@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+}
+
+/* Phone frame for demo */
+.phone-frame {
+  width: 390px;
+  height: 844px;
+  background: #fff;
+  border-radius: 50px;
+  overflow: hidden;
+  position: relative;
+  box-shadow:
+    0 0 0 12px #1a1a2e,
+    0 0 0 14px #2a2a4e,
+    0 50px 100px rgba(0,0,0,0.8);
+}
+
+.scrollable {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollable::-webkit-scrollbar { display: none; }
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #f97316, #fb923c, #fbbf24);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Tab bar blur */
+.tab-bar {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255,255,255,0.95);
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+/* Card shadow */
+.card-shadow {
+  box-shadow: 0 4px 24px rgba(249,115,22,0.12), 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* Smooth transitions */
+.page-enter {
+  animation: fadeSlideUp 0.3s ease both;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.pulse-ring {
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* Number counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.count-up { animation: countUp 0.5s ease both; }
