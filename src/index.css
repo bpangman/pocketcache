@@ -21,7 +21,7 @@ body {
 /* Phone frame for demo */
 .phone-frame {
   width: 390px;
-  height: min(844px, calc(100svh - 200px));
+  height: 844px;
   background: #fff;
   border-radius: 50px;
   overflow: hidden;
