@@ -8,7 +8,6 @@ import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import OrgLogo from '../components/OrgLogo';
 import CustomTooltip from '../components/CustomTooltip';
 import Sheet from '../components/Sheet';
-import CoinAccent from '../components/CoinAccent';
 
 const MILESTONE_DEFS = [
   { amount: 10,  label: 'First $10',  emoji: '🌱' },
@@ -282,9 +281,6 @@ export default function Dashboard() {
         >
           <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-black/10 translate-y-1/2 -translate-x-1/2" />
-          {/* Subtle coin accents for brand continuity */}
-          <CoinAccent size={48} opacity={0.12} className="absolute bottom-4 right-4" />
-          <CoinAccent size={28} opacity={0.10} className="absolute top-5 right-16" />
           <div className="relative z-10">
             <p className="text-white/70 text-sm font-medium uppercase tracking-widest">Total Donated</p>
             <div className="mt-1">
@@ -546,7 +542,6 @@ export default function Dashboard() {
               style={{ background: brand.gradient }}
             >
               A
-              <CoinAccent size={18} opacity={0.5} className="absolute -bottom-1 -right-1" />
             </div>
             <p className="font-bold text-gray-900 text-lg mt-1">Alex</p>
             <p className="text-gray-400 text-sm">alex@example.com</p>

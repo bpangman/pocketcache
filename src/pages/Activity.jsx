@@ -6,7 +6,6 @@ import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import CustomTooltip from '../components/CustomTooltip';
-import CoinAccent from '../components/CoinAccent';
 
 function groupByDate(transactions) {
   const groups = {};
@@ -58,7 +57,6 @@ export default function Activity() {
             <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Activity</h1>
             <p className="text-white/70 text-sm mt-0.5">Your giving history</p>
           </div>
-          <CoinAccent size={36} opacity={0.25} />
         </div>
 
         {/* Tab switcher */}

@@ -6,7 +6,6 @@ import { useTheme } from '../store/ThemeContext';
 import { NONPROFITS, CATEGORIES } from '../data/nonprofits';
 import OrgLogo from '../components/OrgLogo';
 import MatchBadge from '../components/MatchBadge';
-import CoinAccent from '../components/CoinAccent';
 
 // The featured "Cause of the Month" — pulled from data, not hardcoded
 const CAUSE_OF_MONTH = NONPROFITS.find(n => n.id === 'bgca');
@@ -220,7 +219,6 @@ export default function Nonprofits() {
               Supporting: <span className="text-white font-semibold">{selectedNonprofit.name}</span>
             </p>
           </div>
-          <CoinAccent size={32} opacity={0.3} />
         </div>
 
         {/* Search */}

@@ -14,107 +14,48 @@ export default function CoinLogo({ size = 180, animate = true, showName = true, 
   return (
     <div
       className={`inline-flex flex-col items-center select-none ${className}`}
-      style={{ width: size, gap: showName ? Math.round(12 * scale) : 0 }}
+      style={{ width: size, gap: showName ? Math.round(8 * scale) : 0 }}
     >
       {/* ── SVG coins ── */}
       <svg
         width={size}
-        height={Math.round(90 * scale)}
-        viewBox="0 0 180 90"
+        height={Math.round(100 * scale)}
+        viewBox="0 0 180 100"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         overflow="visible"
       >
-        <defs>
-          {/* Left coin gradient */}
-          <radialGradient id="lcg" cx="40%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="#fde68a" />
-            <stop offset="40%" stopColor="#f59e0b" />
-            <stop offset="100%" stopColor="#b45309" />
-          </radialGradient>
-          {/* Right coin gradient */}
-          <radialGradient id="rcg" cx="60%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="#fde68a" />
-            <stop offset="40%" stopColor="#fbbf24" />
-            <stop offset="100%" stopColor="#92400e" />
-          </radialGradient>
-          {/* Shine overlay */}
-          <radialGradient id="shine" cx="35%" cy="30%" r="50%">
-            <stop offset="0%" stopColor="#fff" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
-          </radialGradient>
-          {/* Edge stroke */}
-          <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#78350f" stopOpacity="0.4" />
-          </linearGradient>
-          {/* Spark burst */}
-          <radialGradient id="spark" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#fef08a" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-          </radialGradient>
-
-          {animate && (
-            <>
-              {/* Left coin: slight counter-clockwise tilt, then back */}
-              <animateTransform
-                xlinkHref="#leftCoin"
-                attributeName="transform"
-                type="rotate"
-                values="0 55 45; -6 55 45; 4 55 45; -3 55 45; 0 55 45"
-                keyTimes="0; 0.2; 0.5; 0.75; 1"
-                dur="1.4s"
-                repeatCount="indefinite"
-              />
-              {/* Right coin: slight clockwise tilt */}
-              <animateTransform
-                xlinkHref="#rightCoin"
-                attributeName="transform"
-                type="rotate"
-                values="0 125 45; 6 125 45; -4 125 45; 3 125 45; 0 125 45"
-                keyTimes="0; 0.2; 0.5; 0.75; 1"
-                dur="1.4s"
-                repeatCount="indefinite"
-              />
-            </>
-          )}
-        </defs>
-
         {/* ── Left coin ── */}
         <g id="leftCoin">
           {animate && (
             <animateTransform
               attributeName="transform"
               type="rotate"
-              values="0 55 45; -6 55 45; 4 55 45; -3 55 45; 0 55 45"
+              values="0 55 48; -7 55 48; 5 55 48; -3 55 48; 0 55 48"
               keyTimes="0; 0.2; 0.5; 0.75; 1"
               dur="1.4s"
               repeatCount="indefinite"
             />
           )}
-          {/* Coin body */}
-          <circle cx="55" cy="45" r="40" fill="url(#lcg)" />
-          {/* Rim */}
-          <circle cx="55" cy="45" r="40" stroke="url(#edge)" strokeWidth="2" fill="none" />
-          {/* Knurling lines (decorative edge ticks) */}
-          {Array.from({ length: 20 }).map((_, i) => {
-            const angle = (i / 20) * Math.PI * 2;
-            const x1 = 55 + Math.cos(angle) * 36;
-            const y1 = 45 + Math.sin(angle) * 36;
-            const x2 = 55 + Math.cos(angle) * 40;
-            const y2 = 45 + Math.sin(angle) * 40;
-            return (
-              <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke="#b45309" strokeWidth="1" opacity="0.4" />
-            );
-          })}
-          {/* Inner ring */}
-          <circle cx="55" cy="45" r="32" stroke="#b45309" strokeWidth="0.8" fill="none" opacity="0.3" />
-          {/* Dollar sign */}
-          <text x="55" y="52" textAnchor="middle" fontSize="22" fontWeight="700"
-            fill="#78350f" opacity="0.85" fontFamily="Georgia, serif">$</text>
-          {/* Shine */}
-          <circle cx="55" cy="45" r="40" fill="url(#shine)" />
+          {/* Drop shadow offset shape */}
+          <circle cx="58" cy="51" r="38" fill="#b85c00" opacity="0.35" />
+          {/* Coin body — flat warm orange */}
+          <circle cx="55" cy="48" r="38" fill="#FF9F43" />
+          {/* Bold dark outline */}
+          <circle cx="55" cy="48" r="38" stroke="#2D3436" strokeWidth="3.5" fill="none" />
+          {/* Dollar sign — bold cartoonish */}
+          <text
+            x="55"
+            y="57"
+            textAnchor="middle"
+            fontSize="30"
+            fontWeight="900"
+            fill="#2D3436"
+            fontFamily="'Arial Black', 'Arial Bold', Arial, sans-serif"
+            letterSpacing="-1"
+          >
+            $
+          </text>
         </g>
 
         {/* ── Right coin ── */}
@@ -123,94 +64,131 @@ export default function CoinLogo({ size = 180, animate = true, showName = true, 
             <animateTransform
               attributeName="transform"
               type="rotate"
-              values="0 125 45; 6 125 45; -4 125 45; 3 125 45; 0 125 45"
+              values="0 125 48; 7 125 48; -5 125 48; 3 125 48; 0 125 48"
               keyTimes="0; 0.2; 0.5; 0.75; 1"
               dur="1.4s"
               repeatCount="indefinite"
             />
           )}
-          <circle cx="125" cy="45" r="40" fill="url(#rcg)" />
-          <circle cx="125" cy="45" r="40" stroke="url(#edge)" strokeWidth="2" fill="none" />
-          {Array.from({ length: 20 }).map((_, i) => {
-            const angle = (i / 20) * Math.PI * 2;
-            const x1 = 125 + Math.cos(angle) * 36;
-            const y1 = 45 + Math.sin(angle) * 36;
-            const x2 = 125 + Math.cos(angle) * 40;
-            const y2 = 45 + Math.sin(angle) * 40;
-            return (
-              <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke="#92400e" strokeWidth="1" opacity="0.4" />
-            );
-          })}
-          <circle cx="125" cy="45" r="32" stroke="#92400e" strokeWidth="0.8" fill="none" opacity="0.3" />
-          <text x="125" y="52" textAnchor="middle" fontSize="22" fontWeight="700"
-            fill="#78350f" opacity="0.85" fontFamily="Georgia, serif">¢</text>
-          <circle cx="125" cy="45" r="40" fill="url(#shine)" />
+          {/* Drop shadow offset shape */}
+          <circle cx="128" cy="51" r="38" fill="#c8950a" opacity="0.35" />
+          {/* Coin body — flat golden yellow */}
+          <circle cx="125" cy="48" r="38" fill="#FECA57" />
+          {/* Bold dark outline */}
+          <circle cx="125" cy="48" r="38" stroke="#2D3436" strokeWidth="3.5" fill="none" />
+          {/* Cent sign — bold cartoonish */}
+          <text
+            x="125"
+            y="57"
+            textAnchor="middle"
+            fontSize="30"
+            fontWeight="900"
+            fill="#2D3436"
+            fontFamily="'Arial Black', 'Arial Bold', Arial, sans-serif"
+            letterSpacing="-1"
+          >
+            ¢
+          </text>
         </g>
 
         {/* ── Spark burst at contact point ── */}
         {animate && (
           <g>
-            {/* Center glow */}
-            <ellipse cx="90" cy="45" rx="8" ry="8" fill="url(#spark)">
-              <animate attributeName="rx" values="4; 12; 4" dur="1.4s" repeatCount="indefinite" />
-              <animate attributeName="ry" values="4; 10; 4" dur="1.4s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0; 0.8; 0" dur="1.4s" repeatCount="indefinite" />
-            </ellipse>
-            {/* Spark rays */}
-            {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => {
+            {/* Simple star sparks — 3 lines at different angles */}
+            {[315, 0, 45].map((deg, i) => {
               const rad = (deg * Math.PI) / 180;
-              const x2 = 90 + Math.cos(rad) * 14;
-              const y2 = 45 + Math.sin(rad) * 14;
+              const x2 = 90 + Math.cos(rad) * 18;
+              const y2 = 48 + Math.sin(rad) * 18;
               return (
-                <line key={i} x1="90" y1="45" x2={x2} y2={y2}
-                  stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round">
-                  <animate attributeName="opacity"
-                    values={`0; ${0.3 + (i % 3) * 0.2}; 0`}
+                <line
+                  key={i}
+                  x1="90"
+                  y1="48"
+                  x2={x2}
+                  y2={y2}
+                  stroke="#fff"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                >
+                  <animate
+                    attributeName="opacity"
+                    values="0; 1; 0"
                     dur="1.4s"
-                    begin={`${i * 0.06}s`}
-                    repeatCount="indefinite" />
-                  <animate attributeName="x2"
+                    begin={`${i * 0.08}s`}
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="x2"
                     values={`90; ${x2}; 90`}
                     dur="1.4s"
-                    begin={`${i * 0.06}s`}
-                    repeatCount="indefinite" />
-                  <animate attributeName="y2"
-                    values={`45; ${y2}; 45`}
+                    begin={`${i * 0.08}s`}
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="y2"
+                    values={`48; ${y2}; 48`}
                     dur="1.4s"
-                    begin={`${i * 0.06}s`}
-                    repeatCount="indefinite" />
+                    begin={`${i * 0.08}s`}
+                    repeatCount="indefinite"
+                  />
                 </line>
               );
             })}
+            {/* Center flash dot */}
+            <circle cx="90" cy="48" r="5" fill="#fff">
+              <animate
+                attributeName="r"
+                values="2; 7; 2"
+                dur="1.4s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="0; 0.9; 0"
+                dur="1.4s"
+                repeatCount="indefinite"
+              />
+            </circle>
           </g>
         )}
       </svg>
 
-      {/* ── "Spare" cursive wordmark ── */}
+      {/* ── "Spare" thick bubbly cursive wordmark ── */}
       {showName && (
         <svg
-          width={Math.round(130 * scale)}
-          height={Math.round(48 * scale)}
-          viewBox="0 0 130 48"
+          width={Math.round(150 * scale)}
+          height={Math.round(54 * scale)}
+          viewBox="0 0 150 54"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <defs>
-            <linearGradient id="wordGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#f59e0b" />
-              <stop offset="100%" stopColor="#b45309" />
-            </linearGradient>
-          </defs>
+          {/* Shadow layer — offset duplicate for depth */}
           <text
-            x="65"
-            y="38"
+            x="77"
+            y="42"
             textAnchor="middle"
-            fontSize="38"
-            fontFamily="'Brush Script MT', 'Segoe Script', 'Dancing Script', cursive"
-            fontStyle="italic"
-            fill="url(#wordGrad)"
-            letterSpacing="1"
+            fontSize="42"
+            fontWeight="bold"
+            fontFamily="'Pacifico', 'Comic Neue', 'Brush Script MT', 'Dancing Script', cursive"
+            fill="#c8710a"
+            letterSpacing="0.5"
+          >
+            Spare
+          </text>
+          {/* Main bubbly text — thick stroke + fill trick for puffy look */}
+          <text
+            x="75"
+            y="40"
+            textAnchor="middle"
+            fontSize="42"
+            fontWeight="bold"
+            fontFamily="'Pacifico', 'Comic Neue', 'Brush Script MT', 'Dancing Script', cursive"
+            fill="#FF9F43"
+            stroke="#2D3436"
+            strokeWidth="3"
+            strokeLinejoin="round"
+            paintOrder="stroke"
+            letterSpacing="0.5"
           >
             Spare
           </text>
