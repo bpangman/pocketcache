@@ -409,7 +409,7 @@ function ConnectCardScreen({ onNext }) {
           </motion.div>
         </motion.div>
         <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-          Which card should{'\n'}we watch?
+          Which card should{'\n'}we track?
         </h1>
         <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
           We'll track your everyday purchases on this card to calculate your round-ups.
