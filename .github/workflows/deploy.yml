@@ -36,6 +36,9 @@ jobs:
           cp -r dist/* dist-pages/v2/
           mkdir -p dist-pages/dashboard
           cp dashboard/index.html dist-pages/dashboard/index.html
+          mkdir -p dist-pages/legal/privacy dist-pages/legal/terms
+          cp legal/privacy/index.html dist-pages/legal/privacy/index.html
+          cp legal/terms/index.html dist-pages/legal/terms/index.html
           cat > dist-pages/index.html << 'EOF'
           <!DOCTYPE html>
           <html lang="en">

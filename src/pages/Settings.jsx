@@ -267,6 +267,7 @@ function PrivacySheet({ show, onClose, brand }) {
             label="Privacy Policy"
             sub="Read our full data practices"
             color="#6b7280"
+            onPress={() => window.open('/pocketchange/legal/privacy/', '_blank')}
             right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
           <div className="h-px bg-gray-100 mx-4" />
@@ -275,6 +276,7 @@ function PrivacySheet({ show, onClose, brand }) {
             label="Terms of Service"
             sub="Review your user agreement"
             color="#6b7280"
+            onPress={() => window.open('/pocketchange/legal/terms/', '_blank')}
             right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
         </div>
@@ -424,6 +426,15 @@ export default function Settings() {
             onPress={() => setShowAddCard(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
+        </motion.div>
+
+        {/* Billing policy */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
+          className="bg-amber-50 rounded-3xl px-4 py-3.5" style={{ border: '1px solid #fde68a' }}>
+          <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
+          <p className="text-xs text-amber-800 leading-relaxed">
+            Charged once a month (minimum $5). If a payment fails, we'll retry once after 3 days. If it fails again, your account is paused and you'll be notified to update your payment method. Round-ups keep accumulating during a pause.
+          </p>
         </motion.div>
 
         {/* Current cause */}
