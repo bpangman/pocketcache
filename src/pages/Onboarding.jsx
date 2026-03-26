@@ -19,7 +19,7 @@ const FEATURED = NONPROFITS.filter(n => FEATURED_IDS.includes(n.id));
 const SLIDES = [
   {
     id: 0,
-    bg: 'from-orange-500 to-amber-400',
+    bg: 'from-blue-600 to-cyan-500',
     illustration: (
       <div className="relative flex items-center justify-center">
         <CoinLogo size={260} animate showName />
