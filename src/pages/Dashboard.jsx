@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { ArrowUpRight, Zap, Heart, TrendingUp, X, Share2, Plus } from 'lucide-react';
+import { ArrowUpRight, Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import OrgLogo from '../components/OrgLogo';
 import CustomTooltip from '../components/CustomTooltip';
 import Sheet from '../components/Sheet';
+import CoinAccent from '../components/CoinAccent';
 
 const MILESTONE_DEFS = [
   { amount: 10,  label: 'First $10',  emoji: '🌱' },
@@ -200,6 +201,7 @@ export default function Dashboard() {
   const [showMilestone, setShowMilestone] = useState(true);
   const [showBoost, setShowBoost] = useState(false);
   const [boostToast, setBoostToast] = useState(null);
+  const [showProfile, setShowProfile] = useState(false);
   const toastTimerRef = useRef(null);
   const daysLeft = daysUntilQuarterEnd();
 
@@ -257,9 +259,15 @@ export default function Dashboard() {
               {brand.appName}
             </h1>
           </div>
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30">
+          <button
+            onClick={() => setShowProfile(true)}
+            className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30 active:scale-95 transition-transform relative"
+            aria-label="Open account settings"
+          >
             A
-          </div>
+            {/* Subtle pulse ring to hint it's tappable */}
+            <span className="absolute inset-0 rounded-full border border-white/40 animate-ping opacity-30" style={{ animationDuration: '3s' }} />
+          </button>
         </div>
       </motion.div>
 
@@ -274,6 +282,9 @@ export default function Dashboard() {
         >
           <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-black/10 translate-y-1/2 -translate-x-1/2" />
+          {/* Subtle coin accents for brand continuity */}
+          <CoinAccent size={48} opacity={0.12} className="absolute bottom-4 right-4" />
+          <CoinAccent size={28} opacity={0.10} className="absolute top-5 right-16" />
           <div className="relative z-10">
             <p className="text-white/70 text-sm font-medium uppercase tracking-widest">Total Donated</p>
             <div className="mt-1">
@@ -524,6 +535,52 @@ export default function Dashboard() {
         </motion.div>
 
       </div>
+
+      {/* ── Profile / Account sheet ── */}
+      <Sheet show={showProfile} onClose={() => setShowProfile(false)} title="Your Account">
+        <div className="px-6 pt-2 pb-8 space-y-1">
+          {/* Avatar + name block */}
+          <div className="flex flex-col items-center py-6 gap-2">
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg relative"
+              style={{ background: brand.gradient }}
+            >
+              A
+              <CoinAccent size={18} opacity={0.5} className="absolute -bottom-1 -right-1" />
+            </div>
+            <p className="font-bold text-gray-900 text-lg mt-1">Alex</p>
+            <p className="text-gray-400 text-sm">alex@example.com</p>
+          </div>
+
+          {/* Menu rows */}
+          {[
+            { icon: <Settings size={18} />, label: 'Account Settings', action: () => { setShowProfile(false); setTab('settings'); } },
+            { icon: <CreditCard size={18} />, label: 'Payment Method', action: () => { setShowProfile(false); setTab('settings'); } },
+            { icon: <Bell size={18} />, label: 'Notifications', action: () => { setShowProfile(false); setTab('settings'); } },
+            { icon: <HelpCircle size={18} />, label: 'Help & Support', action: null },
+          ].map(({ icon, label, action }) => (
+            <button
+              key={label}
+              onClick={action ?? undefined}
+              disabled={!action}
+              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-gray-50 active:bg-gray-100 transition-colors text-left"
+            >
+              <span className="text-gray-500">{icon}</span>
+              <span className="flex-1 text-gray-800 font-medium text-sm">{label}</span>
+              <ChevronRight size={16} className="text-gray-300" />
+            </button>
+          ))}
+
+          <div className="pt-2">
+            <button className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-red-50 active:bg-red-100 transition-colors text-left">
+              <span className="text-red-400"><LogOut size={18} /></span>
+              <span className="flex-1 text-red-500 font-medium text-sm">Sign Out</span>
+            </button>
+          </div>
+
+          <p className="text-center text-gray-300 text-xs pt-4">Spare · v1.0.0</p>
+        </div>
+      </Sheet>
     </div>
   );
 }

@@ -35,7 +35,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
 
       case 'payment_intent.succeeded': {
         const pi = event.data.object;
-        const chargeId = pi.metadata?.pocketchange_charge_id;
+        const chargeId = pi.metadata?.spare_charge_id;
         if (!chargeId) break;
 
         const charge = db.prepare(`SELECT * FROM monthly_charges WHERE id = ?`).get(chargeId);
@@ -56,7 +56,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
 
       case 'payment_intent.payment_failed': {
         const pi = event.data.object;
-        const chargeId = pi.metadata?.pocketchange_charge_id;
+        const chargeId = pi.metadata?.spare_charge_id;
         if (!chargeId) break;
 
         const charge = db.prepare(`SELECT * FROM monthly_charges WHERE id = ?`).get(chargeId);
@@ -74,7 +74,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
 
       case 'treasury.outbound_transfer.posted': {
         // Quarterly sweep to Endaoment confirmed by ACH network
-        const disbursementId = event.data.object.metadata?.pocketchange_disbursement_id;
+        const disbursementId = event.data.object.metadata?.spare_disbursement_id;
         if (disbursementId) {
           db.prepare(`
             UPDATE quarterly_disbursements SET status = 'confirmed', confirmed_at = unixepoch()

@@ -32,7 +32,7 @@ export async function getOrCreateCustomer(userId, email, name) {
   const customer = await stripe.customers.create({
     email,
     name,
-    metadata: { pocketchange_user_id: userId },
+    metadata: { spare_user_id: userId },
   });
   return customer.id;
 }
@@ -101,11 +101,11 @@ export async function chargeUser(stripeCustomerId, paymentMethodId, grossAmount,
     confirm: true,
     // application_fee_amount: platformFee,  // uncomment if using Stripe Connect
     metadata: {
-      pocketchange_charge_id: chargeId,
+      spare_charge_id: chargeId,
       platform_fee_cents: platformFee,
       net_cents: grossCents - platformFee,
     },
-    description: `PocketChange monthly round-up donation`,
+    description: `Spare monthly round-up donation`,
   });
 
   return {

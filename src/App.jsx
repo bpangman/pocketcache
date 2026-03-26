@@ -1,16 +1,18 @@
+import { useState } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { ThemeProvider, useTheme } from './store/ThemeContext';
 import Onboarding from './pages/Onboarding';
 import AppShell from './components/AppShell';
-import Logo from './components/Logo';
-import { motion, AnimatePresence } from 'framer-motion';
+import Splash from './pages/Splash';
+import CoinLogo from './components/CoinLogo';
+import { motion } from 'framer-motion';
 
 function AppContent() {
   const { page } = useApp();
   return page === 'onboarding' ? <Onboarding /> : <AppShell />;
 }
 
-function PhoneFrame({ children }) {
+function PhoneFrame({ children, splashDone, onSplashDone }) {
   const brand = useTheme();
 
   return (
@@ -27,11 +29,11 @@ function PhoneFrame({ children }) {
         style={{ background: `radial-gradient(circle, ${brand.secondary}88 0%, transparent 70%)` }} />
 
       <div className="flex flex-col items-center gap-8 relative z-10">
-        {/* Brand wordmark — animates when cause changes */}
+        {/* Brand wordmark outside phone — animates when cause changes */}
         <motion.div
           key={brand.appName}
           initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: splashDone ? 1 : 0, y: 0 }}
           transition={{ duration: 0.4 }}
           className="flex items-center gap-3"
         >
@@ -43,7 +45,7 @@ function PhoneFrame({ children }) {
               {brand.logoEmoji}
             </div>
           ) : (
-            <Logo size={40} />
+            <CoinLogo size={40} animate={false} showName={false} />
           )}
           <div>
             <h1 className="text-white font-bold text-2xl" style={{ letterSpacing: '-0.5px' }}>{brand.appName}</h1>
@@ -58,22 +60,28 @@ function PhoneFrame({ children }) {
             9:41
           </div>
           <div className="w-full h-full relative">
-            {children}
+            {/* Splash rendered inside the phone */}
+            {!splashDone && <Splash onDone={onSplashDone} />}
+            {splashDone && children}
           </div>
         </div>
 
-        <p className="text-slate-500 text-xs text-center max-w-xs">
-          Interactive prototype · Select any cause to rebrand the app
-        </p>
+        {splashDone && (
+          <p className="text-slate-500 text-xs text-center max-w-xs">
+            Interactive prototype · Select any cause to rebrand the app
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
 function ThemedApp() {
+  const [splashDone, setSplashDone] = useState(false);
+
   return (
     <ThemeProvider>
-      <PhoneFrame>
+      <PhoneFrame splashDone={splashDone} onSplashDone={() => setSplashDone(true)}>
         <AppContent />
       </PhoneFrame>
     </ThemeProvider>

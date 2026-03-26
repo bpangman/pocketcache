@@ -6,7 +6,7 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 
 // In production, replace with your publishable key from environment variables
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
-import Logo from '../components/Logo';
+import CoinLogo from '../components/CoinLogo';
 import OrgLogo from '../components/OrgLogo';
 import MatchBadge from '../components/MatchBadge';
 import { useApp } from '../store/AppContext';
@@ -22,13 +22,11 @@ const SLIDES = [
     bg: 'from-orange-500 to-amber-400',
     illustration: (
       <div className="relative flex items-center justify-center">
-        <div className="w-32 h-32 rounded-full bg-white/20 flex items-center justify-center pulse-ring absolute" />
-        <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center">
-          <Logo size={72} />
-        </div>
+        <div className="w-40 h-40 rounded-full bg-white/10 flex items-center justify-center pulse-ring absolute" />
+        <CoinLogo size={160} animate showName />
       </div>
     ),
-    title: 'Welcome to\nPocketChange',
+    title: '',
     subtitle: 'Turn everyday purchases into impactful donations — automatically.\nInspiring change, from your pocket.',
     cta: 'Get Started',
   },
@@ -482,7 +480,7 @@ function ConnectCardScreen({ onNext }) {
 
           <div className="flex items-center gap-2 px-1 pt-1">
             <Lock size={12} className="text-gray-400 shrink-0" />
-            <p className="text-gray-400 text-xs">Read-only access via Plaid · Your credentials are never stored by PocketChange</p>
+            <p className="text-gray-400 text-xs">Read-only access via Plaid · Your credentials are never stored by Spare</p>
           </div>
         </div>
 
@@ -703,7 +701,7 @@ function CardEntryForm({ onSuccess }) {
       <div className="flex items-center gap-2 px-1">
         <Lock size={13} className="text-gray-400 shrink-0" />
         <p className="text-gray-400 text-xs">
-          Card details secured by <span className="font-semibold">Stripe</span>. PocketChange never sees your card number.
+          Card details secured by <span className="font-semibold">Stripe</span>. Spare never sees your card number.
         </p>
       </div>
 
@@ -1010,9 +1008,11 @@ export default function Onboarding() {
 
           {/* Text */}
           <div className="mt-10 text-center">
-            <h1 className="text-white font-bold text-4xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
-              {current.title}
-            </h1>
+            {current.title ? (
+              <h1 className="text-white font-bold text-4xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
+                {current.title}
+              </h1>
+            ) : null}
             <p className="text-white/80 text-base mt-4 leading-relaxed">
               {current.subtitle}
             </p>

@@ -81,7 +81,7 @@ export async function runQuarterlySweep() {
       const grant = await submitGrant({
         orgId: org.cause_org_id,
         amountDollars: grantAmount,
-        description: `PocketChange ${period} quarterly donation`,
+        description: `Spare ${period} quarterly donation`,
         metadata: { disbursement_id: disbursementId, period },
       });
 

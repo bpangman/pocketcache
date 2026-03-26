@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const db = new Database(process.env.DATABASE_PATH ?? './pocketchange.db');
+const db = new Database(process.env.DATABASE_PATH ?? './spare.db');
 
 // Enable WAL mode for better concurrent read performance
 db.pragma('journal_mode = WAL');

@@ -4,7 +4,8 @@ import { CreditCard, Bell, Shield, ChevronRight, Plus, Zap, Lock, Eye, EyeOff, T
 import Sheet from '../components/Sheet';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
-import Logo from '../components/Logo';
+import CoinLogo from '../components/CoinLogo';
+import CoinAccent from '../components/CoinAccent';
 
 function Toggle({ value, onChange, color }) {
   return (
@@ -267,7 +268,7 @@ function PrivacySheet({ show, onClose, brand }) {
             label="Privacy Policy"
             sub="Read our full data practices"
             color="#6b7280"
-            onPress={() => window.open('/pocketchange/legal/privacy/', '_blank')}
+            onPress={() => window.open('/spare/legal/privacy/', '_blank')}
             right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
           <div className="h-px bg-gray-100 mx-4" />
@@ -276,7 +277,7 @@ function PrivacySheet({ show, onClose, brand }) {
             label="Terms of Service"
             sub="Review your user agreement"
             color="#6b7280"
-            onPress={() => window.open('/pocketchange/legal/terms/', '_blank')}
+            onPress={() => window.open('/spare/legal/terms/', '_blank')}
             right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
         </div>
@@ -350,8 +351,13 @@ export default function Settings() {
         transition={{ duration: 0.6 }}
         className="px-5 pt-14 pb-5"
       >
-        <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Settings</h1>
-        <p className="text-white/70 text-sm mt-0.5">{brand.appName}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Settings</h1>
+            <p className="text-white/70 text-sm mt-0.5">{brand.appName}</p>
+          </div>
+          <CoinLogo size={48} animate={false} showName={false} />
+        </div>
       </motion.div>
 
       <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
@@ -489,9 +495,9 @@ export default function Settings() {
             <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl" style={{ background: brand.gradient }}>
               {brand.logoEmoji}
             </div>
-          ) : <Logo size={32} />}
+          ) : <CoinLogo size={32} animate={false} showName={false} />}
           <p className="font-bold text-sm" style={{ color: brand.primary }}>{brand.appName}</p>
-          <p className="text-gray-300 text-xs">PocketChange · v1.0.0</p>
+          <p className="text-gray-300 text-xs">Spare · v1.0.0</p>
         </motion.div>
 
       </div>

@@ -6,7 +6,7 @@
  *  2. Exchange the public token (returned by Plaid Link) for a permanent access token
  *  3. Fetch new transactions daily using the cursor-based sync API
  *  4. Calculate round-ups from transactions
- *  5. Filter out PocketChange's own monthly charges (infinite loop prevention)
+ *  5. Filter out Spare's own monthly charges (infinite loop prevention)
  */
 
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
@@ -33,7 +33,7 @@ const plaidClient = new PlaidApi(config);
 export async function createLinkToken(userId) {
   const response = await plaidClient.linkTokenCreate({
     user: { client_user_id: userId },
-    client_name: 'PocketChange',
+    client_name: 'Spare',
     products: [Products.Transactions],
     country_codes: [CountryCode.Us],
     language: 'en',
@@ -68,7 +68,7 @@ export async function getAccounts(accessToken) {
  * Returns only ADDED transactions (not modified/removed) for round-up calculation.
  *
  * Infinite loop prevention: we filter out any transaction that matches
- * a known PocketChange charge by amount + date + last4 of the payment card.
+ * a known Spare charge by amount + date + last4 of the payment card.
  * DO NOT filter by merchant name — it's unreliable across institutions.
  */
 export async function fetchNewTransactions(accessToken, cursor, ownChargeFilter = []) {
@@ -92,7 +92,7 @@ export async function fetchNewTransactions(accessToken, cursor, ownChargeFilter 
     hasMore = response.data.has_more;
   }
 
-  // Filter out PocketChange's own charges to prevent double-counting
+  // Filter out Spare's own charges to prevent double-counting
   // ownChargeFilter: [{ amount, date, last4 }] — from monthly_charges table
   const filtered = added.filter(txn => {
     return !ownChargeFilter.some(charge =>

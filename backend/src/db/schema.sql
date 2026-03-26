@@ -1,5 +1,5 @@
--- PocketChange database schema
--- Run once to initialize: sqlite3 pocketchange.db < src/db/schema.sql
+-- Spare database schema
+-- Run once to initialize: sqlite3 spare.db < src/db/schema.sql
 
 -- ── Users ─────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (

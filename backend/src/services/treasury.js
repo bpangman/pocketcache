@@ -11,7 +11,7 @@
  *  - Users are charged monthly. Net amounts (after our fee) flow into Treasury.
  *  - Treasury earns interest on the held balance (Stripe pays this to us).
  *  - Quarterly, we sweep the full Treasury balance to Endaoment via OutboundTransfer.
- *  - PocketChange earns: platform fees (5-10%) + interest on the ~45-day float.
+ *  - Spare earns: platform fees (5-10%) + interest on the ~45-day float.
  *
  * IMPORTANT: Requires Stripe Treasury partner approval before use.
  * Apply at: stripe.com → Contact Sales → "Stripe Treasury / Banking as a Service"
@@ -44,8 +44,8 @@ export async function depositToTreasury(netAmountCents, chargeId) {
     amount: netAmountCents,
     currency: 'usd',
     origin_payment_method: 'balance',  // pull from Stripe platform balance
-    description: `PocketChange monthly deposit — charge ${chargeId}`,
-    metadata: { pocketchange_charge_id: chargeId },
+    description: `Spare monthly deposit — charge ${chargeId}`,
+    metadata: { spare_charge_id: chargeId },
   });
 
   // Log to treasury_log
@@ -104,8 +104,8 @@ export async function sweepToEndaoment(amountCents, disbursementId) {
       type: 'us_bank_account',
       us_bank_account: ENDAOMENT_BANK,
     },
-    description: `PocketChange quarterly donation disbursement — ${disbursementId}`,
-    metadata: { pocketchange_disbursement_id: disbursementId },
+    description: `Spare quarterly donation disbursement — ${disbursementId}`,
+    metadata: { spare_disbursement_id: disbursementId },
   });
 
   // Log the withdrawal

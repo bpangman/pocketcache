@@ -6,6 +6,7 @@ import { useTheme } from '../store/ThemeContext';
 import { NONPROFITS, CATEGORIES } from '../data/nonprofits';
 import OrgLogo from '../components/OrgLogo';
 import MatchBadge from '../components/MatchBadge';
+import CoinAccent from '../components/CoinAccent';
 
 // The featured "Cause of the Month" — pulled from data, not hardcoded
 const CAUSE_OF_MONTH = NONPROFITS.find(n => n.id === 'bgca');
@@ -212,10 +213,15 @@ export default function Nonprofits() {
         transition={{ duration: 0.6 }}
         className="px-5 pt-14 pb-5"
       >
-        <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Find a Cause</h1>
-        <p className="text-white/70 text-sm mt-0.5">
-          Supporting: <span className="text-white font-semibold">{selectedNonprofit.name}</span>
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Find a Cause</h1>
+            <p className="text-white/70 text-sm mt-0.5">
+              Supporting: <span className="text-white font-semibold">{selectedNonprofit.name}</span>
+            </p>
+          </div>
+          <CoinAccent size={32} opacity={0.3} />
+        </div>
 
         {/* Search */}
         <div className="mt-4 flex items-center gap-3 bg-white/15 rounded-2xl px-4 py-3 border border-white/20">

@@ -1,5 +1,5 @@
 /**
- * PocketChange Backend Server
+ * Spare Backend Server
  *
  * Full fund flow:
  *
@@ -25,7 +25,7 @@
  *  ───────────────────────
  *  6. daily-roundups job fetches new transactions via Plaid for each user
  *     → calculates round-ups, saves to DB
- *     → filters out PocketChange's own charges (infinite loop prevention)
+ *     → filters out Spare's own charges (infinite loop prevention)
  *
  *  MONTHLY (1st of month, 6am)
  *  ───────────────────────────
@@ -107,7 +107,7 @@ cron.schedule('0 8 1 1,4,7,10 *', () => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`PocketChange backend running on port ${PORT}`);
+  console.log(`Spare backend running on port ${PORT}`);
   console.log(`Environment: ${process.env.PLAID_ENV ?? 'sandbox'}`);
   console.log(`Treasury: ${process.env.STRIPE_TREASURY_FINANCIAL_ACCOUNT_ID ? 'configured' : 'NOT configured (TODO)'}`);
   console.log(`Endaoment: ${process.env.ENDAOMENT_CLIENT_ID ? 'configured' : 'NOT configured (TODO)'}`);

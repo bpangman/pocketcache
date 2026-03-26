@@ -278,7 +278,7 @@ export const CATEGORIES = [
 
 // Default white-label brand (before any cause is chosen)
 export const DEFAULT_BRAND = {
-  appName: 'PocketChange',
+  appName: 'Spare',
   tagline: 'Give with every purchase',
   primary: '#f97316',
   secondary: '#fbbf24',

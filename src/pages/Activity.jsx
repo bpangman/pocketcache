@@ -6,6 +6,7 @@ import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import CustomTooltip from '../components/CustomTooltip';
+import CoinAccent from '../components/CoinAccent';
 
 function groupByDate(transactions) {
   const groups = {};
@@ -52,8 +53,13 @@ export default function Activity() {
         transition={{ duration: 0.6 }}
         className="px-5 pt-14 pb-4"
       >
-        <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Activity</h1>
-        <p className="text-white/70 text-sm mt-0.5">Your giving history</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Activity</h1>
+            <p className="text-white/70 text-sm mt-0.5">Your giving history</p>
+          </div>
+          <CoinAccent size={36} opacity={0.25} />
+        </div>
 
         {/* Tab switcher */}
         <div className="flex gap-1 mt-4 bg-white/15 rounded-2xl p-1">

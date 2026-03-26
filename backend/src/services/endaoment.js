@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *  1. Authenticate with Endaoment API using OAuth client credentials
- *  2. Submit a grant from PocketChange's platform DAF to the user's chosen nonprofit
+ *  2. Submit a grant from Spare's platform DAF to the user's chosen nonprofit
  *  3. Check grant status
  *
  * Setup required:
@@ -11,7 +11,7 @@
  *  - Reference: https://github.com/endaoment/endaoment-integration-docs
  *
  * Flow:
- *  - PocketChange holds ONE platform-level DAF account at Endaoment
+ *  - Spare holds ONE platform-level DAF account at Endaoment
  *  - Quarterly sweep deposits the full Treasury balance into this DAF
  *  - We then split the DAF balance into individual grants per nonprofit
  *    (proportional to each user's accumulated donations for the quarter)
@@ -63,12 +63,12 @@ export async function getNonprofit(orgId) {
 }
 
 /**
- * Submit a grant from PocketChange's platform DAF to a nonprofit.
+ * Submit a grant from Spare's platform DAF to a nonprofit.
  *
  * This is called AFTER the Treasury sweep has deposited funds to Endaoment.
  * amount: dollars (not cents)
  * orgId: Endaoment org ID for the nonprofit (stored in users.cause_org_id)
- * description: human-readable note on the grant (e.g. "Q1 2026 PocketChange user donations")
+ * description: human-readable note on the grant (e.g. "Q1 2026 Spare user donations")
  *
  * Endaoment automatically emails the user a tax receipt after the grant is processed.
  */

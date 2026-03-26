@@ -49,7 +49,7 @@ export async function runDailyRoundups() {
 
   for (const conn of connections) {
     try {
-      // Build the filter for PocketChange's own charges (loop prevention)
+      // Build the filter for Spare's own charges (loop prevention)
       // Look back 7 days to catch any of our own charges that appeared in Plaid
       const recentCharges = db.prepare(`
         SELECT gross_amount as amount,

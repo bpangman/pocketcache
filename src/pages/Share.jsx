@@ -14,7 +14,7 @@ export default function Share() {
   if (!selectedNonprofit) return null;
 
   const shareText = `I've donated $${totalDonated.toFixed(2)} to ${selectedNonprofit.name} through ${brand.appName} — an app that rounds up every purchase and gives the change to charity. Join me! 💙`;
-  const shareUrl = 'https://pocketchange.app';
+  const shareUrl = 'https://getspareapp.com';
   const referralCode = 'ALEX-GIVES';
 
   function handleCopy() {

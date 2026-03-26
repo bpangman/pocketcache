@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PocketChange — Project Dashboard</title>
+  <title>Spare — Project Dashboard</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -246,13 +246,13 @@
     <div class="header-top">
       <div class="coin">🪙</div>
       <div>
-        <h1>PocketChange</h1>
+        <h1>Spare</h1>
         <p>Project Dashboard — Internal</p>
       </div>
     </div>
     <div class="header-meta">
-      <div class="meta-pill">📱 <a href="https://bpangman.github.io/pocketchange/v2/" target="_blank">Live App (v2)</a></div>
-      <div class="meta-pill">💻 <a href="https://github.com/bpangman/pocketchange" target="_blank">GitHub Repo</a></div>
+      <div class="meta-pill">📱 <a href="https://bpangman.github.io/spare/v2/" target="_blank">Live App (v2)</a></div>
+      <div class="meta-pill">💻 <a href="https://github.com/bpangman/spare" target="_blank">GitHub Repo</a></div>
       <div class="meta-pill">📋 Last updated: <span id="last-updated">March 25, 2026</span></div>
     </div>
   </div>
@@ -307,7 +307,7 @@
           <div class="check-icon done">✓</div>
           <div class="check-text">
             <div class="title">Stripe Elements card entry (CC path)</div>
-            <div class="sub">PCI-compliant, SAQ A. Card data never touches PocketChange servers.</div>
+            <div class="sub">PCI-compliant, SAQ A. Card data never touches Spare servers.</div>
           </div>
         </div>
         <div class="check-item">
@@ -342,7 +342,7 @@
           <div class="check-icon done">✓</div>
           <div class="check-text">
             <div class="title">v2.0 deployment structure</div>
-            <div class="sub">Old link → "expired" page. Live app at /pocketchange/v2/. CI/CD via GitHub Actions.</div>
+            <div class="sub">Old link → "expired" page. Live app at /spare/v2/. CI/CD via GitHub Actions.</div>
           </div>
         </div>
         <div class="check-item">
@@ -430,7 +430,7 @@
           <div class="check-icon na">–</div>
           <div class="check-text">
             <div class="title">State money transmission licenses</div>
-            <div class="sub">Solved — Stripe Treasury holds all required licenses. PocketChange does not need its own MTL.</div>
+            <div class="sub">Solved — Stripe Treasury holds all required licenses. Spare does not need its own MTL.</div>
           </div>
         </div>
 
@@ -453,28 +453,28 @@
 
       <div class="step-header">Onboarding (one time)</div>
       <p>Blake downloads the app. After the welcome slides and account creation, he gets two setup screens back to back.</p>
-      <p>First: <strong>"Which card should we track?"</strong> He picks his Chase Visa. Plaid opens, he logs into Chase, done. PocketChange can now see every transaction on that card — read-only, can never touch it.</p>
+      <p>First: <strong>"Which card should we track?"</strong> He picks his Chase Visa. Plaid opens, he logs into Chase, done. Spare can now see every transaction on that card — read-only, can never touch it.</p>
       <p>Second: <strong>"How should we collect your round-up payments?"</strong> He picks Bank Account (ACH). He connects his checking account via Stripe. He picks Boys &amp; Girls Club as his cause and lands on the dashboard.</p>
 
       <div class="step-header">Every day after that</div>
       <p>Plaid quietly watches his Chase Visa. He buys coffee for $4.30 → $0.70 round-up queued. Groceries $67.43 → $0.57 round-up queued. It all piles up silently. Blake sees nothing until the monthly charge.</p>
 
       <div class="step-header">End of month — the charge</div>
-      <p>Blake has accumulated $23.80 in round-ups. If it's under $5, it rolls to next month. Otherwise, PocketChange charges his checking account $23.80 via ACH. One clean charge on his bank statement, nothing on his Chase Visa.</p>
+      <p>Blake has accumulated $23.80 in round-ups. If it's under $5, it rolls to next month. Otherwise, Spare charges his checking account $23.80 via ACH. One clean charge on his bank statement, nothing on his Chase Visa.</p>
 
       <div class="money-box">
         <div class="line"><span>Blake is charged (ACH)</span><span>$23.80</span></div>
         <div class="line"><span>Stripe ACH processing fee (0.8%)</span><span>−$0.19</span></div>
-        <div class="line"><span>PocketChange platform fee (5% of $23.80)</span><span>−$1.19</span></div>
-        <div class="line"><span>PocketChange net revenue (~$1.00 after Stripe)</span><span></span></div>
+        <div class="line"><span>Spare platform fee (5% of $23.80)</span><span>−$1.19</span></div>
+        <div class="line"><span>Spare net revenue (~$1.00 after Stripe)</span><span></span></div>
         <div class="line divider"><span>Moves into Stripe Treasury</span><span>$22.61</span></div>
       </div>
 
       <div class="step-header">The float period</div>
-      <p>$22.61 sits in your Stripe Treasury account earning interest while you accumulate a full quarter of donations from all users. This is where PocketChange earns float income on top of platform fees.</p>
+      <p>$22.61 sits in your Stripe Treasury account earning interest while you accumulate a full quarter of donations from all users. This is where Spare earns float income on top of platform fees.</p>
 
       <div class="step-header">End of quarter — disbursement</div>
-      <p>PocketChange sweeps the quarter's accumulated funds to Endaoment via their API. Say Blake donated ~$22/month — that's ~$67 for the quarter. Endaoment receives it and grants it directly to Boys &amp; Girls Club. Endaoment emails Blake a tax receipt automatically. Their ~1.5% annual fee on the ~45-day hold comes to roughly $0.13 — negligible.</p>
+      <p>Spare sweeps the quarter's accumulated funds to Endaoment via their API. Say Blake donated ~$22/month — that's ~$67 for the quarter. Endaoment receives it and grants it directly to Boys &amp; Girls Club. Endaoment emails Blake a tax receipt automatically. Their ~1.5% annual fee on the ~45-day hold comes to roughly $0.13 — negligible.</p>
 
       <div class="step-header">What Blake experienced</div>
       <p>One monthly charge on his bank statement. One quarterly tax receipt. His Chase Visa was never charged. He never had to think about it.</p>
@@ -528,7 +528,7 @@
           <div class="reg-title">💸 Money Transmission Licenses (MTL)</div>
           <span class="tag done">Solved</span>
         </div>
-        <div class="reg-body">Stripe Treasury holds all required state MTLs. PocketChange is a platform customer, not a money transmitter. No licensing needed on our end.</div>
+        <div class="reg-body">Stripe Treasury holds all required state MTLs. Spare is a platform customer, not a money transmitter. No licensing needed on our end.</div>
       </div>
 
       <div class="reg-item">
@@ -536,7 +536,7 @@
           <div class="reg-title">📜 Charitable Solicitation Registration</div>
           <span class="tag done">Solved</span>
         </div>
-        <div class="reg-body">Endaoment's DAF model handles solicitation registration across all ~41 states that require it. As the intermediary 501(c)(3), they're the one soliciting — not PocketChange.</div>
+        <div class="reg-body">Endaoment's DAF model handles solicitation registration across all ~41 states that require it. As the intermediary 501(c)(3), they're the one soliciting — not Spare.</div>
       </div>
 
       <div class="reg-item">
@@ -544,7 +544,7 @@
           <div class="reg-title">🔒 PCI DSS (card data security)</div>
           <span class="tag done">Solved</span>
         </div>
-        <div class="reg-body">Stripe Elements + Stripe Treasury keeps PocketChange at SAQ A compliance. Card numbers never touch our servers or code. No PCI audit required.</div>
+        <div class="reg-body">Stripe Elements + Stripe Treasury keeps Spare at SAQ A compliance. Card numbers never touch our servers or code. No PCI audit required.</div>
       </div>
 
       <div class="reg-item">
@@ -568,7 +568,7 @@
           <div class="reg-title">🧾 Tax Receipts for Donors</div>
           <span class="tag done">Solved</span>
         </div>
-        <div class="reg-body">Endaoment issues IRS-compliant tax receipts automatically to users after each disbursement. PocketChange does not need to generate or manage these.</div>
+        <div class="reg-body">Endaoment issues IRS-compliant tax receipts automatically to users after each disbursement. Spare does not need to generate or manage these.</div>
       </div>
 
     </div>
@@ -596,7 +596,7 @@
         <div class="stack-icon">🏦</div>
         <div>
           <div class="stack-name">Stripe Treasury</div>
-          <div class="stack-role">Holds collected funds between monthly sweep and quarterly Endaoment disbursement. PocketChange earns interest on the float. Stripe holds all MTLs.</div>
+          <div class="stack-role">Holds collected funds between monthly sweep and quarterly Endaoment disbursement. Spare earns interest on the float. Stripe holds all MTLs.</div>
         </div>
       </div>
       <div class="stack-item">
@@ -610,7 +610,7 @@
         <div class="stack-icon">⚛️</div>
         <div>
           <div class="stack-name">React + Vite + TailwindCSS + framer-motion</div>
-          <div class="stack-role">Frontend app stack. Deployed to GitHub Pages via GitHub Actions at bpangman.github.io/pocketchange/v2/.</div>
+          <div class="stack-role">Frontend app stack. Deployed to GitHub Pages via GitHub Actions at bpangman.github.io/spare/v2/.</div>
         </div>
       </div>
     </div>
