@@ -374,7 +374,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="font-bold text-gray-900 text-sm">Q1 Payout to {selectedNonprofit.shortName}</p>
-              <p className="text-gray-400 text-xs mt-0.5">Funds sent on April 1, 2026</p>
+              <p className="text-gray-400 text-xs mt-0.5">Disbursed via Endaoment · April 1, 2026</p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl" style={{ color: brand.primary }}>{daysLeft}</p>

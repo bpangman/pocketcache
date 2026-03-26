@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, ArrowRight, Search, CreditCard, Building2, Lock } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+// In production, replace with your publishable key from environment variables
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 import Logo from '../components/Logo';
 import OrgLogo from '../components/OrgLogo';
 import MatchBadge from '../components/MatchBadge';
@@ -506,7 +511,7 @@ const PAYMENT_OPTIONS = [
     id: 'ach',
     icon: '🏦',
     label: 'Bank Account',
-    sub: 'Direct bank transfer via Stripe',
+    sub: 'Direct bank transfer · 5% platform fee',
     badge: 'Best for most people',
     badgeColor: '#059669',
   },
@@ -514,14 +519,14 @@ const PAYMENT_OPTIONS = [
     id: 'apple_pay',
     icon: '🍎',
     label: 'Apple Pay',
-    sub: 'Set up once, fully automatic after that',
+    sub: 'Set up once, fully automatic · 5% platform fee',
     badge: null,
   },
   {
     id: 'card',
     icon: '💳',
     label: 'Credit or Debit Card',
-    sub: 'Visa, Mastercard, Amex, or Discover',
+    sub: 'Visa, Mastercard, Amex, or Discover · 10% platform fee',
     badge: null,
   },
 ];
@@ -622,21 +627,143 @@ function PaymentMethodScreen({ onNext }) {
         <div className="px-4 pb-10 pt-3 bg-gray-50 border-t border-gray-100">
           <motion.button
             whileTap={selected ? { scale: 0.97 } : {}}
-            onClick={() => selected && onNext()}
+            onClick={() => selected && onNext(selected)}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{
               background: selected ? 'linear-gradient(135deg, #7c3aed, #4f46e5)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
               cursor: selected ? 'pointer' : 'default',
             }}
           >
-            {selected ? 'Continue — Pick Your Cause →' : 'Choose a payment method'}
+            {selected === 'card' ? 'Continue — Add Card →' : selected ? 'Continue — Pick Your Cause →' : 'Choose a payment method'}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
-            PocketChange retains a <span className="font-semibold">3% processing fee</span>. The remaining 97% goes directly to your chosen cause via Endaoment, a registered 501(c)(3).
+            PocketChange retains a <span className="font-semibold">5% fee</span> (ACH/Apple Pay) or <span className="font-semibold">10% fee</span> (card). The remainder goes directly to your cause via{' '}
+            <span className="font-semibold">Endaoment</span>, a registered 501(c)(3) donor-advised fund. Tax receipts issued automatically.
           </p>
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// ─── Step 3 (CC path): Enter card via Stripe Elements ───────────────────────
+
+const CARD_ELEMENT_OPTIONS = {
+  style: {
+    base: {
+      fontSize: '16px',
+      color: '#111827',
+      fontFamily: '"Inter", system-ui, sans-serif',
+      '::placeholder': { color: '#9ca3af' },
+    },
+    invalid: { color: '#ef4444' },
+  },
+  hidePostalCode: false,
+};
+
+function CardEntryForm({ onSuccess }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [cardComplete, setCardComplete] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setLoading(true);
+    setError(null);
+
+    // In production: call your backend to create a SetupIntent, then confirmCardSetup.
+    // For the prototype we simulate a successful save after a brief delay.
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Simulate success (replace with real stripe.confirmCardSetup in production)
+    setLoading(false);
+    onSuccess();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div
+        className="bg-white rounded-2xl px-4 py-4 border"
+        style={{ borderColor: error ? '#ef4444' : '#e5e7eb' }}
+      >
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Card details</p>
+        <CardElement
+          options={CARD_ELEMENT_OPTIONS}
+          onChange={e => {
+            setCardComplete(e.complete);
+            setError(e.error?.message ?? null);
+          }}
+        />
+      </div>
+
+      {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+
+      <div className="flex items-center gap-2 px-1">
+        <Lock size={13} className="text-gray-400 shrink-0" />
+        <p className="text-gray-400 text-xs">
+          Card details secured by <span className="font-semibold">Stripe</span>. PocketChange never sees your card number.
+        </p>
+      </div>
+
+      <motion.button
+        type="submit"
+        whileTap={cardComplete && !loading ? { scale: 0.97 } : {}}
+        disabled={!cardComplete || loading || !stripe}
+        className="w-full py-4 rounded-2xl text-white font-bold text-base"
+        style={{
+          background: cardComplete && !loading
+            ? 'linear-gradient(135deg, #7c3aed, #4f46e5)'
+            : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+          cursor: cardComplete && !loading ? 'pointer' : 'default',
+        }}
+      >
+        {loading ? 'Saving card securely…' : 'Save Card — Pick Your Cause →'}
+      </motion.button>
+    </form>
+  );
+}
+
+function CardEntryScreen({ onNext }) {
+  return (
+    <Elements stripe={stripePromise}>
+      <motion.div
+        initial={{ opacity: 0, x: 30 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        className="flex flex-col h-full overflow-hidden"
+      >
+        <div
+          className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
+          style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)', minHeight: '32%' }}
+        >
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.15, type: 'spring', stiffness: 280 }}
+            className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl mb-5"
+          >
+            💳
+          </motion.div>
+          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+            Add your card
+          </h1>
+          <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
+            Saved securely via Stripe. A 10% platform fee applies to card payments.
+          </p>
+        </div>
+
+        <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-6 pb-10">
+          <CardEntryForm onSuccess={onNext} />
+          <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
+            Round-ups are charged once a month (minimum $5) and disbursed quarterly to your cause via{' '}
+            <span className="font-semibold">Endaoment</span>, a registered 501(c)(3) DAF. Tax receipts issued automatically.
+          </p>
+        </div>
+      </motion.div>
+    </Elements>
   );
 }
 
@@ -844,7 +971,7 @@ function CauseSelectionScreen({ onComplete }) {
 
 export default function Onboarding() {
   const [slide, setSlide] = useState(0);
-  const [step, setStep] = useState('slides'); // 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'cause'
+  const [step, setStep] = useState('slides'); // 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'cause'
 
   const current = SLIDES[slide];
   const isLast = slide === SLIDES.length - 1;
@@ -858,7 +985,8 @@ export default function Onboarding() {
   }
 
   if (step === 'cause') return <CauseSelectionScreen />;
-  if (step === 'payment-method') return <PaymentMethodScreen onNext={() => setStep('cause')} />;
+  if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('cause')} />;
+  if (step === 'payment-method') return <PaymentMethodScreen onNext={method => setStep(method === 'card' ? 'card-entry' : 'cause')} />;
   if (step === 'connect-card') return <ConnectCardScreen onNext={() => setStep('payment-method')} />;
   if (step === 'signup') return <SignUpScreen onNext={() => setStep('connect-card')} />;
 
