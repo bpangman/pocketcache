@@ -1,0 +1,25 @@
+{
+  "name": "pocketchange-backend",
+  "version": "1.0.0",
+  "description": "PocketChange backend — Plaid monitoring, Stripe payments, Stripe Treasury, Endaoment disbursement",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "jobs:daily": "node src/jobs/daily-roundups.js",
+    "jobs:monthly": "node src/jobs/monthly-charge.js",
+    "jobs:quarterly": "node src/jobs/quarterly-sweep.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "plaid": "^20.0.0",
+    "stripe": "^14.0.0",
+    "better-sqlite3": "^9.0.0",
+    "dotenv": "^16.0.0",
+    "node-cron": "^3.0.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
