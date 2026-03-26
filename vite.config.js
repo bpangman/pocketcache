@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/pocketchange/v2/',
+  base: '/spare/v2/',
   server: {
     allowedHosts: 'all',
   },
