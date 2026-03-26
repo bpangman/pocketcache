@@ -519,7 +519,7 @@ const PAYMENT_OPTIONS = [
     id: 'apple_pay',
     icon: '🍎',
     label: 'Apple Pay',
-    sub: 'Set up once, fully automatic · 5% platform fee',
+    sub: 'Set up once, fully automatic · 10% platform fee',
     badge: null,
   },
   {
@@ -637,7 +637,7 @@ function PaymentMethodScreen({ onNext }) {
             {selected === 'card' ? 'Continue — Add Card →' : selected ? 'Continue — Pick Your Cause →' : 'Choose a payment method'}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
-            PocketChange retains a <span className="font-semibold">5% fee</span> (ACH/Apple Pay) or <span className="font-semibold">10% fee</span> (card). The remainder goes directly to your cause via{' '}
+            PocketChange retains a <span className="font-semibold">5% fee</span> (ACH) or <span className="font-semibold">10% fee</span> (Apple Pay &amp; card). The remainder goes directly to your cause via{' '}
             <span className="font-semibold">Endaoment</span>, a registered 501(c)(3) donor-advised fund. Tax receipts issued automatically.
           </p>
         </div>
