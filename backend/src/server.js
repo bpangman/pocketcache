@@ -55,6 +55,7 @@ import dotenv from 'dotenv';
 import plaidRoutes from './routes/plaid.js';
 import stripeRoutes from './routes/stripe.js';
 import webhookRoutes from './routes/webhooks.js';
+import userRoutes from './routes/users.js';
 import { runDailyRoundups } from './jobs/daily-roundups.js';
 import { runMonthlyCharge } from './jobs/monthly-charge.js';
 import { runQuarterlySweep } from './jobs/quarterly-sweep.js';
@@ -82,6 +83,7 @@ app.use((req, res, next) => {
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/plaid', plaidRoutes);
 app.use('/api/stripe', stripeRoutes);
+app.use('/api/users', userRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 

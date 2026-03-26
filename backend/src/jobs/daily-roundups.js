@@ -19,6 +19,24 @@ import { randomUUID } from 'crypto';
 export async function runDailyRoundups() {
   console.log('[daily-roundups] Starting...');
 
+  // Apply any pending cause changes FIRST, before processing transactions.
+  // Cause switches made in the app are staged in pending_cause_org_id and
+  // take effect at the start of the next 2am job — so the switch date is
+  // always a clean day boundary. Coffee at 11am and sandwich at 1pm on the
+  // day of a switch both go to the OLD cause; tomorrow's purchases go to the new one.
+  const pending = db.prepare(`
+    SELECT id, cause_org_id, pending_cause_org_id FROM users
+    WHERE pending_cause_org_id IS NOT NULL
+  `).all();
+
+  for (const u of pending) {
+    db.prepare(`
+      UPDATE users SET cause_org_id = pending_cause_org_id, pending_cause_org_id = NULL
+      WHERE id = ?
+    `).run(u.id);
+    console.log(`[daily-roundups] Cause switch applied for user ${u.id}: ${u.cause_org_id} → ${u.pending_cause_org_id}`);
+  }
+
   // Get all active Plaid connections
   const connections = db.prepare(`
     SELECT pc.*, u.id as user_id

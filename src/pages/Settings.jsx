@@ -453,7 +453,7 @@ export default function Settings() {
           />
           <div className="px-4 pb-3.5">
             <p className="text-gray-400 text-xs leading-relaxed">
-              Round-ups already accumulated this month stay with your current cause. Only new round-ups go to your new cause.
+              Cause changes take effect tomorrow. Today's round-ups stay with your current cause.
             </p>
           </div>
         </motion.div>

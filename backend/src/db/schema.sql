@@ -3,13 +3,14 @@
 
 -- ── Users ─────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
-  id              TEXT PRIMARY KEY,          -- UUID
-  email           TEXT UNIQUE NOT NULL,
-  name            TEXT,
-  cause_org_id    TEXT NOT NULL,             -- Endaoment org ID for chosen nonprofit
-  payment_method  TEXT,                      -- 'ach' | 'apple_pay' | 'card'
-  status          TEXT DEFAULT 'active',     -- 'active' | 'paused' | 'cancelled'
-  created_at      INTEGER DEFAULT (unixepoch())
+  id                      TEXT PRIMARY KEY,  -- UUID
+  email                   TEXT UNIQUE NOT NULL,
+  name                    TEXT,
+  cause_org_id            TEXT NOT NULL,     -- Endaoment org ID — ACTIVE cause
+  pending_cause_org_id    TEXT,              -- staged cause change, applied at next 2am job
+  payment_method          TEXT,              -- 'ach' | 'apple_pay' | 'card'
+  status                  TEXT DEFAULT 'active',  -- 'active' | 'paused' | 'cancelled'
+  created_at              INTEGER DEFAULT (unixepoch())
 );
 
 -- ── Plaid connections (one per user — the card they're tracking) ──────────────
