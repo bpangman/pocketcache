@@ -8,6 +8,7 @@
  *   className — extra CSS classes
  */
 import logo from '../assets/logo.png';
+import wordmark from '../assets/cache-wordmark.png';
 
 export default function CoinLogo({ size = 180, animate = true, showName = true, className = '' }) {
   return (
@@ -24,28 +25,13 @@ export default function CoinLogo({ size = 180, animate = true, showName = true, 
         draggable={false}
       />
       {showName && (
-        <svg
+        <img
+          src={wordmark}
+          alt="Cache"
           width={Math.round(size * 0.7)}
-          height={Math.round(size * 0.28)}
-          viewBox="0 0 140 50"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          style={{ overflow: 'visible' }}
-        >
-          {/* "Cache" in Pacifico cursive */}
-          <text
-            x="70"
-            y="38"
-            textAnchor="middle"
-            fontSize="40"
-            fontWeight="bold"
-            fontFamily="'Pacifico', cursive"
-            fill="white"
-            letterSpacing="1"
-          >
-            Cache
-          </text>
-        </svg>
+          style={{ objectFit: 'contain' }}
+          draggable={false}
+        />
       )}
     </div>
   );
