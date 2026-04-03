@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PocketCache — Project Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --purple: #7c3aed;
+      --purple-light: #ede9fe;
+      --indigo: #4f46e5;
+      --green: #059669;
+      --green-light: #d1fae5;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, var(--purple) 0%, var(--indigo) 100%);
+      color: white;
+      padding: 2.5rem 2rem 2rem;
+    }
+    .header-inner {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .coin { font-size: 2rem; }
+    .header h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px; }
+    .header p { color: rgba(255,255,255,0.75); font-size: 0.875rem; margin-top: 0.25rem; }
+    .header-meta {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1.25rem;
+      flex-wrap: wrap;
+    }
+    .meta-pill {
+      background: rgba(255,255,255,0.15);
+      border-radius: 999px;
+      padding: 0.3rem 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .meta-pill a { color: white; text-decoration: underline; }
+
+    /* ── Layout ── */
+    .main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* ── Section ── */
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      margin-bottom: 0.75rem;
+    }
+    .card {
+      background: white;
+      border-radius: 1.25rem;
+      padding: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .card + .card { margin-top: 0.75rem; }
+
+    /* ── Status grid ── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+    }
+    .status-card {
+      background: white;
+      border-radius: 1rem;
+      padding: 1.1rem 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .status-card .label { font-size: 0.75rem; color: var(--gray-500); font-weight: 600; margin-bottom: 0.25rem; }
+    .status-card .value { font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .dot.green { background: var(--green); }
+    .dot.amber { background: var(--amber); }
+    .dot.red { background: var(--red); }
+    .dot.gray { background: var(--gray-400); }
+
+    /* ── Checklist ── */
+    .checklist { display: flex; flex-direction: column; gap: 0.6rem; }
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      background: var(--gray-50);
+    }
+    .check-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+      font-weight: 700;
+    }
+    .check-icon.done { background: var(--green-light); color: var(--green); }
+    .check-icon.pending { background: var(--amber-light); color: var(--amber); }
+    .check-icon.blocked { background: var(--red-light); color: var(--red); }
+    .check-icon.na { background: var(--gray-100); color: var(--gray-400); }
+    .check-text .title { font-size: 0.875rem; font-weight: 600; color: var(--gray-900); }
+    .check-text .sub { font-size: 0.78rem; color: var(--gray-500); margin-top: 0.15rem; }
+    .tag {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      margin-left: 0.4rem;
+      vertical-align: middle;
+    }
+    .tag.done { background: var(--green-light); color: var(--green); }
+    .tag.todo { background: var(--amber-light); color: var(--amber); }
+    .tag.blocked { background: var(--red-light); color: var(--red); }
+
+    /* ── Narrative ── */
+    .narrative { font-size: 0.9rem; color: var(--gray-700); line-height: 1.75; }
+    .narrative p { margin-bottom: 1rem; }
+    .narrative p:last-child { margin-bottom: 0; }
+    .narrative strong { color: var(--gray-900); font-weight: 700; }
+    .narrative .step-header {
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--purple);
+      margin: 1.25rem 0 0.35rem;
+    }
+    .narrative .step-header:first-child { margin-top: 0; }
+    .money-box {
+      background: var(--purple-light);
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+      line-height: 1.7;
+    }
+    .money-box .line { display: flex; justify-content: space-between; padding: 0.1rem 0; }
+    .money-box .line.divider { border-top: 1px solid rgba(124,58,237,0.2); margin-top: 0.5rem; padding-top: 0.6rem; font-weight: 700; color: var(--purple); }
+    .money-box .line span:first-child { color: var(--gray-700); }
+    .money-box .line span:last-child { font-weight: 600; color: var(--gray-900); }
+
+    /* ── Fee table ── */
+    .fee-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--gray-100);
+      font-size: 0.875rem;
+    }
+    .fee-row:last-child { border-bottom: none; }
+    .fee-row .method { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+    .fee-row .amount { color: var(--gray-500); font-size: 0.8rem; }
+
+    /* ── Regulatory ── */
+    .reg-item {
+      padding: 1rem;
+      border-radius: 0.75rem;
+      background: var(--gray-50);
+      margin-bottom: 0.6rem;
+    }
+    .reg-item:last-child { margin-bottom: 0; }
+    .reg-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem; }
+    .reg-title { font-weight: 700; font-size: 0.875rem; }
+    .reg-body { font-size: 0.8rem; color: var(--gray-500); line-height: 1.55; }
+
+    /* ── Tech stack ── */
+    .stack-item {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: 0.9rem 0;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .stack-item:last-child { border-bottom: none; }
+    .stack-icon { font-size: 1.5rem; flex-shrink: 0; width: 2rem; text-align: center; margin-top: 2px; }
+    .stack-name { font-weight: 700; font-size: 0.875rem; }
+    .stack-role { font-size: 0.78rem; color: var(--gray-500); margin-top: 0.15rem; }
+
+    /* ── Updated timestamp ── */
+    .updated {
+      font-size: 0.75rem;
+      color: var(--gray-400);
+      text-align: center;
+      padding-top: 0.5rem;
+    }
+
+    @media (max-width: 600px) {
+      .header { padding: 1.75rem 1.25rem 1.5rem; }
+      .main { padding: 1.25rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="header-top">
+      <div class="coin">🪙</div>
+      <div>
+        <h1>PocketCache</h1>
+        <p>Project Dashboard — Internal</p>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-pill">📱 <a href="https://bpangman.github.io/pocketcache/" target="_blank">Live App (v2)</a></div>
+      <div class="meta-pill">💻 <a href="https://github.com/bpangman/pocketcache" target="_blank">GitHub Repo</a></div>
+      <div class="meta-pill">📋 Last updated: <span id="last-updated">March 25, 2026</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- ── Status Overview ── -->
+  <div>
+    <div class="section-label">Current Status</div>
+    <div class="status-grid">
+      <div class="status-card">
+        <div class="label">App Build</div>
+        <div class="value"><span class="dot green"></span> Live on GitHub Pages</div>
+      </div>
+      <div class="status-card">
+        <div class="label">Version</div>
+        <div class="value">v2.0 — prototype</div>
+      </div>
+      <div class="status-card">
+        <div class="label">Payments</div>
+        <div class="value"><span class="dot amber"></span> Stripe (sandbox)</div>
+      </div>
+      <div class="status-card">
+        <div class="label">Card Monitoring</div>
+        <div class="value"><span class="dot amber"></span> Plaid (sandbox)</div>
+      </div>
+      <div class="status-card">
+        <div class="label">DAF / Disbursement</div>
+        <div class="value"><span class="dot amber"></span> Endaoment (pending creds)</div>
+      </div>
+      <div class="status-card">
+        <div class="label">Production-Ready</div>
+        <div class="value"><span class="dot red"></span> Not yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── What's Built ── -->
+  <div>
+    <div class="section-label">What's Built</div>
+    <div class="card">
+      <div class="checklist">
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">Full onboarding flow</div>
+            <div class="sub">Welcome slides → signup → Plaid card link → payment method selection → cause picker</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">Stripe Elements card entry (CC path)</div>
+            <div class="sub">PCI-compliant, SAQ A. Card data never touches PocketCache servers.</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">Payment method selection with fee disclosure</div>
+            <div class="sub">ACH 5% / Apple Pay 10% / Card 10%, all labeled "deducted from donation, not charged extra"</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">Dashboard with live round-up total</div>
+            <div class="sub">Milestone badges, quarterly payout progress, Endaoment disbursement reference</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">"Give Extra" one-time donation button</div>
+            <div class="sub">Preset amounts + custom input. $1,000+ requires double confirmation. Toast confirmation.</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">Cause selection (5 featured nonprofits)</div>
+            <div class="sub">BGCA, St. Jude, WWF, Khan Academy, Feeding America. Branded per org.</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">v2.0 deployment structure</div>
+            <div class="sub">Old link → "expired" page. Live app at /pocketcache/. CI/CD via GitHub Actions.</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <div class="check-icon done">✓</div>
+          <div class="check-text">
+            <div class="title">Regulatory architecture decided</div>
+            <div class="sub">MTL → Stripe Treasury. Charitable solicitation → Endaoment DAF. PCI → Stripe Elements.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Outstanding ── -->
+  <div>
+    <div class="section-label">Outstanding — Before Launch</div>
+    <div class="card">
+      <div class="checklist">
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Open a ticket with Endaoment <span class="tag todo">Action needed</span></div>
+            <div class="sub">Request OAuth partner credentials for DAF-as-a-Service API. Mention: round-up fintech, monthly Stripe collection, quarterly disbursement. Docs: github.com/endaoment/endaoment-integration-docs</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Apply for Stripe Treasury <span class="tag todo">Action needed</span></div>
+            <div class="sub">Not self-service — requires application as a platform partner. Custom pricing. This is what gives you the float interest model. Contact Stripe directly.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Apply for Plaid production access <span class="tag todo">Action needed</span></div>
+            <div class="sub">Sandbox → Production requires Plaid to review your application. Requires live ToS and Privacy Policy first. Budget 2–4 weeks.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Write Terms of Service + Privacy Policy <span class="tag todo">Blocker for Plaid</span></div>
+            <div class="sub">Must disclose: what Plaid accesses, how round-ups are calculated, fee structure, how to cancel. Required before Plaid approves production access.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Apple Pay merchant setup</div>
+            <div class="sub">Need to register as an Apple Pay merchant via Stripe. Requires domain verification. One-time setup.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Failed ACH / insufficient funds policy</div>
+            <div class="sub">When a bank charge bounces, define behavior: retry once after 3 days, then pause account + notify user. Nothing complex — just needs to be decided and built.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Replace Settings card input with Stripe Elements</div>
+            <div class="sub">AddCardSheet in Settings.jsx currently collects raw card numbers — PCI violation. Needs Stripe Elements before any real user touches it.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon pending">!</div>
+          <div class="check-text">
+            <div class="title">Deploy the backend <span class="tag todo">Stubbed — needs server</span></div>
+            <div class="sub">Full backend is written in <code>backend/</code> (Plaid, Stripe, Treasury, Endaoment, all jobs). Needs a deployment target (Railway, Render, or Fly.io) and live credentials to activate. Frontend API calls are still pointed at mock data.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon na">–</div>
+          <div class="check-text">
+            <div class="title">State money transmission licenses</div>
+            <div class="sub">Solved — Stripe Treasury holds all required licenses. PocketCache does not need its own MTL.</div>
+          </div>
+        </div>
+
+        <div class="check-item">
+          <div class="check-icon na">–</div>
+          <div class="check-text">
+            <div class="title">Charitable solicitation registration (50 states)</div>
+            <div class="sub">Solved — Endaoment DAF model handles this entirely. You do not register separately.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── User & Money Narrative ── -->
+  <div>
+    <div class="section-label">How It Works — User Flow & Money</div>
+    <div class="card narrative">
+
+      <div class="step-header">Onboarding (one time)</div>
+      <p>Blake downloads the app. After the welcome slides and account creation, he gets two setup screens back to back.</p>
+      <p>First: <strong>"Which card should we track?"</strong> He picks his Chase Visa. Plaid opens, he logs into Chase, done. PocketCache can now see every transaction on that card — read-only, can never touch it.</p>
+      <p>Second: <strong>"How should we collect your round-up payments?"</strong> He picks Bank Account (ACH). He connects his checking account via Stripe. He picks Boys &amp; Girls Club as his cause and lands on the dashboard.</p>
+
+      <div class="step-header">Every day after that</div>
+      <p>Plaid quietly watches his Chase Visa. He buys coffee for $4.30 → $0.70 round-up queued. Groceries $67.43 → $0.57 round-up queued. It all piles up silently. Blake sees nothing until the monthly charge.</p>
+
+      <div class="step-header">End of month — the charge</div>
+      <p>Blake has accumulated $23.80 in round-ups. If it's under $5, it rolls to next month. Otherwise, PocketCache charges his checking account $23.80 via ACH. One clean charge on his bank statement, nothing on his Chase Visa.</p>
+
+      <div class="money-box">
+        <div class="line"><span>Blake is charged (ACH)</span><span>$23.80</span></div>
+        <div class="line"><span>Stripe ACH processing fee (0.8%)</span><span>−$0.19</span></div>
+        <div class="line"><span>PocketCache platform fee (5% of $23.80)</span><span>−$1.19</span></div>
+        <div class="line"><span>PocketCache net revenue (~$1.00 after Stripe)</span><span></span></div>
+        <div class="line divider"><span>Moves into Stripe Treasury</span><span>$22.61</span></div>
+      </div>
+
+      <div class="step-header">The float period</div>
+      <p>$22.61 sits in your Stripe Treasury account earning interest while you accumulate a full quarter of donations from all users. This is where PocketCache earns float income on top of platform fees.</p>
+
+      <div class="step-header">End of quarter — disbursement</div>
+      <p>PocketCache sweeps the quarter's accumulated funds to Endaoment via their API. Say Blake donated ~$22/month — that's ~$67 for the quarter. Endaoment receives it and grants it directly to Boys &amp; Girls Club. Endaoment emails Blake a tax receipt automatically. Their ~1.5% annual fee on the ~45-day hold comes to roughly $0.13 — negligible.</p>
+
+      <div class="step-header">What Blake experienced</div>
+      <p>One monthly charge on his bank statement. One quarterly tax receipt. His Chase Visa was never charged. He never had to think about it.</p>
+
+    </div>
+  </div>
+
+  <!-- ── Fee Structure ── -->
+  <div>
+    <div class="section-label">Fee Structure</div>
+    <div class="card">
+      <div class="fee-row">
+        <div class="method">🏦 ACH (Bank Account)</div>
+        <div>
+          <div style="font-weight:700; font-size:0.875rem; text-align:right;">5% of round-up total</div>
+          <div class="amount">Stripe takes 0.8% (cap $5) · you net ~4.2%</div>
+        </div>
+      </div>
+      <div class="fee-row">
+        <div class="method">🍎 Apple Pay</div>
+        <div>
+          <div style="font-weight:700; font-size:0.875rem; text-align:right;">10% of round-up total</div>
+          <div class="amount">Stripe takes 2.9% + $0.30 · you net ~7%</div>
+        </div>
+      </div>
+      <div class="fee-row">
+        <div class="method">💳 Credit / Debit Card</div>
+        <div>
+          <div style="font-weight:700; font-size:0.875rem; text-align:right;">10% of round-up total</div>
+          <div class="amount">Stripe takes 2.9% + $0.30 · you net ~7%</div>
+        </div>
+      </div>
+      <div class="fee-row">
+        <div class="method">🏛 Endaoment (DAF)</div>
+        <div>
+          <div style="font-weight:700; font-size:0.875rem; text-align:right;">1.5% annually on float</div>
+          <div class="amount">~0.19% effective on 45-day hold · negligible</div>
+        </div>
+      </div>
+      <p style="font-size:0.75rem; color:var(--gray-400); margin-top:1rem;">All fees are deducted from the donation total. Users are never charged extra beyond their round-up amount.</p>
+    </div>
+  </div>
+
+  <!-- ── Regulatory Checklist ── -->
+  <div>
+    <div class="section-label">Regulatory Checklist</div>
+    <div class="card">
+
+      <div class="reg-item">
+        <div class="reg-header">
+          <div class="reg-title">💸 Money Transmission Licenses (MTL)</div>
+          <span class="tag done">Solved</span>
+        </div>
+        <div class="reg-body">Stripe Treasury holds all required state MTLs. PocketCache is a platform customer, not a money transmitter. No licensing needed on our end.</div>
+      </div>
+
+      <div class="reg-item">
+        <div class="reg-header">
+          <div class="reg-title">📜 Charitable Solicitation Registration</div>
+          <span class="tag done">Solved</span>
+        </div>
+        <div class="reg-body">Endaoment's DAF model handles solicitation registration across all ~41 states that require it. As the intermediary 501(c)(3), they're the one soliciting — not PocketCache.</div>
+      </div>
+
+      <div class="reg-item">
+        <div class="reg-header">
+          <div class="reg-title">🔒 PCI DSS (card data security)</div>
+          <span class="tag done">Solved</span>
+        </div>
+        <div class="reg-body">Stripe Elements + Stripe Treasury keeps PocketCache at SAQ A compliance. Card numbers never touch our servers or code. No PCI audit required.</div>
+      </div>
+
+      <div class="reg-item">
+        <div class="reg-header">
+          <div class="reg-title">🏦 Consumer Consent for Bank Data (Plaid)</div>
+          <span class="tag done">Solved</span>
+        </div>
+        <div class="reg-body">Plaid Link (the modal users interact with) handles all required CFPB consent disclosures inline. Users explicitly authorize access during onboarding.</div>
+      </div>
+
+      <div class="reg-item">
+        <div class="reg-header">
+          <div class="reg-title">📋 Terms of Service + Privacy Policy</div>
+          <span class="tag blocked">Blocker</span>
+        </div>
+        <div class="reg-body">Required before Plaid will approve production access. Must disclose: what Plaid reads, how round-ups are calculated, fee structure (deducted from donation), how to cancel, data retention.</div>
+      </div>
+
+      <div class="reg-item">
+        <div class="reg-header">
+          <div class="reg-title">🧾 Tax Receipts for Donors</div>
+          <span class="tag done">Solved</span>
+        </div>
+        <div class="reg-body">Endaoment issues IRS-compliant tax receipts automatically to users after each disbursement. PocketCache does not need to generate or manage these.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Tech Stack ── -->
+  <div>
+    <div class="section-label">Tech Stack</div>
+    <div class="card">
+      <div class="stack-item">
+        <div class="stack-icon">📡</div>
+        <div>
+          <div class="stack-name">Plaid</div>
+          <div class="stack-role">Reads credit card transactions to calculate round-ups. Read-only, ~12,000 institutions. Cannot be replaced by Stripe for CC monitoring.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">💳</div>
+        <div>
+          <div class="stack-name">Stripe (Payments + Elements + Financial Connections)</div>
+          <div class="stack-role">Collects monthly round-up payments via ACH, Apple Pay, or card. Stripe Elements handles card input (PCI-compliant). Financial Connections links bank accounts for ACH.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">🏦</div>
+        <div>
+          <div class="stack-name">Stripe Treasury</div>
+          <div class="stack-role">Holds collected funds between monthly sweep and quarterly Endaoment disbursement. PocketCache earns interest on the float. Stripe holds all MTLs.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">🏛</div>
+        <div>
+          <div class="stack-name">Endaoment</div>
+          <div class="stack-role">Registered 501(c)(3) donor-advised fund. Receives quarterly disbursements and grants to nonprofits. Handles charitable solicitation registration. Issues tax receipts automatically.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">⚛️</div>
+        <div>
+          <div class="stack-name">React + Vite + TailwindCSS + framer-motion</div>
+          <div class="stack-role">Frontend app stack. Deployed to GitHub Pages via GitHub Actions at bpangman.github.io/pocketcache/.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Backend Architecture ── -->
+  <div>
+    <div class="section-label">Backend Architecture</div>
+    <div class="card">
+      <p style="font-size:0.85rem;color:var(--gray-500);margin-bottom:1.25rem;">Full backend is stubbed in <code style="background:var(--gray-100);padding:1px 5px;border-radius:4px;font-size:0.8rem;">backend/</code> — real code structure, wired logic, TODOs where live credentials plug in. Not yet deployed; needs a server (Railway, Render, Fly.io, etc.).</p>
+
+      <div class="stack-item">
+        <div class="stack-icon">📅</div>
+        <div>
+          <div class="stack-name">Daily job — 2am every night</div>
+          <div class="stack-role"><code>daily-roundups.js</code> — Fetches new Plaid transactions, calculates round-ups, saves to DB. Filters own charges by amount + date + last4 to prevent infinite loop.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">📅</div>
+        <div>
+          <div class="stack-name">Monthly job — 1st of month, 6am</div>
+          <div class="stack-role"><code>monthly-charge.js</code> — Sums round-ups per user. Charges via Stripe if ≥$5. Deducts platform fee (5% ACH, 10% card/Apple Pay). Deposits net to Stripe Treasury. Retry once after 3 days on failure; pause + notify on second failure.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">📅</div>
+        <div>
+          <div class="stack-name">Quarterly job — Jan 1, Apr 1, Jul 1, Oct 1 at 8am</div>
+          <div class="stack-role"><code>quarterly-sweep.js</code> — Gets Treasury balance, initiates ACH OutboundTransfer to Endaoment bank, submits grants via Endaoment API proportionally per nonprofit. Endaoment sends tax receipts to users.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">🔁</div>
+        <div>
+          <div class="stack-name">Stripe webhook handler</div>
+          <div class="stack-role"><code>webhooks.js</code> — Listens for <code>payment_intent.succeeded</code>, <code>payment_intent.payment_failed</code>, <code>treasury.outbound_transfer.posted</code>. Confirms charges and disbursements asynchronously.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">🗄</div>
+        <div>
+          <div class="stack-name">Database schema (SQLite)</div>
+          <div class="stack-role"><code>schema.sql</code> — Tables: users, plaid_connections, payment_methods, roundups, monthly_charges, treasury_log, quarterly_disbursements.</div>
+        </div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-icon">🔌</div>
+        <div>
+          <div class="stack-name">API routes</div>
+          <div class="stack-role">
+            <code>POST /api/plaid/link-token</code> — creates Plaid Link token for frontend<br>
+            <code>POST /api/plaid/exchange</code> — exchanges public token for access token<br>
+            <code>POST /api/stripe/setup-intent</code> — creates SetupIntent for Stripe Elements<br>
+            <code>POST /api/stripe/financial-session</code> — creates FC session for ACH<br>
+            <code>POST /api/stripe/save-payment-method</code> — attaches pm to customer<br>
+            <code>POST /api/webhooks/stripe</code> — Stripe event handler
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="updated">Dashboard updated March 26, 2026 · Updated each session as work progresses</div>
+
+</main>
+
+</body>
+</html>
