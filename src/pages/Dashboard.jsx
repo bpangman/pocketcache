@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { ArrowUpRight, Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
+import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
@@ -194,11 +194,87 @@ function MilestoneToast({ milestone, onClose }) {
   );
 }
 
+function CorporateMatchSheet({ show, onClose, nonprofit, brand }) {
+  const [employer, setEmployer] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setTimeout(() => { setSubmitted(true); }, 600);
+  }
+
+  return (
+    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setEmployer(''); }} title="Corporate Match Inquiry">
+      <div className="px-6 py-5 pb-8">
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">&#127962;</div>
+            <p className="font-bold text-gray-900 text-lg">Inquiry Sent!</p>
+            <p className="text-gray-500 text-sm mt-2">{nonprofit?.shortName} will follow up about matching your round-ups through your employer.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-gray-500 text-sm mb-5">Ask {nonprofit?.shortName} about matching your round-ups through your employer&apos;s giving program.</p>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <input type="text" placeholder="Your employer name" value={employer} onChange={e => setEmployer(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                style={{ background: brand.gradient, opacity: employer ? 1 : 0.4 }}>
+                Send Inquiry
+              </motion.button>
+            </form>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+function VolunteerSheet({ show, onClose, nonprofit, brand }) {
+  const [interest, setInterest] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setTimeout(() => { setSubmitted(true); }, 600);
+  }
+
+  return (
+    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setInterest(''); }} title="Volunteer">
+      <div className="px-6 py-5 pb-8">
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">&#128588;</div>
+            <p className="font-bold text-gray-900 text-lg">Interest Noted!</p>
+            <p className="text-gray-500 text-sm mt-2">{nonprofit?.shortName} will reach out about volunteer opportunities near you.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-gray-500 text-sm mb-5">Express your interest in volunteering with {nonprofit?.shortName}.</p>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <textarea placeholder="Tell us how you'd like to help..." value={interest} onChange={e => setInterest(e.target.value)} required rows={3}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 resize-none" />
+              <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                style={{ background: brand.gradient, opacity: interest ? 1 : 0.4 }}>
+                Express Interest
+              </motion.button>
+            </form>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 export default function Dashboard() {
   const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab } = useApp();
   const brand = useTheme();
   const [showMilestone, setShowMilestone] = useState(true);
   const [showBoost, setShowBoost] = useState(false);
+  const [showMatch, setShowMatch] = useState(false);
+  const [showVolunteer, setShowVolunteer] = useState(false);
   const [boostToast, setBoostToast] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const toastTimerRef = useRef(null);
@@ -244,6 +320,9 @@ export default function Dashboard() {
         nonprofit={selectedNonprofit}
         brand={brand}
       />
+
+      <CorporateMatchSheet show={showMatch} onClose={() => setShowMatch(false)} nonprofit={selectedNonprofit} brand={brand} />
+      <VolunteerSheet show={showVolunteer} onClose={() => setShowVolunteer(false)} nonprofit={selectedNonprofit} brand={brand} />
 
       {/* Header */}
       <motion.div
@@ -296,17 +375,14 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 shrink-0">
-                <button
-                  onClick={() => setShowBoost(true)}
-                  className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1"
-                >
+                <button onClick={() => setShowBoost(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
                   <Plus size={12} /> Give Extra
                 </button>
-                <button
-                  onClick={() => setTab('nonprofits')}
-                  className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1"
-                >
-                  Change <ArrowUpRight size={12} />
+                <button onClick={() => setShowMatch(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
+                  &#127962; Corp Match
+                </button>
+                <button onClick={() => setShowVolunteer(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
+                  &#128588; Volunteer
                 </button>
               </div>
             </div>
@@ -354,8 +430,7 @@ export default function Dashboard() {
         {/* Stats row */}
         <div className="flex gap-3">
           {[
-            { icon: <Zap size={18} />, label: 'Pending', value: `$${pendingRoundUps.toFixed(2)}`, sub: 'This month', color: brand.primary,
-              note: `~$${Math.min(5, Math.max(2, parseFloat((pendingRoundUps * 0.10).toFixed(2)))).toFixed(2)} service fee` },
+            { icon: <Zap size={18} />, label: 'Pending', value: `$${pendingRoundUps.toFixed(2)}`, sub: 'This month', color: brand.primary, note: null },
             { icon: <TrendingUp size={18} />, label: 'Avg/mo', value: '$10.10', sub: '+12% vs last', color: '#10b981', note: null },
             { icon: <Heart size={18} />, label: 'Round-ups', value: '247', sub: 'All time', color: brand.secondary, note: null },
           ].map((s, i) => (
@@ -382,8 +457,8 @@ export default function Dashboard() {
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="font-bold text-gray-900 text-sm">Q1 Payout to {selectedNonprofit.shortName}</p>
-              <p className="text-gray-400 text-xs mt-0.5">100% goes to your cause · Disbursed via Endaoment · April 1, 2026</p>
+              <p className="font-bold text-gray-900 text-sm">Q1 Round-Ups to {selectedNonprofit.shortName}</p>
+              <p className="text-gray-400 text-xs mt-0.5">Charged monthly on your behalf · Direct to BGCA · June 30, 2026</p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl" style={{ color: brand.primary }}>{daysLeft}</p>
@@ -400,9 +475,9 @@ export default function Dashboard() {
             />
           </div>
           <div className="flex justify-between mt-1.5">
-            <p className="text-gray-400 text-xs">Jan 1</p>
+            <p className="text-gray-400 text-xs">Jun 1</p>
             <p className="text-xs font-semibold" style={{ color: brand.primary }}>${pendingRoundUps.toFixed(2)} ready to send</p>
-            <p className="text-gray-400 text-xs">Apr 1</p>
+            <p className="text-gray-400 text-xs">Jun 30</p>
           </div>
         </motion.div>
 
@@ -531,6 +606,11 @@ export default function Dashboard() {
             ))}
           </div>
         </motion.div>
+
+        {/* Footer */}
+        <div className="text-center py-4">
+          <p className="text-xs text-gray-300">Powered by <span className="font-semibold">PocketCache</span></p>
+        </div>
 
       </div>
 

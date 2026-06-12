@@ -1,52 +1,70 @@
 /**
- * Spare Backend Server
+ * PocketCache Backend Server
  *
- * Full fund flow:
+ * Architecture: White-label B2B tech vendor model.
+ * PocketCache is the SOFTWARE PROVIDER. The Nonprofit is the MERCHANT OF RECORD.
+ * All donation charges are DIRECT CHARGES on the nonprofit's own Stripe Connect Standard account.
+ * PocketCache NEVER holds, receives, or controls donation funds.
+ * PocketCache's revenue is FLAT FEES only — never a percentage of donations.
  *
- *  USER ONBOARDING
- *  ───────────────
- *  1. Frontend calls POST /api/plaid/link-token
- *     → backend creates Plaid Link token
- *  2. User links card in Plaid Link modal (frontend)
- *  3. Frontend calls POST /api/plaid/exchange with public_token
- *     → backend exchanges for access_token (stored securely, never exposed)
+ * FUND FLOW
+ * ─────────
+ * All charges are created as direct charges (not destination charges) on the nonprofit's
+ * Stripe Connect account. The nonprofit is the merchant of record on the donor's statement.
  *
- *  4. User picks payment method (ACH / Apple Pay / Card)
- *  5a. Card: frontend calls POST /api/stripe/setup-intent
- *          → backend returns clientSecret
- *          → frontend calls stripe.confirmCardSetup(clientSecret) via Stripe Elements
- *          → frontend calls POST /api/stripe/save-payment-method with resulting pm_id
- *  5b. ACH:  frontend calls POST /api/stripe/financial-session
- *          → backend returns clientSecret
- *          → frontend uses Stripe Financial Connections to link bank
- *          → frontend calls POST /api/stripe/save-payment-method with resulting pm_id
+ * NONPROFIT ONBOARDING
+ * ────────────────────
+ * 1. Nonprofit enters EIN → verified against IRS tax-exempt database
+ * 2. Nonprofit connects their own Stripe account via Stripe Connect Standard OAuth
+ *    → PocketCache stores the connected account ID (acct_xxx), never the keys
+ * 3. Nonprofit configures branding (logo, colors, story) and accepts Nonprofit Software License
+ * 4. Nonprofit's PocketCache page is live immediately
  *
- *  DAILY (2am every night)
- *  ───────────────────────
- *  6. daily-roundups job fetches new transactions via Plaid for each user
- *     → calculates round-ups, saves to DB
- *     → filters out Spare's own charges (infinite loop prevention)
+ * DONOR ONBOARDING
+ * ────────────────
+ * 1. Donor follows nonprofit's link/QR code
+ * 2. Donor signs up (SSO) and selects their state (California residents blocked at launch)
+ * 3. Donor links card via Plaid (read-only transaction monitoring)
+ * 4. Donor selects payment method (ACH or card)
+ * 5. Donor reviews checkout screen: sees round-up estimate, one-charge explanation,
+ *    and pre-checked "cover the $0.50/mo processing fee" checkbox
+ * 6. Donor confirms → donor record created linked to nonprofit's Stripe Connect account
  *
- *  MONTHLY (1st of month, 6am)
- *  ───────────────────────────
- *  7. monthly-charge job sums un-swept round-ups per user
- *     → if >= $5 minimum: charges user via Stripe
- *     → deducts platform fee (5% ACH, 10% Apple Pay/Card)
- *     → deposits net amount to Stripe Treasury
- *     → on failure: retry once after 3 days; pause account if retry fails
+ * DAILY (2am every night)
+ * ───────────────────────
+ * 7. daily-roundups job fetches new transactions via Plaid for each donor
+ *    → calculates round-ups, saves to DB
+ *    → filters out PocketCache's own charges (infinite loop prevention)
  *
- *  QUARTERLY (Jan 1, Apr 1, Jul 1, Oct 1 at 8am)
- *  ────────────────────────────────────────────────
- *  8. quarterly-sweep job gets Treasury balance
- *     → initiates ACH OutboundTransfer from Treasury → Endaoment bank account
- *     → calls Endaoment API to submit grants proportionally to each chosen nonprofit
- *     → Endaoment issues tax receipts to users automatically
+ * MONTHLY CHARGE (1st of month, 6am)
+ * ────────────────────────────────────
+ * 8. monthly-charge job sums un-swept round-ups per donor
+ *    → if >= $0.01: creates a DIRECT CHARGE on nonprofit's Stripe Connect account
+ *      (stripe.charges.create with stripe_account: nonprofit.stripeAccountId)
+ *    → amount = round-ups + $0.50 processing fee (if donor opted to cover it)
+ *      OR amount = round-ups alone (if donor opted out; $0.50 deducted from round-up total)
+ *    → application_fee_amount = $0.50 (flat) per charge → routes to PocketCache platform balance
+ *    → statement_descriptor = nonprofit's name (not "PocketCache")
+ *    → on failure: retry once after 3 days; pause donor if retry fails
  *
- *  REVENUE STREAMS
- *  ───────────────
- *  A. Platform fees (5-10%) taken at charge time — stays in Stripe platform balance
- *  B. Float interest: Treasury earns yield on held funds between monthly charge and
- *     quarterly disbursement (~45-day average hold). Stripe pays this to the platform.
+ * MONTHLY INVOICE TO NONPROFIT (5th of month)
+ * ─────────────────────────────────────────────
+ * 9. Monthly Stripe Billing invoice to nonprofit for $0.50 × active linked users
+ *    "Active linked user" = at least $0.01 in round-ups during the month
+ *    This is separate from and in addition to the application_fee from charges.
+ *    Total PocketCache revenue per active donor ≈ $1.00/month.
+ *
+ * NO DAF, NO ENDAOMENT, NO TREASURY
+ * ───────────────────────────────────
+ * Phase 1 launches with direct Stripe charges only.
+ * No donor-advised fund, no Endaoment sweep, no Stripe Treasury float.
+ * DAF/marketplace features are deferred to Phase 2 (multi-charity platform stage).
+ *
+ * REVENUE STREAMS
+ * ───────────────
+ * A. application_fee_amount: $0.50 flat per monthly donor charge (processing fee)
+ * B. Monthly SaaS invoice: $0.50/active linked user/month to nonprofit
+ * Total: ~$1.00/active donor/month to PocketCache. Always flat. Never a %.
  */
 
 import express from 'express';

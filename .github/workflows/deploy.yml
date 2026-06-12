@@ -50,6 +50,14 @@ jobs:
           cp legal/privacy/index.html dist-pages/legal/privacy/index.html
           cp legal/terms/index.html dist-pages/legal/terms/index.html
 
+          # Pitch page
+          mkdir -p dist-pages/pitch
+          cp public/pitch.html dist-pages/pitch/index.html
+
+          # Nonprofit license page
+          mkdir -p dist-pages/legal/nonprofit-license
+          cp legal/nonprofit-license/index.html dist-pages/legal/nonprofit-license/index.html
+
           # Static assets for landing page
           cp public/logo.png dist-pages/logo.png
 

@@ -1,20 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ArrowRight, Search, CreditCard, Building2, Lock } from 'lucide-react';
+import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 // In production, replace with your publishable key from environment variables
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 import CoinLogo from '../components/CoinLogo';
-import OrgLogo from '../components/OrgLogo';
-import MatchBadge from '../components/MatchBadge';
 import { useApp } from '../store/AppContext';
-import { NONPROFITS } from '../data/nonprofits';
 
-// Featured causes shown on the pick-your-cause screen
-const FEATURED_IDS = ['bgca', 'stjude', 'wwf', 'khanacademy', 'feedamerica'];
-const FEATURED = NONPROFITS.filter(n => FEATURED_IDS.includes(n.id));
 
 const SLIDES = [
   {
@@ -26,7 +20,7 @@ const SLIDES = [
       </div>
     ),
     title: '',
-    subtitle: '100% of your round-ups go to your chosen nonprofit — automatically.\nInspiring change, from your pocket.',
+    subtitle: 'Your round-ups go straight to Boys & Girls Clubs of America — charged monthly on BGCA\'s behalf. Your card, your impact.',
     cta: 'Get Started',
   },
   {
@@ -87,8 +81,8 @@ const SLIDES = [
         </div>
       </div>
     ),
-    title: 'Choose Your\nCause',
-    subtitle: 'Pick from hundreds of verified nonprofits across the causes you care about most.',
+    title: 'Your App,\nYour Cause',
+    subtitle: 'This app is powered by PocketCache for Boys & Girls Clubs of America. Your round-ups go directly to BGCA every month.',
     cta: 'Next',
   },
   {
@@ -128,7 +122,7 @@ const SLIDES = [
     ),
     title: 'Watch Your\nImpact Grow',
     subtitle: 'Track every donation, see your cumulative impact, and share your generosity with others.',
-    cta: 'Pick Your Cause',
+    cta: 'Sign Up →',
   },
 ];
 
@@ -136,14 +130,35 @@ const SLIDES = [
 
 const BASE = import.meta.env.BASE_URL ?? '/';
 
+const US_STATES = [
+  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'DC', name: 'District of Columbia' },
+  { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' }, { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' }, { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' }, { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
+];
+
 function SignUpScreen({ onNext }) {
   const [chosen, setChosen] = useState(null);
   const [showEmail, setShowEmail] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreedTerms, setAgreedTerms] = useState(false);
-  const [agreedData, setAgreedData] = useState(false);
-  const canContinue = agreedTerms && agreedData;
+  const [selectedState, setSelectedState] = useState('');
+  const isCA = selectedState === 'CA';
+  const canContinue = agreedTerms && selectedState !== '' && !isCA;
 
   function handleSSO(provider) {
     if (!canContinue) return;
@@ -206,22 +221,11 @@ function SignUpScreen({ onNext }) {
       {/* Hero */}
       <div
         className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', minHeight: '38%' }}
+        style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: '38%' }}
       >
         <motion.div className="mb-5 flex flex-col items-center gap-3">
-          {/* Avatar stack illustration */}
-          <div className="flex -space-x-3 mb-2">
-            {['🧑‍💼','👩‍🎓','👨‍🍳','👩‍💻','🧑‍🎨'].map((e, i) => (
-              <motion.div
-                key={i}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: i * 0.07 + 0.1, type: 'spring', stiffness: 300 }}
-                className="w-11 h-11 rounded-full bg-white/25 flex items-center justify-center text-xl border-2 border-white/40"
-              >
-                {e}
-              </motion.div>
-            ))}
+          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl mb-2">
+            &#127952;
           </div>
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -229,20 +233,64 @@ function SignUpScreen({ onNext }) {
             transition={{ delay: 0.5 }}
             className="bg-white/20 rounded-2xl px-4 py-2"
           >
-            <p className="text-white text-xs font-semibold text-center">Join 12,400+ donors making change</p>
+            <p className="text-white text-xs font-semibold text-center">Supporting Boys &amp; Girls Clubs of America</p>
           </motion.div>
         </motion.div>
         <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
           Create Your{'\n'}Account
         </h1>
         <p className="text-white/80 text-sm mt-2 text-center">
-          Sign up in seconds. No credit card required yet.
+          Sign up in seconds. No payment required yet.
         </p>
       </div>
+
+      {/* CA Block overlay */}
+      <AnimatePresence>
+        {isCA && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center px-8"
+            style={{ background: 'rgba(0,56,101,0.96)' }}
+          >
+            <div className="text-center">
+              <div className="text-5xl mb-4">&#127968;</div>
+              <h2 className="text-white font-bold text-xl mb-3">Not Available in California Yet</h2>
+              <p className="text-white/75 text-sm leading-relaxed mb-6">
+                PocketCache isn&apos;t available in California yet. We&apos;re working on it! Ask your favorite nonprofit for updates.
+              </p>
+              <button
+                onClick={() => setSelectedState('')}
+                className="bg-white/20 text-white font-semibold px-6 py-3 rounded-2xl text-sm"
+              >
+                ← Go Back
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom sheet */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
         <div className="flex-1 px-4 pt-5 pb-2 space-y-3 overflow-y-auto">
+
+          {/* State selector */}
+          <div>
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-1 block">Your State</label>
+            <select
+              value={selectedState}
+              onChange={e => setSelectedState(e.target.value)}
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+              style={{ appearance: 'none', WebkitAppearance: 'none' }}
+            >
+              <option value="">Select your state…</option>
+              {US_STATES.map(s => (
+                <option key={s.code} value={s.code}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
           {!showEmail ? (
             <>
               {ssoButtons.map((btn) => (
@@ -252,11 +300,11 @@ function SignUpScreen({ onNext }) {
                   onClick={() => handleSSO(btn.id)}
                   className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-semibold text-sm transition-all"
                   style={{
-                    background: chosen === btn.id ? '#e0e7ff' : btn.bg,
+                    background: chosen === btn.id ? '#e0f0ff' : btn.bg,
                     color: btn.color,
                     border: btn.border ?? 'none',
                     opacity: !canContinue ? 0.4 : chosen && chosen !== btn.id ? 0.5 : 1,
-                  cursor: canContinue ? 'pointer' : 'default',
+                    cursor: canContinue ? 'pointer' : 'default',
                   }}
                 >
                   {btn.icon}
@@ -272,33 +320,34 @@ function SignUpScreen({ onNext }) {
 
               <button
                 onClick={() => setShowEmail(true)}
-                className="w-full py-3.5 rounded-2xl font-semibold text-sm text-indigo-600 bg-indigo-50"
+                className="w-full py-3.5 rounded-2xl font-semibold text-sm"
+                style={{ color: '#003865', background: '#e8f0fa' }}
               >
-                Use email & password
+                Use email &amp; password
               </button>
             </>
           ) : (
             <form onSubmit={handleEmail} className="space-y-3">
               <button type="button" onClick={() => setShowEmail(false)}
-                className="text-indigo-600 text-sm font-semibold">
+                className="text-sm font-semibold" style={{ color: '#003865' }}>
                 ← Back
               </button>
               <input
                 type="email" placeholder="Email address" value={email}
                 onChange={e => setEmail(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-indigo-400"
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
               />
               <input
                 type="password" placeholder="Create password" value={password}
                 onChange={e => setPassword(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-indigo-400"
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
               />
               <motion.button
                 whileTap={canContinue ? { scale: 0.97 } : {}}
                 type="submit"
                 className="w-full py-4 rounded-2xl text-white font-bold text-base"
                 style={{
-                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  background: 'linear-gradient(135deg, #003865, #001a33)',
                   opacity: canContinue ? 1 : 0.4,
                   cursor: canContinue ? 'pointer' : 'default',
                 }}
@@ -309,37 +358,28 @@ function SignUpScreen({ onNext }) {
           )}
         </div>
 
-        {/* Consent checkboxes */}
+        {/* Consent checkbox */}
         <div className="px-5 pb-8 pt-3 space-y-3">
           <label className="flex items-start gap-3 cursor-pointer">
             <div
               onClick={() => setAgreedTerms(v => !v)}
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-              style={{ borderColor: agreedTerms ? '#4f46e5' : '#d1d5db', background: agreedTerms ? '#4f46e5' : '#fff' }}
+              style={{ borderColor: agreedTerms ? '#003865' : '#d1d5db', background: agreedTerms ? '#003865' : '#fff' }}
             >
               {agreedTerms && <CheckCircle size={12} className="text-white" />}
             </div>
             <span className="text-xs text-gray-500 leading-relaxed">
               I am at least 18 years old and agree to the{' '}
-              <a href={`${BASE}terms.html`} target="_blank" rel="noopener" className="text-indigo-600 font-semibold underline">Terms of Service</a>
+              <a href="/legal/terms/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Terms of Service</a>
               {' '}and{' '}
-              <a href={`${BASE}privacy.html`} target="_blank" rel="noopener" className="text-indigo-600 font-semibold underline">Privacy Policy</a>.
+              <a href="/legal/privacy/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Privacy Policy</a>.
             </span>
           </label>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <div
-              onClick={() => setAgreedData(v => !v)}
-              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-              style={{ borderColor: agreedData ? '#4f46e5' : '#d1d5db', background: agreedData ? '#4f46e5' : '#fff' }}
-            >
-              {agreedData && <CheckCircle size={12} className="text-white" />}
-            </div>
-            <span className="text-xs text-gray-500 leading-relaxed">
-              I agree to share anonymized demographic data (age range, location, giving patterns) to help nonprofits understand donor trends. My financial data is never sold.
-            </span>
-          </label>
-          {!canContinue && (
-            <p className="text-xs text-center text-gray-400">Please check both boxes above to continue</p>
+          {selectedState === '' && (
+            <p className="text-xs text-center text-gray-400">Select your state above to continue</p>
+          )}
+          {selectedState !== '' && !agreedTerms && (
+            <p className="text-xs text-center text-gray-400">Check the box above to continue</p>
           )}
         </div>
       </div>
@@ -508,22 +548,21 @@ const PAYMENT_OPTIONS = [
     id: 'ach',
     icon: '🏦',
     label: 'Bank Account',
-    sub: 'Direct bank transfer · 5% service fee ($2–$5 cap)',
-    badge: 'Lowest fee',
-    badgeColor: '#059669',
+    sub: 'Direct bank transfer · Flat $0.50/month processing fee',
+    badge: null,
   },
   {
     id: 'apple_pay',
     icon: '🍎',
     label: 'Apple Pay',
-    sub: 'Set up once, fully automatic · 10% service fee ($2–$5 cap)',
+    sub: 'Set up once, fully automatic · Flat $0.50/month processing fee',
     badge: null,
   },
   {
     id: 'card',
     icon: '💳',
     label: 'Credit or Debit Card',
-    sub: 'Visa, Mastercard, Amex, or Discover · 10% service fee ($2–$5 cap)',
+    sub: 'Visa, Mastercard, Amex, or Discover · Flat $0.50/month processing fee',
     badge: null,
   },
 ];
@@ -631,10 +670,10 @@ function PaymentMethodScreen({ onNext }) {
               cursor: selected ? 'pointer' : 'default',
             }}
           >
-            {selected === 'card' ? 'Continue — Add Card →' : selected ? 'Continue — Pick Your Cause →' : 'Choose a payment method'}
+            {selected === 'card' ? 'Continue →' : selected ? 'Continue →' : 'Choose a payment method'}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
-            <span className="font-semibold text-gray-600">100% of your round-ups go to your chosen cause.</span> A separate platform service fee is charged: <span className="font-semibold">5%</span> for bank account or <span className="font-semibold">10%</span> for Apple Pay &amp; card ($2 minimum, $5 maximum). The fee is a separate charge — never deducted from your donation. Donations go to your cause via <span className="font-semibold">Endaoment</span>, a registered 501(c)(3) donor-advised fund. Tax receipts issued automatically.
+            Your round-ups are charged once a month on behalf of BGCA. BGCA&apos;s statement descriptor will appear on your bank statement. Receipts are issued by BGCA.
           </p>
         </div>
       </div>
@@ -716,7 +755,7 @@ function CardEntryForm({ onSuccess }) {
           cursor: cardComplete && !loading ? 'pointer' : 'default',
         }}
       >
-        {loading ? 'Saving card securely…' : 'Save Card — Pick Your Cause →'}
+        {loading ? 'Saving card securely…' : 'Save Card →'}
       </motion.button>
     </form>
   );
@@ -747,15 +786,14 @@ function CardEntryScreen({ onNext }) {
             Add your card
           </h1>
           <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Saved securely via Stripe. A 10% fee is deducted from your donation — you are never charged extra.
+            Saved securely via Stripe. Your round-ups are collected monthly on BGCA&apos;s behalf.
           </p>
         </div>
 
         <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-6 pb-10">
           <CardEntryForm onSuccess={onNext} />
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
-            Round-ups are charged once a month (minimum $5) and disbursed quarterly to your cause via{' '}
-            <span className="font-semibold">Endaoment</span>, a registered 501(c)(3) DAF. Tax receipts issued automatically.
+            Round-ups are charged once a month on behalf of BGCA. BGCA issues your tax receipt directly.
           </p>
         </div>
       </motion.div>
@@ -763,204 +801,303 @@ function CardEntryScreen({ onNext }) {
   );
 }
 
-// ─── Cause selection screen ─────────────────────────────────────────────────
+// ─── Checkout confirm screen ─────────────────────────────────────────────────
 
-function CauseCard({ nonprofit, selected, onSelect }) {
-  return (
-    <motion.button
-      whileTap={{ scale: 0.97 }}
-      onClick={() => onSelect(nonprofit)}
-      className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-all relative overflow-hidden"
-      style={selected
-        ? { background: nonprofit.brand.accentLight, boxShadow: `0 0 0 2px ${nonprofit.brand.primary}` }
-        : { background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
-      }
-    >
-      {/* Color accent bar */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl transition-all"
-        style={{ background: selected ? nonprofit.brand.primary : 'transparent' }}
-      />
-      <OrgLogo nonprofit={nonprofit} size={12} rounded="xl" className="shrink-0 ml-1" />
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-gray-900 text-sm leading-snug">{nonprofit.name}</p>
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          <span
-            className="text-xs font-medium px-1.5 py-0.5 rounded-full inline-block"
-            style={{ background: nonprofit.categoryColor + '18', color: nonprofit.categoryColor }}
-          >
-            {nonprofit.category}
-          </span>
-          <MatchBadge match={nonprofit.corporateMatch} compact />
-        </div>
-      </div>
-      <div
-        className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all"
-        style={selected
-          ? { background: nonprofit.brand.primary }
-          : { background: '#f3f4f6' }
-        }
-      >
-        {selected
-          ? <CheckCircle size={14} className="text-white" />
-          : <div className="w-3 h-3 rounded-full bg-gray-300" />
-        }
-      </div>
-    </motion.button>
-  );
-}
-
-function CauseSelectionScreen({ onComplete }) {
-  const { setSelectedNonprofit, setTab, setPage } = useApp();
-  const [picked, setPicked] = useState(null);
-  const [showSearch, setShowSearch] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const searchResults = NONPROFITS.filter(n =>
-    n.name.toLowerCase().includes(search.toLowerCase()) ||
-    n.category.toLowerCase().includes(search.toLowerCase())
-  );
-
-  function handleConfirm() {
-    if (!picked) return;
-    setSelectedNonprofit(picked);
-    setPage('home');
-  }
-
-  function handleBrowseAll(nonprofit) {
-    setSelectedNonprofit(nonprofit);
-    setPage('home');
-    setTab('nonprofits');
-  }
+function CheckoutConfirmScreen({ onConfirm }) {
+  const [coverFee, setCoverFee] = useState(true);
+  const roundUps = 4.63;
+  const fee = 0.50;
+  const total = coverFee ? roundUps + fee : roundUps;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 30 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="flex flex-col h-full overflow-hidden"
-    >
-      {/* Hero — same full-bleed gradient style as intro slides */}
-      <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #f97316 0%, #ec4899 55%, #8b5cf6 100%)', minHeight: '38%' }}
-      >
-        {/* Mini logo row preview */}
-        <motion.div className="flex gap-2 mb-5">
-          {FEATURED.map((n, i) => (
-            <motion.div
-              key={n.id}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: i * 0.07 + 0.15, type: 'spring', stiffness: 320 }}
-              className="w-11 h-11 rounded-xl bg-white/25 p-1.5 flex items-center justify-center"
-            >
-              <OrgLogo nonprofit={n} size={7} rounded="lg" className="shrink-0" />
-            </motion.div>
-          ))}
+    <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
+      className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: '38%' }}>
+        <motion.div className="mb-5 flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl"
+            style={{ background: 'rgba(255,255,255,0.15)' }}>&#127952;</div>
+          <div className="bg-white/20 rounded-2xl px-4 py-2">
+            <p className="text-white text-xs font-semibold text-center">One monthly charge · BGCA on your statement</p>
+          </div>
         </motion.div>
         <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-          Pick Your{'\n'}Cause
+          Review &amp;{'\n'}Confirm
         </h1>
-        <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-          Your round-ups will support this cause.{'\n'}You can always change it later.
+        <p className="text-white/80 text-sm mt-2 text-center">
+          Your round-ups are collected monthly by Boys &amp; Girls Clubs of America.
         </p>
       </div>
 
-      {/* Bottom sheet card panel */}
-      <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div className="flex-1 scrollable px-4 pt-5 pb-2 space-y-2.5">
-          {!showSearch ? (
-            <>
-              <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Featured Causes</p>
-              {FEATURED.map((nonprofit) => (
-                <CauseCard
-                  key={nonprofit.id}
-                  nonprofit={nonprofit}
-                  selected={picked?.id === nonprofit.id}
-                  onSelect={setPicked}
-                />
-              ))}
+      {/* Sheet */}
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
+        <div className="flex-1 px-5 pt-5 pb-2 space-y-4 overflow-y-auto">
 
-              {/* Browse all */}
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setShowSearch(true)}
-                className="w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 border-dashed border-gray-200 bg-white text-left"
-              >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center shrink-0">
-                  <Search size={20} className="text-violet-500" />
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-800 text-sm">Find a different cause</p>
-                  <p className="text-gray-400 text-xs">Search all verified nonprofits</p>
-                </div>
-                <ArrowRight size={16} className="text-gray-300 ml-auto shrink-0" />
-              </motion.button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setShowSearch(false)}
-                className="text-sm font-semibold px-1 pb-1"
-                style={{ color: '#f97316' }}
-              >
-                ← Featured causes
-              </button>
-              <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 shadow-sm">
-                <Search size={16} className="text-gray-400 shrink-0" />
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Search causes..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
-                />
+          {/* Estimate card */}
+          <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Monthly Estimate</p>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-700">Round-ups this month</span>
+              <span className="font-bold text-gray-900">${roundUps.toFixed(2)}</span>
+            </div>
+            {coverFee && (
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-gray-500">Processing fee (you&apos;re covering it)</span>
+                <span className="text-sm text-gray-500">+$0.50</span>
               </div>
-              <div className="space-y-2">
-                {searchResults.map(nonprofit => (
-                  <motion.button
-                    key={nonprofit.id}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleBrowseAll(nonprofit)}
-                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white shadow-sm text-left"
-                  >
-                    <OrgLogo nonprofit={nonprofit} size={10} rounded="xl" className="shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm leading-snug">{nonprofit.name}</p>
-                      <p className="text-gray-400 text-xs">{nonprofit.category}</p>
-                    </div>
-                    <ArrowRight size={14} className="text-gray-300 shrink-0" />
-                  </motion.button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+            )}
+            <div className="h-px bg-slate-200 my-2" />
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-gray-900">One charge from BGCA</span>
+              <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
+            </div>
+          </div>
 
-        {/* CTA */}
-        {!showSearch && (
-          <div className="px-4 pb-10 pt-3 bg-gray-50 border-t border-gray-100">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={handleConfirm}
-              disabled={!picked}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base transition-all"
-              style={{
-                background: picked
-                  ? picked.brand.gradient
-                  : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-                opacity: picked ? 1 : 0.7,
-              }}
-            >
-              {picked ? `Support ${picked.name}` : 'Select a cause to continue'}
-            </motion.button>
-            <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
-              Donations are made to <span className="font-semibold">Endaoment</span>, a registered 501(c)(3) donor-advised fund, which grants funds to your chosen nonprofit quarterly. Once donated, funds cannot be reversed. Tax receipts are issued by Endaoment, not directly by your chosen charity. You can change your cause anytime for future donations.
+          {/* Cover fee checkbox */}
+          <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl"
+            style={{ background: coverFee ? '#d1fae5' : '#f9fafb', border: coverFee ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}>
+            <div onClick={() => setCoverFee(v => !v)}
+              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+              style={{ borderColor: coverFee ? '#059669' : '#d1d5db', background: coverFee ? '#059669' : '#fff' }}>
+              {coverFee && <CheckCircle size={12} className="text-white" />}
+            </div>
+            <div>
+              <span className="text-sm font-semibold text-gray-900">Cover the processing fee ($0.50/mo) so 100% of my round-ups go to BGCA</span>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {coverFee
+                  ? `Your $0.50 covers our operating costs. 100% of your $${roundUps.toFixed(2)} in round-ups goes to BGCA.`
+                  : `The $0.50 fee will be deducted from your round-ups instead. BGCA receives $${(roundUps - fee).toFixed(2)}.`}
+              </p>
+            </div>
+          </label>
+
+          {/* One-charge explanation */}
+          <div className="rounded-2xl p-4 bg-gray-50">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">How charges work</p>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Once a month, Boys &amp; Girls Clubs of America charges your payment method for your accumulated round-ups. The charge appears as <strong>&ldquo;BGCA&rdquo;</strong> on your statement. BGCA issues your tax receipt directly.
+            </p>
+            <p className="text-xs text-gray-400 mt-2">
+              Note: the $0.50/mo processing fee is not tax-deductible. Your donation amount is.
             </p>
           </div>
+        </div>
+
+        <div className="px-4 pb-10 pt-3 bg-white border-t border-gray-100">
+          <motion.button whileTap={{ scale: 0.97 }} onClick={onConfirm}
+            className="w-full py-4 rounded-2xl text-white font-bold text-base"
+            style={{ background: 'linear-gradient(135deg, #003865, #001a33)' }}>
+            Start Giving to BGCA
+          </motion.button>
+          <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
+            Powered by PocketCache, LLC. You can cancel anytime in Settings.
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Nonprofit self-serve signup flow ─────────────────────────────────────────
+
+function NonprofitSignupFlow({ onBack }) {
+  const [step, setStep] = useState('ein');
+  const [ein, setEin] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [stripeConnecting, setStripeConnecting] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [story, setStory] = useState('');
+  const [color, setColor] = useState('#003865');
+  const [accepted, setAccepted] = useState(false);
+
+  function handleVerifyEIN(e) {
+    e.preventDefault();
+    setVerifying(true);
+    setTimeout(() => {
+      setVerifying(false);
+      setVerified(true);
+      setOrgName('Boys & Girls Clubs of America');
+      setStep('stripe');
+    }, 1500);
+  }
+
+  function handleStripeConnect() {
+    setStripeConnecting(true);
+    setTimeout(() => {
+      setStripeConnecting(false);
+      setStripeConnected(true);
+    }, 1500);
+  }
+
+  function handleBrandingNext(e) {
+    e.preventDefault();
+    setStep('license');
+  }
+
+  function handleAccept(e) {
+    e.preventDefault();
+    setStep('live');
+  }
+
+  const stepBack = { ein: onBack, stripe: () => setStep('ein'), branding: () => setStep('stripe'), license: () => setStep('branding'), live: () => setStep('license') };
+
+  return (
+    <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
+      className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '30%' }}>
+        <button onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</button>
+        <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          {step === 'ein' && 'Verify Your\nNonprofit'}
+          {step === 'stripe' && 'Connect\nStripe'}
+          {step === 'branding' && 'Customize\nYour Page'}
+          {step === 'license' && 'License\nAgreement'}
+          {step === 'live' && "You're\nLive! 🎉"}
+        </h1>
+      </div>
+
+      {/* Sheet */}
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-5 pt-6 pb-10 space-y-4">
+
+        {step === 'ein' && (
+          <form onSubmit={handleVerifyEIN} className="space-y-4">
+            <p className="text-gray-500 text-sm">Enter your organization&apos;s EIN. We verify your tax-exempt status with IRS data.</p>
+            <input type="text" placeholder="XX-XXXXXXX" value={ein} onChange={e => setEin(e.target.value)} required
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono" />
+            {verified && (
+              <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
+                <p className="text-green-800 text-sm font-bold">&#10003; Verified: Boys &amp; Girls Clubs of America</p>
+                <p className="text-green-700 text-xs mt-1">EIN 13-5562976 · 501(c)(3)</p>
+              </div>
+            )}
+            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: ein ? 1 : 0.4 }}>
+              {verifying ? 'Verifying…' : 'Verify EIN →'}
+            </motion.button>
+          </form>
         )}
+
+        {step === 'stripe' && (
+          <div className="space-y-4">
+            <p className="text-gray-500 text-sm">Connect your organization&apos;s Stripe account. You are the merchant of record — donations charge directly on your Stripe.</p>
+            {stripeConnected ? (
+              <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
+                <p className="text-green-800 text-sm font-bold">&#10003; Stripe Connected</p>
+                <p className="text-green-700 text-xs mt-1">You are the merchant of record for all donations</p>
+              </div>
+            ) : (
+              <motion.button whileTap={{ scale: 0.97 }} onClick={handleStripeConnect}
+                className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                style={{ background: 'linear-gradient(135deg, #635bff, #4b45c6)' }}>
+                {stripeConnecting ? 'Connecting…' : 'Connect with Stripe'}
+              </motion.button>
+            )}
+            {stripeConnected && (
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('branding')}
+                className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
+                Continue →
+              </motion.button>
+            )}
+          </div>
+        )}
+
+        {step === 'branding' && (
+          <form onSubmit={handleBrandingNext} className="space-y-4">
+            <p className="text-gray-500 text-sm">Customize how your page looks to donors.</p>
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Organization Name</label>
+              <input type="text" value={orgName} onChange={e => setOrgName(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Mission (shown to donors)</label>
+              <textarea value={story} onChange={e => setStory(e.target.value)} rows={3} placeholder="Tell donors what you do…"
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 resize-none" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Brand Color</label>
+              <div className="flex gap-3">
+                {['#003865', '#059669', '#7c3aed'].map(c => (
+                  <button key={c} type="button" onClick={() => setColor(c)}
+                    className="w-10 h-10 rounded-xl border-2 transition-all"
+                    style={{ background: c, borderColor: color === c ? '#111' : 'transparent' }} />
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logo</label>
+              <button type="button" className="w-full py-3 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 text-sm font-semibold">
+                Upload Logo (coming soon)
+              </button>
+            </div>
+            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
+              Continue →
+            </motion.button>
+          </form>
+        )}
+
+        {step === 'license' && (
+          <form onSubmit={handleAccept} className="space-y-4">
+            <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
+            <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
+              <p><strong>Flat fee:</strong> $0.50/active linked user/month. Never a % of donations.</p>
+              <p><strong>You are the merchant of record.</strong> Donations charge directly on your Stripe. PocketCache never holds donation funds.</p>
+              <p><strong>You issue tax receipts</strong> directly to donors. PocketCache does not.</p>
+              <p><strong>You handle charitable solicitation registration</strong> in applicable states.</p>
+              <p><strong>California:</strong> Not available at launch. Do not promote to CA residents until PocketCache confirms availability.</p>
+            </div>
+            <a href="/legal/nonprofit-license/" target="_blank" rel="noopener"
+              className="block text-center text-sm font-semibold underline" style={{ color: '#003865' }}>
+              Read full license →
+            </a>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <div onClick={() => setAccepted(v => !v)}
+                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                style={{ borderColor: accepted ? '#059669' : '#d1d5db', background: accepted ? '#059669' : '#fff' }}>
+                {accepted && <CheckCircle size={12} className="text-white" />}
+              </div>
+              <span className="text-xs text-gray-600 leading-relaxed">I accept the Nonprofit Software License Agreement on behalf of this organization.</span>
+            </label>
+            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: accepted ? 1 : 0.4 }}>
+              Accept &amp; Go Live →
+            </motion.button>
+          </form>
+        )}
+
+        {step === 'live' && (
+          <div className="space-y-4">
+            <div className="rounded-2xl p-4 bg-green-50 border border-green-200 text-center">
+              <p className="text-green-800 font-bold text-base mb-1">Your page is live!</p>
+              <p className="text-green-700 text-sm font-mono">pocketcache.app/bgca</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">QR Code</p>
+              <div className="w-24 h-24 bg-gray-200 rounded-xl flex items-center justify-center text-gray-400 text-xs font-bold">QR</div>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Embed Widget</p>
+              <div className="bg-gray-900 rounded-xl p-3 overflow-x-auto">
+                <code className="text-green-400 text-xs whitespace-nowrap">{'<script src="https://cdn.pocketcache.app/widget.js" data-org="bgca"></script>'}</code>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">API Key</p>
+              <div className="bg-gray-50 rounded-xl px-4 py-3 font-mono text-xs text-gray-500">sk_live_••••••••••••••••</div>
+            </div>
+            <p className="text-gray-400 text-xs text-center">Check your email for next steps from PocketCache.</p>
+          </div>
+        )}
+
       </div>
     </motion.div>
   );
@@ -969,8 +1106,9 @@ function CauseSelectionScreen({ onComplete }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
+  const { setPage } = useApp();
   const [slide, setSlide] = useState(0);
-  const [step, setStep] = useState('slides'); // 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'cause'
+  const [step, setStep] = useState('slides'); // 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
 
   const current = SLIDES[slide];
   const isLast = slide === SLIDES.length - 1;
@@ -983,9 +1121,10 @@ export default function Onboarding() {
     }
   }
 
-  if (step === 'cause') return <CauseSelectionScreen />;
-  if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('cause')} />;
-  if (step === 'payment-method') return <PaymentMethodScreen onNext={method => setStep(method === 'card' ? 'card-entry' : 'cause')} />;
+  if (step === 'nonprofit-signup') return <NonprofitSignupFlow onBack={() => setStep('slides')} />;
+  if (step === 'checkout-confirm') return <CheckoutConfirmScreen onConfirm={() => setPage('home')} />;
+  if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('checkout-confirm')} />;
+  if (step === 'payment-method') return <PaymentMethodScreen onNext={method => setStep(method === 'card' ? 'card-entry' : 'checkout-confirm')} />;
   if (step === 'connect-card') return <ConnectCardScreen onNext={() => setStep('payment-method')} />;
   if (step === 'signup') return <SignUpScreen onNext={() => setStep('connect-card')} />;
 
@@ -1036,10 +1175,18 @@ export default function Onboarding() {
               whileTap={{ scale: 0.97 }}
               onClick={advance}
               className="w-full py-4 rounded-2xl bg-white font-bold text-base shadow-lg"
-              style={{ color: slide === 0 ? '#2563eb' : slide === 1 ? '#7c3aed' : slide === 2 ? '#059669' : '#e11d48' }}
+              style={{ color: slide === 0 ? '#003865' : slide === 1 ? '#7c3aed' : slide === 2 ? '#059669' : '#e11d48' }}
             >
               {current.cta}
             </motion.button>
+            {slide === 0 && (
+              <button
+                onClick={() => setStep('nonprofit-signup')}
+                className="text-white/70 text-sm py-2 underline"
+              >
+                For Nonprofits →
+              </button>
+            )}
             {slide > 0 && (
               <button
                 onClick={() => setStep('signup')}

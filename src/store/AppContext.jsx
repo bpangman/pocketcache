@@ -16,26 +16,13 @@ function save(key, value) {
 
 const AppContext = createContext(null);
 
-/**
- * Calculate the platform service fee for a given amount and payment method.
- * Fee is charged separately — 100% of the round-up amount goes to charity.
- *
- * @param {number} amount - round-up total in dollars
- * @param {'card'|'ach'|'apple_pay'} method - payment method
- * @returns {number} service fee in dollars
- */
-export function calculateFee(amount, method = 'card') {
-  const rate = method === 'ach' ? 0.05 : 0.10;
-  const raw = amount * rate;
-  return Math.min(5, Math.max(2, parseFloat(raw.toFixed(2))));
-}
 
 const BASE_PENDING = 4.63;
 
 export function AppProvider({ children }) {
   const [page, setPageState] = useState(() => load('pc_page', 'onboarding'));
   const [tab, setTab] = useState('dashboard');
-  const [selectedNonprofitId, setSelectedNonprofitIdState] = useState(() => load('pc_cause_id', null));
+  const [selectedNonprofitId, setSelectedNonprofitIdState] = useState(() => load('pc_cause_id', 'bgca'));
   const [roundUpMultiplier, setRoundUpMultiplierState] = useState(() => load('pc_multiplier', 1));
   const [linkedCards, setLinkedCardsState] = useState(() => load('pc_cards', [
     { id: 1, last4: '4242', brand: 'Visa', name: 'Chase Sapphire' },
@@ -93,7 +80,6 @@ export function AppProvider({ children }) {
       totalDonated,
       boostDonation,
       pendingRoundUps,
-      calculateFee,
     }}>
       {children}
     </AppContext.Provider>
