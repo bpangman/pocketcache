@@ -1,11 +1,28 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CreditCard, Bell, Shield, ChevronRight, Plus, Zap, Lock, Eye, EyeOff, Trash2, Fingerprint, FileText, ExternalLink } from 'lucide-react';
+import { CreditCard, Bell, Shield, ChevronRight, Plus, Zap, Lock, Trash2, Fingerprint, FileText, ExternalLink, Eye } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
 import CoinAccent from '../components/CoinAccent';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
+
+const CARD_ELEMENT_OPTIONS = {
+  style: {
+    base: {
+      fontSize: '16px',
+      color: '#111827',
+      fontFamily: '"Inter", system-ui, sans-serif',
+      '::placeholder': { color: '#9ca3af' },
+    },
+    invalid: { color: '#ef4444' },
+  },
+  hidePostalCode: false,
+};
 
 function Toggle({ value, onChange, color }) {
   return (
@@ -60,141 +77,77 @@ const MULTIPLIER_OPTIONS = [
 
 const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover'];
 
-function AddCardSheet({ show, onClose, onAdd, brand }) {
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [name, setName] = useState('');
-  const [showCvv, setShowCvv] = useState(false);
+function AddCardForm({ onAdd, onClose, brand }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [cardComplete, setCardComplete] = useState(false);
 
-  function formatCard(val) {
-    return val.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
-  }
-  function formatExpiry(val) {
-    const digits = val.replace(/\D/g, '').slice(0, 4);
-    return digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits;
-  }
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setLoading(true);
+    setError(null);
 
-  function detectCardBrand(num) {
-    const n = num.replace(/\s/g, '');
-    if (n.startsWith('4')) return 'Visa';
-    if (n.startsWith('5')) return 'Mastercard';
-    if (n.startsWith('3')) return 'Amex';
-    if (n.startsWith('6')) return 'Discover';
-    return 'Card';
-  }
+    // In production: call backend to create a SetupIntent, then confirmCardSetup.
+    // For the prototype we simulate a successful save after a brief delay.
+    await new Promise(r => setTimeout(r, 1200));
 
-  function handleAdd() {
-    if (cardNumber.replace(/\s/g, '').length < 16) return;
-    const last4 = cardNumber.replace(/\s/g, '').slice(-4);
-    const detectedBrand = detectCardBrand(cardNumber);
-    onAdd({ id: Date.now(), last4, brand: detectedBrand, name: name || 'My Card' });
+    setLoading(false);
+    // Simulate getting back last4 from Stripe — replace with real payment method details in production
+    onAdd({ id: Date.now(), last4: '****', brand: 'Card', name: 'My Card' });
     onClose();
-    setCardNumber(''); setExpiry(''); setCvv(''); setName('');
   }
 
-  const InputField = ({ label, value, onChange, placeholder, type = 'text', right }) => (
-    <div className="mb-4">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{label}</p>
-      <div className="flex items-center gap-2 border-2 border-gray-100 rounded-2xl px-4 py-3 focus-within:border-orange-300 transition-colors"
-        style={{ borderColor: 'transparent', background: '#f9fafb' }}>
-        <input
-          type={type}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          inputMode={type === 'tel' ? 'numeric' : 'text'}
-          className="flex-1 bg-transparent text-gray-900 text-sm outline-none placeholder:text-gray-400"
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div
+        className="bg-white rounded-2xl px-4 py-4 border"
+        style={{ borderColor: error ? '#ef4444' : '#e5e7eb' }}
+      >
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Card details</p>
+        <CardElement
+          options={CARD_ELEMENT_OPTIONS}
+          onChange={e => {
+            setCardComplete(e.complete);
+            setError(e.error?.message ?? null);
+          }}
         />
-        {right}
       </div>
-    </div>
-  );
 
+      {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+
+      <div className="flex items-center gap-2 px-1">
+        <Lock size={13} className="text-gray-400 shrink-0" />
+        <p className="text-gray-400 text-xs">
+          Card details secured by <span className="font-semibold">Stripe</span>. {brand.appName} never sees your card number.
+        </p>
+      </div>
+
+      <motion.button
+        type="submit"
+        whileTap={cardComplete && !loading ? { scale: 0.97 } : {}}
+        disabled={!cardComplete || loading || !stripe}
+        className="w-full py-4 rounded-2xl text-white font-bold text-base"
+        style={{
+          background: cardComplete && !loading ? brand.gradient : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+          cursor: cardComplete && !loading ? 'pointer' : 'default',
+        }}
+      >
+        {loading ? 'Saving card securely…' : 'Add Card'}
+      </motion.button>
+    </form>
+  );
+}
+
+function AddCardSheet({ show, onClose, onAdd, brand }) {
   return (
     <Sheet show={show} onClose={onClose} title="Add a Card">
       <div className="px-6 py-4 pb-8">
-        {/* Mock card preview */}
-        <div
-          className="rounded-3xl p-5 mb-6 text-white relative overflow-hidden h-40"
-          style={{ background: brand.gradient }}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/2" />
-          <div className="relative z-10 h-full flex flex-col justify-between">
-            <div className="flex justify-between items-start">
-              <span className="text-white/70 text-xs font-semibold uppercase tracking-widest">{brand.appName}</span>
-              <CreditCard size={20} className="text-white/60" />
-            </div>
-            <div>
-              <p className="text-white/60 text-xs mb-1">Card Number</p>
-              <p className="font-mono text-lg tracking-widest">
-                {cardNumber || '•••• •••• •••• ••••'}
-              </p>
-            </div>
-            <div className="flex justify-between">
-              <div>
-                <p className="text-white/60 text-xs">Cardholder</p>
-                <p className="font-semibold text-sm">{name || 'Your Name'}</p>
-              </div>
-              <div>
-                <p className="text-white/60 text-xs">Expires</p>
-                <p className="font-semibold text-sm">{expiry || 'MM/YY'}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <InputField
-          label="Card Number"
-          value={cardNumber}
-          onChange={v => setCardNumber(formatCard(v))}
-          placeholder="1234 5678 9012 3456"
-          type="tel"
-        />
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <InputField
-              label="Expiry"
-              value={expiry}
-              onChange={v => setExpiry(formatExpiry(v))}
-              placeholder="MM/YY"
-              type="tel"
-            />
-          </div>
-          <div className="flex-1">
-            <InputField
-              label="CVV"
-              value={cvv}
-              onChange={v => setCvv(v.replace(/\D/g, '').slice(0, 4))}
-              placeholder="•••"
-              type={showCvv ? 'tel' : 'password'}
-              right={
-                <button onClick={() => setShowCvv(s => !s)}>
-                  {showCvv ? <EyeOff size={16} className="text-gray-400" /> : <Eye size={16} className="text-gray-400" />}
-                </button>
-              }
-            />
-          </div>
-        </div>
-        <InputField
-          label="Cardholder Name"
-          value={name}
-          onChange={setName}
-          placeholder="Alex Johnson"
-        />
-
-        <p className="text-gray-400 text-xs text-center mb-4 flex items-center justify-center gap-1">
-          <Lock size={11} /> 256-bit encrypted · PCI DSS compliant
-        </p>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleAdd}
-          className="w-full py-4 rounded-2xl text-white font-bold text-base"
-          style={{ background: brand.gradient, opacity: cardNumber.replace(/\s/g,'').length < 16 ? 0.5 : 1 }}
-        >
-          Add Card
-        </motion.button>
+        <Elements stripe={stripePromise}>
+          <AddCardForm onAdd={onAdd} onClose={onClose} brand={brand} />
+        </Elements>
       </div>
     </Sheet>
   );
@@ -336,7 +289,7 @@ function PrivacySheet({ show, onClose, brand }) {
 }
 
 export default function Settings() {
-  const { linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier, setRoundUpMultiplier, setTab, totalDonated } = useApp();
+  const { linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier, setRoundUpMultiplier, totalDonated } = useApp();
   const brand = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [autoDeposit, setAutoDeposit] = useState(true);
@@ -456,14 +409,8 @@ export default function Settings() {
             label={selectedNonprofit.name}
             sub={selectedNonprofit.category}
             color={brand.primary}
-            onPress={() => setTab('nonprofits')}
-            right={<span className="text-xs font-semibold shrink-0" style={{ color: brand.primary }}>Change</span>}
+            right={<span className="text-xs font-semibold shrink-0 bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full">Active</span>}
           />
-          <div className="px-4 pb-3.5">
-            <p className="text-gray-400 text-xs leading-relaxed">
-              Cause changes take effect tomorrow. Today's round-ups stay with your current cause.
-            </p>
-          </div>
         </motion.div>
 
         {/* Preferences */}

@@ -2,14 +2,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useApp } from '../store/AppContext';
 import TabBar from './TabBar';
 import Dashboard from '../pages/Dashboard';
-import Nonprofits from '../pages/Nonprofits';
+import MyCause from '../pages/MyCause';
 import Activity from '../pages/Activity';
 import Share from '../pages/Share';
 import Settings from '../pages/Settings';
 
 const PAGES = {
   dashboard: Dashboard,
-  nonprofits: Nonprofits,
+  mycause: MyCause,
   activity: Activity,
   share: Share,
   settings: Settings,

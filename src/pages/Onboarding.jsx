@@ -1179,14 +1179,6 @@ export default function Onboarding() {
             >
               {current.cta}
             </motion.button>
-            {slide === 0 && (
-              <button
-                onClick={() => setStep('nonprofit-signup')}
-                className="text-white/70 text-sm py-2 underline"
-              >
-                For Nonprofits →
-              </button>
-            )}
             {slide > 0 && (
               <button
                 onClick={() => setStep('signup')}
@@ -1196,6 +1188,22 @@ export default function Onboarding() {
               </button>
             )}
           </div>
+
+          {/* Nonprofit CTA — pinned banner on every slide, unmissable */}
+          {slide === 0 && (
+            <motion.button
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setStep('nonprofit-signup')}
+              className="w-full mt-3 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm border-2 border-white/40 bg-white/15"
+              style={{ color: '#fff' }}
+            >
+              <span className="text-base">🏢</span>
+              Are you a nonprofit? Create your free page →
+            </motion.button>
+          )}
         </motion.div>
       </AnimatePresence>
     </div>

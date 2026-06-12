@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion';
-import { Home, Search, Activity, Settings, Share2 } from 'lucide-react';
+import { Home, Heart, Activity, Settings, Share2 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 
 const TABS = [
   { id: 'dashboard', label: 'Home', icon: Home },
-  { id: 'nonprofits', label: 'Causes', icon: Search },
+  { id: 'mycause', label: 'My Cause', icon: Heart },
   { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'share', label: 'Share', icon: Share2 },
   { id: 'settings', label: 'Settings', icon: Settings },
