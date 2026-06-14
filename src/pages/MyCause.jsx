@@ -157,7 +157,7 @@ function BoostToast({ amount, nonprofit, onClose }) {
 // ─── Corporate Match sheet ───────────────────────────────────────────────────
 
 function CorporateMatchSheet({ show, onClose, nonprofit, brand }) {
-  const [employer, setEmployer] = useState('');
+  const [company, setCompany] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   function handleSubmit(e) {
@@ -166,24 +166,72 @@ function CorporateMatchSheet({ show, onClose, nonprofit, brand }) {
   }
 
   return (
-    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setEmployer(''); }} title="Corporate Match Inquiry">
+    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setCompany(''); }} title="Suggest a Match Sponsor">
       <div className="px-6 py-5 pb-8">
         {submitted ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">&#127962;</div>
             <p className="font-bold text-gray-900 text-lg">Inquiry Sent!</p>
-            <p className="text-gray-500 text-sm mt-2">{nonprofit?.shortName} will follow up about matching your round-ups through your employer.</p>
+            <p className="text-gray-500 text-sm mt-2">BGCA's corporate partnerships team will follow up with {company} about sponsoring the monthly match.</p>
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm mb-5">Ask {nonprofit?.shortName} about matching your round-ups through your employer&apos;s giving program.</p>
+            <p className="text-gray-500 text-sm mb-5">Know a company that should be matching your round-ups for BGCA? Let us know — BGCA's corporate partnerships team will reach out to them.</p>
             <form onSubmit={handleSubmit} className="space-y-3">
-              <input type="text" placeholder="Your employer name" value={employer} onChange={e => setEmployer(e.target.value)} required
+              <input type="text" placeholder="Company you'd like to suggest" value={company} onChange={e => setCompany(e.target.value)} required
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
               <motion.button whileTap={{ scale: 0.97 }} type="submit"
                 className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: employer ? 1 : 0.4 }}>
-                Send Inquiry
+                style={{ background: brand.gradient, opacity: company ? 1 : 0.4 }}>
+                Send Suggestion
+              </motion.button>
+            </form>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+// ─── Become a Match Sponsor sheet ───────────────────────────────────────────
+
+function BecomeMatchSponsorSheet({ show, onClose, nonprofit, brand }) {
+  const [companyName, setCompanyName] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [email, setEmail] = useState('');
+  const [budget, setBudget] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setTimeout(() => { setSubmitted(true); }, 600);
+  }
+
+  return (
+    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setCompanyName(''); setContactName(''); setEmail(''); setBudget(''); }} title="Become a Match Sponsor">
+      <div className="px-6 py-5 pb-8">
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">🤝</div>
+            <p className="font-bold text-gray-900 text-lg">Application Sent!</p>
+            <p className="text-gray-500 text-sm mt-2">BGCA's corporate partnerships team will be in touch within 2 business days.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-gray-500 text-sm mb-5">Partner with BGCA this month. Your company sponsors the monthly round-up match — donors see your logo, you get a community impact report.</p>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <input type="text" placeholder="Company name" value={companyName} onChange={e => setCompanyName(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <input type="text" placeholder="Contact name" value={contactName} onChange={e => setContactName(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <input type="text" placeholder="$10,000–$50,000" value={budget} onChange={e => setBudget(e.target.value)}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                style={{ background: brand.gradient, opacity: companyName && email ? 1 : 0.4 }}>
+                Submit to BGCA Partnerships
               </motion.button>
             </form>
           </>
@@ -240,6 +288,7 @@ export default function MyCause() {
   const [showBoost, setShowBoost] = useState(false);
   const [showMatch, setShowMatch] = useState(false);
   const [showVolunteer, setShowVolunteer] = useState(false);
+  const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const [boostToast, setBoostToast] = useState(null);
   const toastTimerRef = useRef(null);
 
@@ -273,6 +322,7 @@ export default function MyCause() {
       />
       <CorporateMatchSheet show={showMatch} onClose={() => setShowMatch(false)} nonprofit={np} brand={brand} />
       <VolunteerSheet show={showVolunteer} onClose={() => setShowVolunteer(false)} nonprofit={np} brand={brand} />
+      <BecomeMatchSponsorSheet show={showSponsorSheet} onClose={() => setShowSponsorSheet(false)} nonprofit={np} brand={brand} />
 
       {/* Hero header */}
       <motion.div
@@ -387,6 +437,15 @@ export default function MyCause() {
             style={{ borderColor: brand.primary, color: brand.primary, background: brand.accentLight }}
           >
             &#128588; Volunteer
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setShowSponsorSheet(true)}
+            className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
+            style={{ borderColor: '#f59e0b', color: '#92400e', background: '#fffbeb' }}
+          >
+            🏢 Become a Match Sponsor
           </motion.button>
         </motion.div>
 

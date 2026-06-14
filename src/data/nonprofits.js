@@ -2,6 +2,7 @@
 // brand.primary / brand.secondary drive CSS custom properties app-wide.
 // logoUrl: import local assets so Vite resolves the base path correctly on deploy.
 import bgcaLogoUrl from '../assets/bgca-logo.png';
+import gmLogoUrl from '../assets/gm-logo.svg';
 
 export const NONPROFITS = [
   {
@@ -28,6 +29,9 @@ export const NONPROFITS = [
       matched: 23400,
       active: true,
       description: 'GM is matching every dollar donated to BGCA, up to $50,000 total.',
+      logoUrl: gmLogoUrl,
+      impactUrl: 'https://www.gm.com/commitments',
+      impactReport: "GM's match helped fund after-school programs for 4,300 kids this month. This month's match brought total giving to $23,400 — directly supporting BGCA Club programs in Detroit, Austin, and Atlanta.",
     },
     brand: {
       appName: 'BGCA Round-Up',

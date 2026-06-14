@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
+import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
@@ -212,7 +212,7 @@ function MilestoneToast({ milestone, onClose }) {
 }
 
 function CorporateMatchSheet({ show, onClose, nonprofit, brand }) {
-  const [employer, setEmployer] = useState('');
+  const [company, setCompany] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   function handleSubmit(e) {
@@ -221,24 +221,70 @@ function CorporateMatchSheet({ show, onClose, nonprofit, brand }) {
   }
 
   return (
-    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setEmployer(''); }} title="Corporate Match Inquiry">
+    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setCompany(''); }} title="Suggest a Match Sponsor">
       <div className="px-6 py-5 pb-8">
         {submitted ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">&#127962;</div>
             <p className="font-bold text-gray-900 text-lg">Inquiry Sent!</p>
-            <p className="text-gray-500 text-sm mt-2">{nonprofit?.shortName} will follow up about matching your round-ups through your employer.</p>
+            <p className="text-gray-500 text-sm mt-2">BGCA's corporate partnerships team will follow up with {company} about sponsoring the monthly match.</p>
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm mb-5">Ask {nonprofit?.shortName} about matching your round-ups through your employer&apos;s giving program.</p>
+            <p className="text-gray-500 text-sm mb-5">Know a company that should be matching your round-ups for BGCA? Let us know — BGCA's corporate partnerships team will reach out to them.</p>
             <form onSubmit={handleSubmit} className="space-y-3">
-              <input type="text" placeholder="Your employer name" value={employer} onChange={e => setEmployer(e.target.value)} required
+              <input type="text" placeholder="Company you'd like to suggest" value={company} onChange={e => setCompany(e.target.value)} required
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
               <motion.button whileTap={{ scale: 0.97 }} type="submit"
                 className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: employer ? 1 : 0.4 }}>
-                Send Inquiry
+                style={{ background: brand.gradient, opacity: company ? 1 : 0.4 }}>
+                Send Suggestion
+              </motion.button>
+            </form>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+function BecomeMatchSponsorSheet({ show, onClose, nonprofit, brand }) {
+  const [companyName, setCompanyName] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [email, setEmail] = useState('');
+  const [budget, setBudget] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setTimeout(() => { setSubmitted(true); }, 600);
+  }
+
+  return (
+    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setCompanyName(''); setContactName(''); setEmail(''); setBudget(''); }} title="Become a Match Sponsor">
+      <div className="px-6 py-5 pb-8">
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">🤝</div>
+            <p className="font-bold text-gray-900 text-lg">Application Sent!</p>
+            <p className="text-gray-500 text-sm mt-2">BGCA's corporate partnerships team will be in touch within 2 business days.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-gray-500 text-sm mb-5">Partner with BGCA this month. Your company sponsors the monthly round-up match — donors see your logo, you get a community impact report.</p>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <input type="text" placeholder="Company name" value={companyName} onChange={e => setCompanyName(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <input type="text" placeholder="Contact name" value={contactName} onChange={e => setContactName(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <input type="text" placeholder="$10,000–$50,000" value={budget} onChange={e => setBudget(e.target.value)}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+              <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                style={{ background: brand.gradient, opacity: companyName && email ? 1 : 0.4 }}>
+                Submit to BGCA Partnerships
               </motion.button>
             </form>
           </>
@@ -285,6 +331,56 @@ function VolunteerSheet({ show, onClose, nonprofit, brand }) {
   );
 }
 
+function MatchBanner({ m, pct, onOpenSponsor }) {
+  const [showReport, setShowReport] = useState(false);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.12 }}
+      className="rounded-3xl p-4 card-shadow"
+      style={{ background: '#fffbeb', border: '1.5px solid #fde68a' }}
+    >
+      <div className="flex items-center gap-3 mb-2">
+        {m.logoUrl && (
+          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0" style={{ border: '1px solid #f3f4f6' }}>
+            <img src={m.logoUrl} alt="GM" style={{ height: 28, objectFit: 'contain' }} />
+          </div>
+        )}
+        <p className="font-bold text-amber-900 text-sm flex-1">{m.companyShort} is matching your round-ups this month — up to ${(m.maxAmount / 1000).toFixed(0)}K (${(m.matched / 1000).toFixed(1)}K matched so far)</p>
+      </div>
+      <div className="h-2 bg-amber-100 rounded-full overflow-hidden mb-1.5">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 1, delay: 0.4 }}
+          className="h-full bg-amber-400 rounded-full"
+        />
+      </div>
+      <p className="text-amber-700 text-xs mb-3">{pct}% of match pool used · ${((m.maxAmount - m.matched) / 1000).toFixed(1)}K remaining</p>
+      {m.impactUrl && (
+        <a href={m.impactUrl} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 mb-2">
+          See {m.companyShort}&apos;s community impact <ExternalLink size={11} />
+        </a>
+      )}
+      {m.impactReport && (
+        <div className="mb-2">
+          <button onClick={() => setShowReport(r => !r)} className="text-xs text-amber-600 underline underline-offset-2">
+            {showReport ? 'Hide impact report' : 'View impact report'}
+          </button>
+          {showReport && (
+            <p className="text-amber-800 text-xs mt-1.5 leading-relaxed">{m.impactReport}</p>
+          )}
+        </div>
+      )}
+      <button onClick={onOpenSponsor} className="text-xs text-amber-500 underline underline-offset-2">
+        Your company? Sponsor next month →
+      </button>
+    </motion.div>
+  );
+}
+
 export default function Dashboard() {
   const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab } = useApp();
   const brand = useTheme();
@@ -296,6 +392,7 @@ export default function Dashboard() {
   const [showVolunteer, setShowVolunteer] = useState(false);
   const [boostToast, setBoostToast] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const toastTimerRef = useRef(null);
   const daysLeft = daysUntilMonthEnd();
 
@@ -350,6 +447,7 @@ export default function Dashboard() {
 
       <CorporateMatchSheet show={showMatch} onClose={() => setShowMatch(false)} nonprofit={selectedNonprofit} brand={brand} />
       <VolunteerSheet show={showVolunteer} onClose={() => setShowVolunteer(false)} nonprofit={selectedNonprofit} brand={brand} />
+      <BecomeMatchSponsorSheet show={showSponsorSheet} onClose={() => setShowSponsorSheet(false)} nonprofit={selectedNonprofit} brand={brand} />
 
       {/* Header */}
       <motion.div
@@ -421,36 +519,7 @@ export default function Dashboard() {
           const m = selectedNonprofit.corporateMatch;
           const pct = Math.round((m.matched / m.maxAmount) * 100);
           return (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12 }}
-              className="rounded-3xl p-4 card-shadow"
-              style={{ background: '#fffbeb', border: '1.5px solid #fde68a' }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🏢</span>
-                  <div>
-                    <p className="font-bold text-amber-900 text-sm">{m.company} Match Active</p>
-                    <p className="text-amber-700 text-xs">Every dollar you donate is matched</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-amber-900 text-sm">${(m.matched / 1000).toFixed(1)}K</p>
-                  <p className="text-amber-600 text-xs">of ${(m.maxAmount / 1000).toFixed(0)}K used</p>
-                </div>
-              </div>
-              <div className="h-2 bg-amber-100 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${pct}%` }}
-                  transition={{ duration: 1, delay: 0.4 }}
-                  className="h-full bg-amber-400 rounded-full"
-                />
-              </div>
-              <p className="text-amber-700 text-xs mt-1.5">{pct}% of match pool used · ${((m.maxAmount - m.matched) / 1000).toFixed(1)}K remaining</p>
-            </motion.div>
+            <MatchBanner m={m} pct={pct} onOpenSponsor={() => setShowSponsorSheet(true)} />
           );
         })()}
 

@@ -405,8 +405,63 @@ function AppIconSheet({ show, onClose, brand }) {
   );
 }
 
+function CancelSheet({ show, onClose, pendingRoundUps, brand }) {
+  const [result, setResult] = useState(null); // 'donated' | 'cancelled'
+
+  function handleDonate() {
+    setTimeout(() => { setResult('donated'); }, 600);
+  }
+
+  function handleCancelOnly() {
+    setTimeout(() => { setResult('cancelled'); }, 600);
+  }
+
+  const amount = typeof pendingRoundUps === 'number' ? pendingRoundUps.toFixed(2) : '0.00';
+
+  return (
+    <Sheet show={show} onClose={() => { onClose(); setResult(null); }} title="Before you go…">
+      <div className="px-6 py-5 pb-8">
+        {result === 'donated' ? (
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">💚</div>
+            <p className="font-bold text-gray-900 text-lg">Donated! Your subscription has been cancelled.</p>
+            <p className="text-gray-500 text-sm mt-2">Thank you for your final donation to BGCA.</p>
+          </div>
+        ) : result === 'cancelled' ? (
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">👋</div>
+            <p className="font-bold text-gray-900 text-lg">Subscription Cancelled</p>
+            <p className="text-gray-500 text-sm mt-2">This month's round-ups won't be charged — as if the month never happened.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-gray-700 text-sm mb-6 leading-relaxed">
+              You've rounded up <strong>${amount}</strong> for BGCA this month. Would you like to make this month's donation before cancelling?
+            </p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handleDonate}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base mb-3"
+              style={{ background: brand.gradient }}
+            >
+              Donate ${amount} &amp; cancel
+            </motion.button>
+            <button
+              onClick={handleCancelOnly}
+              className="w-full py-3.5 rounded-2xl font-semibold text-sm text-gray-500 border border-gray-200 bg-gray-50 mb-3"
+            >
+              Cancel without donating
+            </button>
+            <p className="text-gray-400 text-xs text-center">This month's round-ups won't be charged — as if the month never happened.</p>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 export default function Settings() {
-  const { linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier, setRoundUpMultiplier, totalDonated, setSelectedNonprofit } = useApp();
+  const { linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier, setRoundUpMultiplier, totalDonated, setSelectedNonprofit, pendingRoundUps } = useApp();
   const brand = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [autoDeposit, setAutoDeposit] = useState(true);
@@ -415,6 +470,7 @@ export default function Settings() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showSwitchOrg, setShowSwitchOrg] = useState(false);
   const [showAppIcon, setShowAppIcon] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative">
@@ -510,7 +566,7 @@ export default function Settings() {
           className="bg-amber-50 rounded-3xl px-4 py-3.5" style={{ border: '1px solid #fde68a' }}>
           <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
           <p className="text-xs text-amber-800 leading-relaxed">
-            Your round-ups are charged once a month (minimum $10) directly on BGCA&apos;s Stripe — BGCA is the merchant of record. 100% of your round-up amount goes directly to BGCA. A flat <strong>$0.50/month</strong> processing fee is charged separately (you can opt to cover it at checkout, pre-checked). PocketCache takes no percentage of your donation — ever. If a payment fails, we&apos;ll retry once after 3 days. If it fails again, your account is paused and you&apos;ll be notified. Round-ups keep accumulating during a pause. If you cancel mid-month, the round-ups accumulated that month are simply not charged — as if the month never happened.
+            Your round-ups are charged once a month (minimum $10) directly on BGCA&apos;s Stripe — BGCA is the merchant of record. 100% of your round-up amount goes directly to BGCA. A flat <strong>$0.50/month</strong> processing fee is charged separately (you can opt to cover it at checkout, pre-checked). PocketCache takes no percentage of your donation — ever. If a payment fails, we&apos;ll retry once after 3 days. If it fails again, your account is paused and you&apos;ll be notified. Round-ups keep accumulating during a pause. When you cancel, we'll ask if you'd like to make this month's donation first — you can always donate and cancel, or cancel without donating.
           </p>
         </motion.div>
 
@@ -583,6 +639,16 @@ export default function Settings() {
           <p className="text-gray-300 text-xs">PocketCache · v1.0.0</p>
         </motion.div>
 
+        {/* Cancel subscription */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}>
+          <button
+            onClick={() => setShowCancel(true)}
+            className="w-full py-3.5 rounded-2xl text-sm font-semibold text-red-500 bg-gray-100 active:bg-gray-200 transition-colors"
+          >
+            Cancel Subscription
+          </button>
+        </motion.div>
+
       </div>
 
       {/* Multiplier sheet */}
@@ -641,6 +707,14 @@ export default function Settings() {
       <AppIconSheet
         show={showAppIcon}
         onClose={() => setShowAppIcon(false)}
+        brand={brand}
+      />
+
+      {/* Cancel sheet */}
+      <CancelSheet
+        show={showCancel}
+        onClose={() => setShowCancel(false)}
+        pendingRoundUps={pendingRoundUps}
         brand={brand}
       />
     </div>
