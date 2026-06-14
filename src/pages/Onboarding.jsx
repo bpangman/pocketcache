@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import bgcaLogoUrl from '../assets/bgca-logo.png';
 
 // In production, replace with your publishable key from environment variables
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
@@ -1214,7 +1215,7 @@ function NonprofitSignupFlow({ onBack }) {
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logo</label>
               <div className="flex items-center gap-3 mb-2">
-                <img src="/bgca-logo.png" alt="BGCA logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
+                <img src={bgcaLogoUrl} alt="BGCA logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
                 <span className="text-xs text-gray-500">Preview: your uploaded logo becomes the app mark for donors.</span>
               </div>
               <button type="button" className="w-full py-3 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 text-sm font-semibold">

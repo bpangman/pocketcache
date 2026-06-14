@@ -1,6 +1,8 @@
 // Each nonprofit has a `brand` object that white-labels the entire app when selected.
 // brand.primary / brand.secondary drive CSS custom properties app-wide.
-// logoUrl uses Clearbit Logo API for real brand marks.
+// logoUrl: import local assets so Vite resolves the base path correctly on deploy.
+import bgcaLogoUrl from '../assets/bgca-logo.png';
+
 export const NONPROFITS = [
   {
     id: 'bgca',
@@ -10,7 +12,7 @@ export const NONPROFITS = [
     category: 'Youth Development',
     categoryColor: '#003865',
     logo: '🏀',
-    logoUrl: '/bgca-logo.png',
+    logoUrl: bgcaLogoUrl,
     raised: 3841209,
     donors: 112340,
     impact: '4.3M youth served at 5,000+ club locations',
