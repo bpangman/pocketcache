@@ -320,6 +320,38 @@
     </div>
   </div>
 
+  <!-- ── Mind Map: Onboarding & Roadmap ── -->
+  <div>
+    <div class="section-label">Mind Map — Onboarding Model &amp; Roadmap (decisions 2026-06-13)</div>
+    <div class="card">
+      <div style="font-size:1.05rem; font-weight:700; color:var(--purple); margin-bottom:0.6rem;">
+        How donors &amp; nonprofits "marry" — the code/QR gate
+      </div>
+      <div class="narrative">
+        <p>The app opens <strong>bound to no charity</strong>. We never show a menu of causes (legal firewall: the nonprofit solicits, we're just software). A cold App Store download lands on a single fork screen with two doors:</p>
+        <ul style="margin:0.45rem 0 0 1.25rem; color:var(--gray-700); line-height:1.7;">
+          <li><strong>"I have a nonprofit's code"</strong> &rarr; enter short code or scan their QR &rarr; app binds to that one charity and "becomes" their app</li>
+          <li><strong>"I'm a nonprofit — create your free page"</strong> &rarr; EIN &rarr; IRS verify &rarr; connect own Stripe &rarr; customize &rarr; click-through license &rarr; live. They're <em>issued</em> the unique code + QR + share link + website embed that donors consume above.</li>
+        </ul>
+        <p style="margin-top:0.7rem;">Nonprofits <strong>generate</strong> the code; donors <strong>consume</strong> it. That code is the join point between the two halves of the product.</p>
+
+        <div style="background:var(--gray-50); border-radius:0.75rem; padding:0.9rem 1.1rem; margin-top:0.75rem; font-size:0.85rem;">
+          <strong style="color:var(--gray-900);">Confirmed build items:</strong>
+          <ul style="margin:0.45rem 0 0 1.25rem; color:var(--gray-700); line-height:1.7;">
+            <li><strong>Deferred deep link:</strong> scanning a nonprofit's QR/link without the app installed routes to the App Store, then auto-binds that charity on first open — no manual code needed. Manual code entry is the cold-download fallback. (Future: App Clip to round up before full install.)</li>
+            <li><strong>Switch nonprofit in Settings:</strong> enter a new code / scan to move to a different charity. Allowed because they still arrive via a charity's code, not a browsable directory. Card stays linked; new charity's Stripe takes over.</li>
+            <li><strong>Alternate app icon:</strong> donor can keep the PocketCache icon or flip the home-screen icon to the nonprofit's. iOS limit — every icon must be bundled at build time, so offer it only for <strong>anchor partners</strong> (BGCA, etc.) whose icons we ship; everyone else stays PocketCache-branded.</li>
+          </ul>
+        </div>
+
+        <div style="background:#fdf6ec; border:1px solid #f0d9b5; border-radius:0.75rem; padding:0.9rem 1.1rem; margin-top:0.75rem; font-size:0.85rem;">
+          <strong style="color:#92400e;">Phase 2 idea (parked, not v1) — "any cause" crowdsourcing:</strong>
+          <p style="margin:0.4rem 0 0; color:var(--gray-700); line-height:1.7;">EINs aren't exclusive to nonprofits. Opening the app to <em>any</em> cause (little league, medical fund) via the recipient's Stripe — or even a Venmo for informal groups — broadens the market and sheds the "nonprofit-only" label. But it's a <strong>different legal animal</strong> (personal/peer-to-peer fundraising, not charitable solicitation): no tax deduction for non-501(c)(3) recipients, possible money-transmitter questions if funds ever route through us, and it slightly muddies the clean "we're just nonprofit software" lane Nathan established. <strong>Decision: v1 stays strictly EIN-verified 501(c)(3); revisit "any cause" as a separately-vetted Phase 2.</strong></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Status Overview ── -->
   <div>
     <div class="section-label">Current Status</div>

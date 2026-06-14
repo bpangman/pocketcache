@@ -1,7 +1,7 @@
 {
   "name": "PocketCache",
   "short_name": "PocketCache",
-  "description": "Round up every purchase and donate the spare change to the cause you love.",
+  "description": "PocketCache — round-up giving software for nonprofits. BGCA donor app demo.",
   "start_url": "/demo/",
   "display": "standalone",
   "orientation": "portrait",
@@ -9,13 +9,13 @@
   "theme_color": "#f97316",
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "./logo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/logo.png",
+      "src": "./logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

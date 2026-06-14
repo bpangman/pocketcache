@@ -63,7 +63,7 @@ function PhoneFrame({ children }) {
         </div>
 
         <p className="text-slate-500 text-xs text-center max-w-xs">
-          Interactive prototype · Select any cause to rebrand the app
+          Interactive prototype · BGCA tenant demo
         </p>
       </div>
     </div>

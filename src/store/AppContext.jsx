@@ -22,7 +22,7 @@ const BASE_PENDING = 4.63;
 export function AppProvider({ children }) {
   const [page, setPageState] = useState(() => load('pc_page', 'onboarding'));
   const [tab, setTab] = useState('dashboard');
-  const [selectedNonprofitId, setSelectedNonprofitIdState] = useState(() => load('pc_cause_id', 'bgca'));
+  const [selectedNonprofitId, setSelectedNonprofitIdState] = useState(() => load('pc_cause_id', null));
   const [roundUpMultiplier, setRoundUpMultiplierState] = useState(() => load('pc_multiplier', 1));
   const [linkedCards, setLinkedCardsState] = useState(() => load('pc_cards', [
     { id: 1, last4: '4242', brand: 'Visa', name: 'Chase Sapphire' },

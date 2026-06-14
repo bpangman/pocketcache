@@ -17,14 +17,10 @@ const MILESTONE_DEFS = [
   { amount: 250, label: '$250 hero',  emoji: '🦸' },
 ];
 
-function daysUntilQuarterEnd() {
+function daysUntilMonthEnd() {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  // Find end of current quarter
-  const quarterEndMonth = Math.ceil((m + 1) / 3) * 3; // 3, 6, 9, 12
-  const qEnd = new Date(y, quarterEndMonth, 1); // first day of next quarter = last day of this one
-  return Math.max(1, Math.ceil((qEnd - now) / (1000 * 60 * 60 * 24)));
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
 }
 
 const BOOST_PRESETS = [1, 5, 10, 25];
@@ -278,7 +274,7 @@ export default function Dashboard() {
   const [boostToast, setBoostToast] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const toastTimerRef = useRef(null);
-  const daysLeft = daysUntilQuarterEnd();
+  const daysLeft = daysUntilMonthEnd();
 
   const milestones = MILESTONE_DEFS.map(m => ({ ...m, achieved: totalDonated >= m.amount }));
   const nextMilestone = milestones.find(m => !m.achieved);
@@ -457,8 +453,8 @@ export default function Dashboard() {
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="font-bold text-gray-900 text-sm">Q1 Round-Ups to {selectedNonprofit.shortName}</p>
-              <p className="text-gray-400 text-xs mt-0.5">Charged monthly on your behalf · Direct to BGCA · June 30, 2026</p>
+              <p className="font-bold text-gray-900 text-sm">Monthly Charge to {selectedNonprofit.shortName}</p>
+              <p className="text-gray-400 text-xs mt-0.5">Next charge: end of month · Direct to BGCA&apos;s Stripe</p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl" style={{ color: brand.primary }}>{daysLeft}</p>
@@ -468,16 +464,16 @@ export default function Dashboard() {
           <div className="h-2 bg-gray.100 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${100 - (daysLeft / 90) * 100}%` }}
+              animate={{ width: `${100 - (daysLeft / 30) * 100}%` }}
               transition={{ duration: 1, delay: 0.4 }}
               className="h-full rounded-full"
               style={{ background: brand.gradient }}
             />
           </div>
           <div className="flex justify-between mt-1.5">
-            <p className="text-gray-400 text-xs">Jun 1</p>
+            <p className="text-gray-400 text-xs">Month start</p>
             <p className="text-xs font-semibold" style={{ color: brand.primary }}>${pendingRoundUps.toFixed(2)} ready to send</p>
-            <p className="text-gray-400 text-xs">Jun 30</p>
+            <p className="text-gray-400 text-xs">Month end</p>
           </div>
         </motion.div>
 

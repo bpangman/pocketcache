@@ -8,8 +8,15 @@ import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
 import CoinAccent from '../components/CoinAccent';
+import { NONPROFITS } from '../data/nonprofits';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
+
+function findNonprofitByCode(code) {
+  if (!code) return null;
+  const lower = code.toLowerCase().trim();
+  return NONPROFITS.find(n => n.id === lower || n.shortName.toLowerCase() === lower) ?? null;
+}
 
 const CARD_ELEMENT_OPTIONS = {
   style: {
@@ -221,7 +228,7 @@ function PrivacySheet({ show, onClose, brand }) {
             label="Privacy Policy"
             sub="Read our full data practices"
             color="#6b7280"
-            onPress={() => window.open('/cache/legal/privacy/', '_blank')}
+            onPress={() => window.open('/legal/privacy/', '_blank')}
             right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
           <div className="h-px bg-gray-100 mx-4" />
@@ -230,7 +237,7 @@ function PrivacySheet({ show, onClose, brand }) {
             label="Terms of Service"
             sub="Review your user agreement"
             color="#6b7280"
-            onPress={() => window.open('/cache/legal/terms/', '_blank')}
+            onPress={() => window.open('/legal/terms/', '_blank')}
             right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
         </div>
@@ -288,14 +295,125 @@ function PrivacySheet({ show, onClose, brand }) {
   );
 }
 
+function SwitchOrgSheet({ show, onClose, brand, onBind }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState(null);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const np = findNonprofitByCode(code);
+    if (!np) {
+      setError('Code not found. Ask your nonprofit for their PocketCache code.');
+      return;
+    }
+    onBind(np);
+    onClose();
+    setCode('');
+    setError(null);
+  }
+
+  return (
+    <Sheet show={show} onClose={onClose} title="Switch Nonprofit">
+      <div className="px-6 py-5 pb-8">
+        <p className="text-gray-500 text-sm mb-5">Enter a new nonprofit code to re-bind to a different organization.</p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <input
+              type="text"
+              placeholder="Enter code (e.g. BGCA)"
+              value={code}
+              onChange={e => { setCode(e.target.value); setError(null); }}
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors font-mono uppercase"
+              style={{ borderColor: error ? '#ef4444' : code ? brand.primary : '#e5e7eb' }}
+            />
+            {error && <p className="text-red-500 text-xs mt-1 px-1">{error}</p>}
+            <p className="text-gray-400 text-xs mt-1 px-1">Demo code: BGCA</p>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            type="submit"
+            className="w-full py-4 rounded-2xl text-white font-bold text-base"
+            style={{
+              background: code ? brand.gradient : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+              cursor: code ? 'pointer' : 'default',
+            }}
+          >
+            Switch Nonprofit →
+          </motion.button>
+        </form>
+      </div>
+    </Sheet>
+  );
+}
+
+function AppIconSheet({ show, onClose, brand }) {
+  const [selectedIcon, setSelectedIcon] = useState('pocketcache');
+
+  return (
+    <Sheet show={show} onClose={onClose} title="App Icon">
+      <div className="px-6 py-5 pb-8 space-y-4">
+        <div className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background: brand.accentLight }}>
+          <span className="text-2xl">⚓</span>
+          <div>
+            <p className="font-bold text-sm" style={{ color: brand.primary }}>BGCA Anchor Partner</p>
+            <p className="text-gray-500 text-xs">Custom icon available</p>
+          </div>
+        </div>
+
+        <p className="text-gray-500 text-sm">Choose your app icon. Custom icons are available for anchor nonprofit partners.</p>
+
+        <div className="space-y-3">
+          {[
+            { id: 'pocketcache', label: 'PocketCache Icon', sub: 'Default', emoji: '🪙' },
+            { id: 'bgca', label: 'BGCA Custom Icon', sub: 'Anchor partner benefit', emoji: '🏀' },
+          ].map(opt => (
+            <motion.button
+              key={opt.id}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setSelectedIcon(opt.id)}
+              className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all"
+              style={selectedIcon === opt.id
+                ? { borderColor: brand.primary, background: brand.accentLight }
+                : { borderColor: '#f3f4f6', background: '#f9fafb' }}
+            >
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm"
+                style={{ background: selectedIcon === opt.id ? brand.gradient : '#e5e7eb' }}>
+                {opt.emoji}
+              </div>
+              <div className="text-left flex-1">
+                <p className="font-semibold text-sm text-gray-900">{opt.label}</p>
+                <p className="text-gray-400 text-xs">{opt.sub}</p>
+              </div>
+              <div
+                className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
+                style={selectedIcon === opt.id
+                  ? { borderColor: brand.primary, background: brand.primary }
+                  : { borderColor: '#d1d5db', background: 'transparent' }}
+              >
+                {selectedIcon === opt.id && <div className="w-2 h-2 rounded-full bg-white" />}
+              </div>
+            </motion.button>
+          ))}
+        </div>
+
+        <p className="text-gray-400 text-xs text-center px-2">
+          Custom icons are available for anchor nonprofit partners. For iOS, icons are bundled at app build time. Non-anchor tenants use the PocketCache icon.
+        </p>
+      </div>
+    </Sheet>
+  );
+}
+
 export default function Settings() {
-  const { linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier, setRoundUpMultiplier, totalDonated } = useApp();
+  const { linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier, setRoundUpMultiplier, totalDonated, setSelectedNonprofit } = useApp();
   const brand = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [autoDeposit, setAutoDeposit] = useState(true);
   const [showMultiplier, setShowMultiplier] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showSwitchOrg, setShowSwitchOrg] = useState(false);
+  const [showAppIcon, setShowAppIcon] = useState(false);
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative">
@@ -391,10 +509,7 @@ export default function Settings() {
           className="bg-amber-50 rounded-3xl px-4 py-3.5" style={{ border: '1px solid #fde68a' }}>
           <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
           <p className="text-xs text-amber-800 leading-relaxed">
-            Your round-ups are charged once a month (minimum $5). <strong>100% of your round-up amount goes directly to your chosen cause.</strong> A separate platform service fee is also charged each month: <strong>10%</strong> for card or Apple Pay, or <strong>5%</strong> for bank account (ACH) — with a $2 minimum and $5 maximum. If a payment fails, we'll retry once after 3 days. If it fails again, your account is paused and you'll be notified to update your payment method. Round-ups keep accumulating during a pause.
-          </p>
-          <p className="text-xs text-amber-700 mt-2 font-medium">
-            Tip: Connect a bank account to pay a lower 5% service fee.
+            Your round-ups are charged once a month (minimum $5) directly on BGCA&apos;s Stripe — BGCA is the merchant of record. <strong>100% of your round-up amount goes directly to BGCA.</strong> A flat <strong>$0.50/month</strong> processing fee is charged separately (you can opt to cover it at checkout, pre-checked). PocketCache takes no percentage of your donation — ever. If a payment fails, we&apos;ll retry once after 3 days. If it fails again, your account is paused and you&apos;ll be notified. Round-ups keep accumulating during a pause.
           </p>
         </motion.div>
 
@@ -410,6 +525,15 @@ export default function Settings() {
             sub={selectedNonprofit.category}
             color={brand.primary}
             right={<span className="text-xs font-semibold shrink-0 bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full">Active</span>}
+          />
+          <div className="h-px bg-gray-50 mx-4" />
+          <SettingRow
+            icon={<span className="text-base">🔄</span>}
+            label="Switch Nonprofit"
+            sub="Enter a new code to re-bind to a different nonprofit"
+            color={brand.primary}
+            onPress={() => setShowSwitchOrg(true)}
+            right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
         </motion.div>
 
@@ -435,6 +559,15 @@ export default function Settings() {
             onPress={() => setShowPrivacy(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
+          <div className="h-px bg-gray-50 mx-4" />
+          <SettingRow
+            icon={<span className="text-base">🖼️</span>}
+            label="App Icon"
+            sub="BGCA is an anchor partner — custom icon available"
+            color={brand.secondary}
+            onPress={() => setShowAppIcon(true)}
+            right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+          />
         </motion.div>
 
         {/* Footer */}
@@ -446,7 +579,7 @@ export default function Settings() {
             </div>
           ) : <CoinLogo size={32} animate={false} showName={false} />}
           <p className="font-bold text-sm" style={{ color: brand.primary }}>{brand.appName}</p>
-          <p className="text-gray-300 text-xs">Cache · v1.0.0</p>
+          <p className="text-gray-300 text-xs">PocketCache · v1.0.0</p>
         </motion.div>
 
       </div>
@@ -494,6 +627,21 @@ export default function Settings() {
 
       {/* Privacy & Security sheet */}
       <PrivacySheet show={showPrivacy} onClose={() => setShowPrivacy(false)} brand={brand} />
+
+      {/* Switch Org sheet */}
+      <SwitchOrgSheet
+        show={showSwitchOrg}
+        onClose={() => setShowSwitchOrg(false)}
+        brand={brand}
+        onBind={(np) => { setSelectedNonprofit(np); setShowSwitchOrg(false); }}
+      />
+
+      {/* App Icon sheet */}
+      <AppIconSheet
+        show={showAppIcon}
+        onClose={() => setShowAppIcon(false)}
+        brand={brand}
+      />
     </div>
   );
 }

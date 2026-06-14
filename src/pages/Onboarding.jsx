@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
@@ -8,7 +8,14 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 import CoinLogo from '../components/CoinLogo';
 import { useApp } from '../store/AppContext';
+import { NONPROFITS } from '../data/nonprofits';
 
+
+function findNonprofitByCode(code) {
+  if (!code) return null;
+  const lower = code.toLowerCase().trim();
+  return NONPROFITS.find(n => n.id === lower || n.shortName.toLowerCase() === lower) ?? null;
+}
 
 const SLIDES = [
   {
@@ -52,12 +59,12 @@ const SLIDES = [
           className="mt-2 flex items-center gap-2 bg-white rounded-2xl px-6 py-3"
         >
           <span className="text-violet-600 font-bold text-lg">$1.00</span>
-          <span className="text-gray-500 text-sm">donated to your cause ❤️</span>
+          <span className="text-gray-500 text-sm">donated to BGCA ❤️</span>
         </motion.div>
       </div>
     ),
     title: 'Round Up Every\nPurchase',
-    subtitle: 'We round up each transaction to the nearest dollar. 100% of the spare change goes straight to your chosen nonprofit.',
+    subtitle: 'We round up each transaction to the nearest dollar. 100% of the spare change goes straight to BGCA — charged monthly on BGCA\'s behalf.',
     cta: 'Next',
   },
   {
@@ -65,20 +72,22 @@ const SLIDES = [
     bg: 'from-emerald-500 to-teal-400',
     illustration: (
       <div className="flex flex-col items-center gap-4">
-        <div className="text-6xl mb-2">🌍</div>
-        <div className="grid grid-cols-3 gap-2">
-          {['🏀', '📚', '🌾', '🏥', '🏠', '⚖️'].map((emoji, i) => (
-            <motion.div
-              key={i}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: i * 0.07 + 0.3, type: 'spring', stiffness: 300 }}
-              className="w-16 h-16 rounded-2xl bg-white/25 flex items-center justify-center text-3xl"
-            >
-              {emoji}
-            </motion.div>
-          ))}
-        </div>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+          className="text-8xl"
+        >
+          🏀
+        </motion.div>
+        <motion.p
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="text-white font-bold text-lg text-center"
+        >
+          Boys &amp; Girls Clubs of America
+        </motion.p>
       </div>
     ),
     title: 'Your App,\nYour Cause',
@@ -125,6 +134,170 @@ const SLIDES = [
     cta: 'Sign Up →',
   },
 ];
+
+// ─── Org Gate Screen ─────────────────────────────────────────────────────────
+
+function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [autoBound, setAutoBound] = useState(false);
+
+  useEffect(() => {
+    if (autoBindOrg) {
+      const np = findNonprofitByCode(autoBindOrg);
+      if (np) {
+        setAutoBound(true);
+        setTimeout(() => onBind(np), 800);
+      }
+    }
+  }, [autoBindOrg]);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const np = findNonprofitByCode(code);
+    if (!np) {
+      setError('Code not found. Ask your nonprofit for their PocketCache code.');
+      return;
+    }
+    onBind(np);
+  }
+
+  function handleScan() {
+    setScanning(true);
+    setTimeout(() => {
+      setScanning(false);
+      setCode('BGCA');
+    }, 1000);
+  }
+
+  if (autoBound) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex flex-col h-full items-center justify-center gap-4 px-8"
+        style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)' }}
+      >
+        <div className="text-6xl">🏀</div>
+        <p className="text-white font-bold text-xl text-center">Invited by BGCA</p>
+        <p className="text-white/70 text-sm text-center">Setting up your BGCA Round-Up…</p>
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+          className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white"
+        />
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="flex flex-col h-full overflow-hidden"
+    >
+      {/* Header */}
+      <div
+        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: '42%' }}
+      >
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.2, type: 'spring', stiffness: 280 }}
+          className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-4xl mb-5"
+        >
+          🪙
+        </motion.div>
+        <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+          Welcome to{'\n'}PocketCache
+        </h1>
+        <p className="text-white/80 text-sm mt-3 text-center leading-relaxed">
+          Enter your nonprofit&apos;s code or scan their QR to get started.
+        </p>
+      </div>
+
+      {/* Bottom sheet */}
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
+        <div className="flex-1 px-5 pt-6 pb-2 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nonprofit Code</label>
+              <input
+                type="text"
+                placeholder="Enter code (e.g. BGCA)"
+                value={code}
+                onChange={e => { setCode(e.target.value); setError(null); }}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors font-mono uppercase"
+                style={{ borderColor: error ? '#ef4444' : code ? '#f97316' : '#e5e7eb' }}
+              />
+              {error && <p className="text-red-500 text-xs mt-1 px-1">{error}</p>}
+              <p className="text-gray-400 text-xs mt-1 px-1">Demo code: BGCA</p>
+            </div>
+
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={handleScan}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-dashed"
+              style={{ borderColor: '#f97316', color: '#f97316', background: '#fff7ed' }}
+            >
+              {scanning ? (
+                <>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                    className="w-4 h-4 rounded-full border-2 border-orange-300 border-t-orange-500"
+                  />
+                  Scanning…
+                </>
+              ) : (
+                <>
+                  <span>📷</span> Scan QR Code
+                </>
+              )}
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="submit"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{
+                background: code ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+                cursor: code ? 'pointer' : 'default',
+              }}
+            >
+              Continue →
+            </motion.button>
+          </form>
+
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-gray-100" />
+            <p className="text-gray-400 text-xs">or</p>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={onNonprofitSignup}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm"
+            style={{ background: '#f3f4f6', color: '#374151' }}
+          >
+            <span>🏢</span> Are you a nonprofit? Create your free page →
+          </motion.button>
+        </div>
+
+        <div className="px-5 pb-8 pt-2">
+          <p className="text-center text-gray-400 text-xs">
+            PocketCache — round-up giving software for nonprofits
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 // ─── Sign-up screen ──────────────────────────────────────────────────────────
 
@@ -519,7 +692,7 @@ function ConnectCardScreen({ onNext }) {
 
           <div className="flex items-center gap-2 px-1 pt-1">
             <Lock size={12} className="text-gray-400 shrink-0" />
-            <p className="text-gray-400 text-xs">Read-only access via Plaid · Your credentials are never stored by Cache</p>
+            <p className="text-gray-400 text-xs">Read-only access via Plaid · Your credentials are never stored by PocketCache</p>
           </div>
         </div>
 
@@ -739,7 +912,7 @@ function CardEntryForm({ onSuccess }) {
       <div className="flex items-center gap-2 px-1">
         <Lock size={13} className="text-gray-400 shrink-0" />
         <p className="text-gray-400 text-xs">
-          Card details secured by <span className="font-semibold">Stripe</span>. Cache never sees your card number.
+          Card details secured by <span className="font-semibold">Stripe</span>. PocketCache never sees your card number.
         </p>
       </div>
 
@@ -867,7 +1040,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               <p className="text-xs text-gray-500 mt-0.5">
                 {coverFee
                   ? `Your $0.50 covers our operating costs. 100% of your $${roundUps.toFixed(2)} in round-ups goes to BGCA.`
-                  : `The $0.50 fee will be deducted from your round-ups instead. BGCA receives $${(roundUps - fee).toFixed(2)}.`}
+                  : `The $0.50 fee will be deducted from your round-ups instead. BGCA receives $${Math.max(0, roundUps - fee).toFixed(2)}.`}
               </p>
             </div>
           </label>
@@ -1106,9 +1279,21 @@ function NonprofitSignupFlow({ onBack }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { setPage } = useApp();
+  const { setPage, setSelectedNonprofit, selectedNonprofit } = useApp();
   const [slide, setSlide] = useState(0);
-  const [step, setStep] = useState('slides'); // 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
+  const [step, setStep] = useState(() => {
+    // Start at gate if no nonprofit is bound
+    const stored = localStorage.getItem('pc_cause_id');
+    return stored && stored !== 'null' ? 'slides' : 'gate';
+  }); // 'gate' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const autoBindOrg = urlParams.get('org') || new URLSearchParams(window.location.hash.replace('#', '?')).get('org') || null;
+
+  function handleBind(np) {
+    setSelectedNonprofit(np);
+    setStep('slides');
+  }
 
   const current = SLIDES[slide];
   const isLast = slide === SLIDES.length - 1;
@@ -1121,6 +1306,7 @@ export default function Onboarding() {
     }
   }
 
+  if (step === 'gate') return <OrgGateScreen onBind={handleBind} onNonprofitSignup={() => setStep('nonprofit-signup')} autoBindOrg={autoBindOrg} />;
   if (step === 'nonprofit-signup') return <NonprofitSignupFlow onBack={() => setStep('slides')} />;
   if (step === 'checkout-confirm') return <CheckoutConfirmScreen onConfirm={() => setPage('home')} />;
   if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('checkout-confirm')} />;
