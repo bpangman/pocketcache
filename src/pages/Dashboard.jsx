@@ -44,17 +44,6 @@ function daysUntilMonthEnd() {
   return Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
 }
 
-function daysUntilNextCharge() {
-  const now = new Date();
-  const nextFirst = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return Math.max(0, Math.ceil((nextFirst - now) / (1000 * 60 * 60 * 24)));
-}
-
-function currentPeriodKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${now.getMonth() + 1}`;
-}
-
 const BOOST_PRESETS = [1, 5, 10, 25];
 const LARGE_DONATION_THRESHOLD = 1000;
 
@@ -342,28 +331,6 @@ function VolunteerSheet({ show, onClose, nonprofit, brand }) {
   );
 }
 
-function CountdownBanner({ pendingRoundUps, brand, onDismiss }) {
-  const days = daysUntilNextCharge();
-  if (days === 0) return null; // charge day — hide banner
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
-      className="mx-4 mt-3 mb-0 rounded-2xl px-4 py-3 flex items-center gap-3"
-      style={{ background: brand.accentLight, border: `1px solid ${brand.primary}33` }}
-    >
-      <span className="text-lg">🗓️</span>
-      <p className="flex-1 text-xs font-semibold" style={{ color: brand.primary }}>
-        {days} day{days !== 1 ? 's' : ''} until your next round-up charge — ${pendingRoundUps.toFixed(2)} so far this month
-      </p>
-      <button onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100">
-        <X size={14} style={{ color: brand.primary }} />
-      </button>
-    </motion.div>
-  );
-}
-
 function MatchBanner({ m, pct }) {
   return (
     <motion.div
@@ -416,19 +383,6 @@ export default function Dashboard() {
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const toastTimerRef = useRef(null);
   const daysLeft = daysUntilMonthEnd();
-
-  const [countdownDismissed, setCountdownDismissed] = useState(() => {
-    try {
-      return localStorage.getItem('pc_dismiss_countdown') === currentPeriodKey();
-    } catch { return false; }
-  });
-
-  function dismissCountdown() {
-    try { localStorage.setItem('pc_dismiss_countdown', currentPeriodKey()); } catch {}
-    setCountdownDismissed(true);
-  }
-
-  const showCountdownBanner = !countdownDismissed && daysUntilNextCharge() > 0;
 
   const milestones = getMilestonesUpTo(totalDonated);
   const nextMilestone = milestones.find(m => !m.achieved);
@@ -507,17 +461,6 @@ export default function Dashboard() {
           </button>
         </div>
       </motion.div>
-
-      {/* Charge countdown banner */}
-      <AnimatePresence>
-        {showCountdownBanner && (
-          <CountdownBanner
-            pendingRoundUps={pendingRoundUps}
-            brand={brand}
-            onDismiss={dismissCountdown}
-          />
-        )}
-      </AnimatePresence>
 
       <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
 
