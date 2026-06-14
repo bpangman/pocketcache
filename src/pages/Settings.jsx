@@ -464,6 +464,7 @@ export default function Settings() {
   const { linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier, setRoundUpMultiplier, totalDonated, setSelectedNonprofit, pendingRoundUps } = useApp();
   const brand = useTheme();
   const [notifications, setNotifications] = useState(true);
+  const [chargeReminder, setChargeReminder] = useState(true);
   const [autoDeposit, setAutoDeposit] = useState(true);
   const [showMultiplier, setShowMultiplier] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
@@ -606,6 +607,14 @@ export default function Settings() {
             sub="Round-up alerts and impact updates"
             color={brand.secondary}
             right={<Toggle value={notifications} onChange={setNotifications} color={brand.primary} />}
+          />
+          <div className="h-px bg-gray-50 mx-4" />
+          <SettingRow
+            icon={<Bell size={18} />}
+            label="Charge Reminder"
+            sub="Notify me before my monthly charge"
+            color={brand.primary}
+            right={<Toggle value={chargeReminder} onChange={setChargeReminder} color={brand.primary} />}
           />
           <div className="h-px bg-gray-50 mx-4" />
           <SettingRow

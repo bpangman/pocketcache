@@ -253,7 +253,7 @@ function VolunteerSheet({ show, onClose, nonprofit, brand }) {
   }
 
   return (
-    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setInterest(''); }} title="Volunteer">
+    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setInterest(''); }} title="Volunteer Opportunities">
       <div className="px-6 py-5 pb-8">
         {submitted ? (
           <div className="text-center py-8">
@@ -369,7 +369,7 @@ export default function MyCause() {
           <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1 relative z-10">Impact</p>
           <p className="text-white font-bold text-base leading-snug relative z-10">"{np.impact}"</p>
           <div className="flex items-center gap-2 mt-3 relative z-10">
-            <span className="text-2xl">{np.logo}</span>
+            <OrgLogo nonprofit={np} size={7} rounded="full" className="shrink-0" />
             <p className="text-white/70 text-xs">{np.name}</p>
           </div>
         </motion.div>
@@ -408,45 +408,38 @@ export default function MyCause() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.18 }}
-          className="bg-white rounded-3xl p-5 card-shadow space-y-3"
+          className="bg-white rounded-3xl p-5 card-shadow"
         >
-          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-1">Get More Involved</p>
+          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-4">Get More Involved</p>
 
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setShowBoost(true)}
-            className="w-full py-3.5 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2"
-            style={{ background: brand.gradient }}
-          >
-            <Plus size={16} /> Give Extra Now
-          </motion.button>
+          <div className="space-y-3">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowBoost(true)}
+              className="w-full py-3.5 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2"
+              style={{ background: brand.gradient }}
+            >
+              <Plus size={16} /> Give Extra Now
+            </motion.button>
 
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setShowMatch(true)}
-            className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
-            style={{ borderColor: brand.primary, color: brand.primary, background: brand.accentLight }}
-          >
-            &#127962; Corporate Match
-          </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowSponsorSheet(true)}
+              className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
+              style={{ borderColor: '#f59e0b', color: '#92400e', background: '#fffbeb' }}
+            >
+              🏢 Become a Match Sponsor
+            </motion.button>
 
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setShowVolunteer(true)}
-            className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
-            style={{ borderColor: brand.primary, color: brand.primary, background: brand.accentLight }}
-          >
-            &#128588; Volunteer
-          </motion.button>
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setShowSponsorSheet(true)}
-            className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
-            style={{ borderColor: '#f59e0b', color: '#92400e', background: '#fffbeb' }}
-          >
-            🏢 Become a Match Sponsor
-          </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowVolunteer(true)}
+              className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
+              style={{ borderColor: brand.primary, color: brand.primary, background: brand.accentLight }}
+            >
+              &#128588; Volunteer Opportunities
+            </motion.button>
+          </div>
         </motion.div>
 
         {/* Footer */}

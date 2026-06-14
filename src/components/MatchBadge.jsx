@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function MatchBadge({ match, compact = false }) {
-  const [showReport, setShowReport] = useState(false);
   if (!match?.active) return null;
   const pct = Math.round((match.matched / match.maxAmount) * 100);
   if (compact) {
@@ -36,19 +34,9 @@ export default function MatchBadge({ match, compact = false }) {
       <p className="text-amber-700 text-xs mb-2">{match.description}</p>
       {match.impactUrl && (
         <a href={match.impactUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 mb-2">
+          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900">
           See {match.companyShort}&apos;s community impact <ExternalLink size={11} />
         </a>
-      )}
-      {match.impactReport && (
-        <div>
-          <button onClick={() => setShowReport(r => !r)} className="text-xs text-amber-600 underline underline-offset-2">
-            {showReport ? 'Hide impact report' : 'View impact report'}
-          </button>
-          {showReport && (
-            <p className="text-amber-800 text-xs mt-1.5 leading-relaxed">{match.impactReport}</p>
-          )}
-        </div>
       )}
     </div>
   );

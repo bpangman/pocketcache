@@ -27,8 +27,8 @@ export default function OrgLogo({ nonprofit, size = 14, className = '', rounded 
   if (urls.length > 0 && urlIndex < urls.length) {
     return (
       <div
-        className={`flex items-center justify-center bg-white overflow-hidden ${className}`}
-        style={{ width: px, height: px, minWidth: px, padding: '10%', borderRadius }}
+        className={`flex items-center justify-center overflow-hidden ${className}`}
+        style={{ width: px, height: px, minWidth: px, padding: '10%', borderRadius, background: '#ffffff' }}
       >
         <img
           src={urls[urlIndex]}

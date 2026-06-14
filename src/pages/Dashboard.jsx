@@ -4,7 +4,7 @@ import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
-import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
+import { MONTHLY_DATA } from '../data/transactions';
 import OrgLogo from '../components/OrgLogo';
 import CustomTooltip from '../components/CustomTooltip';
 import Sheet from '../components/Sheet';
@@ -42,6 +42,17 @@ function daysUntilMonthEnd() {
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   return Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
+}
+
+function daysUntilNextCharge() {
+  const now = new Date();
+  const nextFirst = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return Math.max(0, Math.ceil((nextFirst - now) / (1000 * 60 * 60 * 24)));
+}
+
+function currentPeriodKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${now.getMonth() + 1}`;
 }
 
 const BOOST_PRESETS = [1, 5, 10, 25];
@@ -331,8 +342,29 @@ function VolunteerSheet({ show, onClose, nonprofit, brand }) {
   );
 }
 
-function MatchBanner({ m, pct, onOpenSponsor }) {
-  const [showReport, setShowReport] = useState(false);
+function CountdownBanner({ pendingRoundUps, brand, onDismiss }) {
+  const days = daysUntilNextCharge();
+  if (days === 0) return null; // charge day — hide banner
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      className="mx-4 mt-3 mb-0 rounded-2xl px-4 py-3 flex items-center gap-3"
+      style={{ background: brand.accentLight, border: `1px solid ${brand.primary}33` }}
+    >
+      <span className="text-lg">🗓️</span>
+      <p className="flex-1 text-xs font-semibold" style={{ color: brand.primary }}>
+        {days} day{days !== 1 ? 's' : ''} until your next round-up charge — ${pendingRoundUps.toFixed(2)} so far this month
+      </p>
+      <button onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100">
+        <X size={14} style={{ color: brand.primary }} />
+      </button>
+    </motion.div>
+  );
+}
+
+function MatchBanner({ m, pct }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -360,23 +392,10 @@ function MatchBanner({ m, pct, onOpenSponsor }) {
       <p className="text-amber-700 text-xs mb-3">{pct}% of match pool used · ${((m.maxAmount - m.matched) / 1000).toFixed(1)}K remaining</p>
       {m.impactUrl && (
         <a href={m.impactUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 mb-2">
+          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900">
           See {m.companyShort}&apos;s community impact <ExternalLink size={11} />
         </a>
       )}
-      {m.impactReport && (
-        <div className="mb-2">
-          <button onClick={() => setShowReport(r => !r)} className="text-xs text-amber-600 underline underline-offset-2">
-            {showReport ? 'Hide impact report' : 'View impact report'}
-          </button>
-          {showReport && (
-            <p className="text-amber-800 text-xs mt-1.5 leading-relaxed">{m.impactReport}</p>
-          )}
-        </div>
-      )}
-      <button onClick={onOpenSponsor} className="text-xs text-amber-500 underline underline-offset-2">
-        Your company? Sponsor next month →
-      </button>
     </motion.div>
   );
 }
@@ -395,6 +414,19 @@ export default function Dashboard() {
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const toastTimerRef = useRef(null);
   const daysLeft = daysUntilMonthEnd();
+
+  const [countdownDismissed, setCountdownDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('pc_dismiss_countdown') === currentPeriodKey();
+    } catch { return false; }
+  });
+
+  function dismissCountdown() {
+    try { localStorage.setItem('pc_dismiss_countdown', currentPeriodKey()); } catch {}
+    setCountdownDismissed(true);
+  }
+
+  const showCountdownBanner = !countdownDismissed && daysUntilNextCharge() > 0;
 
   const milestones = getMilestonesUpTo(totalDonated);
   const nextMilestone = milestones.find(m => !m.achieved);
@@ -474,6 +506,17 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
+      {/* Charge countdown banner */}
+      <AnimatePresence>
+        {showCountdownBanner && (
+          <CountdownBanner
+            pendingRoundUps={pendingRoundUps}
+            brand={brand}
+            onDismiss={dismissCountdown}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
 
         {/* Hero donation card */}
@@ -493,7 +536,7 @@ export default function Dashboard() {
             <p className="text-white/60 text-sm mt-2">Since Jan 2026 · All time</p>
             <div className="mt-5 pt-4 border-t border-white/20 flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                <OrgLogo nonprofit={selectedNonprofit} size={8} rounded="full" className="bg-white/20 shrink-0" />
+                <OrgLogo nonprofit={selectedNonprofit} size={8} rounded="full" className="shrink-0" />
                 <div className="min-w-0">
                   <p className="text-white font-semibold text-sm leading-snug">{selectedNonprofit.name}</p>
                   <p className="text-white/60 text-xs">Your chosen cause</p>
@@ -519,7 +562,7 @@ export default function Dashboard() {
           const m = selectedNonprofit.corporateMatch;
           const pct = Math.round((m.matched / m.maxAmount) * 100);
           return (
-            <MatchBanner m={m} pct={pct} onOpenSponsor={() => setShowSponsorSheet(true)} />
+            <MatchBanner m={m} pct={pct} />
           );
         })()}
 
@@ -554,7 +597,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="font-bold text-gray-900 text-sm">Monthly Charge to {selectedNonprofit.shortName}</p>
-              <p className="text-gray-400 text-xs mt-0.5">Next charge: end of month · Direct to BGCA&apos;s Stripe</p>
+              <p className="text-gray-400 text-xs mt-0.5">Next charge: end of month</p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl" style={{ color: brand.primary }}>{daysLeft}</p>
@@ -659,7 +702,7 @@ export default function Dashboard() {
           </p>
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{selectedNonprofit.logo}</span>
+              <OrgLogo nonprofit={selectedNonprofit} size={7} rounded="full" className="shrink-0" />
               <p className="text-white/70 text-xs">{selectedNonprofit.name}</p>
             </div>
             <button
@@ -668,38 +711,6 @@ export default function Dashboard() {
             >
               <Share2 size={11} /> Share
             </button>
-          </div>
-        </motion.div>
-
-        {/* Recent transactions */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white rounded-3xl p-5 card-shadow"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900 text-base">Recent Round-ups</h3>
-            <button onClick={() => setTab('activity')} className="text-xs font-semibold" style={{ color: brand.primary }}>
-              See all
-            </button>
-          </div>
-          <div className="space-y-3">
-            {TRANSACTIONS.slice(0, 4).map((tx) => (
-              <div key={tx.id} className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-xl shrink-0">
-                  {tx.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-gray-900 text-sm font-semibold truncate">{tx.merchant}</p>
-                  <p className="text-gray-400 text-xs">{tx.category}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-gray-400 text-xs">${tx.amount.toFixed(2)}</p>
-                  <p className="text-sm font-bold" style={{ color: brand.primary }}>+${tx.roundUp.toFixed(2)}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </motion.div>
 

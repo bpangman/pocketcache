@@ -1,5 +1,30 @@
-import { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useMemo } from 'react';
 import { NONPROFITS } from '../data/nonprofits';
+
+// Keys to clear on ?reset=1 or ?fresh=1
+const RESET_KEYS = [
+  'pc_page',
+  'pc_cause_id',
+  'pc_multiplier',
+  'pc_cards',
+  'pc_total_donated',
+  'pc_seen_milestone',
+  'pc_dismiss_countdown',
+];
+
+function clearDemoState() {
+  RESET_KEYS.forEach(k => {
+    try { localStorage.removeItem(k); } catch { /* ignore */ }
+  });
+}
+
+// Check for ?reset=1 or ?fresh=1 on load — clear state so demo starts at the gate
+if (typeof window !== 'undefined') {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('reset') === '1' || params.get('fresh') === '1') {
+    clearDemoState();
+  }
+}
 
 function load(key, fallback) {
   try {
