@@ -10,7 +10,7 @@ export const NONPROFITS = [
     category: 'Youth Development',
     categoryColor: '#003865',
     logo: '🏀',
-    logoUrl: 'https://logo.clearbit.com/bgca.org',
+    logoUrl: '/bgca-logo.png',
     raised: 3841209,
     donors: 112340,
     impact: '4.3M youth served at 5,000+ club locations',
@@ -18,6 +18,7 @@ export const NONPROFITS = [
     ein: '13-5562976',
     rating: 4.8,
     featured: true,
+    monthlyMinimum: 10,
     corporateMatch: {
       company: 'General Motors',
       companyShort: 'GM',

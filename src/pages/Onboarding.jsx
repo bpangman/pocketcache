@@ -9,6 +9,7 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 
 import CoinLogo from '../components/CoinLogo';
 import { useApp } from '../store/AppContext';
 import { NONPROFITS } from '../data/nonprofits';
+import OrgLogo from '../components/OrgLogo';
 
 
 function findNonprofitByCode(code) {
@@ -70,26 +71,7 @@ const SLIDES = [
   {
     id: 2,
     bg: 'from-emerald-500 to-teal-400',
-    illustration: (
-      <div className="flex flex-col items-center gap-4">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
-          className="text-8xl"
-        >
-          🏀
-        </motion.div>
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="text-white font-bold text-lg text-center"
-        >
-          Boys &amp; Girls Clubs of America
-        </motion.p>
-      </div>
-    ),
+    illustration: null,
     title: 'Your App,\nYour Cause',
     subtitle: 'This app is powered by PocketCache for Boys & Girls Clubs of America. Your round-ups go directly to BGCA every month.',
     cta: 'Next',
@@ -142,12 +124,14 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [autoBound, setAutoBound] = useState(false);
+  const [boundNp, setBoundNp] = useState(null);
 
   useEffect(() => {
     if (autoBindOrg) {
       const np = findNonprofitByCode(autoBindOrg);
       if (np) {
         setAutoBound(true);
+        setBoundNp(np);
         setTimeout(() => onBind(np), 800);
       }
     }
@@ -179,7 +163,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
         className="flex flex-col h-full items-center justify-center gap-4 px-8"
         style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)' }}
       >
-        <div className="text-6xl">🏀</div>
+        {boundNp ? <OrgLogo nonprofit={boundNp} size={16} rounded="2xl" /> : <div className="text-6xl">🏀</div>}
         <p className="text-white font-bold text-xl text-center">Invited by BGCA</p>
         <p className="text-white/70 text-sm text-center">Setting up your BGCA Round-Up…</p>
         <motion.div
@@ -323,25 +307,27 @@ const US_STATES = [
   { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
 ];
 
-function SignUpScreen({ onNext }) {
+function SignUpScreen({ onNext, nonprofit }) {
   const [chosen, setChosen] = useState(null);
   const [showEmail, setShowEmail] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [selectedState, setSelectedState] = useState('');
+  const [showTermsHint, setShowTermsHint] = useState(false);
   const isCA = selectedState === 'CA';
   const canContinue = agreedTerms && selectedState !== '' && !isCA;
 
   function handleSSO(provider) {
-    if (!canContinue) return;
+    if (!canContinue) { setShowTermsHint(true); return; }
     setChosen(provider);
     setTimeout(() => onNext(), 700);
   }
 
   function handleEmail(e) {
     e.preventDefault();
-    if (email && password && canContinue) onNext();
+    if (!canContinue) { setShowTermsHint(true); return; }
+    if (email && password) onNext();
   }
 
   const ssoButtons = [
@@ -397,9 +383,10 @@ function SignUpScreen({ onNext }) {
         style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: '38%' }}
       >
         <motion.div className="mb-5 flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl mb-2">
-            &#127952;
-          </div>
+          {nonprofit
+            ? <OrgLogo nonprofit={nonprofit} size={16} rounded="2xl" className="bg-white/20 mb-2" />
+            : <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl mb-2">&#127952;</div>
+          }
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -533,9 +520,12 @@ function SignUpScreen({ onNext }) {
 
         {/* Consent checkbox */}
         <div className="px-5 pb-8 pt-3 space-y-3">
-          <label className="flex items-start gap-3 cursor-pointer">
+          <label
+            className="flex items-start gap-3 cursor-pointer"
+            style={showTermsHint && !agreedTerms ? { outline: '2px solid #f59e0b', borderRadius: 8, padding: 4 } : {}}
+          >
             <div
-              onClick={() => setAgreedTerms(v => !v)}
+              onClick={() => { setAgreedTerms(v => !v); setShowTermsHint(false); }}
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
               style={{ borderColor: agreedTerms ? '#003865' : '#d1d5db', background: agreedTerms ? '#003865' : '#fff' }}
             >
@@ -553,6 +543,15 @@ function SignUpScreen({ onNext }) {
           )}
           {selectedState !== '' && !agreedTerms && (
             <p className="text-xs text-center text-gray-400">Check the box above to continue</p>
+          )}
+          {showTermsHint && !agreedTerms && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-amber-600 font-medium text-center"
+            >
+              Please confirm this to continue
+            </motion.p>
           )}
         </div>
       </div>
@@ -774,7 +773,7 @@ function PaymentMethodScreen({ onNext }) {
             transition={{ delay: 0.6 }}
             className="flex items-center gap-2 bg-white/20 rounded-2xl px-4 py-2"
           >
-            <span className="text-white text-sm font-semibold">Charged once a month · $5 minimum</span>
+            <span className="text-white text-sm font-semibold">Charged once a month · $10 minimum</span>
           </motion.div>
         </motion.div>
         <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
@@ -1025,6 +1024,9 @@ function CheckoutConfirmScreen({ onConfirm }) {
               <span className="font-bold text-gray-900">One charge from BGCA</span>
               <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
             </div>
+            <p className="text-xs text-gray-400 mt-2 italic">
+              This is an example — no real charge is made in this demo.
+            </p>
           </div>
 
           {/* Cover fee checkbox */}
@@ -1053,6 +1055,9 @@ function CheckoutConfirmScreen({ onConfirm }) {
             </p>
             <p className="text-xs text-gray-400 mt-2">
               Note: the $0.50/mo processing fee is not tax-deductible. Your donation amount is.
+            </p>
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+              Round-up tracking starts when your card is linked. Round-ups accumulate through the month. Your <strong>first charge happens on the 1st of the following month</strong> — nothing before your signup is ever charged.
             </p>
           </div>
         </div>
@@ -1085,6 +1090,8 @@ function NonprofitSignupFlow({ onBack }) {
   const [story, setStory] = useState('');
   const [color, setColor] = useState('#003865');
   const [accepted, setAccepted] = useState(false);
+  const [showLicenseHint, setShowLicenseHint] = useState(false);
+  const [monthlyMinimum, setMonthlyMinimum] = useState(10);
 
   function handleVerifyEIN(e) {
     e.preventDefault();
@@ -1112,6 +1119,7 @@ function NonprofitSignupFlow({ onBack }) {
 
   function handleAccept(e) {
     e.preventDefault();
+    if (!accepted) { setShowLicenseHint(true); return; }
     setStep('live');
   }
 
@@ -1205,9 +1213,29 @@ function NonprofitSignupFlow({ onBack }) {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logo</label>
+              <div className="flex items-center gap-3 mb-2">
+                <img src="/bgca-logo.png" alt="BGCA logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
+                <span className="text-xs text-gray-500">Preview: your uploaded logo becomes the app mark for donors.</span>
+              </div>
               <button type="button" className="w-full py-3 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 text-sm font-semibold">
                 Upload Logo (coming soon)
               </button>
+              <p className="text-gray-400 text-xs mt-1">If you skip this, a default emoji is used as your app mark.</p>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">
+                Monthly Minimum — ${monthlyMinimum}
+              </label>
+              <input
+                type="range"
+                min={5}
+                max={50}
+                step={5}
+                value={monthlyMinimum}
+                onChange={e => setMonthlyMinimum(Number(e.target.value))}
+                className="w-full accent-teal-600"
+              />
+              <p className="text-gray-400 text-xs mt-1">Default is $10. Donors below this in a month roll over to the next month.</p>
             </div>
             <motion.button whileTap={{ scale: 0.97 }} type="submit"
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
@@ -1239,6 +1267,15 @@ function NonprofitSignupFlow({ onBack }) {
               </div>
               <span className="text-xs text-gray-600 leading-relaxed">I accept the Nonprofit Software License Agreement on behalf of this organization.</span>
             </label>
+            {showLicenseHint && !accepted && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-amber-600 font-medium"
+              >
+                Please accept the license to continue
+              </motion.p>
+            )}
             <motion.button whileTap={{ scale: 0.97 }} type="submit"
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: accepted ? 1 : 0.4 }}>
@@ -1312,7 +1349,7 @@ export default function Onboarding() {
   if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('checkout-confirm')} />;
   if (step === 'payment-method') return <PaymentMethodScreen onNext={method => setStep(method === 'card' ? 'card-entry' : 'checkout-confirm')} />;
   if (step === 'connect-card') return <ConnectCardScreen onNext={() => setStep('payment-method')} />;
-  if (step === 'signup') return <SignUpScreen onNext={() => setStep('connect-card')} />;
+  if (step === 'signup') return <SignUpScreen onNext={() => setStep('connect-card')} nonprofit={selectedNonprofit} />;
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -1327,7 +1364,25 @@ export default function Onboarding() {
         >
           {/* Illustration */}
           <div className="flex-1 flex items-center justify-center min-h-0">
-            {current.illustration}
+            {slide === 2 ? (
+              <div className="flex flex-col items-center gap-4">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+                >
+                  <OrgLogo nonprofit={selectedNonprofit} size={24} rounded="2xl" />
+                </motion.div>
+                <motion.p
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="text-white font-bold text-lg text-center"
+                >
+                  Boys &amp; Girls Clubs of America
+                </motion.p>
+              </div>
+            ) : current.illustration}
           </div>
 
           {/* Text */}

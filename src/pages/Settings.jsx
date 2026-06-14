@@ -8,6 +8,7 @@ import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
 import CoinAccent from '../components/CoinAccent';
+import OrgLogo from '../components/OrgLogo';
 import { NONPROFITS } from '../data/nonprofits';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
@@ -509,7 +510,7 @@ export default function Settings() {
           className="bg-amber-50 rounded-3xl px-4 py-3.5" style={{ border: '1px solid #fde68a' }}>
           <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
           <p className="text-xs text-amber-800 leading-relaxed">
-            Your round-ups are charged once a month (minimum $5) directly on BGCA&apos;s Stripe — BGCA is the merchant of record. <strong>100% of your round-up amount goes directly to BGCA.</strong> A flat <strong>$0.50/month</strong> processing fee is charged separately (you can opt to cover it at checkout, pre-checked). PocketCache takes no percentage of your donation — ever. If a payment fails, we&apos;ll retry once after 3 days. If it fails again, your account is paused and you&apos;ll be notified. Round-ups keep accumulating during a pause.
+            Your round-ups are charged once a month (minimum $10) directly on BGCA&apos;s Stripe — BGCA is the merchant of record. 100% of your round-up amount goes directly to BGCA. A flat <strong>$0.50/month</strong> processing fee is charged separately (you can opt to cover it at checkout, pre-checked). PocketCache takes no percentage of your donation — ever. If a payment fails, we&apos;ll retry once after 3 days. If it fails again, your account is paused and you&apos;ll be notified. Round-ups keep accumulating during a pause. If you cancel mid-month, the round-ups accumulated that month are simply not charged — as if the month never happened.
           </p>
         </motion.div>
 
@@ -520,7 +521,7 @@ export default function Settings() {
             <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Your Cause</p>
           </div>
           <SettingRow
-            icon={<span className="text-xl">{selectedNonprofit.logo}</span>}
+            icon={<OrgLogo nonprofit={selectedNonprofit} size={8} rounded="xl" />}
             label={selectedNonprofit.name}
             sub={selectedNonprofit.category}
             color={brand.primary}

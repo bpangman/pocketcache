@@ -9,13 +9,34 @@ import OrgLogo from '../components/OrgLogo';
 import CustomTooltip from '../components/CustomTooltip';
 import Sheet from '../components/Sheet';
 
-const MILESTONE_DEFS = [
-  { amount: 10,  label: 'First $10',  emoji: '🌱' },
-  { amount: 25,  label: '$25 given',  emoji: '⭐' },
-  { amount: 50,  label: '$50 club',   emoji: '🏆' },
-  { amount: 100, label: 'Century',    emoji: '💎' },
-  { amount: 250, label: '$250 hero',  emoji: '🦸' },
-];
+const MILESTONE_EMOJIS = ['🌱', '⭐', '🏆', '💎', '🦸', '🚀', '🌟', '👑', '🎯', '🔮'];
+
+function getMilestoneAt(index) {
+  // 1-2.5-5 decade pattern indexed from 0:
+  // index 0 → 10, 1 → 25, 2 → 50, 3 → 100, 4 → 250, 5 → 500, 6 → 1000, ...
+  const tier = Math.floor(index / 3);
+  const pos = index % 3;
+  const multiplier = pos === 0 ? 1 : pos === 1 ? 2.5 : 5;
+  const amount = Math.round(10 * Math.pow(10, tier) * multiplier);
+  const emoji = MILESTONE_EMOJIS[index % MILESTONE_EMOJIS.length];
+  const label = amount >= 1000
+    ? `$${(amount / 1000 % 1 === 0 ? amount / 1000 : (amount / 1000).toFixed(1))}K club`
+    : `$${amount} club`;
+  return { amount, label, emoji, index };
+}
+
+function getMilestonesUpTo(total) {
+  const result = [];
+  let i = 0;
+  while (true) {
+    const m = getMilestoneAt(i);
+    result.push({ ...m, achieved: total >= m.amount });
+    if (m.amount > total && result.filter(x => !x.achieved).length >= 5) break;
+    i++;
+    if (i > 50) break;
+  }
+  return result;
+}
 
 function daysUntilMonthEnd() {
   const now = new Date();
@@ -267,7 +288,9 @@ function VolunteerSheet({ show, onClose, nonprofit, brand }) {
 export default function Dashboard() {
   const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab } = useApp();
   const brand = useTheme();
-  const [showMilestone, setShowMilestone] = useState(true);
+  const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pc_seen_milestone') ?? '0'); } catch { return 0; }
+  });
   const [showBoost, setShowBoost] = useState(false);
   const [showMatch, setShowMatch] = useState(false);
   const [showVolunteer, setShowVolunteer] = useState(false);
@@ -276,12 +299,13 @@ export default function Dashboard() {
   const toastTimerRef = useRef(null);
   const daysLeft = daysUntilMonthEnd();
 
-  const milestones = MILESTONE_DEFS.map(m => ({ ...m, achieved: totalDonated >= m.amount }));
+  const milestones = getMilestonesUpTo(totalDonated);
   const nextMilestone = milestones.find(m => !m.achieved);
-  const latestAchieved = [...milestones].reverse().find(m => m.achieved);
+  const latestAchieved = [...milestones].filter(m => m.achieved).pop();
   const progressToNext = nextMilestone
     ? Math.min((totalDonated / nextMilestone.amount) * 100, 100)
     : 100;
+  const shouldShowMilestone = latestAchieved && latestAchieved.amount > seenMilestoneAmount;
 
   if (!selectedNonprofit) return null;
 
@@ -303,8 +327,15 @@ export default function Dashboard() {
 
       {/* Milestone toast */}
       <AnimatePresence>
-        {showMilestone && latestAchieved && boostToast === null && (
-          <MilestoneToast milestone={latestAchieved} onClose={() => setShowMilestone(false)} />
+        {shouldShowMilestone && boostToast === null && (
+          <MilestoneToast
+            milestone={latestAchieved}
+            onClose={() => {
+              const amount = latestAchieved.amount;
+              setSeenMilestoneAmount(amount);
+              try { localStorage.setItem('pc_seen_milestone', JSON.stringify(amount)); } catch {}
+            }}
+          />
         )}
       </AnimatePresence>
 
