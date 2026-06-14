@@ -35,7 +35,14 @@ function PhoneFrame({ children }) {
           transition={{ duration: 0.4 }}
           className="flex items-center gap-3"
         >
-          {brand.logoEmoji ? (
+          {brand.brandLogoUrl ? (
+            <div
+              className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden"
+              style={{ background: '#fff' }}
+            >
+              <img src={brand.brandLogoUrl} alt={brand.appName} className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+            </div>
+          ) : brand.logoEmoji ? (
             <div
               className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl shadow-lg"
               style={{ background: brand.gradient }}

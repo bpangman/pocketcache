@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { QRCodeSVG } from 'qrcode.react';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
 
 // In production, replace with your publishable key from environment variables
@@ -124,6 +125,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [scanned, setScanned] = useState(false);
   const [autoBound, setAutoBound] = useState(false);
   const [boundNp, setBoundNp] = useState(null);
 
@@ -152,8 +154,13 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
     setScanning(true);
     setTimeout(() => {
       setScanning(false);
+      setScanned(true);
       setCode('BGCA');
-    }, 1000);
+      setTimeout(() => {
+        const np = findNonprofitByCode('BGCA');
+        if (np) onBind(np);
+      }, 700);
+    }, 900);
   }
 
   if (autoBound) {
@@ -222,28 +229,35 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
               <p className="text-gray-400 text-xs mt-1 px-1">Demo code: BGCA</p>
             </div>
 
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={handleScan}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-dashed"
-              style={{ borderColor: '#f97316', color: '#f97316', background: '#fff7ed' }}
-            >
-              {scanning ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
-                    className="w-4 h-4 rounded-full border-2 border-orange-300 border-t-orange-500"
-                  />
-                  Scanning…
-                </>
-              ) : (
-                <>
-                  <span>📷</span> Scan QR Code
-                </>
-              )}
-            </motion.button>
+            {scanned ? (
+              <div className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-green-400 bg-green-50 text-green-700">
+                <CheckCircle size={16} className="text-green-500" />
+                QR scanned — BGCA
+              </div>
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={handleScan}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-dashed"
+                style={{ borderColor: '#f97316', color: '#f97316', background: '#fff7ed' }}
+              >
+                {scanning ? (
+                  <>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                      className="w-4 h-4 rounded-full border-2 border-orange-300 border-t-orange-500"
+                    />
+                    Scanning…
+                  </>
+                ) : (
+                  <>
+                    <span>📷</span> Scan QR Code
+                  </>
+                )}
+              </motion.button>
+            )}
 
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -1093,6 +1107,9 @@ function NonprofitSignupFlow({ onBack }) {
   const [accepted, setAccepted] = useState(false);
   const [showLicenseHint, setShowLicenseHint] = useState(false);
   const [monthlyMinimum, setMonthlyMinimum] = useState(10);
+  const [logoPreview, setLogoPreview] = useState(bgcaLogoUrl);
+  const [logoUrlInput, setLogoUrlInput] = useState('');
+  const fileInputRef = useRef(null);
 
   function handleVerifyEIN(e) {
     e.preventDefault();
@@ -1101,7 +1118,7 @@ function NonprofitSignupFlow({ onBack }) {
       setVerifying(false);
       setVerified(true);
       setOrgName('Boys & Girls Clubs of America');
-      setStep('stripe');
+      setStep('confirm-org');
     }, 1500);
   }
 
@@ -1124,7 +1141,7 @@ function NonprofitSignupFlow({ onBack }) {
     setStep('live');
   }
 
-  const stepBack = { ein: onBack, stripe: () => setStep('ein'), branding: () => setStep('stripe'), license: () => setStep('branding'), live: () => setStep('license') };
+  const stepBack = { ein: onBack, 'confirm-org': () => setStep('ein'), stripe: () => setStep('confirm-org'), branding: () => setStep('stripe'), license: () => setStep('branding'), live: () => setStep('license') };
 
   return (
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
@@ -1135,6 +1152,7 @@ function NonprofitSignupFlow({ onBack }) {
         <button onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</button>
         <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
           {step === 'ein' && 'Verify Your\nNonprofit'}
+          {step === 'confirm-org' && 'Confirm\nYour Org'}
           {step === 'stripe' && 'Connect\nStripe'}
           {step === 'branding' && 'Customize\nYour Page'}
           {step === 'license' && 'License\nAgreement'}
@@ -1161,7 +1179,37 @@ function NonprofitSignupFlow({ onBack }) {
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: ein ? 1 : 0.4 }}>
               {verifying ? 'Verifying…' : 'Verify EIN →'}
             </motion.button>
+            <p className="text-gray-400 text-xs text-center px-2">We only use this to confirm your 501(c)(3) status with the IRS. Takes a few seconds.</p>
           </form>
+        )}
+
+        {step === 'confirm-org' && (
+          <div className="space-y-4">
+            <p className="text-gray-500 text-sm">We found a match. Is this your organization?</p>
+            <div className="rounded-2xl p-5 bg-gray-50 border border-gray-200 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-white flex items-center justify-center border border-gray-100">
+                  <img src={bgcaLogoUrl} alt="BGCA" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 text-base">Boys &amp; Girls Clubs of America</p>
+                  <p className="text-gray-500 text-xs">1275 Peachtree St NE, Atlanta, GA 30309</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle size={14} className="text-green-500 shrink-0" />
+                <p className="text-green-700 text-xs font-semibold">EIN 13-5562976 · 501(c)(3) Verified</p>
+              </div>
+            </div>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('stripe')}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
+              Confirm — this is us →
+            </motion.button>
+            <button onClick={() => setStep('ein')} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
+              No, re-enter EIN
+            </button>
+          </div>
         )}
 
         {step === 'stripe' && (
@@ -1186,6 +1234,7 @@ function NonprofitSignupFlow({ onBack }) {
                 Continue →
               </motion.button>
             )}
+            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches donation funds — they settle directly into your Stripe account.</p>
           </div>
         )}
 
@@ -1215,12 +1264,31 @@ function NonprofitSignupFlow({ onBack }) {
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logo</label>
               <div className="flex items-center gap-3 mb-2">
-                <img src={bgcaLogoUrl} alt="BGCA logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
+                <img src={logoPreview} alt="Logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
                 <span className="text-xs text-gray-500">Preview: your uploaded logo becomes the app mark for donors.</span>
               </div>
-              <button type="button" className="w-full py-3 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 text-sm font-semibold">
-                Upload Logo (coming soon)
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) setLogoPreview(URL.createObjectURL(file));
+                }}
+              />
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="w-full py-3 rounded-2xl border-2 border-dashed border-teal-300 text-teal-600 text-sm font-semibold mb-2">
+                Upload image
               </button>
+              <input
+                type="url"
+                placeholder="or paste a logo URL"
+                value={logoUrlInput}
+                onChange={e => setLogoUrlInput(e.target.value)}
+                onBlur={e => { if (e.target.value) setLogoPreview(e.target.value); }}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400"
+              />
               <p className="text-gray-400 text-xs mt-1">If you skip this, a default emoji is used as your app mark.</p>
             </div>
             <div>
@@ -1293,12 +1361,14 @@ function NonprofitSignupFlow({ onBack }) {
             </div>
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">QR Code</p>
-              <div className="w-24 h-24 bg-gray-200 rounded-xl flex items-center justify-center text-gray-400 text-xs font-bold">QR</div>
+              <div className="bg-white rounded-xl p-3 inline-block border border-gray-100">
+                <QRCodeSVG value="https://pocketcache.app/demo/?org=BGCA" size={96} level="M" includeMargin />
+              </div>
             </div>
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Embed Widget</p>
-              <div className="bg-gray-900 rounded-xl p-3 overflow-x-auto">
-                <code className="text-green-400 text-xs whitespace-nowrap">{'<script src="https://cdn.pocketcache.app/widget.js" data-org="bgca"></script>'}</code>
+              <div className="bg-gray-900 rounded-xl p-3 max-w-full overflow-x-auto">
+                <code className="text-green-400 text-xs whitespace-pre-wrap break-all">{'<script src="https://cdn.pocketcache.app/widget.js" data-org="bgca"></script>'}</code>
               </div>
             </div>
             <div>

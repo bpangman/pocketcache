@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Star } from 'lucide-react';
+import { X, Plus, Star, Sparkles } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import OrgLogo from '../components/OrgLogo';
@@ -280,10 +280,19 @@ function VolunteerSheet({ show, onClose, nonprofit, brand }) {
   );
 }
 
+// ─── Impact tier helper ───────────────────────────────────────────────────────
+
+function impactTier(total) {
+  if (total >= 100) return 'About $100 = a month of after-school programming for a Club kid';
+  if (total >= 60) return 'About $60 = 2 weeks of after-school snacks for a kid';
+  if (total >= 25) return 'About $25 = art & sports supplies for a Club session';
+  return 'Every dollar helps fund safe after-school spaces for kids';
+}
+
 // ─── MyCause page ────────────────────────────────────────────────────────────
 
 export default function MyCause() {
-  const { selectedNonprofit, boostDonation } = useApp();
+  const { selectedNonprofit, boostDonation, totalDonated } = useApp();
   const brand = useTheme();
   const [showBoost, setShowBoost] = useState(false);
   const [showMatch, setShowMatch] = useState(false);
@@ -371,6 +380,22 @@ export default function MyCause() {
           <div className="flex items-center gap-2 mt-3 relative z-10">
             <OrgLogo nonprofit={np} size={7} rounded="full" className="shrink-0" />
             <p className="text-white/70 text-xs">{np.name}</p>
+          </div>
+        </motion.div>
+
+        {/* Your impact storytelling card */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className="bg-white rounded-3xl p-5 card-shadow flex items-start gap-3"
+        >
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: brand.accentLight }}>
+            <Sparkles size={18} style={{ color: brand.textAccent }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-1">Your Impact</p>
+            <p className="text-gray-700 text-sm leading-relaxed">{impactTier(totalDonated)}</p>
           </div>
         </motion.div>
 

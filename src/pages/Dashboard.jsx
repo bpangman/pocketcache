@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink } from 'lucide-react';
+import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink, Building2, Flame } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { MONTHLY_DATA } from '../data/transactions';
@@ -400,6 +400,8 @@ function MatchBanner({ m, pct }) {
   );
 }
 
+const MONTHS_GIVING = 6;
+
 export default function Dashboard() {
   const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab } = useApp();
   const brand = useTheme();
@@ -534,6 +536,10 @@ export default function Dashboard() {
               <span className="text-5xl font-bold">${totalDonated.toFixed(2)}</span>
             </div>
             <p className="text-white/60 text-sm mt-2">Since Jan 2026 · All time</p>
+            <div className="mt-2 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
+              <Flame size={13} className="text-orange-300" />
+              <span className="text-white/90 text-xs font-semibold">{MONTHS_GIVING}-month giving streak</span>
+            </div>
             <div className="mt-5 pt-4 border-t border-white/20 flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
                 <OrgLogo nonprofit={selectedNonprofit} size={8} rounded="full" className="shrink-0" />
@@ -547,7 +553,7 @@ export default function Dashboard() {
                   <Plus size={12} /> Give Extra
                 </button>
                 <button onClick={() => setShowMatch(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
-                  &#127962; Corp Match
+                  <Building2 size={12} /> Corp Match
                 </button>
                 <button onClick={() => setShowVolunteer(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
                   &#128588; Volunteer

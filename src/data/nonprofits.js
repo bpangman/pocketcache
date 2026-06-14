@@ -43,6 +43,7 @@ export const NONPROFITS = [
       accentLight: '#E8192C22',
       textAccent: '#E8192C',
       logoEmoji: '🏀',
+      brandLogoUrl: bgcaLogoUrl,
     },
   },
 ];

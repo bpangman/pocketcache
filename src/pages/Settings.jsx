@@ -10,6 +10,7 @@ import CoinLogo from '../components/CoinLogo';
 import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
 import { NONPROFITS } from '../data/nonprofits';
+import bgcaLogoUrl from '../assets/bgca-logo.png';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 
@@ -365,8 +366,8 @@ function AppIconSheet({ show, onClose, brand }) {
 
         <div className="space-y-3">
           {[
-            { id: 'pocketcache', label: 'PocketCache Icon', sub: 'Default', emoji: '🪙' },
-            { id: 'bgca', label: 'BGCA Custom Icon', sub: 'Anchor partner benefit', emoji: '🏀' },
+            { id: 'pocketcache', label: 'PocketCache Icon', sub: 'Default', emoji: '🪙', logoImg: null },
+            { id: 'bgca', label: 'BGCA Custom Icon', sub: 'Anchor partner benefit', emoji: null, logoImg: bgcaLogoUrl },
           ].map(opt => (
             <motion.button
               key={opt.id}
@@ -377,10 +378,17 @@ function AppIconSheet({ show, onClose, brand }) {
                 ? { borderColor: brand.primary, background: brand.accentLight }
                 : { borderColor: '#f3f4f6', background: '#f9fafb' }}
             >
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm"
-                style={{ background: selectedIcon === opt.id ? brand.gradient : '#e5e7eb' }}>
-                {opt.emoji}
-              </div>
+              {opt.logoImg ? (
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm overflow-hidden"
+                  style={{ background: '#fff', border: selectedIcon === opt.id ? `2px solid ${brand.primary}` : '2px solid #e5e7eb' }}>
+                  <img src={opt.logoImg} alt={opt.label} className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm"
+                  style={{ background: selectedIcon === opt.id ? brand.gradient : '#e5e7eb' }}>
+                  {opt.emoji}
+                </div>
+              )}
               <div className="text-left flex-1">
                 <p className="font-semibold text-sm text-gray-900">{opt.label}</p>
                 <p className="text-gray-400 text-xs">{opt.sub}</p>
@@ -639,7 +647,11 @@ export default function Settings() {
         {/* Footer */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
           className="flex flex-col items-center gap-2 py-4">
-          {brand.logoEmoji ? (
+          {brand.brandLogoUrl ? (
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center overflow-hidden" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+              <img src={brand.brandLogoUrl} alt={brand.appName} className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+            </div>
+          ) : brand.logoEmoji ? (
             <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl" style={{ background: brand.gradient }}>
               {brand.logoEmoji}
             </div>

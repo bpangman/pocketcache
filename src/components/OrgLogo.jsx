@@ -15,6 +15,7 @@ const RADIUS_MAP = {
 // Shows the real logo, falls back through multiple sources, then emoji.
 export default function OrgLogo({ nonprofit, size = 14, className = '', rounded = '2xl' }) {
   const px = size * 4;
+  const pad = Math.round(px * 0.12);
   const [urlIndex, setUrlIndex] = useState(0);
   const borderRadius = RADIUS_MAP[rounded] ?? '16px';
 
@@ -28,12 +29,12 @@ export default function OrgLogo({ nonprofit, size = 14, className = '', rounded 
     return (
       <div
         className={`flex items-center justify-center overflow-hidden ${className}`}
-        style={{ width: px, height: px, minWidth: px, padding: '10%', borderRadius, background: '#ffffff' }}
+        style={{ width: px, height: px, minWidth: px, padding: pad, borderRadius, background: '#ffffff' }}
       >
         <img
           src={urls[urlIndex]}
           alt={nonprofit.name}
-          className="w-full h-full object-contain"
+          style={{ width: px - pad * 2, height: px - pad * 2, objectFit: 'contain', display: 'block' }}
           onError={() => setUrlIndex(i => i + 1)}
         />
       </div>

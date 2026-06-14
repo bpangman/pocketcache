@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion';
-import { Share2, Copy, Mail, CheckCircle } from 'lucide-react';
+import { Share2, Copy, Mail, CheckCircle, Flame } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import Logo from '../components/Logo';
+
+const MONTHS_GIVING = 6;
 
 export default function Share() {
   const { selectedNonprofit, totalDonated } = useApp();
@@ -16,6 +18,7 @@ export default function Share() {
   const orgCode = selectedNonprofit.id?.toUpperCase() ?? 'BGCA';
   const referralCode = 'ALEX-GIVES';
   const shareUrl = `https://pocketcache.app/demo/?org=${orgCode}&ref=${referralCode}`;
+  const displayUrl = `pocketcache.app/${orgCode.toLowerCase()}`;
   const shareText = `I've donated $${totalDonated.toFixed(2)} to ${selectedNonprofit.name} through ${brand.appName} — an app that rounds up every purchase and gives the change to charity. Join me supporting ${selectedNonprofit.shortName}! 💙`;
 
   function handleCopy() {
@@ -75,7 +78,11 @@ export default function Share() {
             <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3" />
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-4">
-                {brand.logoEmoji ? (
+                {brand.brandLogoUrl ? (
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden bg-white">
+                    <img src={brand.brandLogoUrl} alt={brand.appName} className="w-full h-full object-contain p-1" style={{ display: 'block' }} />
+                  </div>
+                ) : brand.logoEmoji ? (
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base bg-white/20">{brand.logoEmoji}</div>
                 ) : <Logo size={28} />}
                 <span className="font-bold text-white">{brand.appName}</span>
@@ -83,7 +90,12 @@ export default function Share() {
               <p className="text-white/80 text-sm mb-2">I've donated</p>
               <p className="text-5xl font-bold">${totalDonated.toFixed(2)}</p>
               <p className="text-white/80 text-sm mt-2">to {selectedNonprofit.name}</p>
-              <div className="mt-4 pt-4 border-t border-white/20">
+              {/* Giving streak badge */}
+              <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
+                <Flame size={13} className="text-orange-300" />
+                <span className="text-white/90 text-xs font-semibold">{MONTHS_GIVING}-month giving streak</span>
+              </div>
+              <div className="mt-3 pt-4 border-t border-white/20">
                 <p className="text-white/70 text-xs">{selectedNonprofit.impact}</p>
               </div>
             </div>
@@ -103,7 +115,7 @@ export default function Share() {
         >
           <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-3">Message Preview</p>
           <p className="text-gray-700 text-sm leading-relaxed">{shareText}</p>
-          <p className="text-sm font-semibold mt-2" style={{ color: brand.primary }}>{shareUrl}</p>
+          <p className="text-sm font-semibold mt-2" style={{ color: brand.primary }}>{displayUrl}</p>
         </motion.div>
 
         {/* Share buttons */}
