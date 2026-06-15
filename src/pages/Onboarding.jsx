@@ -995,6 +995,7 @@ function CardEntryScreen({ onNext }) {
 // ─── Checkout confirm screen ─────────────────────────────────────────────────
 
 function CheckoutConfirmScreen({ onConfirm }) {
+  const { selectedNonprofit } = useApp();
   const [coverFee, setCoverFee] = useState(true);
   const roundUps = 4.63;
   const fee = 0.50;
@@ -1007,8 +1008,9 @@ function CheckoutConfirmScreen({ onConfirm }) {
       <div className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
         style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: '38%' }}>
         <motion.div className="mb-5 flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl"
-            style={{ background: 'rgba(255,255,255,0.15)' }}>&#127952;</div>
+          {selectedNonprofit
+            ? <OrgLogo nonprofit={selectedNonprofit} size={16} rounded="2xl" className="bg-white/20" />
+            : <img src={bgcaLogoUrl} alt="logo" className="w-16 h-16 rounded-2xl bg-white object-contain p-2" />}
           <div className="bg-white/20 rounded-2xl px-4 py-2">
             <p className="text-white text-xs font-semibold text-center">One monthly charge · BGCA on your statement</p>
           </div>
