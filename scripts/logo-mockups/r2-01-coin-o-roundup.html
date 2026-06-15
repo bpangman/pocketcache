@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .wordmark-wrap {
+    display: flex;
+    align-items: center;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    color: #0B2A4A;
+    margin-top: 0;
+    position: relative;
+  }
+  .teal { color: #0D9488; }
+  /* The coin-o sits inline — sized to cap-height (~52px for 72px font) */
+  .coin-o {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 1px;
+    vertical-align: middle;
+    position: relative;
+    top: -2px;
+  }
+  .caption {
+    margin-top: 48px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+  .rule {
+    width: 120px;
+    height: 2px;
+    background: #FBBF24;
+    border-radius: 1px;
+    margin-top: 36px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <div class="wordmark-wrap">
+      <!-- "P" in navy -->
+      <span>P</span>
+      <!-- coin replaces "o" -->
+      <span class="coin-o">
+        <svg width="52" height="52" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
+          <!-- Outer ring -->
+          <circle cx="26" cy="26" r="25" fill="#E5A800"/>
+          <!-- Main coin face -->
+          <circle cx="26" cy="26" r="21" fill="#FBBF24"/>
+          <!-- Inner highlight -->
+          <circle cx="26" cy="26" r="16" fill="#FDE68A"/>
+          <!-- Up arrow -->
+          <path d="M26 34 L26 20 M26 20 L19 27 M26 20 L33 27"
+                stroke="#0B2A4A" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </span>
+      <!-- rest of "Pocket" -->
+      <span>cket</span>
+      <span class="teal">Cache</span>
+    </div>
+    <div class="rule"></div>
+    <div class="caption">Coin-O · Round Up</div>
+  </div>
+</div>
+</body>
+</html>

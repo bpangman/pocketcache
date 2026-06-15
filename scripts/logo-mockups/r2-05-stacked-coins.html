@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 28px;
+  }
+  .wordmark {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    color: #0B2A4A;
+    letter-spacing: -1.5px;
+    line-height: 1;
+  }
+  .wordmark span { color: #0D9488; }
+  .caption {
+    margin-top: 48px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+  .rule {
+    width: 120px;
+    height: 2px;
+    background: #FBBF24;
+    border-radius: 1px;
+    margin-top: 36px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <div class="row">
+      <!-- Stacked coins emblem — 3 coins stacked, largest at bottom -->
+      <svg width="76" height="90" viewBox="0 0 76 90" xmlns="http://www.w3.org/2000/svg">
+        <!-- Bottom coin (largest) -->
+        <ellipse cx="38" cy="78" rx="34" ry="10" fill="#E5A800"/>
+        <rect x="4" y="62" width="68" height="16" fill="#E5A800" rx="0"/>
+        <ellipse cx="38" cy="62" rx="34" ry="10" fill="#FBBF24"/>
+        <ellipse cx="38" cy="62" rx="28" ry="8" fill="#FDE68A"/>
+
+        <!-- Middle coin -->
+        <ellipse cx="38" cy="50" rx="27" ry="8" fill="#E5A800"/>
+        <rect x="11" y="36" width="54" height="14" fill="#E5A800" rx="0"/>
+        <ellipse cx="38" cy="36" rx="27" ry="8" fill="#FBBF24"/>
+        <ellipse cx="38" cy="36" rx="22" ry="6.5" fill="#FDE68A"/>
+
+        <!-- Top coin (smallest) -->
+        <ellipse cx="38" cy="26" rx="20" ry="6" fill="#E5A800"/>
+        <rect x="18" y="14" width="40" height="12" fill="#E5A800" rx="0"/>
+        <ellipse cx="38" cy="14" rx="20" ry="6" fill="#FBBF24"/>
+        <ellipse cx="38" cy="14" rx="16" ry="4.5" fill="#FDE68A"/>
+      </svg>
+      <div class="wordmark">Pocket<span>Cache</span></div>
+    </div>
+    <div class="rule"></div>
+    <div class="caption">Stacked Coins</div>
+  </div>
+</div>
+</body>
+</html>

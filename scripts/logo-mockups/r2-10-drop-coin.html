@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .drop-coin {
+    margin-bottom: 18px;
+  }
+  .wordmark {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    color: #0B2A4A;
+    letter-spacing: -1.5px;
+    line-height: 1;
+  }
+  .wordmark span { color: #0D9488; }
+  .caption {
+    margin-top: 48px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+  .rule {
+    width: 120px;
+    height: 2px;
+    background: #FBBF24;
+    border-radius: 1px;
+    margin-top: 36px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <!-- Single gold heart-coin centered ABOVE wordmark -->
+    <div class="drop-coin">
+      <svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="40" cy="40" r="38" fill="#E5A800"/>
+        <circle cx="40" cy="40" r="33" fill="#FBBF24"/>
+        <circle cx="40" cy="40" r="26" fill="#FDE68A"/>
+        <!-- Heart inside coin -->
+        <path d="M40 56 C22 44 22 28 30 24 C34 22 40 26 40 30 C40 26 46 22 50 24 C58 28 58 44 40 56Z"
+              fill="#0B2A4A"/>
+      </svg>
+    </div>
+    <div class="wordmark">Pocket<span>Cache</span></div>
+    <div class="rule"></div>
+    <div class="caption">Drop Coin</div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .wordmark-wrap {
+    display: flex;
+    align-items: center;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    color: #0B2A4A;
+    position: relative;
+  }
+  .teal { color: #0D9488; }
+  .coin-o {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 1px;
+    vertical-align: middle;
+    position: relative;
+    top: -2px;
+  }
+  .caption {
+    margin-top: 48px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+  .rule {
+    width: 120px;
+    height: 2px;
+    background: #FBBF24;
+    border-radius: 1px;
+    margin-top: 36px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <div class="wordmark-wrap">
+      <span>P</span>
+      <span class="coin-o">
+        <svg width="52" height="52" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="26" cy="26" r="25" fill="#E5A800"/>
+          <circle cx="26" cy="26" r="21" fill="#FBBF24"/>
+          <circle cx="26" cy="26" r="16" fill="#FDE68A"/>
+          <!-- Heart on coin -->
+          <path d="M26 34 C16 27 16 18 21 16 C23.5 15 26 17 26 19 C26 17 28.5 15 31 16 C36 18 36 27 26 34Z"
+                fill="#0B2A4A" opacity="0.85"/>
+        </svg>
+      </span>
+      <span>cket</span>
+      <span class="teal">Cache</span>
+    </div>
+    <div class="rule"></div>
+    <div class="caption">Coin-O · Heart</div>
+  </div>
+</div>
+</body>
+</html>

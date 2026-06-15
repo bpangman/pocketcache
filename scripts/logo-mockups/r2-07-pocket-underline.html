@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .wordmark {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    color: #0B2A4A;
+    letter-spacing: -1.5px;
+    line-height: 1;
+  }
+  .wordmark span { color: #0D9488; }
+  .pocket-curve {
+    margin-top: 12px;
+  }
+  .caption {
+    margin-top: 36px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <div class="wordmark">Pocket<span>Cache</span></div>
+    <!-- Curved pocket underline with coin tucked at right end -->
+    <div class="pocket-curve">
+      <svg width="520" height="54" viewBox="0 0 520 54" xmlns="http://www.w3.org/2000/svg">
+        <!-- Curved pocket line: starts left, dips down in a soft cup, ends right -->
+        <path d="M20 10 Q260 52 480 10"
+              fill="none" stroke="#FBBF24" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+        <!-- Small coin at right end of curve -->
+        <circle cx="495" cy="10" r="18" fill="#E5A800" opacity="0.9"/>
+        <circle cx="495" cy="10" r="14" fill="#FBBF24"/>
+        <circle cx="495" cy="10" r="10" fill="#FDE68A"/>
+      </svg>
+    </div>
+    <div class="caption">Pocket Underline</div>
+  </div>
+</div>
+</body>
+</html>

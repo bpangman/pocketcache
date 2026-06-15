@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  /* Use inline-flex to compose the wordmark with the coin embedded via SVG */
+  .wordmark-wrap {
+    display: inline-flex;
+    align-items: center;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .navy { color: #0B2A4A; }
+  .teal { color: #0D9488; }
+  /* Small coin inline between C and che to visually sit on 'a' */
+  .coin-inline {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    top: -2px;
+    margin: 0;
+  }
+  .caption {
+    margin-top: 48px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+  .rule {
+    width: 120px;
+    height: 2px;
+    background: #FBBF24;
+    border-radius: 1px;
+    margin-top: 36px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <!--
+      Coin-A concept: the "a" in Cache is replaced by a gold coin.
+      We split "Cache" as "C" + coin + "che" so the coin visually occupies the "a" position.
+      The coin is sized to match the x-height of Poppins 800 at 72px (approx 40px).
+    -->
+    <div class="wordmark-wrap">
+      <span class="navy">Pocket</span><span class="teal">C</span><span class="coin-inline">
+        <svg width="42" height="42" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="21" cy="21" r="20" fill="#E5A800"/>
+          <circle cx="21" cy="21" r="16.5" fill="#FBBF24"/>
+          <circle cx="21" cy="21" r="12" fill="#FDE68A"/>
+        </svg>
+      </span><span class="teal">che</span>
+    </div>
+    <div class="rule"></div>
+    <div class="caption">Coin-A</div>
+  </div>
+</div>
+</body>
+</html>
