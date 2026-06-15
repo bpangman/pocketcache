@@ -9,6 +9,7 @@ import bgcaLogoUrl from '../assets/bgca-logo.png';
 // In production, replace with your publishable key from environment variables
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 import CoinLogo from '../components/CoinLogo';
+import HandwrittenWordmark from '../components/HandwrittenWordmark';
 import { useApp } from '../store/AppContext';
 import { NONPROFITS } from '../data/nonprofits';
 import OrgLogo from '../components/OrgLogo';
@@ -193,7 +194,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
       {/* Header */}
       <div
         className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', minHeight: '42%' }}
+        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '42%' }}
       >
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
@@ -203,9 +204,12 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
         >
           🪙
         </motion.div>
-        <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-          Welcome to{'\n'}PocketCache
-        </h1>
+        <div className="text-center">
+          <p className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+            Welcome to
+          </p>
+          <HandwrittenWordmark fontSize={38} color="#ffffff" />
+        </div>
         <p className="text-white/80 text-sm mt-3 text-center leading-relaxed">
           Enter your nonprofit&apos;s code or scan their QR to get started.
         </p>
