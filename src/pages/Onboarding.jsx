@@ -27,8 +27,8 @@ const SLIDES = [
     id: 0,
     bg: 'from-blue-600 to-cyan-500',
     illustration: (
-      <div className="relative flex items-center justify-center">
-        <PocketCacheLogo size={48} />
+      <div className="relative flex items-center justify-center w-full">
+        <PocketCacheLogo size={44} />
       </div>
     ),
     title: '',
