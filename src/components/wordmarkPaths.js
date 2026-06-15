@@ -16,6 +16,6 @@ export const LETTERS = [
   { char: "e", d: "M 4557.1,630 L 4639,589 L 4708,551 L 4743,494 L 4730,450 L 4671,444 L 4554,513 L 4506.8,548 L 4456.4,608 L 4424.9,661 L 4418.6,711.8 L 4440.6,755.9 L 4522.5,790.55 L 4661,755.9 L 4705,718.1 L 4768,665 L 4806,617", length: 1211 }
 ];
 
-export const VIEWBOX = "-38 12 4904 996";
+export const VIEWBOX = "-58 -8 4944 1036";
 
 export const META = { unitsPerEm: 1000, ascent: 800 };

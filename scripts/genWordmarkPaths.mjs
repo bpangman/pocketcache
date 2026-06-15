@@ -170,7 +170,7 @@ for (const char of WORD) {
 }
 
 // ── 7. Compute viewBox with padding ──────────────────────────────────────────
-const PAD = 60;
+const PAD = 80; // ≥ STROKE_WIDTH/2 (100/2=50) plus margin, prevents stroke edge clipping
 const vbX = Math.floor(overallMinX - PAD);
 const vbY = Math.floor(overallMinY - PAD);
 const vbW = Math.ceil(overallMaxX - overallMinX + PAD * 2);

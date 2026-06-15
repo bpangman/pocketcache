@@ -10,7 +10,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { LETTERS, VIEWBOX } from './wordmarkPaths.js';
 
-const STROKE_WIDTH = 28; // em units — tuned for pen-like weight
+const STROKE_WIDTH = 100; // em units — bold Pacifico-style brush weight (~10% of 1000-unit em)
 const TOTAL_DURATION_MS = 2200; // total animation time across all letters
 const DONE_FADE_MS = 400; // dot fade-out after finishing
 
@@ -182,7 +182,7 @@ export default function HandwrittenWordmark({ fontSize = 38, color = '#ffffff' }
             ref={dotRef}
             cx={dotPos.x}
             cy={dotPos.y}
-            r={22}
+            r={50}
             fill={color}
             opacity={dotPos.opacity}
             style={{ pointerEvents: 'none' }}
