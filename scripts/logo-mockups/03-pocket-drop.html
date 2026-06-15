@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .wordmark {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    color: #0B2A4A;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    margin-top: 28px;
+  }
+  .wordmark span {
+    color: #0D9488;
+  }
+  .caption {
+    margin-top: 48px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+  .rule {
+    width: 120px;
+    height: 2px;
+    background: #FBBF24;
+    border-radius: 1px;
+    margin-top: 36px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <!-- Pocket/wallet icon with coin dropping in — ABOVE wordmark -->
+    <svg width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+      <!-- Pocket/wallet body — rounded rectangle -->
+      <rect x="30" y="90" width="160" height="110" rx="20" fill="#0B2A4A"/>
+      <!-- Pocket flap (curved top) -->
+      <path d="M30 110 Q30 70 60 60 Q85 52 110 52 Q135 52 160 60 Q190 70 190 110"
+            fill="#0D9488"/>
+      <!-- Pocket flap inner curve highlight -->
+      <path d="M50 108 Q50 78 75 70 Q92 63 110 63 Q128 63 145 70 Q170 78 170 108"
+            fill="none" stroke="#14B8A6" stroke-width="3" opacity="0.5"/>
+
+      <!-- Coin dropping in from above — partially inside the pocket -->
+      <!-- Coin drop motion: at top-center, partially overlapping the flap -->
+      <!-- Motion trail / dash lines -->
+      <line x1="110" y1="10" x2="110" y2="35" stroke="#FBBF24" stroke-width="2.5" stroke-dasharray="4 4" opacity="0.6"/>
+
+      <!-- Coin (overlapping the pocket top) -->
+      <circle cx="110" cy="55" r="28" fill="#D97706"/>
+      <circle cx="110" cy="55" r="24" fill="#FBBF24"/>
+      <circle cx="110" cy="55" r="19" fill="#FDE68A"/>
+      <circle cx="110" cy="55" r="19" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+      <!-- Heart on coin -->
+      <path d="M110 65 C97 57 97 46 103 43 C106 42 110 44 110 47 C110 44 114 42 117 43 C123 46 123 57 110 65Z"
+            fill="#F97316" opacity="0.95"/>
+    </svg>
+
+    <!-- Wordmark below -->
+    <div class="wordmark">Pocket<span>Cache</span></div>
+
+    <div class="rule"></div>
+    <div class="caption">Pocket Drop</div>
+  </div>
+</div>
+</body>
+</html>

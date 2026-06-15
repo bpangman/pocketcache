@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 760px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+  }
+  .card {
+    width: 1200px;
+    height: 760px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #FFFBF5;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #FEF3C7 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .lockup {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 44px;
+  }
+  .wordmark {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    color: #0B2A4A;
+    letter-spacing: -1.5px;
+    line-height: 1;
+  }
+  .wordmark span {
+    color: #F97316;
+  }
+  .caption {
+    margin-top: 48px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0B2A4A;
+    opacity: 0.4;
+  }
+  .rule {
+    width: 120px;
+    height: 2px;
+    background: #FBBF24;
+    border-radius: 1px;
+    margin-top: 36px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+  .tile {
+    width: 180px;
+    height: 180px;
+    border-radius: 38px;
+    background: linear-gradient(135deg, #F97316 0%, #FBBF24 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(249,115,22,0.35);
+    flex-shrink: 0;
+  }
+  .tile::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 80px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 38px 38px 0 0;
+    pointer-events: none;
+  }
+  .tile-p {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 108px;
+    color: white;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+    /* nudge up slightly for optical centering */
+    margin-top: -8px;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  /* Up-arrow badge overlaid at top-right corner of the tile */
+  .arrow-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 38px;
+    height: 38px;
+    background: rgba(255,255,255,0.92);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <div class="lockup">
+      <!-- App tile: bold P with circular up-arrow badge -->
+      <div class="tile">
+        <span class="tile-p">P</span>
+        <!-- Circular up-arrow overlay badge -->
+        <div class="arrow-badge">
+          <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+            <!-- Circular arrow: arc ~300° with arrowhead -->
+            <!-- Center (11,11), r=7, stroke 2.5 -->
+            <!-- Arc from bottom-right going CW almost full circle to top -->
+            <!-- start: 40° → (11+7cos40°, 11+7sin40°) = (16.4, 15.5) -->
+            <!-- end:   0° → top of circle, but let's use 350° → almost 0° -->
+            <!-- Actually: arc from ~130° to ~80° going CW (long way around = 310°) -->
+            <!-- 130° (lower-left): (11+7cos130°, 11+7sin130°) = (6.5, 16.4) -->
+            <!-- 80°  (upper-right): (11+7cos80°, 11+7sin80°)  = (12.2, 4.1) -->
+            <!-- large-arc=1, sweep=1 (CW) -->
+            <path
+              d="M 6.5 16.4  A 7 7 0 1 1 12.2 4.1"
+              fill="none"
+              stroke="#F97316"
+              stroke-width="2.6"
+              stroke-linecap="round"
+            />
+            <!-- Arrowhead at (12.2, 4.1) pointing upper-right (tangent at 80° CW = 350° direction) -->
+            <!-- Small arrowhead: tip toward upper-right -->
+            <polygon points="12.2,1.2  9,5.5  15.5,5.8" fill="#F97316"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Wordmark -->
+      <div class="wordmark">Pocket<span>Cache</span></div>
+    </div>
+
+    <div class="rule"></div>
+    <div class="caption">Round-Up Monogram P</div>
+  </div>
+</div>
+</body>
+</html>
