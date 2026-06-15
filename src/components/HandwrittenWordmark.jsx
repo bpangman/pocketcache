@@ -15,16 +15,12 @@ const TOTAL_DURATION_MS = 2200; // total animation time across all letters
 const DONE_FADE_MS = 400; // dot fade-out after finishing
 
 export default function HandwrittenWordmark({ fontSize = 38, color = '#ffffff' }) {
-  // Parse viewBox
-  const [vbX, vbY, vbW, vbH] = VIEWBOX.split(' ').map(Number);
-
-  // Size the SVG to match fontSize visually.
-  // vbH covers the full em square (ascenders+descenders ~996 em units of 1000).
-  // We want the cap-height (~500/1000 * vbH proportionally) to read as ~fontSize.
-  // Empirically: set height so total svg height = fontSize * 2.2 (generous), then
-  // let the wordmark fill naturally.
-  const svgHeight = Math.round(fontSize * 2.2);
-  const svgWidth = Math.round(svgHeight * (vbW / vbH));
+  // Responsive sizing: let the SVG fill its container up to a capped width.
+  // The viewBox preserves aspect ratio automatically (default xMidYMid meet).
+  // fontSize prop scales the maxWidth cap so larger font → slightly wider cap,
+  // but we hard-cap at 300px to always fit within a 390px mobile viewport
+  // that has px-8 (32px) padding on each side (~326px usable).
+  const maxWidth = Math.min(Math.round(fontSize * 7.5), 300);
 
   // Refs for path elements — array of SVGPathElement | null
   const pathRefs = useRef(LETTERS.map(() => null));
@@ -155,12 +151,10 @@ export default function HandwrittenWordmark({ fontSize = 38, color = '#ffffff' }
   }, [animate]);
 
   return (
-    <span style={{ display: 'inline-block', lineHeight: 1 }}>
+    <span style={{ display: 'block', lineHeight: 1, width: '100%', maxWidth: `${maxWidth}px`, margin: '0 auto' }}>
       <svg
-        width={svgWidth}
-        height={svgHeight}
         viewBox={VIEWBOX}
-        style={{ display: 'block', overflow: 'visible' }}
+        style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}
         aria-label="PocketCache"
       >
         {LETTERS.map((letter, i) => {
