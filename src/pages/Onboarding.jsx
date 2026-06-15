@@ -9,7 +9,6 @@ import bgcaLogoUrl from '../assets/bgca-logo.png';
 // In production, replace with your publishable key from environment variables
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 import CoinLogo from '../components/CoinLogo';
-import HandwrittenWordmark from '../components/HandwrittenWordmark';
 import { useApp } from '../store/AppContext';
 import { NONPROFITS } from '../data/nonprofits';
 import OrgLogo from '../components/OrgLogo';
@@ -208,7 +207,9 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
           <p className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
             Welcome to
           </p>
-          <HandwrittenWordmark fontSize={38} color="#ffffff" />
+          <span style={{ fontFamily: "'Pacifico', cursive", fontSize: 40, color: '#ffffff', lineHeight: 1.3, display: 'inline-block' }}>
+            PocketCache
+          </span>
         </div>
         <p className="text-white/80 text-sm mt-3 text-center leading-relaxed">
           Enter your nonprofit&apos;s code or scan their QR to get started.
