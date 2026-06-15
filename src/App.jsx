@@ -3,6 +3,7 @@ import { ThemeProvider, useTheme } from './store/ThemeContext';
 import Onboarding from './pages/Onboarding';
 import AppShell from './components/AppShell';
 import CoinLogo from './components/CoinLogo';
+import CoinMark from './components/CoinMark';
 import { motion } from 'framer-motion';
 
 function AppContent() {
@@ -50,7 +51,7 @@ function PhoneFrame({ children }) {
               {brand.logoEmoji}
             </div>
           ) : (
-            <CoinLogo size={40} animate={false} showName={false} />
+            <CoinMark size={40} />
           )}
           <div>
             <h1 className="text-white font-bold text-2xl" style={{ letterSpacing: '-0.5px' }}>{brand.appName}</h1>

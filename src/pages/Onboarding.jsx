@@ -9,6 +9,8 @@ import bgcaLogoUrl from '../assets/bgca-logo.png';
 // In production, replace with your publishable key from environment variables
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 import CoinLogo from '../components/CoinLogo';
+import CoinMark from '../components/CoinMark';
+import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { NONPROFITS } from '../data/nonprofits';
 import OrgLogo from '../components/OrgLogo';
@@ -26,7 +28,7 @@ const SLIDES = [
     bg: 'from-blue-600 to-cyan-500',
     illustration: (
       <div className="relative flex items-center justify-center">
-        <CoinLogo size={200} animate showName />
+        <PocketCacheLogo size={64} />
       </div>
     ),
     title: '',
@@ -199,17 +201,15 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 280 }}
-          className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-4xl mb-5"
+          className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center mb-5"
         >
-          🪙
+          <CoinMark size={56} />
         </motion.div>
         <div className="text-center">
           <p className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
             Welcome to
           </p>
-          <span style={{ fontFamily: "'Pacifico', cursive", fontSize: 40, color: '#ffffff', lineHeight: 1.3, display: 'inline-block' }}>
-            PocketCache
-          </span>
+          <PocketCacheLogo size={40} />
         </div>
         <p className="text-white/80 text-sm mt-3 text-center leading-relaxed">
           Enter your nonprofit&apos;s code or scan their QR to get started.
@@ -1091,7 +1091,10 @@ function CheckoutConfirmScreen({ onConfirm }) {
             Start Giving to BGCA
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
-            Powered by PocketCache, LLC. You can cancel anytime in Settings.
+            <span className="inline-flex items-center gap-1 justify-center">
+              <CoinMark size={14} />
+              Powered by PocketCache, LLC. You can cancel anytime in Settings.
+            </span>
           </p>
         </div>
       </div>

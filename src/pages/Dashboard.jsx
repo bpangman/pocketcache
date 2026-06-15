@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink, Building2, Flame } from 'lucide-react';
 import { useApp } from '../store/AppContext';
+import CoinMark from '../components/CoinMark';
 import { useTheme } from '../store/ThemeContext';
 import { MONTHLY_DATA } from '../data/transactions';
 import OrgLogo from '../components/OrgLogo';
@@ -711,7 +712,7 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <p className="text-center text-gray-300 text-xs pt-4">PocketCache · v1.0.0</p>
+          <p className="text-center text-gray-300 text-xs pt-4 flex items-center gap-1 justify-center"><CoinMark size={14} />PocketCache · v1.0.0</p>
         </div>
       </Sheet>
     </div>

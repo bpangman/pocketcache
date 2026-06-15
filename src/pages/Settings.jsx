@@ -7,6 +7,7 @@ import Sheet from '../components/Sheet';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
+import CoinMark from '../components/CoinMark';
 import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
 import { NONPROFITS } from '../data/nonprofits';
@@ -655,9 +656,9 @@ export default function Settings() {
             <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl" style={{ background: brand.gradient }}>
               {brand.logoEmoji}
             </div>
-          ) : <CoinLogo size={32} animate={false} showName={false} />}
+          ) : <CoinMark size={32} />}
           <p className="font-bold text-sm" style={{ color: brand.primary }}>{brand.appName}</p>
-          <p className="text-gray-300 text-xs">PocketCache · v1.0.0</p>
+          <p className="text-gray-300 text-xs flex items-center gap-1 justify-center"><CoinMark size={14} />PocketCache · v1.0.0</p>
         </motion.div>
 
         {/* Cancel subscription */}
