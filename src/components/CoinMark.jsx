@@ -13,10 +13,14 @@ export default function CoinMark({ size = 64, className = '' }) {
       <circle cx="50" cy="50" r="50" fill="#E5A800" />
       {/* Coin face — bright gold */}
       <circle cx="50" cy="50" r="44" fill="#FBBF24" />
-      {/* White halo behind arrow */}
-      <polygon points="50,16 32,38 40,38 40,64 60,64 60,38 68,38" fill="white" />
-      {/* Teal up-arrow */}
-      <polygon points="50,22 36,40 43,40 43,62 57,62 57,40 64,40" fill="#0D9488" />
+      {/* Bulky block up-arrow — teal with white halo (matches approved Block Arrow) */}
+      <polygon
+        points="50,17 24,43 37,43 37,77 63,77 63,43 76,43"
+        fill="#0D9488"
+        stroke="#ffffff"
+        strokeWidth="4"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
