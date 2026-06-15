@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px; height: 760px;
+    display: flex; align-items: center; justify-content: center;
+    background: #FFFBF5; font-family: 'Poppins', sans-serif; overflow: hidden;
+  }
+  .card {
+    width: 1200px; height: 760px; position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #FFFBF5; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 45%, #CCFBF180 0%, #FFFBF5 70%);
+    z-index: 0;
+  }
+  .content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .wordmark-wrap {
+    display: flex; align-items: center; font-family: 'Poppins', sans-serif; font-weight: 800;
+    font-size: 72px; letter-spacing: -1.5px; line-height: 1; color: #0B2A4A; margin-top: 0; position: relative;
+  }
+  .teal { color: #0D9488; }
+  .coin-o {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin: 0 2px; vertical-align: middle; position: relative; top: -2px;
+  }
+  .caption { margin-top: 48px; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 3px; text-transform: uppercase; color: #0B2A4A; opacity: 0.4; }
+  .rule { width: 120px; height: 2px; background: #FBBF24; border-radius: 1px; margin-top: 36px; margin-bottom: 16px; opacity: 0.6; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="content">
+    <div class="wordmark-wrap">
+      <span>P</span>
+      <span class="coin-o">
+        <!-- Soft squircle coin: gently rounded square -->
+        <svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+          <!-- Outer edge (darker gold) -->
+          <rect x="3" y="3" width="50" height="50" rx="18" ry="18" fill="#E5A800"/>
+          <!-- Main coin face -->
+          <rect x="6" y="6" width="44" height="44" rx="15" fill="#FBBF24"/>
+          <!-- Inner highlight -->
+          <rect x="10" y="10" width="36" height="36" rx="12" fill="#FDE68A"/>
+          <!-- White halo arrow (drawn first, underneath) -->
+          <path d="M28 38 L28 20 M28 20 L20 27 M28 20 L36 27"
+                stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9"/>
+          <!-- Teal arrow -->
+          <path d="M28 38 L28 20 M28 20 L20 27 M28 20 L36 27"
+                stroke="#0D9488" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </span>
+      <span>cket</span>
+      <span class="teal">Cache</span>
+    </div>
+    <div class="rule"></div>
+    <div class="caption">COIN-O · SQUIRCLE</div>
+  </div>
+</div>
+</body>
+</html>
