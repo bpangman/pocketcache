@@ -15,6 +15,8 @@ export default function PocketCacheLogo({ size = 40, className = '' }) {
         fontSize: fontSize,
         lineHeight: 1,
         letterSpacing: '-0.5px',
+        maxWidth: '100%',
+        overflow: 'visible',
       }}
     >
       <span style={{ color: '#0B2A4A' }}>P</span>

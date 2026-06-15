@@ -28,7 +28,7 @@ const SLIDES = [
     bg: 'from-blue-600 to-cyan-500',
     illustration: (
       <div className="relative flex items-center justify-center">
-        <PocketCacheLogo size={64} />
+        <PocketCacheLogo size={48} />
       </div>
     ),
     title: '',
@@ -209,7 +209,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
           <p className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
             Welcome to
           </p>
-          <PocketCacheLogo size={40} />
+          <PocketCacheLogo size={34} />
         </div>
         <p className="text-white/80 text-sm mt-3 text-center leading-relaxed">
           Enter your nonprofit&apos;s code or scan their QR to get started.
