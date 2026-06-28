@@ -1,10 +1,11 @@
 import CoinMark from './CoinMark';
 
-export default function PocketCacheLogo({ size = 40, className = '' }) {
+export default function PocketCacheLogo({ size = 40, className = '', onDark = false }) {
   // coin diameter matches roughly the cap height of the font
   // at size=40, font is ~40px, lowercase ~0.7x = 28px coin
   const coinSize = Math.round(size * 0.72);
   const fontSize = size;
+  const darkTextColor = onDark ? '#FFFFFF' : '#0B2A4A';
 
   return (
     <div
@@ -19,7 +20,7 @@ export default function PocketCacheLogo({ size = 40, className = '' }) {
         overflow: 'visible',
       }}
     >
-      <span style={{ color: '#0B2A4A' }}>P</span>
+      <span style={{ color: darkTextColor }}>P</span>
       <span style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -31,8 +32,8 @@ export default function PocketCacheLogo({ size = 40, className = '' }) {
       }}>
         <CoinMark size={coinSize} />
       </span>
-      <span style={{ color: '#0B2A4A' }}>cket</span>
-      <span style={{ color: '#0D9488' }}>Cache</span>
+      <span style={{ color: darkTextColor }}>cket</span>
+      <span style={{ color: '#5EEAD4' }}>Cache</span>
     </div>
   );
 }

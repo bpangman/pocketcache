@@ -16,7 +16,7 @@ function PhoneFrame({ children }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-8 relative overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}
+      style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 50%, #0B2A4A 100%)' }}
     >
       {/* Ambient glow — follows brand color */}
       <motion.div

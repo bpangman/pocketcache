@@ -51,12 +51,12 @@ export const NONPROFITS = [
 // Default white-label brand (before any cause is chosen)
 export const DEFAULT_BRAND = {
   appName: 'PocketCache',
-  tagline: 'Give with every purchase',
-  primary: '#f97316',
-  secondary: '#fbbf24',
-  gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-  headerGradient: 'linear-gradient(135deg, #f97316, #ea580c)',
-  accentLight: '#f9731622',
-  textAccent: '#f97316',
+  tagline: 'Give with every purchase.',
+  primary: '#FBBF24',
+  secondary: '#0D9488',
+  gradient: 'linear-gradient(135deg, #FBBF24 0%, #E5A800 100%)',
+  headerGradient: 'linear-gradient(135deg, #0B2A4A, #003865)',
+  accentLight: '#FEF3C7',
+  textAccent: '#D97706',
   logoEmoji: null, // uses SVG Logo component
 };

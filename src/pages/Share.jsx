@@ -37,19 +37,19 @@ export default function Share() {
     {
       label: 'Copy Link',
       icon: copied ? <CheckCircle size={20} /> : <Copy size={20} />,
-      color: brand.primary,
+      color: brand.textAccent,
       onPress: handleCopy,
     },
     {
       label: 'Share via...',
       icon: <Share2 size={20} />,
-      color: '#6366f1',
+      color: brand.secondary,
       onPress: () => navigator.share?.({ title: brand.appName, text: shareText, url: shareUrl }),
     },
     {
       label: 'Email a Friend',
       icon: <Mail size={20} />,
-      color: '#10b981',
+      color: brand.textAccent,
       onPress: () => window.open(`mailto:?subject=Join me on ${brand.appName}&body=${encodeURIComponent(shareText + '\n' + shareUrl)}`),
     },
   ];
@@ -92,7 +92,7 @@ export default function Share() {
               <p className="text-white/80 text-sm mt-2">to {selectedNonprofit.name}</p>
               {/* Giving streak badge */}
               <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
-                <Flame size={13} className="text-orange-300" />
+                <Flame size={13} className="text-amber-300" />
                 <span className="text-white/90 text-xs font-semibold">{MONTHS_GIVING}-month giving streak</span>
               </div>
               <div className="mt-3 pt-4 border-t border-white/20">
@@ -115,7 +115,7 @@ export default function Share() {
         >
           <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-3">Message Preview</p>
           <p className="text-gray-700 text-sm leading-relaxed">{shareText}</p>
-          <p className="text-sm font-semibold mt-2" style={{ color: brand.primary }}>{displayUrl}</p>
+          <p className="text-sm font-semibold mt-2" style={{ color: brand.textAccent }}>{displayUrl}</p>
         </motion.div>
 
         {/* Share buttons */}

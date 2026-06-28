@@ -29,14 +29,14 @@ export default function TabBar() {
               <motion.div
                 layoutId="tabIndicator"
                 className="absolute top-0 inset-x-3 h-0.5 rounded-full"
-                style={{ background: brand.primary }}
+                style={{ background: brand.textAccent }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               />
             )}
             <Icon size={20} className="transition-colors duration-300"
-              style={{ color: active ? brand.primary : '#9ca3af' }} />
+              style={{ color: active ? brand.textAccent : '#9ca3af' }} />
             <span className="text-xs font-semibold transition-colors duration-300"
-              style={{ color: active ? brand.primary : '#9ca3af', fontSize: '10px' }}>
+              style={{ color: active ? brand.textAccent : '#9ca3af', fontSize: '10px' }}>
               {label}
             </span>
           </button>

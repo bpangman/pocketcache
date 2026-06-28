@@ -16,7 +16,7 @@ export default function CoinMark({ size = 64, className = '' }) {
       {/* Bulky block up-arrow — teal with white halo (matches approved Block Arrow) */}
       <polygon
         points="50,17 24,43 37,43 37,77 63,77 63,43 76,43"
-        fill="#0D9488"
+        fill="#5EEAD4"
         stroke="#ffffff"
         strokeWidth="4"
         strokeLinejoin="round"

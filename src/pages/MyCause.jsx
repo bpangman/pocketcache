@@ -460,7 +460,7 @@ export default function MyCause() {
               whileTap={{ scale: 0.97 }}
               onClick={() => setShowVolunteer(true)}
               className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
-              style={{ borderColor: brand.primary, color: brand.primary, background: brand.accentLight }}
+              style={{ borderColor: brand.textAccent, color: brand.textAccent, background: brand.accentLight }}
             >
               &#128588; Volunteer Opportunities
             </motion.button>

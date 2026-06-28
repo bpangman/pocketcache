@@ -4,6 +4,7 @@ import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import CustomTooltip from '../components/CustomTooltip';
+import OrgLogo from '../components/OrgLogo';
 
 function groupByDate(transactions) {
   const groups = {};
@@ -68,14 +69,15 @@ export default function Activity() {
             <div>
               <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">This Month</p>
               <p className="text-3xl font-bold text-gray-900 mt-1">${pendingRoundUps.toFixed(2)}</p>
-              <p className="text-xs font-semibold mt-1" style={{ color: brand.primary }}>
-                → {selectedNonprofit.name}
-              </p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <OrgLogo nonprofit={selectedNonprofit} size={4} rounded="md" />
+                <span className="text-xs font-semibold text-gray-600 truncate">{selectedNonprofit.name}</span>
+              </div>
             </div>
             <div className="text-right">
               <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">All Time</p>
               <p className="text-xl font-bold text-gray-900 mt-1">${totalDonated.toFixed(2)}</p>
-              <p className="text-emerald-500 text-xs font-semibold mt-1">↑ 12% vs last month</p>
+              <p style={{ color: '#059669' }} className="text-xs font-semibold mt-1">↑ 12% vs last month</p>
             </div>
           </div>
           <div className="h-24">
@@ -106,7 +108,7 @@ export default function Activity() {
               <p className="text-gray-400 text-xs">{TRANSACTIONS.length} transactions · ${totalRoundUps.toFixed(2)} rounded up</p>
             </div>
           </div>
-          <div className="font-bold text-base" style={{ color: brand.primary }}>${pendingRoundUps.toFixed(2)}</div>
+          <div className="font-bold text-base" style={{ color: '#059669' }}>${pendingRoundUps.toFixed(2)}</div>
         </div>
 
         {/* Transaction groups */}
@@ -128,7 +130,7 @@ export default function Activity() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-gray-400 text-xs">-${tx.amount.toFixed(2)}</p>
-                    <p className="text-sm font-bold" style={{ color: brand.primary }}>+${tx.roundUp.toFixed(2)}</p>
+                    <p className="text-sm font-bold" style={{ color: '#059669' }}>+${tx.roundUp.toFixed(2)}</p>
                   </div>
                 </div>
               ))}

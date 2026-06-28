@@ -21,17 +21,16 @@ export default function Logo({ size = 40, className = '' }) {
       <circle cx="40" cy="40" r="38" stroke="url(#edgeGradient)" strokeWidth="1.5" fill="none" />
       <defs>
         <linearGradient id="coinGradient" x1="10" y1="10" x2="70" y2="70">
-          <stop offset="0%" stopColor="#fb923c" />
-          <stop offset="50%" stopColor="#f97316" />
-          <stop offset="100%" stopColor="#ea580c" />
+          <stop offset="0%" stopColor="#E5A800" />
+          <stop offset="100%" stopColor="#FBBF24" />
         </linearGradient>
         <linearGradient id="innerGradient" x1="10" y1="10" x2="70" y2="70">
-          <stop offset="0%" stopColor="#fff" />
-          <stop offset="100%" stopColor="#fed7aa" />
+          <stop offset="0%" stopColor="#FBBF24" />
+          <stop offset="100%" stopColor="#FBBF24" />
         </linearGradient>
         <linearGradient id="edgeGradient" x1="0" y1="0" x2="80" y2="80">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#c2410c" stopOpacity="0.3" />
+          <stop offset="0%" stopColor="#FBBF24" stopOpacity="0.6" />
+          <stop offset="100%" stopColor="#D97706" stopOpacity="0.3" />
         </linearGradient>
       </defs>
     </svg>

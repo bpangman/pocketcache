@@ -65,7 +65,7 @@ const SLIDES = [
           transition={{ delay: 0.8 }}
           className="mt-2 flex items-center gap-2 bg-white rounded-2xl px-6 py-3"
         >
-          <span className="text-violet-600 font-bold text-lg">$1.00</span>
+          <span className="font-bold text-lg" style={{ color: '#0D9488' }}>$1.00</span>
           <span className="text-gray-500 text-sm">donated to BGCA ❤️</span>
         </motion.div>
       </div>
@@ -256,7 +256,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
-                      className="w-4 h-4 rounded-full border-2 border-orange-300 border-t-orange-500"
+                      className="w-4 h-4 rounded-full border-2 border-amber-200 border-t-amber-500"
                     />
                     Scanning…
                   </>
@@ -612,7 +612,7 @@ function ConnectCardScreen({ onNext }) {
     >
       <div
         className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0891b2 100%)', minHeight: '38%' }}
+        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '38%' }}
       >
         <motion.div className="mb-5 flex flex-col items-center gap-3">
           <motion.div
@@ -632,7 +632,7 @@ function ConnectCardScreen({ onNext }) {
             <p className="text-white/80 font-mono text-sm tracking-widest">•••• •••• •••• ••••</p>
             <div className="flex justify-between mt-2">
               <p className="text-white/60 text-xs">Your Card</p>
-              <p className="text-xs font-semibold" style={{ color: '#5eead4' }}>👁 Watching purchases</p>
+              <p className="text-xs font-semibold text-white/80">👁 Watching purchases</p>
             </div>
           </motion.div>
           <motion.div
@@ -726,7 +726,7 @@ function ConnectCardScreen({ onNext }) {
             onClick={() => connected && onNext()}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{
-              background: connected ? 'linear-gradient(135deg, #0d9488, #0891b2)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+              background: connected ? 'linear-gradient(135deg, #0d9488, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
               cursor: connected ? 'pointer' : 'default',
             }}
           >

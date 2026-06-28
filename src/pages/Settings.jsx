@@ -358,7 +358,7 @@ function AppIconSheet({ show, onClose, brand }) {
         <div className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background: brand.accentLight }}>
           <span className="text-2xl">⚓</span>
           <div>
-            <p className="font-bold text-sm" style={{ color: brand.primary }}>BGCA Anchor Partner</p>
+            <p className="font-bold text-sm" style={{ color: brand.textAccent }}>BGCA Anchor Partner</p>
             <p className="text-gray-500 text-xs">Custom icon available</p>
           </div>
         </div>
@@ -512,7 +512,7 @@ export default function Settings() {
           <div className="flex-1">
             <p className="font-bold text-gray-900 text-lg">Alex Johnson</p>
             <p className="text-gray-400 text-sm">alex@example.com</p>
-            <p className="text-xs font-semibold mt-1" style={{ color: brand.primary }}>Member since Jan 2026</p>
+            <p className="text-xs font-semibold mt-1" style={{ color: brand.textAccent }}>Member since Jan 2026</p>
           </div>
           <div className="text-right">
             <p className="text-gray-400 text-xs">Donated</p>
@@ -657,7 +657,7 @@ export default function Settings() {
               {brand.logoEmoji}
             </div>
           ) : <CoinMark size={32} />}
-          <p className="font-bold text-sm" style={{ color: brand.primary }}>{brand.appName}</p>
+          <p className="font-bold text-sm" style={{ color: brand.textAccent }}>{brand.appName}</p>
           <p className="text-gray-300 text-xs flex items-center gap-1 justify-center"><CoinMark size={14} />PocketCache · v1.0.0</p>
         </motion.div>
 
@@ -695,7 +695,7 @@ export default function Settings() {
                   {opt.label}
                 </div>
                 <div className="text-left">
-                  <p className="font-semibold text-sm" style={{ color: roundUpMultiplier === opt.value ? brand.primary : '#111827' }}>
+                  <p className="font-semibold text-sm" style={{ color: roundUpMultiplier === opt.value ? brand.textAccent : '#111827' }}>
                     {opt.label} Round-up
                   </p>
                   <p className="text-gray-400 text-xs">{opt.desc}</p>

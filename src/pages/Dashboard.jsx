@@ -481,7 +481,7 @@ export default function Dashboard() {
             </div>
             <p className="text-white/60 text-sm mt-2">Since Jan 2026 · All time</p>
             <div className="mt-2 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
-              <Flame size={13} className="text-orange-300" />
+              <Flame size={13} className="text-amber-300" />
               <span className="text-white/90 text-xs font-semibold">{MONTHS_GIVING}-month giving streak</span>
             </div>
             <div className="mt-5 pt-4 border-t border-white/20 flex items-center justify-between">
@@ -519,19 +519,19 @@ export default function Dashboard() {
         {/* Stats row */}
         <div className="flex gap-3">
           {[
-            { icon: <Zap size={18} />, label: 'Pending', value: `$${pendingRoundUps.toFixed(2)}`, sub: 'This month', color: brand.primary, note: null },
-            { icon: <TrendingUp size={18} />, label: 'Avg/mo', value: '$10.10', sub: '+12% vs last', color: '#10b981', note: null },
-            { icon: <Heart size={18} />, label: 'Round-ups', value: '247', sub: 'All time', color: brand.secondary, note: null },
+            { icon: <Zap size={18} />, label: 'Pending', value: `$${pendingRoundUps.toFixed(2)}`, sub: 'This month', iconColor: brand.primary, textColor: '#059669', note: null },
+            { icon: <TrendingUp size={18} />, label: 'Avg/mo', value: '$10.10', sub: '+12% vs last', iconColor: brand.secondary, textColor: brand.secondary, note: null },
+            { icon: <Heart size={18} />, label: 'Round-ups', value: '247', sub: 'All time', iconColor: brand.secondary, textColor: brand.secondary, note: null },
           ].map((s, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.05 }}
               className="bg-white rounded-3xl p-4 flex-1 card-shadow">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: s.color + '18' }}>
-                <span style={{ color: s.color }}>{s.icon}</span>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: s.iconColor + '18' }}>
+                <span style={{ color: s.iconColor }}>{s.icon}</span>
               </div>
               <div className="text-2xl font-bold text-gray-900 leading-none">{s.value}</div>
               <div className="text-xs text-gray-400 mt-1.5 font-medium">{s.label}</div>
-              <div className="text-xs mt-1 font-semibold" style={{ color: s.color }}>{s.sub}</div>
+              <div className="text-xs mt-1 font-semibold" style={{ color: s.textColor }}>{s.sub}</div>
               {s.note && <div className="text-xs mt-1 text-gray-400">{s.note}</div>}
             </motion.div>
           ))}
@@ -550,7 +550,7 @@ export default function Dashboard() {
               <p className="text-gray-400 text-xs mt-0.5">Next charge: end of month</p>
             </div>
             <div className="text-right">
-              <p className="font-bold text-2xl" style={{ color: brand.primary }}>{daysLeft}</p>
+              <p className="font-bold text-2xl" style={{ color: '#0B2A4A' }}>{daysLeft}</p>
               <p className="text-gray-400 text-xs">days left</p>
             </div>
           </div>
@@ -565,7 +565,7 @@ export default function Dashboard() {
           </div>
           <div className="flex justify-between mt-1.5">
             <p className="text-gray-400 text-xs">Month start</p>
-            <p className="text-xs font-semibold" style={{ color: brand.primary }}>${pendingRoundUps.toFixed(2)} ready to send</p>
+            <p className="text-xs font-semibold" style={{ color: '#059669' }}>${pendingRoundUps.toFixed(2)} ready to send</p>
             <p className="text-gray-400 text-xs">Month end</p>
           </div>
         </motion.div>
