@@ -25,19 +25,21 @@ function findNonprofitByCode(code) {
 const SLIDES = [
   {
     id: 0,
-    bg: 'from-blue-600 to-cyan-500',
+    bg: '',
+    bgStyle: { background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)' },
     illustration: (
       <div className="relative flex items-center justify-center w-full">
-        <PocketCacheLogo size={44} />
+        <PocketCacheLogo size={44} onDark={true} />
       </div>
     ),
     title: '',
-    subtitle: 'Your round-ups go straight to Boys & Girls Clubs of America — charged monthly on BGCA\'s behalf. Your card, your impact.',
+    subtitle: 'PocketCache gives every nonprofit its own branded micro-donation experience. Set up in minutes. Flat pricing. No percentages. Just giving.',
     cta: 'Get Started',
   },
   {
     id: 1,
-    bg: 'from-violet-600 to-indigo-500',
+    bg: '',
+    bgStyle: { background: 'linear-gradient(135deg, #0B2A4A 0%, #0D9488 100%)' },
     illustration: (
       <div className="relative flex flex-col items-center gap-3">
         {[
@@ -69,12 +71,13 @@ const SLIDES = [
       </div>
     ),
     title: 'Round Up Every\nPurchase',
-    subtitle: 'We round up each transaction to the nearest dollar. 100% of the spare change goes straight to BGCA — charged monthly on BGCA\'s behalf.',
+    subtitle: 'We round up each transaction to the nearest dollar. Your money goes straight to your Stripe — we never touch the funds.',
     cta: 'Next',
   },
   {
     id: 2,
-    bg: 'from-emerald-500 to-teal-400',
+    bg: '',
+    bgStyle: { background: '#003865' },
     illustration: null,
     title: 'Your App,\nYour Cause',
     subtitle: 'This app is powered by PocketCache for Boys & Girls Clubs of America. Your round-ups go directly to BGCA every month.',
@@ -82,7 +85,8 @@ const SLIDES = [
   },
   {
     id: 3,
-    bg: 'from-rose-500 to-pink-400',
+    bg: '',
+    bgStyle: { background: 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)' },
     illustration: (
       <div className="flex flex-col items-center gap-4">
         <motion.div
@@ -195,7 +199,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
       {/* Header */}
       <div
         className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '42%' }}
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '42%' }}
       >
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
@@ -209,7 +213,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
           <p className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
             Welcome to
           </p>
-          <PocketCacheLogo size={34} />
+          <PocketCacheLogo size={34} onDark={true} />
         </div>
         <p className="text-white/80 text-sm mt-3 text-center leading-relaxed">
           Enter your nonprofit&apos;s code or scan their QR to get started.
@@ -228,7 +232,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
                 value={code}
                 onChange={e => { setCode(e.target.value); setError(null); }}
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors font-mono uppercase"
-                style={{ borderColor: error ? '#ef4444' : code ? '#f97316' : '#e5e7eb' }}
+                style={{ borderColor: error ? '#ef4444' : code ? '#FBBF24' : '#e5e7eb' }}
               />
               {error && <p className="text-red-500 text-xs mt-1 px-1">{error}</p>}
               <p className="text-gray-400 text-xs mt-1 px-1">Demo code: BGCA</p>
@@ -245,7 +249,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
                 type="button"
                 onClick={handleScan}
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-dashed"
-                style={{ borderColor: '#f97316', color: '#f97316', background: '#fff7ed' }}
+                style={{ borderColor: '#FBBF24', color: '#D97706', background: '#FEF3C7' }}
               >
                 {scanning ? (
                   <>
@@ -269,7 +273,8 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
               type="submit"
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{
-                background: code ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+                background: code ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+                color: code ? '#0B2A4A' : '#fff',
                 cursor: code ? 'pointer' : 'default',
               }}
             >
@@ -627,7 +632,7 @@ function ConnectCardScreen({ onNext }) {
             <p className="text-white/80 font-mono text-sm tracking-widest">•••• •••• •••• ••••</p>
             <div className="flex justify-between mt-2">
               <p className="text-white/60 text-xs">Your Card</p>
-              <p className="text-emerald-300 text-xs font-semibold">👁 Watching purchases</p>
+              <p className="text-xs font-semibold" style={{ color: '#5eead4' }}>👁 Watching purchases</p>
             </div>
           </motion.div>
           <motion.div
@@ -660,12 +665,12 @@ function ConnectCardScreen({ onNext }) {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               className="rounded-2xl p-4 flex items-center gap-3"
-              style={{ background: '#d1fae5', border: '1px solid #6ee7b7' }}
+              style={{ background: '#f0fdfa', border: '1px solid #99f6e4' }}
             >
-              <CheckCircle size={22} className="text-emerald-600 shrink-0" />
+              <CheckCircle size={22} className="shrink-0" style={{ color: '#0D9488' }} />
               <div>
-                <p className="font-bold text-emerald-900 text-sm">{connected.name} connected</p>
-                <p className="text-emerald-700 text-xs mt-0.5">We'll watch your purchases and calculate round-ups automatically</p>
+                <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{connected.name} connected</p>
+                <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We'll watch your purchases and calculate round-ups automatically</p>
               </div>
             </motion.div>
           ) : (
@@ -771,7 +776,7 @@ function PaymentMethodScreen({ onNext }) {
     >
       <div
         className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)', minHeight: '38%' }}
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
       >
         <motion.div className="mb-5 flex flex-col items-center gap-3">
           <div className="flex gap-3">
@@ -816,7 +821,7 @@ function PaymentMethodScreen({ onNext }) {
               onClick={() => setSelected(opt.id)}
               className="w-full flex items-center gap-3 p-4 rounded-2xl text-left transition-all"
               style={selected === opt.id
-                ? { background: '#ede9fe', border: '2px solid #7c3aed' }
+                ? { background: '#FEF3C7', border: '2px solid #FBBF24' }
                 : { background: '#fff', border: '1.5px solid #e5e7eb' }
               }
             >
@@ -838,7 +843,7 @@ function PaymentMethodScreen({ onNext }) {
               <div
                 className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
                 style={selected === opt.id
-                  ? { borderColor: '#7c3aed', background: '#7c3aed' }
+                  ? { borderColor: '#FBBF24', background: '#FBBF24' }
                   : { borderColor: '#d1d5db', background: 'transparent' }
                 }
               >
@@ -858,7 +863,8 @@ function PaymentMethodScreen({ onNext }) {
             onClick={() => selected && onNext(selected)}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{
-              background: selected ? 'linear-gradient(135deg, #7c3aed, #4f46e5)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+              background: selected ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+              color: selected ? '#0B2A4A' : '#fff',
               cursor: selected ? 'pointer' : 'default',
             }}
           >
@@ -942,8 +948,9 @@ function CardEntryForm({ onSuccess }) {
         className="w-full py-4 rounded-2xl text-white font-bold text-base"
         style={{
           background: cardComplete && !loading
-            ? 'linear-gradient(135deg, #7c3aed, #4f46e5)'
+            ? 'linear-gradient(135deg, #FBBF24, #E5A800)'
             : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+          color: cardComplete && !loading ? '#0B2A4A' : '#fff',
           cursor: cardComplete && !loading ? 'pointer' : 'default',
         }}
       >
@@ -964,7 +971,7 @@ function CardEntryScreen({ onNext }) {
       >
         <div
           className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-          style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)', minHeight: '32%' }}
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '32%' }}
         >
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
@@ -1441,7 +1448,8 @@ export default function Onboarding() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -30 }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className={`flex-1 bg-gradient-to-br ${current.bg} flex flex-col items-center justify-center px-8 pt-8 pb-6`}
+          className={`flex-1 flex flex-col items-center justify-center px-8 pt-8 pb-6`}
+          style={current.bgStyle}
         >
           {/* Illustration */}
           <div className="flex-1 flex items-center justify-center min-h-0">
@@ -1497,7 +1505,7 @@ export default function Onboarding() {
               whileTap={{ scale: 0.97 }}
               onClick={advance}
               className="w-full py-4 rounded-2xl bg-white font-bold text-base shadow-lg"
-              style={{ color: slide === 0 ? '#003865' : slide === 1 ? '#7c3aed' : slide === 2 ? '#059669' : '#e11d48' }}
+              style={{ color: '#0B2A4A' }}
             >
               {current.cta}
             </motion.button>
