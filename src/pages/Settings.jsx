@@ -198,9 +198,9 @@ function PrivacySheet({ show, onClose, brand }) {
             icon={<Shield size={18} />}
             label="Two-Factor Authentication"
             sub="SMS or authenticator app"
-            color="#10b981"
+            color={brand.primary}
             right={
-              <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-1 rounded-full shrink-0">On</span>
+              <span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ color: '#0D9488', background: '#f0fdfa' }}>On</span>
             }
           />
         </div>
@@ -254,7 +254,7 @@ function PrivacySheet({ show, onClose, brand }) {
             icon={<FileText size={18} />}
             label="Download My Data"
             sub="Get a copy of everything we have"
-            color="#6366f1"
+            color={brand.primary}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
           <div className="h-px bg-gray-100 mx-4" />
@@ -539,7 +539,7 @@ export default function Settings() {
             icon={<span className="text-base">🏦</span>}
             label="Auto-deposit"
             sub="Send round-ups automatically"
-            color="#10b981"
+            color={brand.secondary}
             right={<Toggle value={autoDeposit} onChange={setAutoDeposit} color={brand.primary} />}
           />
         </motion.div>
@@ -557,7 +557,7 @@ export default function Settings() {
               label={card.name}
               sub={`•••• ${card.last4} · ${card.brand}`}
               color={brand.secondary}
-              right={<span className="text-xs text-emerald-500 font-semibold bg-emerald-50 px-2 py-1 rounded-full shrink-0">Active</span>}
+              right={<span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ color: '#0D9488', background: '#f0fdfa' }}>Active</span>}
             />
           ))}
           <div className="h-px bg-gray-50 mx-4" />
@@ -591,7 +591,7 @@ export default function Settings() {
             label={selectedNonprofit.name}
             sub={selectedNonprofit.category}
             color={brand.primary}
-            right={<span className="text-xs font-semibold shrink-0 bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full">Active</span>}
+            right={<span className="text-xs font-semibold shrink-0 px-2 py-1 rounded-full" style={{ color: '#0D9488', background: '#f0fdfa' }}>Active</span>}
           />
           <div className="h-px bg-gray-50 mx-4" />
           <SettingRow
@@ -630,7 +630,7 @@ export default function Settings() {
             icon={<Shield size={18} />}
             label="Privacy & Security"
             sub="Biometrics, data, and permissions"
-            color="#10b981"
+            color={brand.secondary}
             onPress={() => setShowPrivacy(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
