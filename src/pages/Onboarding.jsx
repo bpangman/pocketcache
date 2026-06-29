@@ -198,24 +198,27 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
     >
       {/* Header */}
       <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '42%' }}
+        className="flex flex-col items-center justify-end px-8 pb-5 pt-10 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '44%' }}
       >
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 280 }}
-          className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center mb-5"
+          className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center mb-3"
         >
-          <CoinMark size={56} />
+          <CoinMark size={40} />
         </motion.div>
-        <div className="text-center">
-          <p className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+        <div className="text-center mb-3">
+          <p className="text-white/80 font-semibold text-base leading-tight mb-1">
             Welcome to
           </p>
-          <PocketCacheLogo size={34} onDark={true} />
+          <PocketCacheLogo size={32} onDark={true} />
         </div>
-        <p className="text-white/80 text-sm mt-3 text-center leading-relaxed">
+        <p className="text-white/80 text-xs text-center leading-relaxed mb-2 px-2">
+          PocketCache turns your everyday purchases into spare-change donations — round up to the nearest dollar, and the difference goes to a nonprofit you choose. Causes get their own branded giving app in minutes, and 100% of your round-ups reach them — we never take a cut. Connect a card once and give without thinking about it.
+        </p>
+        <p className="text-white/70 text-xs text-center leading-relaxed">
           Enter your nonprofit&apos;s code or scan their QR to get started.
         </p>
       </div>
@@ -294,7 +297,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm"
             style={{ background: '#f3f4f6', color: '#374151' }}
           >
-            <span>🏢</span> Are you a nonprofit? Create your free page →
+            Are you a nonprofit? Create your free page →
           </motion.button>
         </div>
 
@@ -1119,6 +1122,7 @@ function NonprofitSignupFlow({ onBack }) {
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [orgName, setOrgName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
   const [story, setStory] = useState('');
   const [color, setColor] = useState('#003865');
   const [accepted, setAccepted] = useState(false);
@@ -1264,18 +1268,31 @@ function NonprofitSignupFlow({ onBack }) {
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400" />
             </div>
             <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Admin Contact Email</label>
+              <input type="email" required value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="you@yourorg.org"
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400" />
+              <p className="text-gray-400 text-xs mt-1">We&apos;ll use this to reach whoever manages your page.</p>
+            </div>
+            <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Mission (shown to donors)</label>
-              <textarea value={story} onChange={e => setStory(e.target.value)} rows={3} placeholder="Tell donors what you do…"
+              <textarea value={story} onChange={e => setStory(e.target.value)} rows={4} maxLength={600} placeholder="Tell donors what you do…"
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 resize-none" />
+              <p className="text-gray-400 text-xs mt-1">Keep it concise — this shows on your public donor page.</p>
+              <p className="text-gray-400 text-xs text-right mt-0.5">{story.length}/600</p>
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Brand Color</label>
-              <div className="flex gap-3">
-                {['#003865', '#059669', '#7c3aed'].map(c => (
+              <div className="flex flex-wrap gap-3">
+                {['#003865', '#0D9488', '#059669', '#2563EB', '#4F46E5', '#7C3AED', '#DB2777', '#DC2626', '#EA580C', '#F59E0B'].map(c => (
                   <button key={c} type="button" onClick={() => setColor(c)}
                     className="w-10 h-10 rounded-xl border-2 transition-all"
                     style={{ background: c, borderColor: color === c ? '#111' : 'transparent' }} />
                 ))}
+                <label className="flex flex-col items-center justify-center w-10 h-10 rounded-xl border-2 cursor-pointer transition-all overflow-hidden"
+                  style={{ borderColor: !['#003865','#0D9488','#059669','#2563EB','#4F46E5','#7C3AED','#DB2777','#DC2626','#EA580C','#F59E0B'].includes(color) ? '#111' : 'transparent', background: color }}>
+                  <input type="color" value={color} onChange={e => setColor(e.target.value)} className="opacity-0 w-0 h-0 absolute" />
+                  <span className="text-white text-xs font-bold leading-none" style={{ textShadow: '0 0 3px rgba(0,0,0,0.5)' }}>+</span>
+                </label>
               </div>
             </div>
             <div>
@@ -1530,7 +1547,6 @@ export default function Onboarding() {
               className="w-full mt-3 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm border-2 border-white/40 bg-white/15"
               style={{ color: '#fff' }}
             >
-              <span className="text-base">🏢</span>
               Are you a nonprofit? Create your free page →
             </motion.button>
           )}
