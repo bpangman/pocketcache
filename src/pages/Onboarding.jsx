@@ -14,14 +14,11 @@ import CoinMark from '../components/CoinMark';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
-import { findOrgByCode, buildOrgFromSignup, saveCustomOrg } from '../store/orgStore';
+import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode } from '../store/orgStore';
+import { loadKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 
-
-function findNonprofitByCode(code) {
-  return findOrgByCode(code);
-}
 
 const SLIDES = [
   {
@@ -140,7 +137,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
 
   useEffect(() => {
     if (autoBindOrg) {
-      const np = findNonprofitByCode(autoBindOrg);
+      const np = findOrgByCode(autoBindOrg);
       if (np) {
         setAutoBound(true);
         setBoundNp(np);
@@ -152,7 +149,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
 
   function handleSubmit(e) {
     e.preventDefault();
-    const np = findNonprofitByCode(code);
+    const np = findOrgByCode(code);
     if (!np) {
       setError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
@@ -167,7 +164,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
       setScanned(true);
       setCode('BGCA');
       setTimeout(() => {
-        const np = findNonprofitByCode('BGCA');
+        const np = findOrgByCode('BGCA');
         if (np) onBind(np);
       }, 700);
     }, 900);
@@ -460,30 +457,19 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
 
   const npName = nonprofit?.name ?? 'your nonprofit';
 
+  function handleSignIn() {
+    if (!hasAccount) return;
+    if (accountStatus === 'cancelled') { onGoToDashboard?.(); return; }
+    setWelcomeBack(true);
+    setTimeout(() => onGoToDashboard?.(), 900);
+  }
+
   function handleSSO(provider) {
-    if (hasAccount) {
-      if (accountStatus === 'cancelled') {
-        onGoToDashboard?.();
-        return;
-      }
-      setWelcomeBack(true);
-      setTimeout(() => onGoToDashboard?.(), 900);
-      return;
-    }
+    if (hasAccount) return handleSignIn();
     if (!canContinue) { setShowTermsHint(true); return; }
     onProviderChosen?.(provider);
     setChosen(provider);
     setTimeout(() => onNext(), 700);
-  }
-
-  function handleSignIn() {
-    if (!hasAccount) return;
-    if (accountStatus === 'cancelled') {
-      onGoToDashboard?.();
-      return;
-    }
-    setWelcomeBack(true);
-    setTimeout(() => onGoToDashboard?.(), 900);
   }
 
   function handleEmail(e) {
@@ -1313,13 +1299,6 @@ async function lookupEIN(digits9) {
   };
 }
 
-function computeJoinCode(name) {
-  if (!name) return 'ORG';
-  const words = name.split(/[\s&,]+/).filter(w => w.length > 2);
-  const initials = words.map(w => w[0].toUpperCase()).join('').slice(0, 6);
-  return initials || name.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 6) || 'ORG';
-}
-
 // ─── Nonprofit self-serve signup flow ─────────────────────────────────────────
 
 function NonprofitSignupFlow({ onBack, onGoLive }) {
@@ -1343,7 +1322,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const fileInputRef = useRef(null);
 
-  const joinCode = computeJoinCode(orgName) || 'ORG';
+  const joinCode = generateJoinCode(orgName);
 
   async function handleVerifyEIN(e) {
     e.preventDefault();
@@ -1717,18 +1696,13 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep } = useApp();
-  const { setNpOrg, setNpSignedIn } = useNp();
+  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, adminRole, setAdminRole, lastMode, setLastMode } = useApp();
+  const { setNpOrg } = useNp();
   const [slide, setSlide] = useState(0);
   const [signupProvider, setSignupProvider] = useState('demo');
   const [step, setStep] = useState(() => {
-    try {
-      const v = localStorage.getItem('pc_account_status');
-      const status = v != null ? JSON.parse(v) : 'active';
-      if (status === 'cancelled') return 'gate';
-    } catch { /* ignore */ }
-    const stored = localStorage.getItem('pc_cause_id');
-    return stored && stored !== 'null' ? 'slides' : 'gate';
+    if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
+    return loadKey('pc_cause_id') ? 'slides' : 'gate';
   }); // 'gate' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup' | 'np-signin'
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -1773,13 +1747,20 @@ export default function Onboarding() {
       joinCode:       org.shortName,
       _orgId:         org.id,
     });
-    setNpSignedIn(true);
+    setAdminRole({ orgId: org.id, joinCode: org.shortName });
+    setLastMode('admin');
     setPage('np-dashboard');
   }
 
   function handleNpSignIn() {
-    setNpSignedIn(true);
+    setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    setLastMode('admin');
     setPage('np-dashboard');
+  }
+
+  // Returning users land in their last-used mode.
+  function resumeSession() {
+    setPage(lastMode === 'admin' && adminRole ? 'np-dashboard' : 'home');
   }
 
   const current = SLIDES[slide];
@@ -1817,7 +1798,7 @@ export default function Onboarding() {
       onNpSignIn={() => setStep('np-signin')}
       autoBindOrg={autoBindOrg}
       hasAccount={hasAccount}
-      onWelcomeBack={() => setPage('home')}
+      onWelcomeBack={resumeSession}
     />
   );
   if (step === 'np-signin') return (
@@ -1834,6 +1815,7 @@ export default function Onboarding() {
       joinedAt: new Date().toISOString(),
     });
     setAccountStatus('active');
+    setLastMode('giving');
     setPage('home');
   }} />;
   if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('checkout-confirm')} />;
@@ -1844,7 +1826,7 @@ export default function Onboarding() {
     nonprofit={selectedNonprofit}
     hasAccount={hasAccount}
     accountStatus={accountStatus}
-    onGoToDashboard={() => setPage('home')}
+    onGoToDashboard={resumeSession}
     onProviderChosen={p => setSignupProvider(p)}
   />;
 

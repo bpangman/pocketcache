@@ -5,22 +5,18 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
 import { useApp } from '../store/AppContext';
-import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
 import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
 import { findOrgByCode } from '../store/orgStore';
+import { loadKey, saveKey } from '../store/identityStore';
 import { MONTHLY_DATA } from '../data/transactions';
 import { DEMO_USER } from '../data/derived';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
-
-function findNonprofitByCode(code) {
-  return findOrgByCode(code);
-}
 
 const CARD_ELEMENT_OPTIONS = {
   style: {
@@ -37,27 +33,13 @@ const CARD_ELEMENT_OPTIONS = {
 
 const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover'];
 
-// Load persisted toggle preferences from localStorage (pc_prefs).
-// Demo note: in production, user preferences are stored server-side.
+// Persisted toggle preferences (pc_prefs). In production these live server-side.
 function loadPrefs() {
-  try {
-    const v = localStorage.getItem('pc_prefs');
-    const stored = v ? JSON.parse(v) : {};
-    return {
-      notifications: stored.notifications ?? true,
-      chargeReminder: stored.chargeReminder ?? true,
-      autoDeposit: stored.autoDeposit ?? true,
-      biometric: stored.biometric ?? true,
-      dataSharing: stored.dataSharing ?? false,
-      marketingEmails: stored.marketingEmails ?? true,
-    };
-  } catch {
-    return { notifications: true, chargeReminder: true, autoDeposit: true, biometric: true, dataSharing: false, marketingEmails: true };
-  }
-}
-
-function savePrefs(prefs) {
-  try { localStorage.setItem('pc_prefs', JSON.stringify(prefs)); } catch { /* ignore */ }
+  return {
+    notifications: true, chargeReminder: true, autoDeposit: true,
+    biometric: true, dataSharing: false, marketingEmails: true,
+    ...loadKey('pc_prefs', {}),
+  };
 }
 
 function Toggle({ value, onChange, color }) {
@@ -190,6 +172,7 @@ function AddCardSheet({ show, onClose, onAdd, brand }) {
 function PrivacySheet({
   show, onClose, brand,
   onDeleteAccount,
+  adminOrgName,
   onDownloadData,
   biometric, onBiometricChange,
   dataSharing, onDataSharingChange,
@@ -217,9 +200,11 @@ function PrivacySheet({
             animate={{ opacity: 1, scale: 1 }}
             className="bg-gray-50 rounded-3xl p-6 text-center"
           >
-            <div className="text-4xl mb-3">🗑️</div>
-            <p className="font-bold text-gray-900">Account Deleted</p>
-            <p className="text-gray-400 text-sm mt-1">Your data has been removed.</p>
+            <div className="text-4xl mb-3">{adminOrgName ? '🪙' : '🗑️'}</div>
+            <p className="font-bold text-gray-900">{adminOrgName ? 'Your giving account is deleted.' : 'Account Deleted'}</p>
+            <p className="text-gray-400 text-sm mt-1">
+              {adminOrgName ? `Your admin account for ${adminOrgName} is untouched.` : 'Your data has been removed.'}
+            </p>
           </motion.div>
         )}
 
@@ -357,7 +342,7 @@ function SwitchOrgSheet({ show, onClose, brand, onBind }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    const np = findNonprofitByCode(code);
+    const np = findOrgByCode(code);
     if (!np) {
       setError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
@@ -574,9 +559,8 @@ export default function Settings() {
   const {
     linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier,
     setRoundUpMultiplier, totalDonated, setSelectedNonprofit, pendingRoundUps,
-    boostDonation, signOut, cancelAccount, goToOnboardingStep, setPage,
+    boostDonation, cancelAccount, adminRole, deleteAccount,
   } = useApp();
-  const { npSignedIn } = useNp();
   const brand = useTheme();
 
   // All toggle preferences persisted to pc_prefs in localStorage
@@ -584,7 +568,7 @@ export default function Settings() {
   function updatePref(key, value) {
     const next = { ...prefs, [key]: value };
     setPrefsState(next);
-    savePrefs(next);
+    saveKey('pc_prefs', next);
   }
 
   const [showMultiplier, setShowMultiplier] = useState(false);
@@ -753,33 +737,6 @@ export default function Settings() {
           />
         </motion.div>
 
-        {/* Nonprofit / Switch hats */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
-          className="bg-white rounded-3xl overflow-hidden card-shadow">
-          <div className="px-4 pt-4 pb-2">
-            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Nonprofit</p>
-          </div>
-          {npSignedIn ? (
-            <SettingRow
-              icon={<span className="text-base">🏛️</span>}
-              label="Switch to your admin dashboard"
-              sub="Manage your nonprofit program"
-              color={brand.primary}
-              onPress={() => setPage('np-dashboard')}
-              right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
-            />
-          ) : (
-            <SettingRow
-              icon={<span className="text-base">🏛️</span>}
-              label="Run a nonprofit?"
-              sub="Create your free page in minutes"
-              color={brand.primary}
-              onPress={() => goToOnboardingStep('nonprofit-signup')}
-              right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
-            />
-          )}
-        </motion.div>
-
         {/* Preferences — persisted to localStorage */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="bg-white rounded-3xl overflow-hidden card-shadow">
@@ -900,7 +857,8 @@ export default function Settings() {
         show={showPrivacy}
         onClose={() => setShowPrivacy(false)}
         brand={brand}
-        onDeleteAccount={() => { setShowPrivacy(false); signOut(); }}
+        onDeleteAccount={() => { setShowPrivacy(false); deleteAccount(); }}
+        adminOrgName={adminRole?.joinCode ?? null}
         onDownloadData={handleDownloadData}
         biometric={prefs.biometric}
         onBiometricChange={v => updatePref('biometric', v)}

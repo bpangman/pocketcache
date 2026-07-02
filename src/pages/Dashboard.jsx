@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line 
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink, Building2, Flame } from 'lucide-react';
 import { useApp } from '../store/AppContext';
+import { useNp } from '../store/NpContext';
+import { loadKey, saveKey } from '../store/identityStore';
 import CoinMark from '../components/CoinMark';
 import { useTheme } from '../store/ThemeContext';
 import { MONTHLY_DATA } from '../data/transactions';
@@ -116,11 +118,10 @@ function MatchBanner({ m, pct }) {
 }
 
 export default function Dashboard() {
-  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, signOut } = useApp();
+  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep } = useApp();
+  const { resetNpContent } = useNp();
   const brand = useTheme();
-  const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('pc_seen_milestone') ?? '0'); } catch { return 0; }
-  });
+  const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
   const [showMatchDetails, setShowMatchDetails] = useState(false);
   const [showVolunteer, setShowVolunteer] = useState(false);
@@ -174,7 +175,7 @@ export default function Dashboard() {
             onClose={() => {
               const amount = latestAchieved.amount;
               setSeenMilestoneAmount(amount);
-              try { localStorage.setItem('pc_seen_milestone', JSON.stringify(amount)); } catch { /* ignore */ }
+              saveKey('pc_seen_milestone', amount);
             }}
           />
         )}
@@ -505,6 +506,26 @@ export default function Dashboard() {
             <p className="text-gray-400 text-sm">{DEMO_USER.email}</p>
           </div>
 
+          {/* Mode switch — top of menu */}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              setShowProfile(false);
+              if (adminRole) { setLastMode('admin'); setPage('np-dashboard'); }
+              else goToOnboardingStep('nonprofit-signup');
+            }}
+            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-left mb-1"
+            style={adminRole
+              ? { background: 'linear-gradient(135deg,#0B2A4A,#003865)', color: '#fff' }
+              : { background: '#f9fafb', color: '#374151' }}
+          >
+            <span className="text-lg">🏛️</span>
+            <span className="flex-1 font-semibold text-sm">
+              {adminRole ? `Switch to Admin · ${adminRole.joinCode}` : 'Run a nonprofit? Create your page'}
+            </span>
+            <ChevronRight size={16} className={adminRole ? 'text-white/50' : 'text-gray-300'} />
+          </motion.button>
+
           {/* Menu rows */}
           {[
             { icon: <Settings size={18} />, label: 'Account Settings', action: () => { setShowProfile(false); setTab('settings'); } },
@@ -525,7 +546,7 @@ export default function Dashboard() {
 
           <div className="pt-2">
             <button
-              onClick={() => { setShowProfile(false); signOut(); }}
+              onClick={() => { setShowProfile(false); resetNpContent(); signOut(); }}
               className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-red-50 active:bg-red-100 transition-colors text-left"
             >
               <span className="text-red-400"><LogOut size={18} /></span>

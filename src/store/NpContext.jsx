@@ -1,26 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState } from 'react';
 import { saveCustomOrg, getCustomOrg, saveBgcaOverrides, computeBrandFromColor } from './orgStore';
+import { loadKey, saveKey, removeKeys } from './identityStore';
 
 // localStorage keys — all prefixed pc_np_ so they don't collide with donor keys
 const NP_KEYS = {
-  org:      'pc_np_org',
-  tab:      'pc_np_tab',
-  signedIn: 'pc_np_signed_in',
+  org: 'pc_np_org',
+  tab: 'pc_np_tab',
 };
-
-function npLoad(key, fallback) {
-  try {
-    const v = localStorage.getItem(key);
-    return v != null ? JSON.parse(v) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function npSave(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
-}
 
 export const DEFAULT_NP_ORG = {
   name:           'Boys & Girls Clubs of America',
@@ -36,12 +23,11 @@ export const DEFAULT_NP_ORG = {
 const NpContext = createContext(null);
 
 export function NpProvider({ children }) {
-  const [npOrg,      setNpOrgState]      = useState(() => npLoad(NP_KEYS.org,      DEFAULT_NP_ORG));
-  const [npTab,      setNpTabState]      = useState(() => npLoad(NP_KEYS.tab,      'overview'));
-  const [npSignedIn, setNpSignedInState] = useState(() => npLoad(NP_KEYS.signedIn, false));
+  const [npOrg,      setNpOrgState]      = useState(() => loadKey(NP_KEYS.org,      DEFAULT_NP_ORG));
+  const [npTab,      setNpTabState]      = useState(() => loadKey(NP_KEYS.tab,      'overview'));
 
   function setNpOrg(org) {
-    npSave(NP_KEYS.org, org);
+    saveKey(NP_KEYS.org, org);
     setNpOrgState(org);
     // Propagate to donor-side org store
     const id = org._orgId || (org.joinCode ? org.joinCode.toLowerCase() : null);
@@ -74,32 +60,21 @@ export function NpProvider({ children }) {
   }
 
   function setNpTab(tab) {
-    npSave(NP_KEYS.tab, tab);
+    saveKey(NP_KEYS.tab, tab);
     setNpTabState(tab);
   }
 
-  function setNpSignedIn(v) {
-    npSave(NP_KEYS.signedIn, v);
-    setNpSignedInState(v);
-  }
-
-  // setPageFn comes from useApp().setPage — passed in at call site to avoid circular import
-  function npSignOut(setPageFn) {
-    Object.values(NP_KEYS).forEach(k => {
-      try { localStorage.removeItem(k); } catch { /* ignore */ }
-    });
+  function resetNpContent() {
+    removeKeys(Object.values(NP_KEYS));
     setNpOrgState(DEFAULT_NP_ORG);
     setNpTabState('overview');
-    setNpSignedInState(false);
-    if (setPageFn) setPageFn('onboarding');
   }
 
   return (
     <NpContext.Provider value={{
       npOrg, setNpOrg,
       npTab, setNpTab,
-      npSignedIn, setNpSignedIn,
-      npSignOut,
+      resetNpContent,
     }}>
       {children}
     </NpContext.Provider>
