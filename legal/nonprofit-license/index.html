@@ -73,10 +73,12 @@
 
   <div class="divider"></div>
 
+  <!-- PENDING NATHAN REVIEW: fee mechanics updated 2026-07-01 (donor covers both flat fees by default; application-fee collection) -->
   <h2>2. Flat Fee Schedule</h2>
   <div class="fee-box">
-    <p><strong>Software fee:</strong> $0.50/active linked user/month — billed monthly by invoice to the Nonprofit's billing account.</p>
-    <p><strong>Processing fee:</strong> $0.50/charge per donor/month — collected from donors at checkout via a pre-checked opt-in. When a donor covers the fee, it is routed to PocketCache automatically via Stripe Connect application fee. When a donor opts out, the $0.50 is deducted from the round-up total before the Nonprofit receives it.</p>
+    <p><strong>Donor-covered default:</strong> Each active donor's monthly charge includes their round-up total plus a flat <strong>$1.00/month service fee</strong>, pre-selected as "I'll cover it." This $1.00 covers both the $0.50 Stripe processing fee and the $0.50 software fee that would otherwise be invoiced to the Nonprofit — meaning the Nonprofit pays <strong>$0</strong> for any donor who keeps the default selection.</p>
+    <p><strong>Opt-out billing:</strong> If a donor opts out of the $1.00 service fee, $0.50 is deducted from their round-up total before the Nonprofit receives it, and PocketCache invoices the Nonprofit <strong>$0.50/month</strong> for that donor.</p>
+    <p><strong>Rollover and settle-up:</strong> When a donor's accumulated round-ups are below the Nonprofit's monthly minimum (default $10), the charge — including any applicable fee — rolls over to the following month. Regardless of the rollover minimum, a settle-up charge runs at least once every <strong>3 calendar months</strong>, collecting all accrued round-ups and fees. Cancellation triggers an immediate final settle-up charge of all accrued round-ups and fees.</p>
     <p><strong>No setup fees. No percentage of donation amounts. Ever.</strong></p>
     <p><strong>"Active linked user"</strong> means a donor who has at least one linked Plaid account and at least $0.01 in round-ups during the billing month.</p>
   </div>
