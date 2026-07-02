@@ -406,7 +406,7 @@
       <div class="hero-logo-wrap">
         <img src="/logo.png" alt="PocketCache — round-up giving for nonprofits"/>
         <div class="hero-stat-bubble top">
-          <div class="bubble-num">Live in 5 min</div>
+          <div class="bubble-num">Live in minutes</div>
           No tech team needed
         </div>
         <div class="hero-stat-bubble bottom">
@@ -501,7 +501,7 @@
       <div class="why-card reveal">
         <div class="why-emoji">&#128200;</div>
         <h3>Flat pricing, no percentages</h3>
-        <p>$0.50/active linked user/month. Donors can optionally cover it. Never a % of donations. Simple, predictable, fair.</p>
+        <p>$0.50/active donor/month software fee (your only bill) + a flat $0.50/month processing fee donors are invited to cover. Never a percentage of donations. $10 monthly minimum with rollover — donors are never charged if their round-ups haven&rsquo;t reached $10 yet.</p>
       </div>
     </div>
   </div>
@@ -515,7 +515,7 @@
     <div class="trust-items">
       <div class="trust-item reveal">
         <div class="trust-icon">&#128274;</div>
-        <div class="trust-label">Bank-grade security via Plaid</div>
+        <div class="trust-label">Read-only bank connection via Plaid</div>
       </div>
       <div class="trust-item reveal">
         <div class="trust-icon">&#128065;</div>
@@ -543,7 +543,7 @@
     <div class="section-badge reveal">Early Access for Nonprofits</div>
     <h2 class="section-title reveal">Get early access<br/>for your nonprofit.</h2>
     <p class="section-sub reveal" style="margin-left:auto;margin-right:auto;text-align:center;">
-      Join nonprofits already on the waitlist. We&rsquo;ll onboard you personally.
+      Be among the first nonprofits to get early access. We&rsquo;ll onboard you personally.
     </p>
     <div class="waitlist-box reveal">
       <div style="font-size: 40px; margin-bottom: 12px;">&#127881;</div>
@@ -576,7 +576,7 @@
       <a href="mailto:info@pocketcache.app">Contact Us</a>
     </div>
     <div class="footer-copy">
-      &copy; 2026 PocketCache, LLC. All rights reserved.
+      &copy; 2026 PocketCache, LLC. All rights reserved. &middot; Not available in California at launch.
     </div>
   </div>
 </footer>
@@ -598,13 +598,12 @@
   }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-  // Waitlist form — triple capture: Google Form (permanent) + Apps Script (stable) + Cortana relay (tunnel fallback)
+  // Waitlist form — dual capture: Google Form (permanent) + Apps Script (stable).
   // Google Form entry always works — no dependencies, no expiry.
-  // Apps Script URL never changes; tunnel URL is updated by tunnel.sh on each restart.
+  // Apps Script URL never changes.
   const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSc_U6f7hC6KxBDFTfqXTHWrgb5cvvZHOM3gvzUlngC7yWtaag/formResponse';
   const GOOGLE_FORM_ENTRY = 'entry.943864096';
   const APPS_SCRIPT_API = 'https://script.google.com/macros/s/AKfycbw2xVEu7uWaTS0B41DBNDYU_4myWIwjbV_7PvcJsUtCTpGbWaH8NQrFpere4U6PR6Bh/exec';
-  const WAITLIST_API = 'https://floyd-cause-ice-index.trycloudflare.com/api/waitlist';
 
   document.getElementById('waitlist-form').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -615,9 +614,9 @@
     btn.disabled = true;
 
     // Always send ntfy notification (capture even if all APIs are down)
-    fetch('https://ntfy.sh/pocketcache-waitlist', {
+    fetch('https://ntfy.sh/pocketcache-wl-x7k2m9q4', {
       method: 'POST',
-      body: 'New PocketCache waitlist signup: ' + email,
+      body: 'New PocketCache waitlist signup ✉️',
       headers: { 'Title': 'PocketCache Waitlist' }
     }).catch(() => {});
 
@@ -629,27 +628,14 @@
       body: GOOGLE_FORM_ENTRY + '=' + encodeURIComponent(email)
     }).catch(() => {});
 
-    // Try Apps Script (stable, no tunnel dependency) first, then fall back to relay
-    let saved = false;
+    // Submit to Apps Script (stable, no external dependencies)
     try {
-      const res = await fetch(APPS_SCRIPT_API, {
+      await fetch(APPS_SCRIPT_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
       });
-      const data = await res.json();
-      if (data && data.success) saved = true;
     } catch (_) {}
-
-    if (!saved) {
-      try {
-        await fetch(WAITLIST_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        });
-      } catch (_) {}
-    }
 
     // Store locally as additional backup regardless
     const list = JSON.parse(localStorage.getItem('pc-waitlist') || '[]');
