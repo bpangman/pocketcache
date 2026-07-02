@@ -1,14 +1,16 @@
 {
-  "name": "cache-backend",
+  "name": "pocketcache-backend",
   "version": "1.0.0",
-  "description": "Cache backend — Plaid monitoring, Stripe payments, Stripe Treasury, Endaoment disbursement",
+  "description": "PocketCache backend — pure tech vendor SaaS for nonprofit round-up donations",
+  "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "test": "node --test test/*.test.js",
     "jobs:daily": "node src/jobs/daily-roundups.js",
     "jobs:monthly": "node src/jobs/monthly-charge.js",
-    "jobs:quarterly": "node src/jobs/quarterly-sweep.js"
+    "jobs:retry": "node src/jobs/retry-charges.js"
   },
   "dependencies": {
     "express": "^4.18.0",
@@ -17,7 +19,8 @@
     "better-sqlite3": "^9.0.0",
     "dotenv": "^16.0.0",
     "node-cron": "^3.0.0",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "jsonwebtoken": "^9.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.0"

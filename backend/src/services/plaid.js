@@ -3,10 +3,12 @@
  *
  * Responsibilities:
  *  1. Create a Link token so the frontend can open Plaid Link
- *  2. Exchange the public token (returned by Plaid Link) for a permanent access token
- *  3. Fetch new transactions daily using the cursor-based sync API
- *  4. Calculate round-ups from transactions
- *  5. Filter out Spare's own monthly charges (infinite loop prevention)
+ *  2. Exchange the public token for a permanent access token
+ *  3. Fetch transaction updates (added/modified/removed) using the cursor-based sync API
+ *  4. Calculate round-ups from transaction amounts
+ *
+ * NOTE: access_tokens are stored ENCRYPTED in the DB (lib/crypto.js).
+ * Encrypt before storing; decrypt before passing to Plaid API calls.
  */
 
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
@@ -33,7 +35,7 @@ const plaidClient = new PlaidApi(config);
 export async function createLinkToken(userId) {
   const response = await plaidClient.linkTokenCreate({
     user: { client_user_id: userId },
-    client_name: 'Spare',
+    client_name: 'PocketCache',   // was 'Spare' — updated to match our brand
     products: [Products.Transactions],
     country_codes: [CountryCode.Us],
     language: 'en',
@@ -43,13 +45,12 @@ export async function createLinkToken(userId) {
 
 /**
  * Step 2 of Plaid Link: exchange the one-time public token for a permanent access token.
- * Call this after the user successfully links their card in the frontend.
- * Store the access_token and item_id in DB — never send them to the frontend.
+ * IMPORTANT: the caller must encrypt the returned accessToken before storing it in the DB.
  */
 export async function exchangePublicToken(publicToken) {
   const response = await plaidClient.itemPublicTokenExchange({ public_token: publicToken });
   return {
-    accessToken: response.data.access_token,
+    accessToken: response.data.access_token,  // caller must encrypt before storing
     itemId: response.data.item_id,
   };
 }
@@ -64,21 +65,31 @@ export async function getAccounts(accessToken) {
 }
 
 /**
- * Daily job: fetch new transactions since last sync using cursor.
- * Returns only ADDED transactions (not modified/removed) for round-up calculation.
+ * Fetch transaction updates since the last sync cursor.
  *
- * Infinite loop prevention: we filter out any transaction that matches
- * a known Spare charge by amount + date + last4 of the payment card.
- * DO NOT filter by merchant name — it's unreliable across institutions.
+ * Returns three arrays:
+ *   added    — new posted transactions (pending=false). IMPORTANT: do NOT process txns
+ *              where txn.pending === true; they're not finalized and would be double-counted.
+ *   modified — previously-seen transactions that changed (amount, category, etc.)
+ *   removed  — transactions that were removed (refunds, cancellations, bank errors)
+ *
+ * The caller is responsible for:
+ *   - Skipping added txns where txn.pending === true (daily-roundups.js does this)
+ *   - Handling the removed array to reverse already-logged round-ups
+ *   - Handling the modified array to update amount/roundup if not yet charged
+ *
+ * @param {string} accessToken - DECRYPTED Plaid access token
+ * @param {string|null} cursor - last cursor from DB (null = first sync)
+ * @returns {{ added: array, modified: array, removed: array, nextCursor: string }}
  */
-export async function fetchNewTransactions(accessToken, cursor, ownChargeFilter = []) {
+export async function fetchTransactionUpdates(accessToken, cursor) {
   let added = [];
   let modified = [];
   let removed = [];
   let nextCursor = cursor;
   let hasMore = true;
 
-  // Paginate until Plaid says no more
+  // Paginate until Plaid says no more updates
   while (hasMore) {
     const response = await plaidClient.transactionsSync({
       access_token: accessToken,
@@ -92,26 +103,26 @@ export async function fetchNewTransactions(accessToken, cursor, ownChargeFilter 
     hasMore = response.data.has_more;
   }
 
-  // Filter out Spare's own charges to prevent double-counting
-  // ownChargeFilter: [{ amount, date, last4 }] — from monthly_charges table
-  const filtered = added.filter(txn => {
-    return !ownChargeFilter.some(charge =>
-      Math.abs(txn.amount - charge.amount) < 0.01 &&
-      txn.date === charge.date &&
-      txn.payment_meta?.payment_processor?.slice(-4) === charge.last4
-    );
-  });
-
-  return { transactions: filtered, nextCursor };
+  return { added, modified, removed, nextCursor };
 }
 
 /**
  * Calculate the round-up amount for a single transaction.
- * e.g. $4.30 → $0.70 round-up, $5.00 → $0.00 (exact dollar, no round-up)
+ *
+ * Round-up = ceiling(amount) - amount.
+ * e.g. $4.30 → $0.70; $5.00 → $0.00 (exact dollar, no round-up)
+ *
+ * Uses integer arithmetic to avoid floating-point rounding errors.
+ * Returns a number in DOLLARS (not cents) for backward compat — callers convert to cents.
+ *
+ * @param {number} transactionAmount - amount in dollars (from Plaid)
+ * @returns {number} round-up amount in dollars, 0 if exact dollar amount
  */
 export function calculateRoundup(transactionAmount) {
   if (transactionAmount <= 0) return 0;
+  // Convert to cents with rounding to avoid float drift (e.g. 1.10 * 100 = 110.00000001)
   const cents = Math.round(transactionAmount * 100);
   const remainder = cents % 100;
+  // MONEY INVARIANT: arithmetic is in integer cents, result converted back to dollars
   return remainder === 0 ? 0 : (100 - remainder) / 100;
 }

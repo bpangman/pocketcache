@@ -1,76 +1,216 @@
 /**
  * Stripe Service
  *
- * Responsibilities:
- *  1. Create/retrieve Stripe Customers for users
- *  2. Create SetupIntents for saving card details via Stripe Elements (frontend)
- *  3. Create Financial Connections sessions for linking bank accounts (ACH)
- *  4. Charge users monthly via their stored payment method (TWO charges: donation + service fee)
- *  5. Handle failed payments: retry logic, pause account on second failure
- *  6. Process Stripe webhooks to confirm payment outcomes
+ * PocketCache uses Stripe Connect Standard (OAuth).
+ * The NONPROFIT is the merchant of record on its own Stripe account.
+ * All donation charges are DIRECT CHARGES on the nonprofit's connected account.
+ * PocketCache NEVER holds or controls donation funds.
+ *
+ * FLAT FEE MODEL (no percentages):
+ *   application_fee_amount = 50 cents, always, on every charge
+ *   The $0.50 routes to the PocketCache platform Stripe balance.
+ *
+ * COVER-FEE LOGIC:
+ *   If donor opted to cover the fee (cover_fee = 1):
+ *     total charged = roundup_cents + 50
+ *     nonprofit receives = roundup_cents (after Stripe takes its cut + our $0.50 app fee)
+ *   If donor opted out (cover_fee = 0):
+ *     total charged = roundup_cents
+ *     nonprofit receives = roundup_cents - 50 (after app fee)
+ *   In BOTH cases, application_fee_amount = 50 cents.
+ *
+ * CONNECT NUANCE — payment method cloning:
+ *   A platform-level Customer/PaymentMethod CANNOT be used directly on a connected account.
+ *   Canonical pattern:
+ *     1. stripe.paymentMethods.create({ customer: platformCustomerId, payment_method: platformPmId },
+ *                                      { stripeAccount: connectedAccountId })
+ *        → creates a cloned pm_... on the connected account
+ *     2. stripe.customers.create({ payment_method: clonedPmId }, { stripeAccount: connectedAccountId })
+ *        → creates a connected-account Customer; store connected_customer_id in DB
+ *     3. On subsequent charges for the same user+nonprofit, reuse the stored connected_customer_id
+ *        and connected_payment_method_id (no re-cloning needed).
+ *   See: https://stripe.com/docs/connect/cloning-customers-across-accounts
  */
 
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
+import db from '../db/index.js';
+import { randomUUID } from 'crypto';
 
 dotenv.config();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// ── Fee config ───────────────────────────────────────────────────────────────
-// The service fee is charged as a SEPARATE PaymentIntent — 100% of round-ups
-// go to the user's chosen charity. The fee is PocketCache's platform revenue.
-const FEE_CONFIG = {
-  ach:       { rate: 0.05, min: 2.00, max: 5.00 },   // 5%, $2–$5
-  apple_pay: { rate: 0.10, min: 2.00, max: 5.00 },   // 10%, $2–$5
-  card:      { rate: 0.10, min: 2.00, max: 5.00 },   // 10%, $2–$5
-};
+// FLAT FEE — $0.50 per monthly charge, always, no exceptions.
+// This is the application_fee_amount passed to Stripe Connect direct charges.
+const FEE_CENTS = 50;
 
 /**
- * Calculate the platform service fee for a given gross amount and payment method.
- * Fee is separate from the donation — the full gross amount goes to charity.
+ * Get or create a platform-level Stripe Customer for a user.
+ * Idempotent — looks up users.stripe_customer_id first, only creates if missing.
  *
- * @param {number} grossAmount - donation amount in dollars
- * @param {string} paymentMethod - 'ach' | 'apple_pay' | 'card'
- * @returns {number} fee in dollars (floored to 2 decimal places)
- */
-export function calculatePlatformFee(grossAmount, paymentMethod = 'card') {
-  const config = FEE_CONFIG[paymentMethod] ?? FEE_CONFIG.card;
-  const raw = grossAmount * config.rate;
-  return Math.min(config.max, Math.max(config.min, parseFloat(raw.toFixed(2))));
-}
-
-/**
- * Create or retrieve a Stripe Customer for a user.
- * Idempotent — call freely, it won't create duplicates if stripe_customer_id is stored.
+ * @param {string} userId
+ * @param {string} email
+ * @param {string} [name]
+ * @returns {Promise<string>} Stripe customer ID (cus_...)
  */
 export async function getOrCreateCustomer(userId, email, name) {
+  // Look up existing customer first — never create duplicates
+  const user = db.prepare(`SELECT stripe_customer_id FROM users WHERE id = ?`).get(userId);
+  if (user?.stripe_customer_id) return user.stripe_customer_id;
+
   const customer = await stripe.customers.create({
     email,
     name,
     metadata: { pocketcache_user_id: userId },
   });
+
+  // Persist so future calls are idempotent
+  db.prepare(`UPDATE users SET stripe_customer_id = ? WHERE id = ?`).run(customer.id, userId);
   return customer.id;
 }
 
 /**
- * Step 1 for card (CC) payment method:
- * Create a SetupIntent so the frontend (Stripe Elements) can securely collect card details.
- * The frontend calls stripe.confirmCardSetup(clientSecret) — card never touches our server.
+ * Get or create a connected-account Customer for this user+nonprofit pair.
+ *
+ * On first charge for a given (user, nonprofit), we clone the platform-level
+ * payment method to the nonprofit's connected Stripe account. We then create a
+ * Customer object on that connected account and store both IDs in connected_customers.
+ *
+ * On subsequent charges, we reuse the stored connected_customer_id and
+ * connected_payment_method_id — no re-cloning, no duplicate customers.
+ *
+ * @param {object} user - { id, stripe_customer_id }
+ * @param {object} pm   - { stripe_payment_method_id } — the platform-level pm_...
+ * @param {object} nonprofit - { id, stripe_account_id }
+ * @returns {Promise<{connectedCustomerId: string, connectedPaymentMethodId: string}>}
+ */
+async function getOrCreateConnectedCustomer(user, pm, nonprofit) {
+  // Check for existing connected customer record
+  const existing = db.prepare(`
+    SELECT connected_customer_id, connected_payment_method_id
+    FROM connected_customers
+    WHERE user_id = ? AND nonprofit_id = ?
+  `).get(user.id, nonprofit.id);
+
+  if (existing) {
+    return {
+      connectedCustomerId: existing.connected_customer_id,
+      connectedPaymentMethodId: existing.connected_payment_method_id,
+    };
+  }
+
+  // Clone the platform payment method to the connected account.
+  // This is the Stripe-canonical approach; the cloned pm_... lives on the connected account.
+  const clonedPm = await stripe.paymentMethods.create(
+    {
+      customer: user.stripe_customer_id,
+      payment_method: pm.stripe_payment_method_id,
+    },
+    { stripeAccount: nonprofit.stripe_account_id }
+  );
+
+  // Create a Customer on the connected account so future charges can use off_session
+  const connectedCustomer = await stripe.customers.create(
+    {
+      payment_method: clonedPm.id,
+      metadata: { pocketcache_user_id: user.id },
+    },
+    { stripeAccount: nonprofit.stripe_account_id }
+  );
+
+  // Store for reuse — unique per (user, nonprofit)
+  db.prepare(`
+    INSERT OR IGNORE INTO connected_customers
+      (id, user_id, nonprofit_id, connected_customer_id, connected_payment_method_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(randomUUID(), user.id, nonprofit.id, connectedCustomer.id, clonedPm.id);
+
+  return {
+    connectedCustomerId: connectedCustomer.id,
+    connectedPaymentMethodId: clonedPm.id,
+  };
+}
+
+/**
+ * Charge a donor for their monthly round-up accumulation.
+ *
+ * Creates ONE PaymentIntent as a DIRECT CHARGE on the nonprofit's connected Stripe account.
+ * application_fee_amount = 50 cents in ALL cases (routes to PocketCache platform balance).
+ *
+ * Cover-fee logic (per donor preference set at checkout):
+ *   cover_fee = 1: donor pays round-ups + $0.50 → nonprofit gets round-ups (minus Stripe fees)
+ *   cover_fee = 0: donor pays round-ups only  → nonprofit gets round-ups - $0.50 (minus Stripe fees)
+ *
+ * @param {object} user      - { id, stripe_customer_id, cover_fee }
+ * @param {object} pm        - { stripe_payment_method_id }
+ * @param {object} nonprofit - { id, stripe_account_id, name }
+ * @param {number} roundupCents - INTEGER cents, total round-ups to charge
+ * @param {string} chargeId  - monthly_charges.id (for metadata + idempotency)
+ * @returns {Promise<{paymentIntentId: string, status: string, totalChargedCents: number}>}
+ */
+export async function chargeDonor(user, pm, nonprofit, roundupCents, chargeId) {
+  // All money is integers (cents). No floats in money math.
+  const coverFee = user.cover_fee === 1;
+  // If donor covers fee: they pay round-ups + $0.50
+  // If donor doesn't cover: they pay round-ups (nonprofit receives round-ups - $0.50)
+  // In both cases, application_fee_amount = $0.50 to PocketCache.
+  const totalChargedCents = coverFee ? roundupCents + FEE_CENTS : roundupCents;
+
+  // Sanitize nonprofit name for statement descriptor (Stripe rules: ≤22 chars, alphanumeric + spaces/dashes)
+  const descriptorSuffix = nonprofit.name
+    .replace(/[^a-zA-Z0-9 \-]/g, '')
+    .trim()
+    .slice(0, 22);
+
+  // Get or create the cloned payment method on the connected account
+  const { connectedCustomerId, connectedPaymentMethodId } = await getOrCreateConnectedCustomer(user, pm, nonprofit);
+
+  const idempotencyKey = `charge_${chargeId}`;
+
+  const pi = await stripe.paymentIntents.create(
+    {
+      amount: totalChargedCents,
+      currency: 'usd',
+      customer: connectedCustomerId,
+      payment_method: connectedPaymentMethodId,
+      application_fee_amount: FEE_CENTS, // $0.50 always — routes to PocketCache platform balance
+      off_session: true,
+      confirm: true,
+      statement_descriptor_suffix: descriptorSuffix,
+      metadata: {
+        pocketcache_charge_id: chargeId,        // webhook handler reads this key — keep in sync
+      },
+      description: `PocketCache monthly round-up — ${nonprofit.name}`,
+    },
+    {
+      stripeAccount: nonprofit.stripe_account_id, // DIRECT CHARGE on nonprofit's account
+      idempotencyKey,                              // safe to retry on network failure
+    }
+  );
+
+  return {
+    paymentIntentId: pi.id,
+    status: pi.status,
+    totalChargedCents,
+  };
+}
+
+/**
+ * Create SetupIntent for card entry (Stripe Elements).
+ * Called at donor onboarding — saves card for future off-session charges.
  */
 export async function createSetupIntent(stripeCustomerId) {
   const setupIntent = await stripe.setupIntents.create({
     customer: stripeCustomerId,
     payment_method_types: ['card'],
-    usage: 'off_session',  // we'll charge them without them being present (monthly sweep)
+    usage: 'off_session',
   });
   return { clientSecret: setupIntent.client_secret };
 }
 
 /**
- * Step 1 for ACH payment method:
- * Create a Financial Connections session so the frontend can link a bank account.
- * Returns a client_secret the frontend passes to Stripe Financial Connections.
+ * Create Financial Connections session for ACH bank linking.
  */
 export async function createFinancialConnectionsSession(stripeCustomerId) {
   const session = await stripe.financialConnections.sessions.create({
@@ -81,74 +221,60 @@ export async function createFinancialConnectionsSession(stripeCustomerId) {
 }
 
 /**
- * After the frontend completes Stripe Elements / Financial Connections,
- * they send us the resulting payment_method ID. Attach it to the customer
- * so we can charge them off-session in the future.
+ * Attach a payment method to a platform-level customer after frontend confirmation.
  */
 export async function attachPaymentMethod(paymentMethodId, stripeCustomerId) {
   await stripe.paymentMethods.attach(paymentMethodId, { customer: stripeCustomerId });
-  // Set as default for future charges
   await stripe.customers.update(stripeCustomerId, {
     invoice_settings: { default_payment_method: paymentMethodId },
   });
 }
 
 /**
- * Monthly charge: two separate PaymentIntents.
+ * Initiate Stripe Connect Standard onboarding for a nonprofit.
+ * Returns the URL that the nonprofit admin visits to connect their Stripe account.
  *
- * Flow:
- *   1. Charge #1 — full gross_amount → 100% goes to charity via Endaoment
- *   2. Charge #2 — platform service fee (separate charge, PocketCache revenue)
+ * After the nonprofit completes OAuth, Stripe redirects to STRIPE_CONNECT_REDIRECT_URI
+ * with a `code` query param. Pass that to handleConnectCallback() to store the account ID.
  *
- * The fee is NEVER deducted from the donation. The user is billed separately.
+ * @param {string} nonprofitId - used in `state` param so callback can look up the nonprofit
+ * @returns {Promise<string>} Stripe Connect OAuth URL
  */
-export async function chargeUser(stripeCustomerId, paymentMethodId, grossAmount, paymentMethod, chargeId) {
-  const platformFee = calculatePlatformFee(grossAmount, paymentMethod);
-  const grossCents = Math.round(grossAmount * 100);
-  const feeCents = Math.round(platformFee * 100);
-
-  // Charge 1: full donation amount — goes entirely to charity
-  const donationIntent = await stripe.paymentIntents.create({
-    amount: grossCents,
-    currency: 'usd',
-    customer: stripeCustomerId,
-    payment_method: paymentMethodId,
-    off_session: true,
-    confirm: true,
-    metadata: {
-      pocketcache_charge_id: chargeId,
-      charge_type: 'donation',
-    },
-    description: `PocketCache monthly round-up donation`,
+export async function createNonprofitStripeConnectLink(nonprofitId) {
+  // Stripe Connect Standard OAuth link
+  // Docs: https://stripe.com/docs/connect/oauth-reference
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: process.env.STRIPE_CLIENT_ID,  // Connect application's client_id (ca_...)
+    scope: 'read_write',
+    state: nonprofitId,  // returned by Stripe in redirect so we know which nonprofit
+    redirect_uri: process.env.STRIPE_CONNECT_REDIRECT_URI,
   });
-
-  // Charge 2: platform service fee — separate charge, PocketCache revenue
-  const feeIntent = await stripe.paymentIntents.create({
-    amount: feeCents,
-    currency: 'usd',
-    customer: stripeCustomerId,
-    payment_method: paymentMethodId,
-    off_session: true,
-    confirm: true,
-    metadata: {
-      pocketcache_charge_id: chargeId,
-      charge_type: 'service_fee',
-    },
-    description: `PocketCache monthly service fee`,
-  });
-
-  return {
-    paymentIntentId: donationIntent.id,
-    feePaymentIntentId: feeIntent.id,
-    status: donationIntent.status,
-    platformFeeCents: feeCents,
-    netCents: grossCents,  // full amount goes to charity
-  };
+  return `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
 }
 
 /**
- * Webhook handler: called by Express when Stripe sends an event.
- * Verifies the signature then routes to the right handler.
+ * Handle the OAuth callback after a nonprofit completes Stripe Connect onboarding.
+ * Exchanges the one-time `code` for a permanent account ID and stores it.
+ *
+ * @param {string} nonprofitId - from the `state` param returned by Stripe
+ * @param {string} code - one-time OAuth code from Stripe
+ */
+export async function handleConnectCallback(nonprofitId, code) {
+  const response = await stripe.oauth.token({ grant_type: 'authorization_code', code });
+  const stripeAccountId = response.stripe_user_id; // acct_...
+
+  db.prepare(`UPDATE nonprofits SET stripe_account_id = ? WHERE id = ?`).run(stripeAccountId, nonprofitId);
+  return stripeAccountId;
+}
+
+/**
+ * Verify a Stripe webhook signature and parse the event.
+ *
+ * Connected-account events (from the nonprofit's Stripe account) include event.account.
+ * Platform events (from PocketCache's own Stripe account) do NOT have event.account.
+ * Both types use the same webhook secret if registered on the platform; if you use
+ * per-connected-account webhook endpoints, each has its own secret.
  */
 export function constructWebhookEvent(payload, signature) {
   return stripe.webhooks.constructEvent(
