@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nonprofit Software License Agreement — PocketCache, LLC</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      line-height: 1.7;
+    }
+    .header {
+      background: linear-gradient(135deg, #003865 0%, #001a33 100%);
+      color: white;
+      padding: 2.5rem 1.5rem 2rem;
+    }
+    .header-inner { max-width: 720px; margin: 0 auto; }
+    .back { display: inline-flex; align-items: center; gap: 0.4rem; color: rgba(255,255,255,0.75); font-size: 0.8rem; text-decoration: none; margin-bottom: 1.25rem; }
+    .back:hover { color: white; }
+    .header h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px; }
+    .header p { color: rgba(255,255,255,0.7); font-size: 0.875rem; margin-top: 0.35rem; }
+    .body { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+    h2 { font-size: 1.05rem; font-weight: 700; color: #111827; margin: 2rem 0 0.6rem; }
+    h2:first-child { margin-top: 0; }
+    p { font-size: 0.9rem; color: #374151; margin-bottom: 0.75rem; }
+    p:last-child { margin-bottom: 0; }
+    ul { padding-left: 1.25rem; margin-bottom: 0.75rem; }
+    li { font-size: 0.9rem; color: #374151; margin-bottom: 0.35rem; }
+    a { color: #003865; }
+    .highlight-box {
+      background: #e8f0fa;
+      border-left: 3px solid #003865;
+      border-radius: 0 0.5rem 0.5rem 0;
+      padding: 0.875rem 1rem;
+      margin: 1rem 0;
+    }
+    .highlight-box p { color: #001a33; font-size: 0.85rem; margin: 0; }
+    .fee-box {
+      background: #f0fdf4;
+      border: 1.5px solid #bbf7d0;
+      border-radius: 0.75rem;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    .fee-box p { color: #166534; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .fee-box p:last-child { margin-bottom: 0; }
+    .fee-box strong { color: #14532d; }
+    .divider { height: 1px; background: #e5e7eb; margin: 1.5rem 0; }
+    .effective { font-size: 0.78rem; color: #9ca3af; margin-top: 2.5rem; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="../../" class="back">&larr; PocketCache</a>
+    <h1>Nonprofit Software License Agreement</h1>
+    <p>PocketCache, LLC &middot; Effective June 2026</p>
+  </div>
+</header>
+
+<div class="body">
+
+  <div class="highlight-box">
+    <p><strong>Plain-English summary:</strong> This agreement is between PocketCache, LLC and the nonprofit organization ("Nonprofit") that signs up to use PocketCache's software. PocketCache provides the technology. The Nonprofit runs its own round-up giving program, collects donations on its own Stripe account, and issues tax receipts to donors. PocketCache charges a flat fee — never a percentage of donations.</p>
+  </div>
+
+  <h2>1. License Grant</h2>
+  <p>PocketCache, LLC ("PocketCache") grants the Nonprofit a non-exclusive, non-transferable, revocable license to use the PocketCache software platform (the "Platform") to operate a branded round-up giving program for the Nonprofit's own donors. This license does not include the right to sublicense, resell, or transfer access to the Platform to any third party.</p>
+
+  <div class="divider"></div>
+
+  <!-- PENDING NATHAN REVIEW: fee mechanics updated 2026-07-01 (donor covers both flat fees by default; application-fee collection) -->
+  <h2>2. Flat Fee Schedule</h2>
+  <div class="fee-box">
+    <p><strong>Donor-covered default:</strong> Each active donor's monthly charge includes their round-up total plus a flat <strong>$1.00/month service fee</strong>, pre-selected as "I'll cover it." This $1.00 covers both the $0.50 Stripe processing fee and the $0.50 software fee that would otherwise be invoiced to the Nonprofit — meaning the Nonprofit pays <strong>$0</strong> for any donor who keeps the default selection.</p>
+    <p><strong>Opt-out billing:</strong> If a donor opts out of the $1.00 service fee, $0.50 is deducted from their round-up total before the Nonprofit receives it, and PocketCache invoices the Nonprofit <strong>$0.50/month</strong> for that donor.</p>
+    <p><strong>Rollover and settle-up:</strong> When a donor's accumulated round-ups are below the Nonprofit's monthly minimum (default $10), the charge — including any applicable fee — rolls over to the following month. Regardless of the rollover minimum, a settle-up charge runs at least once every <strong>3 calendar months</strong>, collecting all accrued round-ups and fees. Cancellation triggers an immediate final settle-up charge of all accrued round-ups and fees.</p>
+    <p><strong>No setup fees. No percentage of donation amounts. Ever.</strong></p>
+    <p><strong>"Active linked user"</strong> means a donor who has at least one linked Plaid account and at least $0.01 in round-ups during the billing month.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>3. Nonprofit Responsibilities</h2>
+  <ul>
+    <li>The Nonprofit is the <strong>soliciting party</strong> for all donations made through the Platform. PocketCache does not solicit contributions.</li>
+    <li>The Nonprofit must maintain all required <strong>charitable solicitation registrations</strong> in applicable states. PocketCache is not responsible for state registration compliance.</li>
+    <li>The Nonprofit must operate its own <strong>Stripe Connect Standard account</strong> and is the merchant of record for all donor charges. Stripe's Connected Account Agreement governs the Nonprofit's Stripe relationship.</li>
+    <li>The Nonprofit is responsible for <strong>issuing tax receipts</strong> and all donor communications. PocketCache does not issue tax receipts.</li>
+    <li>The Nonprofit must not represent PocketCache as a fundraiser, charitable organization, fiduciary, or holder of donation funds.</li>
+    <li>The Nonprofit must not use the Platform to solicit donations from California residents until PocketCache has confirmed California availability.</li>
+  </ul>
+
+  <div class="divider"></div>
+
+  <h2>4. PocketCache Provides Technology Only</h2>
+  <ul>
+    <li>PocketCache provides software, infrastructure, and payment facilitation technology.</li>
+    <li>PocketCache is <strong>not</strong> a professional fundraiser, fundraising counsel, or commercial co-venturer as defined under any state charitable solicitation law.</li>
+    <li>PocketCache does not provide fundraising advice, strategy, or consulting.</li>
+    <li>PocketCache <strong>never</strong> receives, holds, controls, or has custody of donation funds. All charges are direct charges on the Nonprofit's Stripe Connect account.</li>
+  </ul>
+
+  <div class="divider"></div>
+
+  <h2>5. Stripe Connect</h2>
+  <p>The Nonprofit must connect its own Stripe account via Stripe Connect Standard OAuth. The Nonprofit accepts Stripe's <a href="https://stripe.com/connect-account/legal" target="_blank">Connected Account Agreement</a>. PocketCache uses Stripe's <code>application_fee_amount</code> parameter per charge to collect the processing fee; this amount is explicitly disclosed to donors at checkout. PocketCache is not responsible for Stripe service interruptions, Stripe's terms changes, or Stripe's decisions regarding the Nonprofit's account.</p>
+
+  <div class="divider"></div>
+
+  <h2>6. Trademark Use</h2>
+  <p>The Nonprofit may display "Powered by PocketCache" in its donor-facing materials in accordance with PocketCache's brand guidelines. The Nonprofit may not use PocketCache's name, logo, or marks in any way that implies PocketCache endorses the Nonprofit's fundraising activities, is a co-fundraiser, or is a registered charitable organization.</p>
+
+  <div class="divider"></div>
+
+  <h2>7. Branding and White-Label</h2>
+  <p>PocketCache grants the Nonprofit the right to configure the Platform with the Nonprofit's own logo, colors, and story text to create a branded donor experience. All branding must comply with applicable law and must not be misleading. The Nonprofit is responsible for ensuring that all branding content it uploads is accurate and that the Nonprofit has the right to use it.</p>
+
+  <div class="divider"></div>
+
+  <h2>8. Termination</h2>
+  <p>Either party may terminate this Agreement on <strong>30 days' written notice</strong>. Upon termination, PocketCache will wind down the Nonprofit's program and stop processing new donor enrollments. Existing active donors will be notified of the program's end. PocketCache will complete any charges already initiated before the termination date. The Nonprofit remains responsible for issuing tax receipts for all charges processed before termination.</p>
+  <p>PocketCache may terminate immediately upon written notice if the Nonprofit materially breaches this Agreement and fails to cure the breach within 10 days of notice.</p>
+
+  <div class="divider"></div>
+
+  <h2>9. Limitation of Liability</h2>
+  <p>PocketCache's liability to the Nonprofit for any claim arising from this Agreement or use of the Platform is limited to the fees paid by the Nonprofit to PocketCache in the <strong>3 months</strong> preceding the claim. PocketCache is not liable for indirect, incidental, consequential, or punitive damages of any kind. PocketCache is not liable for actions or omissions of Stripe, Plaid, or any third-party service provider.</p>
+
+  <div class="divider"></div>
+
+  <h2>10. Arbitration</h2>
+  <p>Any dispute arising from this Agreement that cannot be resolved informally will be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Arbitration Rules. The arbitration will be conducted in Wisconsin. Both parties waive the right to a jury trial. Class arbitration is not permitted.</p>
+
+  <div class="divider"></div>
+
+  <h2>11. Governing Law</h2>
+  <p>This Agreement is governed by the laws of the State of Wisconsin, without regard to its conflict-of-law provisions.</p>
+
+  <div class="divider"></div>
+
+  <h2>12. Contact</h2>
+  <p>PocketCache, LLC<br/>
+  Legal: <a href="mailto:legal@pocketcache.app">legal@pocketcache.app</a></p>
+
+  <p class="effective">This Agreement is effective June 2026.</p>
+
+</div>
+</body>
+</html>

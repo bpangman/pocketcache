@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PocketCache &times; BGCA &mdash; Partnership Proposal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:'Inter',sans-serif;background:#0a0a0f;color:#fff;overflow-x:hidden}
+
+  /* ── Animations ── */
+  @keyframes fadeUp{from{opacity:0;transform:translateY(32px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+  @keyframes barFill{from{width:0}to{width:var(--w)}}
+  .fade-up{animation:fadeUp .7s ease both}
+  .delay-1{animation-delay:.1s}.delay-2{animation-delay:.2s}.delay-3{animation-delay:.3s}.delay-4{animation-delay:.4s}.delay-5{animation-delay:.5s}
+  .float{animation:float 3s ease-in-out infinite}
+
+  /* ── Layout ── */
+  section{padding:96px 24px;max-width:1100px;margin:0 auto}
+  .full-bleed{max-width:100%;padding-left:0;padding-right:0}
+
+  /* ── Hero ── */
+  .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px;position:relative;overflow:hidden;background:linear-gradient(160deg,#003865 0%,#001a33 40%,#0a0a0f 100%)}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(232,25,44,.18) 0%,transparent 70%)}
+  .hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(232,25,44,.15);border:1px solid rgba(232,25,44,.4);border-radius:999px;padding:6px 16px;font-size:13px;font-weight:600;color:#ff6b7a;margin-bottom:32px;letter-spacing:.3px}
+  .hero h1{font-size:clamp(42px,7vw,84px);font-weight:900;line-height:1.05;letter-spacing:-2px;max-width:900px}
+  .hero h1 .brand{background:linear-gradient(90deg,#E8192C,#ff6b7a);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .hero h1 .pocket{color:#fff}
+  .hero-sub{font-size:clamp(17px,2.5vw,22px);color:rgba(255,255,255,.6);max-width:640px;margin:24px auto 0;line-height:1.6}
+  .hero-cta{display:inline-flex;align-items:center;gap:10px;margin-top:40px;background:linear-gradient(135deg,#E8192C,#c41224);color:#fff;font-weight:700;font-size:16px;padding:16px 36px;border-radius:16px;text-decoration:none;transition:transform .2s,box-shadow .2s}
+  .hero-cta:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(232,25,44,.4)}
+
+  /* ── Stats strip ── */
+  .stats-strip{background:linear-gradient(135deg,#003865,#001a33);border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08);padding:48px 24px}
+  .stats-strip-inner{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:32px;text-align:center}
+  .stat-num{font-size:clamp(36px,5vw,52px);font-weight:900;letter-spacing:-1.5px;background:linear-gradient(135deg,#fff,rgba(255,255,255,.7));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .stat-label{font-size:14px;color:rgba(255,255,255,.5);margin-top:4px;font-weight:500}
+
+  /* ── How it works ── */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;margin-top:48px}
+  .step-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:28px;transition:border-color .3s,background .3s}
+  .step-card:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18)}
+  .step-num{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;margin-bottom:16px}
+  .step-title{font-size:17px;font-weight:700;margin-bottom:8px}
+  .step-desc{font-size:14px;color:rgba(255,255,255,.55);line-height:1.6}
+
+  /* ── Match feature ── */
+  .match-box{background:linear-gradient(135deg,rgba(254,243,199,.08),rgba(253,230,138,.04));border:1.5px solid rgba(253,230,138,.3);border-radius:28px;padding:40px;margin-top:48px;position:relative;overflow:hidden}
+  .match-box::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;background:rgba(253,230,138,.06)}
+
+  /* ── Why BGCA ── */
+  .reasons{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:48px}
+  .reason{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:24px}
+  .reason-icon{font-size:32px;margin-bottom:12px}
+  .reason-title{font-size:16px;font-weight:700;margin-bottom:6px}
+  .reason-desc{font-size:13px;color:rgba(255,255,255,.5);line-height:1.6}
+
+  /* ── Revenue ── */
+  .revenue-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:40px}
+  .rev-card{border-radius:20px;padding:24px}
+
+  /* ── Model box ── */
+  .model-box{background:rgba(94,234,212,.06);border:1.5px solid rgba(94,234,212,.25);border-radius:24px;padding:32px;margin-top:40px}
+  .model-math{background:rgba(255,255,255,.04);border-radius:16px;padding:20px;margin-top:16px}
+
+  /* ── Actions ── */
+  .actions-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:40px}
+  .action-card{border-radius:20px;padding:24px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+  .action-emoji{font-size:28px;margin-bottom:10px}
+  .action-title{font-size:15px;font-weight:700;margin-bottom:6px}
+  .action-desc{font-size:13px;color:rgba(255,255,255,.5);line-height:1.6}
+
+  /* ── CTA footer ── */
+  .cta-footer{text-align:center;padding:96px 24px 80px;background:linear-gradient(160deg,#0a0a0f 0%,#001a33 100%)}
+  .cta-footer h2{font-size:clamp(32px,5vw,56px);font-weight:900;letter-spacing:-1.5px;margin-bottom:16px}
+  .cta-email{font-size:14px;color:rgba(255,255,255,.4);margin-top:24px}
+
+  /* ── Section headings ── */
+  .eyebrow{font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+  h2.section-title{font-size:clamp(28px,4vw,44px);font-weight:900;letter-spacing:-1px;line-height:1.1}
+  p.section-sub{font-size:16px;color:rgba(255,255,255,.5);margin-top:12px;line-height:1.7;max-width:640px}
+
+  /* ── Divider ── */
+  .divider{height:1px;background:rgba(255,255,255,.06);max-width:1100px;margin:0 auto}
+
+  @media(max-width:600px){section{padding:64px 20px}}
+</style>
+</head>
+<body>
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-badge fade-up">&#127952; Partnership Proposal &middot; June 2026</div>
+  <h1 class="fade-up delay-1">
+    <span class="pocket">BGCA&rsquo;s own</span><br/>
+    <span class="brand">round-up giving app.</span>
+  </h1>
+  <p class="hero-sub fade-up delay-2">Donations go straight to BGCA&rsquo;s Stripe account. BGCA issues receipts. Free for BGCA when donors cover the flat $1/month service fee &mdash; it&rsquo;s pre-selected, so most donors keep it. No percentage, ever.</p>
+  <a href="#how-it-works" class="hero-cta fade-up delay-3">
+    View Full Proposal &rarr;
+  </a>
+</div>
+
+<!-- ── STATS ── -->
+<div class="stats-strip">
+  <div class="stats-strip-inner">
+    <div class="fade-up">
+      <div class="stat-num">4M+</div>
+      <div class="stat-label">Kids BGCA serves each year</div>
+    </div>
+    <div class="fade-up delay-1">
+      <div class="stat-num">$0</div>
+      <div class="stat-label">Percentage taken &mdash; ever</div>
+    </div>
+    <div class="fade-up delay-2">
+      <div class="stat-num">$0</div>
+      <div class="stat-label">BGCA&rsquo;s cost when donors cover the $1 fee</div>
+    </div>
+    <div class="fade-up delay-3">
+      <div class="stat-num">BGCA</div>
+      <div class="stat-label">Issues all tax receipts directly</div>
+    </div>
+    <div class="fade-up delay-4">
+      <div class="stat-num">Days</div>
+      <div class="stat-label">To go live from agreement</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how-it-works">
+  <div class="eyebrow fade-up" style="color:#7c3aed">How It Works for BGCA</div>
+  <h2 class="section-title fade-up delay-1">Passive giving.<br/>Direct to BGCA&rsquo;s Stripe.</h2>
+  <p class="section-sub fade-up delay-2">Donors set it up once. Every purchase rounds up to the nearest dollar. The difference charges monthly on BGCA&rsquo;s Stripe account &mdash; not a middleman&rsquo;s.</p>
+
+  <div class="steps">
+    <div class="step-card fade-up delay-1">
+      <div class="step-num" style="background:rgba(79,70,229,.2);color:#818cf8">01</div>
+      <div class="step-title">Enter BGCA&rsquo;s EIN</div>
+      <div class="step-desc">IRS tax-exempt status verified automatically in seconds. 13-5562976 &mdash; confirmed 501(c)(3).</div>
+    </div>
+    <div class="step-card fade-up delay-2">
+      <div class="step-num" style="background:rgba(13,148,136,.2);color:#2dd4bf">02</div>
+      <div class="step-title">Connect BGCA&rsquo;s Stripe</div>
+      <div class="step-desc">BGCA is the merchant of record for all donations. PocketCache never holds or receives donor funds &mdash; ever.</div>
+    </div>
+    <div class="step-card fade-up delay-3">
+      <div class="step-num" style="background:rgba(232,25,44,.15);color:#ff6b7a">03</div>
+      <div class="step-title">BGCA Shares the Link</div>
+      <div class="step-desc">Donors join directly from bgca.org, email campaigns, QR codes at club locations, or corporate partner programs.</div>
+    </div>
+    <div class="step-card fade-up delay-4">
+      <div class="step-num" style="background:rgba(245,158,11,.15);color:#fbbf24">04</div>
+      <div class="step-title">Monthly: Donors&rsquo; Round-Ups Charge on BGCA&rsquo;s Stripe</div>
+      <div class="step-desc">Donors&rsquo; round-ups charge monthly on BGCA&rsquo;s Stripe. BGCA issues receipts. When donors keep the pre-selected $1/month service fee, PocketCache charges BGCA nothing for that donor.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── REVENUE MODEL ── -->
+<section>
+  <div class="eyebrow fade-up" style="color:#10b981">Revenue Model &mdash; No Middleman</div>
+  <h2 class="section-title fade-up delay-1">Donations hit BGCA&rsquo;s Stripe<br/>directly. Period.</h2>
+  <p class="section-sub fade-up delay-2">No DAF, no Endaoment, no Treasury float. PocketCache is a software vendor. BGCA is the charity. The money flows accordingly.</p>
+
+  <div class="model-box fade-up delay-3">
+    <p style="font-size:15px;color:rgba(255,255,255,.8);line-height:1.7;">Each donor is charged their round-ups plus a flat <strong style="color:#5eead4;">$1.00/month service fee</strong>, pre-selected as &ldquo;I&rsquo;ll cover it.&rdquo; When a donor keeps the default, PocketCache charges BGCA <strong style="color:#5eead4;">$0</strong> for that donor &mdash; the $1 covers both the processing fee and the software fee via Stripe&rsquo;s application_fee. If a donor opts out, $0.50 is deducted from their round-up before BGCA receives it, and PocketCache invoices BGCA $0.50/month for that donor. With the majority covering the fee, BGCA&rsquo;s net cost is near $0.</p>
+
+    <div class="model-math">
+      <p style="font-size:13px;color:rgba(255,255,255,.4);margin-bottom:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Example Math &mdash; 100 Donors</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
+        <div>
+          <p style="font-size:12px;color:rgba(255,255,255,.4)">Avg round-ups/donor/mo</p>
+          <p style="font-size:24px;font-weight:900;color:#fff;margin-top:4px">$12</p>
+        </div>
+        <div>
+          <p style="font-size:12px;color:rgba(255,255,255,.4)">100 donors &times; $12</p>
+          <p style="font-size:24px;font-weight:900;color:#5eead4;margin-top:4px">$1,200</p>
+          <p style="font-size:11px;color:rgba(255,255,255,.3)">to BGCA&rsquo;s Stripe</p>
+        </div>
+        <div>
+          <p style="font-size:12px;color:rgba(255,255,255,.4)">PocketCache invoice</p>
+          <p style="font-size:24px;font-weight:900;color:#ff6b7a;margin-top:4px">~$0</p>
+          <p style="font-size:11px;color:rgba(255,255,255,.3)">$0 when donors cover the $1 fee</p>
+        </div>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,.1);margin-top:16px;padding-top:16px;display:flex;justify-content:space-between;align-items:center;">
+        <p style="font-size:14px;color:rgba(255,255,255,.6)">Net to BGCA (when all donors cover the fee)</p>
+        <p style="font-size:28px;font-weight:900;color:#5eead4">~$1,200/mo</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── DONOR ACTION BUTTONS ── -->
+<section>
+  <div class="eyebrow fade-up" style="color:#f59e0b">Donor Engagement Features</div>
+  <h2 class="section-title fade-up delay-1">More ways donors<br/>can support BGCA.</h2>
+  <p class="section-sub fade-up delay-2">Beyond round-ups, donors have three action buttons in the app &mdash; each drives additional value for BGCA without PocketCache taking a cut.</p>
+
+  <div class="actions-grid">
+    <div class="action-card fade-up delay-1">
+      <div class="action-emoji">&#9889;</div>
+      <div class="action-title">Give Extra (One-Time Boost)</div>
+      <div class="action-desc">Donors can make a one-time extra donation on top of their round-ups. Charges on BGCA&rsquo;s Stripe. BGCA receives it in full (minus Stripe&rsquo;s standard processing fee).</div>
+    </div>
+    <div class="action-card fade-up delay-2">
+      <div class="action-emoji">&#127962;</div>
+      <div class="action-title">Corporate Match Inquiry</div>
+      <div class="action-desc">Donors submit their employer name. BGCA&rsquo;s development team follows up to activate matching through existing corporate giving programs. PocketCache facilitates the inquiry &mdash; match funds go to BGCA directly.</div>
+    </div>
+    <div class="action-card fade-up delay-3">
+      <div class="action-emoji">&#128588;</div>
+      <div class="action-title">Volunteer Inquiry</div>
+      <div class="action-desc">Donors express interest in volunteering. BGCA&rsquo;s volunteer coordinators get the inquiry and follow up. Deepens donor relationship at no additional cost.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── WHITE LABEL ── -->
+<section>
+  <div class="eyebrow fade-up" style="color:#E8192C">White-Label Platform</div>
+  <h2 class="section-title fade-up delay-1">Your brand.<br/>Your donors. Your data.</h2>
+  <p class="section-sub fade-up delay-2">Donors experience &ldquo;BGCA Round-Up&rdquo; &mdash; not PocketCache. Your navy and red throughout. Your logo from day one.</p>
+
+  <div class="reasons">
+    <div class="reason fade-up delay-1">
+      <div class="reason-icon">&#127912;</div>
+      <div class="reason-title">Full Brand Takeover</div>
+      <div class="reason-desc">BGCA navy (#003865) and red (#E8192C) throughout. Your logo, your tagline, your identity from the first onboarding slide.</div>
+    </div>
+    <div class="reason fade-up delay-2">
+      <div class="reason-icon">&#128200;</div>
+      <div class="reason-title">Donor Insights Dashboard</div>
+      <div class="reason-desc">Real-time data on donor demographics, giving patterns, and engagement. All your audience intelligence, no platform sharing.</div>
+    </div>
+    <div class="reason fade-up delay-3">
+      <div class="reason-icon">&#128274;</div>
+      <div class="reason-title">Zero Tech Risk</div>
+      <div class="reason-desc">Plaid handles bank security. Stripe handles payments. BGCA takes on no PCI compliance or data liability from using PocketCache.</div>
+    </div>
+    <div class="reason fade-up delay-4">
+      <div class="reason-icon">&#128176;</div>
+      <div class="reason-title">No Percentage &mdash; Ever</div>
+      <div class="reason-desc">Free for BGCA when donors cover the flat $1/month service fee (pre-selected &mdash; most keep it). Only $0.50/donor/month for opt-out donors. No percentage of donations, no revenue share, no surprise fees.</div>
+    </div>
+    <div class="reason fade-up delay-1">
+      <div class="reason-icon">&#128241;</div>
+      <div class="reason-title">New Donor Acquisition</div>
+      <div class="reason-desc">Reach younger donors (18&ndash;35) who want to give but find traditional fundraising too high-friction. Set it once, give forever.</div>
+    </div>
+    <div class="reason fade-up delay-2">
+      <div class="reason-icon">&#129309;</div>
+      <div class="reason-title">Corporate Partner Ready</div>
+      <div class="reason-desc">Corporate match inquiry built in. BGCA&rsquo;s development team handles follow-through. PocketCache facilitates, BGCA captures the match.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── REVENUE PROJECTION ── -->
+<section>
+  <div class="eyebrow fade-up" style="color:#10b981">Revenue Projection for BGCA</div>
+  <h2 class="section-title fade-up delay-1">What could this mean<br/>for BGCA&rsquo;s fundraising?</h2>
+
+  <div class="revenue-grid">
+    <div class="rev-card fade-up delay-1" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)">
+      <div style="font-size:13px;color:rgba(255,255,255,.4);margin-bottom:8px">Conservative &middot; 1,000 donors</div>
+      <div style="font-size:36px;font-weight:900;color:#fff;letter-spacing:-1px">$144K</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:4px">annual donations to BGCA</div>
+      <div style="font-size:12px;color:#10b981;margin-top:8px">+ corporate match potential</div>
+    </div>
+    <div class="rev-card fade-up delay-2" style="background:rgba(16,185,129,.08);border:1.5px solid rgba(16,185,129,.3)">
+      <div style="font-size:13px;color:rgba(255,255,255,.4);margin-bottom:8px">Target &middot; 10,000 donors</div>
+      <div style="font-size:36px;font-weight:900;color:#10b981;letter-spacing:-1px">$1.44M</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:4px">annual donations to BGCA</div>
+      <div style="font-size:12px;color:#10b981;margin-top:8px">&uarr; Recurring, automatic, growing</div>
+    </div>
+    <div class="rev-card fade-up delay-3" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)">
+      <div style="font-size:13px;color:rgba(255,255,255,.4);margin-bottom:8px">Optimistic &middot; 100,000 donors</div>
+      <div style="font-size:36px;font-weight:900;color:#fff;letter-spacing:-1px">$14.4M</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:4px">annual donations to BGCA</div>
+      <div style="font-size:12px;color:#fbbf24;margin-top:8px">Acorns reached 9M users in 4 yrs</div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:rgba(255,255,255,.3);margin-top:16px">Based on $12/month average round-ups &times; 100% going to BGCA (less standard Stripe processing fees, as with any card donation). Match funding additional.</p>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── LIABILITY / RISK ── -->
+<section>
+  <div class="eyebrow fade-up" style="color:#10b981">Risk &amp; Liability</div>
+  <h2 class="section-title fade-up delay-1">What could go wrong?<br/>Almost nothing lands on BGCA.</h2>
+  <p class="section-sub fade-up delay-2">Money never touches PocketCache. BGCA owns its Stripe account and can disconnect us with one click. The regulated risk sits with Stripe and Plaid &mdash; by design.</p>
+
+  <div class="reasons">
+    <div class="reason fade-up delay-1">
+      <div class="reason-icon">&#128179;</div>
+      <div class="reason-title">Money Never Touches PocketCache</div>
+      <div class="reason-desc">Donations flow from the donor&rsquo;s card &rarr; BGCA&rsquo;s own Stripe account &rarr; BGCA&rsquo;s bank. PocketCache never sees, holds, or moves donor funds.</div>
+    </div>
+    <div class="reason fade-up delay-2">
+      <div class="reason-icon">&#128279;</div>
+      <div class="reason-title">BGCA Owns Its Stripe Account</div>
+      <div class="reason-desc">Stripe Connect Standard means BGCA has full control. You can disconnect PocketCache with one click &mdash; no lock-in, no permission required from us.</div>
+    </div>
+    <div class="reason fade-up delay-3">
+      <div class="reason-icon">&#128100;</div>
+      <div class="reason-title">Who Owns What</div>
+      <div class="reason-desc"><strong style="color:rgba(255,255,255,.85)">Stripe</strong> &mdash; card data, money custody, payouts, disputes, chargebacks, PCI compliance.<br/><br/><strong style="color:rgba(255,255,255,.85)">Plaid</strong> &mdash; secure bank/card connection; donor consents directly to Plaid.<br/><br/><strong style="color:rgba(255,255,255,.85)">SSO (Apple/Google)</strong> &mdash; login identity; no passwords stored by PocketCache.<br/><br/><strong style="color:rgba(255,255,255,.85)">PocketCache</strong> &mdash; the round-up math and the app experience. That&rsquo;s it.</div>
+    </div>
+    <div class="reason fade-up delay-4">
+      <div class="reason-icon">&#128220;</div>
+      <div class="reason-title">PocketCache Carries E&amp;O Insurance</div>
+      <div class="reason-desc">Tech errors &amp; omissions coverage and a contractual liability cap. The regulated risk &mdash; payments, bank data, identity &mdash; sits with licensed, insured vendors by design.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA FOOTER ── -->
+<div class="cta-footer">
+  <div style="font-size:40px;margin-bottom:16px">&#127952;</div>
+  <h2 class="fade-up">Ready to put BGCA<br/>in every donor&rsquo;s pocket?</h2>
+  <p style="font-size:17px;color:rgba(255,255,255,.5);max-width:500px;margin:16px auto 0;line-height:1.7">Zero setup cost for BGCA. No tech team required. Donations go straight to your Stripe. Just a new, passive revenue stream that grows with every swipe.</p>
+  <a href="mailto:Blake.Pangman@gmail.com?subject=BGCA+PocketCache+Partnership+Interest" class="hero-cta" style="margin-top:40px;display:inline-flex">
+    &#129309; Schedule a Call
+  </a>
+  <div class="cta-email">Blake.Pangman@gmail.com &middot; PocketCache, LLC</div>
+</div>
+
+<script>
+  // Animate elements when they scroll into view
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.animationPlayState = 'running';
+        e.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.fade-up').forEach(el => {
+    el.style.animationPlayState = 'paused';
+    observer.observe(el);
+  });
+</script>
+</body>
+</html>
