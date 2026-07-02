@@ -157,6 +157,7 @@ export default function HandwrittenWordmark({ fontSize = 38, color = '#ffffff' }
         style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}
         aria-label="PocketCache"
       >
+        {/* eslint-disable react-hooks/refs -- totalLengths ref read during render is intentional for SVG path length animation */}
         {LETTERS.map((letter, i) => {
           const len = totalLengths.current[i] || 9999;
           return (
@@ -175,6 +176,7 @@ export default function HandwrittenWordmark({ fontSize = 38, color = '#ffffff' }
             />
           );
         })}
+        {/* eslint-enable react-hooks/refs */}
 
         {/* Pen-tip dot */}
         {dotPos.visible && (

@@ -41,10 +41,6 @@ jobs:
           mkdir -p dist-pages/demo
           cp -r dist/* dist-pages/demo/
 
-          # Dashboard
-          mkdir -p dist-pages/dashboard
-          cp dashboard/index.html dist-pages/dashboard/index.html
-
           # Legal pages
           mkdir -p dist-pages/legal/privacy dist-pages/legal/terms
           cp legal/privacy/index.html dist-pages/legal/privacy/index.html

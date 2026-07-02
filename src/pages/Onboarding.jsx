@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
+import { CheckCircle, ArrowRight, Building2, Lock, ArrowLeft } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { QRCodeSVG } from 'qrcode.react';
@@ -12,14 +13,13 @@ import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
-import { NONPROFITS } from '../data/nonprofits';
+import { useNp } from '../store/NpContext';
+import { findOrgByCode, buildOrgFromSignup, saveCustomOrg } from '../store/orgStore';
 import OrgLogo from '../components/OrgLogo';
 
 
 function findNonprofitByCode(code) {
-  if (!code) return null;
-  const lower = code.toLowerCase().trim();
-  return NONPROFITS.find(n => n.id === lower || n.shortName.toLowerCase() === lower) ?? null;
+  return findOrgByCode(code);
 }
 
 const SLIDES = [
@@ -33,7 +33,7 @@ const SLIDES = [
       </div>
     ),
     title: '',
-    subtitle: 'PocketCache gives every nonprofit its own branded micro-donation experience. Set up in minutes. Flat pricing. No percentages. Just giving.',
+    subtitle: 'Your own branded giving app — live in minutes. Donors give with every purchase. Flat pricing, no percentages, just giving.',
     cta: 'Get Started',
   },
   {
@@ -66,12 +66,12 @@ const SLIDES = [
           className="mt-2 flex items-center gap-2 bg-white rounded-2xl px-6 py-3"
         >
           <span className="font-bold text-lg" style={{ color: '#0D9488' }}>$1.00</span>
-          <span className="text-gray-500 text-sm">donated to BGCA ❤️</span>
+          <span className="text-gray-500 text-sm">donated ❤️</span>
         </motion.div>
       </div>
     ),
-    title: 'Round Up Every\nPurchase',
-    subtitle: 'We round up each transaction to the nearest dollar. Your money goes straight to your Stripe — we never touch the funds.',
+    title: 'Spare Change\nAdds Up',
+    subtitle: 'Every purchase rounds up to the next dollar. Coffee for $3.40? That 60¢ goes straight to your cause. Cover the $1/month fee and 100% of your round-ups reach them — never a percentage.',
     cta: 'Next',
   },
   {
@@ -80,7 +80,8 @@ const SLIDES = [
     bgStyle: { background: '#003865' },
     illustration: null,
     title: 'Your App,\nYour Cause',
-    subtitle: 'This app is powered by PocketCache for Boys & Girls Clubs of America. Your round-ups go directly to BGCA every month.',
+    // Dynamic subtitle injected in render
+    subtitle: '',
     cta: 'Next',
   },
   {
@@ -120,14 +121,15 @@ const SLIDES = [
       </div>
     ),
     title: 'Watch Your\nImpact Grow',
-    subtitle: 'Track every donation, see your cumulative impact, and share your generosity with others.',
+    subtitle: 'Every round-up adds up. Track your giving, hit milestones, and share your story with friends.',
     cta: 'Sign Up →',
   },
 ];
 
 // ─── Org Gate Screen ─────────────────────────────────────────────────────────
+// Layout (per founder direction): nonprofit entry first, donor entry below.
 
-function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
+function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
@@ -144,6 +146,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
         setTimeout(() => onBind(np), 800);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoBindOrg]);
 
   function handleSubmit(e) {
@@ -178,8 +181,8 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
         style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)' }}
       >
         {boundNp ? <OrgLogo nonprofit={boundNp} size={16} rounded="2xl" /> : <div className="text-6xl">🏀</div>}
-        <p className="text-white font-bold text-xl text-center">Invited by BGCA</p>
-        <p className="text-white/70 text-sm text-center">Setting up your BGCA Round-Up…</p>
+        <p className="text-white font-bold text-xl text-center">Setting up your program…</p>
+        <p className="text-white/70 text-sm text-center">Just a moment</p>
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
@@ -196,10 +199,10 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
       transition={{ duration: 0.4 }}
       className="flex flex-col h-full overflow-hidden"
     >
-      {/* Header */}
+      {/* Header — leads with the nonprofit pitch */}
       <div
         className="flex flex-col items-center justify-end px-8 pb-5 pt-10 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '44%' }}
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '40%' }}
       >
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
@@ -210,37 +213,51 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
           <CoinMark size={40} />
         </motion.div>
         <div className="text-center mb-3">
-          <p className="text-white/80 font-semibold text-base leading-tight mb-1">
-            Welcome to
-          </p>
+          <p className="text-white/80 font-semibold text-base leading-tight mb-1">Welcome to</p>
           <PocketCacheLogo size={32} onDark={true} />
         </div>
-        <p className="text-white/80 text-xs text-center leading-relaxed mb-2 px-2">
-          PocketCache turns your everyday purchases into spare-change donations — round up to the nearest dollar, and the difference goes to a nonprofit you choose. Causes get their own branded giving app in minutes, and 100% of your round-ups reach them — we never take a cut. Connect a card once and give without thinking about it.
+        <p className="text-white font-semibold text-sm text-center leading-relaxed mb-1 px-2">
+          Your own giving app. Live today.
         </p>
-        <p className="text-white/70 text-xs text-center leading-relaxed">
-          Enter your nonprofit&apos;s code or scan their QR to get started.
+        <p className="text-white/70 text-xs text-center leading-relaxed px-2">
+          Free when donors cover the $1/month fee. Set up in minutes — no tech team needed.
         </p>
       </div>
 
       {/* Bottom sheet */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div className="flex-1 px-5 pt-6 pb-2 overflow-y-auto">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nonprofit Code</label>
-              <input
-                type="text"
-                placeholder="Enter code (e.g. BGCA)"
-                value={code}
-                onChange={e => { setCode(e.target.value); setError(null); }}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors font-mono uppercase"
-                style={{ borderColor: error ? '#ef4444' : code ? '#FBBF24' : '#e5e7eb' }}
-              />
-              {error && <p className="text-red-500 text-xs mt-1 px-1">{error}</p>}
-              <p className="text-gray-400 text-xs mt-1 px-1">Demo code: BGCA</p>
-            </div>
+        <div className="flex-1 px-5 pt-5 pb-2 overflow-y-auto space-y-4">
 
+          {/* ── FOR NONPROFITS (primary) ── */}
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">For Nonprofits</p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onNonprofitSignup}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-base mb-2"
+              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', color: '#fff' }}
+            >
+              Create your nonprofit page →
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onNpSignIn}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm"
+              style={{ background: '#f0f4f8', color: '#0B2A4A' }}
+            >
+              Nonprofit sign in
+            </motion.button>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-100" />
+            <p className="text-gray-400 text-xs font-medium">Joining a nonprofit?</p>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+
+          {/* ── FOR DONORS (secondary) ── */}
+          <form onSubmit={handleSubmit} className="space-y-3">
             {scanned ? (
               <div className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-green-400 bg-green-50 text-green-700">
                 <CheckCircle size={16} className="text-green-500" />
@@ -264,17 +281,29 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
                     Scanning…
                   </>
                 ) : (
-                  <>
-                    <span>📷</span> Scan QR Code
-                  </>
+                  <><span>📷</span> Scan QR Code</>
                 )}
               </motion.button>
             )}
 
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nonprofit Code</label>
+              <input
+                type="text"
+                placeholder="Enter code (e.g. BGCA)"
+                value={code}
+                onChange={e => { setCode(e.target.value); setError(null); }}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors font-mono uppercase"
+                style={{ borderColor: error ? '#ef4444' : code ? '#FBBF24' : '#e5e7eb' }}
+              />
+              {error && <p className="text-red-500 text-xs mt-1 px-1">{error}</p>}
+              <p className="text-gray-400 text-xs mt-1 px-1">Demo code: BGCA</p>
+            </div>
+
             <motion.button
               whileTap={{ scale: 0.97 }}
               type="submit"
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              className="w-full py-4 rounded-2xl font-bold text-base"
               style={{
                 background: code ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
                 color: code ? '#0B2A4A' : '#fff',
@@ -284,21 +313,6 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
               Continue →
             </motion.button>
           </form>
-
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-gray-100" />
-            <p className="text-gray-400 text-xs">or</p>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={onNonprofitSignup}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm"
-            style={{ background: '#f3f4f6', color: '#374151' }}
-          >
-            Are you a nonprofit? Create your free page →
-          </motion.button>
         </div>
 
         <div className="px-5 pb-8 pt-2">
@@ -306,6 +320,88 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg }) {
             PocketCache — round-up giving software for nonprofits
           </p>
         </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Nonprofit Sign-In Screen (simple email → demo BGCA dashboard) ────────────
+
+function NpSignInScreen({ onSignIn, onBack }) {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!email) return;
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onSignIn();
+    }, 900);
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex flex-col h-full overflow-hidden"
+    >
+      <div
+        className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+      >
+        <button onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
+          <ArrowLeft size={14} /> Back
+        </button>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center overflow-hidden shadow-lg">
+            <img src={bgcaLogoUrl} alt="BGCA" className="w-full h-full object-contain p-1" />
+          </div>
+          <p className="text-white/70 text-sm font-semibold">Demo — signs into BGCA</p>
+        </div>
+        <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          Nonprofit{'\n'}Sign In
+        </h1>
+        <p className="text-white/70 text-sm mt-2">
+          In the live product, you&apos;d receive a magic link. For this demo, any email works.
+        </p>
+      </div>
+
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10">
+        <form onSubmit={handleSubmit} className="space-y-4 flex-1">
+          <div>
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Admin Email</label>
+            <input
+              type="email"
+              required
+              placeholder="admin@yourorg.org"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
+            />
+          </div>
+
+          <motion.button
+            whileTap={email ? { scale: 0.97 } : {}}
+            type="submit"
+            className="w-full py-4 rounded-2xl text-white font-bold text-base"
+            style={{
+              background: email ? 'linear-gradient(135deg, #0d9488, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+              opacity: email ? 1 : 0.5,
+            }}
+          >
+            {loading
+              ? <span className="flex items-center justify-center gap-2">
+                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                    className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white" />
+                  Signing in…
+                </span>
+              : 'Sign In →'
+            }
+          </motion.button>
+        </form>
       </div>
     </motion.div>
   );
@@ -345,6 +441,8 @@ function SignUpScreen({ onNext, nonprofit }) {
   const [showTermsHint, setShowTermsHint] = useState(false);
   const isCA = selectedState === 'CA';
   const canContinue = agreedTerms && selectedState !== '' && !isCA;
+
+  const npName = nonprofit?.name ?? 'your nonprofit';
 
   function handleSSO(provider) {
     if (!canContinue) { setShowTermsHint(true); return; }
@@ -421,7 +519,9 @@ function SignUpScreen({ onNext, nonprofit }) {
             transition={{ delay: 0.5 }}
             className="bg-white/20 rounded-2xl px-4 py-2"
           >
-            <p className="text-white text-xs font-semibold text-center">Supporting Boys &amp; Girls Clubs of America</p>
+            <p className="text-white text-xs font-semibold text-center">
+              Supporting {npName}
+            </p>
           </motion.div>
         </motion.div>
         <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
@@ -550,10 +650,10 @@ function SignUpScreen({ onNext, nonprofit }) {
         <div className="px-5 pb-8 pt-3 space-y-3">
           <label
             className="flex items-start gap-3 cursor-pointer"
+            onClick={e => { if (e.target.tagName !== 'A') { setAgreedTerms(v => !v); setShowTermsHint(false); } }}
             style={showTermsHint && !agreedTerms ? { outline: '2px solid #f59e0b', borderRadius: 8, padding: 4 } : {}}
           >
             <div
-              onClick={() => { setAgreedTerms(v => !v); setShowTermsHint(false); }}
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
               style={{ borderColor: agreedTerms ? '#003865' : '#d1d5db', background: agreedTerms ? '#003865' : '#fff' }}
             >
@@ -654,7 +754,7 @@ function ConnectCardScreen({ onNext }) {
           Which card should{'\n'}we track?
         </h1>
         <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-          We'll track your everyday purchases on this card to calculate your round-ups.
+          Every purchase on this card rounds up — the change goes straight to your cause.
         </p>
       </div>
 
@@ -673,7 +773,7 @@ function ConnectCardScreen({ onNext }) {
               <CheckCircle size={22} className="shrink-0" style={{ color: '#0D9488' }} />
               <div>
                 <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{connected.name} connected</p>
-                <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We'll watch your purchases and calculate round-ups automatically</p>
+                <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll track your purchases and calculate round-ups as they happen</p>
               </div>
             </motion.div>
           ) : (
@@ -768,7 +868,10 @@ const PAYMENT_OPTIONS = [
 ];
 
 function PaymentMethodScreen({ onNext }) {
+  const { selectedNonprofit } = useApp();
   const [selected, setSelected] = useState(null);
+  const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
+  const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
 
   return (
     <motion.div
@@ -808,7 +911,7 @@ function PaymentMethodScreen({ onNext }) {
           How should we collect{'\n'}your round-up payments?
         </h1>
         <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-          Once a month, we'll add up your round-ups and charge your chosen payment method.
+          Once a month, your round-ups total up into one clean charge — to the payment method you choose below.
         </p>
       </div>
 
@@ -856,7 +959,7 @@ function PaymentMethodScreen({ onNext }) {
           ))}
 
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
-            You can change this anytime in Settings. Donations are processed securely via Stripe.
+            Change this anytime in Settings. Payments are processed by Stripe — not us.
           </p>
         </div>
 
@@ -871,10 +974,10 @@ function PaymentMethodScreen({ onNext }) {
               cursor: selected ? 'pointer' : 'default',
             }}
           >
-            {selected === 'card' ? 'Continue →' : selected ? 'Continue →' : 'Choose a payment method'}
+            {selected ? 'Continue →' : 'Choose a payment method'}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
-            Your round-ups are charged once a month on behalf of BGCA. BGCA&apos;s statement descriptor will appear on your bank statement. Receipts are issued by BGCA.
+            Your round-ups charge once a month through {npName}&apos;s Stripe. You&apos;ll see &ldquo;{npShort}&rdquo; on your statement. They issue your receipt.
           </p>
         </div>
       </div>
@@ -964,6 +1067,9 @@ function CardEntryForm({ onSuccess }) {
 }
 
 function CardEntryScreen({ onNext }) {
+  const { selectedNonprofit } = useApp();
+  const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
+
   return (
     <Elements stripe={stripePromise}>
       <motion.div
@@ -988,14 +1094,14 @@ function CardEntryScreen({ onNext }) {
             Add your card
           </h1>
           <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Saved securely via Stripe. Your round-ups are collected monthly on BGCA&apos;s behalf.
+            Stripe handles your card — we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
           </p>
         </div>
 
         <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-6 pb-10">
           <CardEntryForm onSuccess={onNext} />
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
-            Round-ups are charged once a month on behalf of BGCA. BGCA issues your tax receipt directly.
+            Round-ups collect monthly on {npShort}&apos;s behalf. They issue your tax receipt directly.
           </p>
         </div>
       </motion.div>
@@ -1006,11 +1112,14 @@ function CardEntryScreen({ onNext }) {
 // ─── Checkout confirm screen ─────────────────────────────────────────────────
 
 function CheckoutConfirmScreen({ onConfirm }) {
-  const { selectedNonprofit } = useApp();
+  const { selectedNonprofit, pendingRoundUps } = useApp();
   const [coverFee, setCoverFee] = useState(true);
-  const roundUps = 4.63;
-  const fee = 0.50;
+  const roundUps = pendingRoundUps ?? 4.63;
+  const fee = 1.00;
   const total = coverFee ? roundUps + fee : roundUps;
+
+  const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
+  const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
 
   return (
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
@@ -1023,14 +1132,16 @@ function CheckoutConfirmScreen({ onConfirm }) {
             ? <OrgLogo nonprofit={selectedNonprofit} size={16} rounded="2xl" className="bg-white/20" />
             : <img src={bgcaLogoUrl} alt="logo" className="w-16 h-16 rounded-2xl bg-white object-contain p-2" />}
           <div className="bg-white/20 rounded-2xl px-4 py-2">
-            <p className="text-white text-xs font-semibold text-center">One monthly charge · BGCA on your statement</p>
+            <p className="text-white text-xs font-semibold text-center">
+              One monthly charge · {npShort} on your statement
+            </p>
           </div>
         </motion.div>
         <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
           Review &amp;{'\n'}Confirm
         </h1>
         <p className="text-white/80 text-sm mt-2 text-center">
-          Your round-ups are collected monthly by Boys &amp; Girls Clubs of America.
+          Your round-ups are collected monthly by {npName}.
         </p>
       </div>
 
@@ -1047,13 +1158,13 @@ function CheckoutConfirmScreen({ onConfirm }) {
             </div>
             {coverFee && (
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-500">Processing fee (you&apos;re covering it)</span>
-                <span className="text-sm text-gray-500">+$0.50</span>
+                <span className="text-sm text-gray-500">App fee (you&apos;re covering it)</span>
+                <span className="text-sm text-gray-500">+$1.00</span>
               </div>
             )}
             <div className="h-px bg-slate-200 my-2" />
             <div className="flex justify-between items-center">
-              <span className="font-bold text-gray-900">One charge from BGCA</span>
+              <span className="font-bold text-gray-900">One charge from {npShort}</span>
               <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
             </div>
             <p className="text-xs text-gray-400 mt-2 italic">
@@ -1063,18 +1174,21 @@ function CheckoutConfirmScreen({ onConfirm }) {
 
           {/* Cover fee checkbox */}
           <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl"
+            onClick={() => setCoverFee(v => !v)}
             style={{ background: coverFee ? '#d1fae5' : '#f9fafb', border: coverFee ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}>
-            <div onClick={() => setCoverFee(v => !v)}
+            <div
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
               style={{ borderColor: coverFee ? '#059669' : '#d1d5db', background: coverFee ? '#059669' : '#fff' }}>
               {coverFee && <CheckCircle size={12} className="text-white" />}
             </div>
             <div>
-              <span className="text-sm font-semibold text-gray-900">Cover the processing fee ($0.50/mo) so 100% of my round-ups go to BGCA</span>
+              <span className="text-sm font-semibold text-gray-900">
+                Cover the $1/month fee — 100% of your round-ups reach {npShort}.
+              </span>
               <p className="text-xs text-gray-500 mt-0.5">
                 {coverFee
-                  ? `Your $0.50 covers our operating costs. 100% of your $${roundUps.toFixed(2)} in round-ups goes to BGCA.`
-                  : `The $0.50 fee will be deducted from your round-ups instead. BGCA receives $${Math.max(0, roundUps - fee).toFixed(2)}.`}
+                  ? `The $1/month keeps the app running. Every dollar of your $${roundUps.toFixed(2)} in round-ups lands at ${npShort}.`
+                  : `Opted out — 50¢ comes from your round-ups and 50¢ is billed to ${npShort}. Your round-ups still reach ${npShort}.`}
               </p>
             </div>
           </label>
@@ -1083,13 +1197,17 @@ function CheckoutConfirmScreen({ onConfirm }) {
           <div className="rounded-2xl p-4 bg-gray-50">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">How charges work</p>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Once a month, Boys &amp; Girls Clubs of America charges your payment method for your accumulated round-ups. The charge appears as <strong>&ldquo;BGCA&rdquo;</strong> on your statement. BGCA issues your tax receipt directly.
+              Once a month, {npName} bundles your round-ups into one charge. You&apos;ll see{' '}
+              <strong>&ldquo;{npShort}&rdquo;</strong> on your statement — not PocketCache.
             </p>
-            <p className="text-xs text-gray-400 mt-2">
-              Note: the $0.50/mo processing fee is not tax-deductible. Your donation amount is.
+            <p className="text-xs text-gray-500 mt-2">
+              {npShort} sends your tax receipt — they&apos;re the ones receiving your donation.
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              The $1/month fee keeps the app running and isn&apos;t tax-deductible, but your donation is. Opt out and the dollar splits: 50¢ from your round-ups, 50¢ from {npShort}. Months under ${selectedNonprofit?.monthlyMinimum ?? 10} just roll forward — we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Round-up tracking starts when your card is linked. Round-ups accumulate through the month. Your <strong>first charge happens on the 1st of the following month</strong> — nothing before your signup is ever charged.
+              Tracking starts the moment your card is linked. Your <strong>first charge hits on the 1st of next month</strong> — nothing before today ever counts.
             </p>
           </div>
         </div>
@@ -1098,7 +1216,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
           <motion.button whileTap={{ scale: 0.97 }} onClick={onConfirm}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{ background: 'linear-gradient(135deg, #003865, #001a33)' }}>
-            Start Giving to BGCA
+            Start Giving to {npShort}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
             <span className="inline-flex items-center gap-1 justify-center">
@@ -1112,16 +1230,50 @@ function CheckoutConfirmScreen({ onConfirm }) {
   );
 }
 
+// ─── EIN lookup helpers ───────────────────────────────────────────────────────
+
+function formatEIN(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+}
+
+async function lookupEIN(digits9) {
+  const res = await fetch(
+    `https://projects.propublica.org/nonprofits/api/v2/organizations/${digits9}.json`
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const org = data.organization;
+  if (!org) throw new Error('No org found');
+  return {
+    name:     org.name ?? '',
+    city:     org.city ?? '',
+    state:    org.state ?? '',
+    is501c3:  org.subsection_code === 3 || org.subsection_code === '3',
+  };
+}
+
+function computeJoinCode(name) {
+  if (!name) return 'ORG';
+  const words = name.split(/[\s&,]+/).filter(w => w.length > 2);
+  const initials = words.map(w => w[0].toUpperCase()).join('').slice(0, 6);
+  return initials || name.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 6) || 'ORG';
+}
+
 // ─── Nonprofit self-serve signup flow ─────────────────────────────────────────
 
-function NonprofitSignupFlow({ onBack }) {
+function NonprofitSignupFlow({ onBack, onGoLive }) {
   const [step, setStep] = useState('ein');
   const [ein, setEin] = useState('');
+  const [einError, setEinError] = useState(null);
   const [verifying, setVerifying] = useState(false);
-  const [verified, setVerified] = useState(false);
+  const [einDemoMode, setEinDemoMode] = useState(false);
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [orgName, setOrgName] = useState('');
+  const [orgAddress, setOrgAddress] = useState('');
+  const [org501c3, setOrg501c3] = useState(true);
   const [adminEmail, setAdminEmail] = useState('');
   const [story, setStory] = useState('');
   const [color, setColor] = useState('#003865');
@@ -1132,15 +1284,36 @@ function NonprofitSignupFlow({ onBack }) {
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const fileInputRef = useRef(null);
 
-  function handleVerifyEIN(e) {
+  const joinCode = computeJoinCode(orgName) || 'ORG';
+
+  async function handleVerifyEIN(e) {
     e.preventDefault();
+    const digits = ein.replace(/\D/g, '');
+    if (digits.length !== 9) {
+      setEinError('EIN must be exactly 9 digits (format: XX-XXXXXXX).');
+      return;
+    }
+    setEinError(null);
     setVerifying(true);
-    setTimeout(() => {
+    setEinDemoMode(false);
+
+    try {
+      const result = await lookupEIN(digits);
       setVerifying(false);
-      setVerified(true);
-      setOrgName('Boys & Girls Clubs of America');
+      setOrgName(result.name || 'Boys & Girls Clubs of America');
+      setOrgAddress(result.city && result.state ? `${result.city}, ${result.state}` : 'Atlanta, GA');
+      setOrg501c3(result.is501c3);
+      setEinDemoMode(false);
       setStep('confirm-org');
-    }, 1500);
+    } catch {
+      // Graceful fallback — use simulated BGCA result with demo note
+      setVerifying(false);
+      setOrgName('Boys & Girls Clubs of America');
+      setOrgAddress('Atlanta, GA');
+      setOrg501c3(true);
+      setEinDemoMode(true);
+      setStep('confirm-org');
+    }
   }
 
   function handleStripeConnect() {
@@ -1162,7 +1335,29 @@ function NonprofitSignupFlow({ onBack }) {
     setStep('live');
   }
 
-  const stepBack = { ein: onBack, 'confirm-org': () => setStep('ein'), stripe: () => setStep('confirm-org'), branding: () => setStep('stripe'), license: () => setStep('branding'), live: () => setStep('license') };
+  function handleGoLive() {
+    onGoLive({
+      name:           orgName,
+      shortName:      joinCode,
+      color,
+      logoPreview,
+      mission:        story,
+      monthlyMinimum,
+      adminEmail,
+      joinCode,
+      ein,
+      orgAddress,
+    });
+  }
+
+  const stepBack = {
+    ein:          onBack,
+    'confirm-org': () => setStep('ein'),
+    stripe:        () => setStep('confirm-org'),
+    branding:      () => setStep('stripe'),
+    license:       () => setStep('branding'),
+    live:          () => setStep('license'),
+  };
 
   return (
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
@@ -1172,12 +1367,12 @@ function NonprofitSignupFlow({ onBack }) {
         style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '30%' }}>
         <button onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</button>
         <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
-          {step === 'ein' && 'Verify Your\nNonprofit'}
-          {step === 'confirm-org' && 'Confirm\nYour Org'}
-          {step === 'stripe' && 'Connect\nStripe'}
-          {step === 'branding' && 'Customize\nYour Page'}
-          {step === 'license' && 'License\nAgreement'}
-          {step === 'live' && "You're\nLive! 🎉"}
+          {step === 'ein'          && 'Verify Your\nNonprofit'}
+          {step === 'confirm-org'  && 'Confirm\nYour Org'}
+          {step === 'stripe'       && 'Connect\nStripe'}
+          {step === 'branding'     && 'Customize\nYour Page'}
+          {step === 'license'      && 'License\nAgreement'}
+          {step === 'live'         && "You're\nLive! 🎉"}
         </h1>
       </div>
 
@@ -1186,21 +1381,39 @@ function NonprofitSignupFlow({ onBack }) {
 
         {step === 'ein' && (
           <form onSubmit={handleVerifyEIN} className="space-y-4">
-            <p className="text-gray-500 text-sm">Enter your organization&apos;s EIN. We verify your tax-exempt status with IRS data.</p>
-            <input type="text" placeholder="XX-XXXXXXX" value={ein} onChange={e => setEin(e.target.value)} required
-              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono" />
-            {verified && (
-              <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
-                <p className="text-green-800 text-sm font-bold">&#10003; Verified: Boys &amp; Girls Clubs of America</p>
-                <p className="text-green-700 text-xs mt-1">EIN 13-5562976 · 501(c)(3)</p>
-              </div>
-            )}
-            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+            <p className="text-gray-500 text-sm">
+              Enter your organization&apos;s EIN. We&apos;ll verify your 501(c)(3) status with IRS data from ProPublica.
+            </p>
+            <div>
+              <input
+                type="text"
+                placeholder="XX-XXXXXXX"
+                value={ein}
+                onChange={e => { setEin(formatEIN(e.target.value)); setEinError(null); }}
+                required
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono"
+                style={{ borderColor: einError ? '#ef4444' : '#e5e7eb' }}
+              />
+              {einError && <p className="text-red-500 text-xs mt-1 px-1">{einError}</p>}
+              <p className="text-gray-400 text-xs mt-1 px-1">Format: XX-XXXXXXX (9 digits)</p>
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="submit"
+              disabled={verifying}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: ein ? 1 : 0.4 }}>
-              {verifying ? 'Verifying…' : 'Verify EIN →'}
+              {verifying ? (
+                <span className="flex items-center justify-center gap-2">
+                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                    className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white" />
+                  Verifying…
+                </span>
+              ) : 'Verify EIN →'}
             </motion.button>
-            <p className="text-gray-400 text-xs text-center px-2">We only use this to confirm your 501(c)(3) status with the IRS. Takes a few seconds.</p>
+            <p className="text-gray-400 text-xs text-center px-2">
+              We only use this to confirm your 501(c)(3) status. Takes a few seconds.
+            </p>
           </form>
         )}
 
@@ -1210,17 +1423,24 @@ function NonprofitSignupFlow({ onBack }) {
             <div className="rounded-2xl p-5 bg-gray-50 border border-gray-200 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-white flex items-center justify-center border border-gray-100">
-                  <img src={bgcaLogoUrl} alt="BGCA" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+                  <img src={bgcaLogoUrl} alt="Org" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
                 </div>
                 <div>
-                  <p className="font-bold text-gray-900 text-base">Boys &amp; Girls Clubs of America</p>
-                  <p className="text-gray-500 text-xs">1275 Peachtree St NE, Atlanta, GA 30309</p>
+                  <p className="font-bold text-gray-900 text-base">{orgName}</p>
+                  <p className="text-gray-500 text-xs">{orgAddress}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle size={14} className="text-green-500 shrink-0" />
-                <p className="text-green-700 text-xs font-semibold">EIN 13-5562976 · 501(c)(3) Verified</p>
+                <p className="text-green-700 text-xs font-semibold">
+                  {org501c3 ? '501(c)(3) Verified' : 'Organization found'} · EIN {ein}
+                </p>
               </div>
+              {einDemoMode && (
+                <p className="text-xs text-amber-600 italic">
+                  Demo data — live verification uses IRS public records.
+                </p>
+              )}
             </div>
             <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('stripe')}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
@@ -1235,7 +1455,9 @@ function NonprofitSignupFlow({ onBack }) {
 
         {step === 'stripe' && (
           <div className="space-y-4">
-            <p className="text-gray-500 text-sm">Connect your organization&apos;s Stripe account. You are the merchant of record — donations charge directly on your Stripe.</p>
+            <p className="text-gray-500 text-sm">
+              Connect your Stripe account. Donations charge directly on your Stripe — you&apos;re the merchant of record the whole time.
+            </p>
             {stripeConnected ? (
               <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
                 <p className="text-green-800 text-sm font-bold">&#10003; Stripe Connected</p>
@@ -1255,7 +1477,7 @@ function NonprofitSignupFlow({ onBack }) {
                 Continue →
               </motion.button>
             )}
-            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches donation funds — they settle directly into your Stripe account.</p>
+            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches the money — it goes straight from donors into your Stripe account.</p>
           </div>
         )}
 
@@ -1327,7 +1549,7 @@ function NonprofitSignupFlow({ onBack }) {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">
-                Monthly Minimum — ${monthlyMinimum}
+                Monthly Minimum — ${monthlyMinimum} <span className="text-gray-400 font-normal normal-case">(default $10)</span>
               </label>
               <input
                 type="range"
@@ -1338,7 +1560,7 @@ function NonprofitSignupFlow({ onBack }) {
                 onChange={e => setMonthlyMinimum(Number(e.target.value))}
                 className="w-full accent-teal-600"
               />
-              <p className="text-gray-400 text-xs mt-1">Default is $10. Donors below this in a month roll over to the next month.</p>
+              <p className="text-gray-400 text-xs mt-1">Donors below this in a month roll over to the next month.</p>
             </div>
             <motion.button whileTap={{ scale: 0.97 }} type="submit"
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
@@ -1352,7 +1574,7 @@ function NonprofitSignupFlow({ onBack }) {
           <form onSubmit={handleAccept} className="space-y-4">
             <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
             <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
-              <p><strong>Flat fee:</strong> $0.50/active linked user/month. Never a % of donations.</p>
+              <p><strong>Free for you when donors keep the $1/month fee</strong> (it&apos;s pre-selected — most do). You&apos;re billed a flat $0.50/donor/month only for donors who opt out. Never a % of donations.</p>
               <p><strong>You are the merchant of record.</strong> Donations charge directly on your Stripe. PocketCache never holds donation funds.</p>
               <p><strong>You issue tax receipts</strong> directly to donors. PocketCache does not.</p>
               <p><strong>You handle charitable solicitation registration</strong> in applicable states.</p>
@@ -1362,8 +1584,8 @@ function NonprofitSignupFlow({ onBack }) {
               className="block text-center text-sm font-semibold underline" style={{ color: '#003865' }}>
               Read full license →
             </a>
-            <label className="flex items-start gap-3 cursor-pointer">
-              <div onClick={() => setAccepted(v => !v)}
+            <label className="flex items-start gap-3 cursor-pointer" onClick={() => setAccepted(v => !v)}>
+              <div
                 className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
                 style={{ borderColor: accepted ? '#059669' : '#d1d5db', background: accepted ? '#059669' : '#fff' }}>
                 {accepted && <CheckCircle size={12} className="text-white" />}
@@ -1391,24 +1613,39 @@ function NonprofitSignupFlow({ onBack }) {
           <div className="space-y-4">
             <div className="rounded-2xl p-4 bg-green-50 border border-green-200 text-center">
               <p className="text-green-800 font-bold text-base mb-1">Your page is live!</p>
-              <p className="text-green-700 text-sm font-mono">pocketcache.app/bgca</p>
+              <p className="text-green-700 text-sm font-mono">
+                pocketcache.app/{joinCode.toLowerCase()}
+              </p>
+            </div>
+            {/* Join code — primary thing to share */}
+            <div className="rounded-2xl p-5 text-center" style={{ background: '#f0fdf4', border: '2px solid #86efac' }}>
+              <p className="text-xs font-bold text-green-700 uppercase tracking-widest mb-1">Your Donor Join Code</p>
+              <p className="text-5xl font-black tracking-wider mb-2" style={{ color: '#065f46' }}>{joinCode}</p>
+              <p className="text-green-700 text-xs">Donors enter this in the PocketCache app to join your program</p>
             </div>
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">QR Code</p>
               <div className="bg-white rounded-xl p-3 inline-block border border-gray-100">
-                <QRCodeSVG value="https://pocketcache.app/demo/?org=BGCA" size={96} level="M" includeMargin />
+                <QRCodeSVG value={`https://pocketcache.app/demo/?org=${joinCode}`} size={96} level="M" includeMargin />
               </div>
+              <p className="text-gray-400 text-xs mt-1">Donors scan this to join <strong>{orgName || 'your program'}</strong></p>
             </div>
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Embed Widget</p>
               <div className="bg-gray-900 rounded-xl p-3 max-w-full overflow-x-auto">
-                <code className="text-green-400 text-xs whitespace-pre-wrap break-all">{'<script src="https://cdn.pocketcache.app/widget.js" data-org="bgca"></script>'}</code>
+                <code className="text-green-400 text-xs whitespace-pre-wrap break-all">
+                  {`<script src="https://cdn.pocketcache.app/widget.js" data-org="${joinCode.toLowerCase()}"></script>`}
+                </code>
               </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">API Key</p>
-              <div className="bg-gray-50 rounded-xl px-4 py-3 font-mono text-xs text-gray-500">sk_live_••••••••••••••••</div>
-            </div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handleGoLive}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
+            >
+              Open your dashboard →
+            </motion.button>
             <p className="text-gray-400 text-xs text-center">Check your email for next steps from PocketCache.</p>
           </div>
         )}
@@ -1422,12 +1659,13 @@ function NonprofitSignupFlow({ onBack }) {
 
 export default function Onboarding() {
   const { setPage, setSelectedNonprofit, selectedNonprofit } = useApp();
+  const { setNpOrg, setNpSignedIn } = useNp();
   const [slide, setSlide] = useState(0);
   const [step, setStep] = useState(() => {
     // Start at gate if no nonprofit is bound
     const stored = localStorage.getItem('pc_cause_id');
     return stored && stored !== 'null' ? 'slides' : 'gate';
-  }); // 'gate' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
+  }); // 'gate' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup' | 'np-signin'
 
   const urlParams = new URLSearchParams(window.location.search);
   const autoBindOrg = urlParams.get('org') || new URLSearchParams(window.location.hash.replace('#', '?')).get('org') || null;
@@ -1435,6 +1673,40 @@ export default function Onboarding() {
   function handleBind(np) {
     setSelectedNonprofit(np);
     setStep('slides');
+  }
+
+  function handleGoLive(config) {
+    // Build and persist the real org object
+    const org = buildOrgFromSignup({
+      name:           config.name,
+      adminEmail:     config.adminEmail,
+      story:          config.mission,
+      color:          config.color,
+      logoPreview:    config.logoPreview !== bgcaLogoUrl ? config.logoPreview : null,
+      monthlyMinimum: config.monthlyMinimum,
+      ein:            config.ein,
+      orgAddress:     config.orgAddress,
+    });
+    saveCustomOrg(org);
+
+    setNpOrg({
+      name:           org.name,
+      shortName:      org.shortName,
+      color:          config.color,
+      logoPreview:    org.logoUrl,
+      mission:        org.description,
+      monthlyMinimum: org.monthlyMinimum,
+      adminEmail:     org.adminEmail,
+      joinCode:       org.shortName,
+      _orgId:         org.id,
+    });
+    setNpSignedIn(true);
+    setPage('np-dashboard');
+  }
+
+  function handleNpSignIn() {
+    setNpSignedIn(true);
+    setPage('np-dashboard');
   }
 
   const current = SLIDES[slide];
@@ -1448,8 +1720,37 @@ export default function Onboarding() {
     }
   }
 
-  if (step === 'gate') return <OrgGateScreen onBind={handleBind} onNonprofitSignup={() => setStep('nonprofit-signup')} autoBindOrg={autoBindOrg} />;
-  if (step === 'nonprofit-signup') return <NonprofitSignupFlow onBack={() => setStep('slides')} />;
+  // Dynamic slide-2 subtitle based on bound nonprofit
+  function slide2Subtitle() {
+    if (selectedNonprofit) {
+      return `This app is built for ${selectedNonprofit.name}. Your spare change goes straight to them every month — nothing in between.`;
+    }
+    return 'This app is built for your cause. Your spare change goes straight to them every month — nothing in between.';
+  }
+
+  // Slide 0 welcomes whoever is actually looking at it: a donor who just joined
+  // their nonprofit's app shouldn't see the pitch written for nonprofits.
+  function slide0Subtitle() {
+    if (selectedNonprofit) {
+      return `${selectedNonprofit.shortName ?? selectedNonprofit.name} has its own giving app — and you're in. Round up your everyday purchases and your spare change quietly adds up for them.`;
+    }
+    return SLIDES[0].subtitle;
+  }
+
+  if (step === 'gate') return (
+    <OrgGateScreen
+      onBind={handleBind}
+      onNonprofitSignup={() => setStep('nonprofit-signup')}
+      onNpSignIn={() => setStep('np-signin')}
+      autoBindOrg={autoBindOrg}
+    />
+  );
+  if (step === 'np-signin') return (
+    <NpSignInScreen onSignIn={handleNpSignIn} onBack={() => setStep('gate')} />
+  );
+  if (step === 'nonprofit-signup') return (
+    <NonprofitSignupFlow onBack={() => setStep('gate')} onGoLive={handleGoLive} />
+  );
   if (step === 'checkout-confirm') return <CheckoutConfirmScreen onConfirm={() => setPage('home')} />;
   if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('checkout-confirm')} />;
   if (step === 'payment-method') return <PaymentMethodScreen onNext={method => setStep(method === 'card' ? 'card-entry' : 'checkout-confirm')} />;
@@ -1485,7 +1786,7 @@ export default function Onboarding() {
                   transition={{ delay: 0.5 }}
                   className="text-white font-bold text-lg text-center"
                 >
-                  Boys &amp; Girls Clubs of America
+                  {selectedNonprofit?.name ?? 'Your Nonprofit'}
                 </motion.p>
               </div>
             ) : current.illustration}
@@ -1499,7 +1800,7 @@ export default function Onboarding() {
               </h1>
             ) : null}
             <p className="text-white/80 text-base mt-4 leading-relaxed">
-              {current.subtitle}
+              {slide === 2 ? slide2Subtitle() : slide === 0 ? slide0Subtitle() : current.subtitle}
             </p>
           </div>
 
@@ -1536,7 +1837,7 @@ export default function Onboarding() {
             )}
           </div>
 
-          {/* Nonprofit CTA — pinned banner on every slide, unmissable */}
+          {/* Nonprofit CTA — pinned banner on slide 0 */}
           {slide === 0 && (
             <motion.button
               initial={{ opacity: 0, y: 8 }}
@@ -1547,7 +1848,7 @@ export default function Onboarding() {
               className="w-full mt-3 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm border-2 border-white/40 bg-white/15"
               style={{ color: '#fff' }}
             >
-              Are you a nonprofit? Create your free page →
+              Nonprofits: get your own giving app free →
             </motion.button>
           )}
         </motion.div>

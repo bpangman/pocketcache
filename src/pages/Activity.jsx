@@ -1,8 +1,9 @@
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
+import { momChange } from '../data/derived';
 import CustomTooltip from '../components/CustomTooltip';
 import OrgLogo from '../components/OrgLogo';
 
@@ -27,10 +28,20 @@ function formatDate(dateStr) {
 }
 
 export default function Activity() {
-  const { totalDonated, pendingRoundUps, selectedNonprofit } = useApp();
+  const { totalDonated, pendingRoundUps, roundUpMultiplier, selectedNonprofit } = useApp();
   const brand = useTheme();
   const grouped = groupByDate(TRANSACTIONS);
-  const totalRoundUps = TRANSACTIONS.reduce((s, t) => s + t.roundUp, 0);
+  // Raw sum of round-ups before any multiplier
+  const rawRoundUps = parseFloat(TRANSACTIONS.reduce((s, t) => s + t.roundUp, 0).toFixed(2));
+
+  // Current month label derived from MONTHLY_DATA — never hardcoded
+  const currentEntry = MONTHLY_DATA[MONTHLY_DATA.length - 1];
+  const currentMonthLabel = `${currentEntry.month} ${currentEntry.year}`;
+
+  // MoM display (real computed value from derived.js)
+  const momDisplay = momChange === null
+    ? null
+    : `${momChange >= 0 ? '↑' : '↓'} ${Math.abs(momChange).toFixed(0)}% vs last month`;
 
   if (!selectedNonprofit) return null;
 
@@ -50,7 +61,7 @@ export default function Activity() {
       </motion.div>
 
       <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
-        {/* Monthly Charges info banner */}
+        {/* Monthly Charges info banner — dynamic nonprofit name + tax receipt line */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -59,7 +70,9 @@ export default function Activity() {
         >
           <p className="font-bold text-sm mb-1">Monthly Charges</p>
           <p className="text-white/80 text-xs leading-relaxed">
-            Your round-ups charge monthly on BGCA&apos;s Stripe. BGCA is the merchant of record — your statement shows &ldquo;BGCA&rdquo;. PocketCache takes no percentage.
+            Once a month, your round-ups roll up into one charge on {selectedNonprofit.shortName}&apos;s Stripe.
+            The $1/month fee is pre-selected — opt out anytime in Settings. Months under ${selectedNonprofit.monthlyMinimum ?? 10} carry forward; we settle every 3 months at most.{' '}
+            {selectedNonprofit.shortName} sends your tax receipt. (The $1 fee isn&apos;t tax-deductible, but your round-ups are.)
           </p>
         </motion.div>
 
@@ -77,7 +90,12 @@ export default function Activity() {
             <div className="text-right">
               <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">All Time</p>
               <p className="text-xl font-bold text-gray-900 mt-1">${totalDonated.toFixed(2)}</p>
-              <p style={{ color: '#059669' }} className="text-xs font-semibold mt-1">↑ 12% vs last month</p>
+              {momDisplay && (
+                <p style={{ color: momChange >= 0 ? '#059669' : '#dc2626' }}
+                  className="text-xs font-semibold mt-1">
+                  {momDisplay}
+                </p>
+              )}
             </div>
           </div>
           <div className="h-24">
@@ -89,26 +107,45 @@ export default function Activity() {
                     <stop offset="95%" stopColor={brand.primary} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10 }} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false}
+                  tick={{ fill: '#9ca3af', fontSize: 10 }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="donated" stroke={brand.primary} strokeWidth={2.5}
-                  fill="url(#areaGradient)" dot={false} activeDot={{ r: 4, fill: brand.primary, strokeWidth: 0 }} />
+                  fill="url(#areaGradient)" dot={false}
+                  activeDot={{ r: 4, fill: brand.primary, strokeWidth: 0 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Month summary pill */}
+        {/* Month summary pill — current month name from data, not hardcoded.
+            When multiplier > 1 both the raw and boosted amounts are shown clearly. */}
         <div className="rounded-2xl px-4 py-3 flex items-center justify-between"
           style={{ background: brand.accentLight }}>
           <div className="flex items-center gap-3">
             <span className="text-2xl">🗓️</span>
             <div>
-              <p className="text-gray-900 font-semibold text-sm">March 2026</p>
-              <p className="text-gray-400 text-xs">{TRANSACTIONS.length} transactions · ${totalRoundUps.toFixed(2)} rounded up</p>
+              <p className="text-gray-900 font-semibold text-sm">{currentMonthLabel}</p>
+              <p className="text-gray-400 text-xs">
+                {TRANSACTIONS.length} transactions · ${rawRoundUps.toFixed(2)} rounded up
+                {roundUpMultiplier > 1 && ` × ${roundUpMultiplier} boost`}
+              </p>
             </div>
           </div>
-          <div className="font-bold text-base" style={{ color: '#059669' }}>${pendingRoundUps.toFixed(2)}</div>
+          {roundUpMultiplier > 1 ? (
+            <div className="text-right">
+              <div className="font-bold text-base" style={{ color: '#059669' }}>
+                ${pendingRoundUps.toFixed(2)}
+              </div>
+              <div className="text-xs text-gray-400">
+                ${rawRoundUps.toFixed(2)} × {roundUpMultiplier}
+              </div>
+            </div>
+          ) : (
+            <div className="font-bold text-base" style={{ color: '#059669' }}>
+              ${pendingRoundUps.toFixed(2)}
+            </div>
+          )}
         </div>
 
         {/* Transaction groups */}
@@ -120,7 +157,8 @@ export default function Activity() {
             </p>
             <div className="bg-white rounded-3xl overflow-hidden card-shadow">
               {txs.map((tx, i) => (
-                <div key={tx.id} className={`flex items-center gap-3 px-4 py-3.5 ${i < txs.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                <div key={tx.id}
+                  className={`flex items-center gap-3 px-4 py-3.5 ${i < txs.length - 1 ? 'border-b border-gray-50' : ''}`}>
                   <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-xl shrink-0">
                     {tx.icon}
                   </div>

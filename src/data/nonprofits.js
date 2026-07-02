@@ -28,10 +28,15 @@ export const NONPROFITS = [
       maxAmount: 50000,
       matched: 23400,
       active: true,
-      description: 'GM is matching every dollar donated to BGCA, up to $50,000 total.',
+      // sample: true — this is a demo partnership used to illustrate the corporate
+      // match feature. In production, match terms come from signed partner agreements.
+      sample: true,
+      description: 'GM is matching every donor round-up dollar-for-dollar, up to $50,000 total — an example of a corporate match partnership.',
       logoUrl: gmLogoUrl,
       impactUrl: 'https://www.gm.com/commitments',
-      impactReport: "GM's match helped fund after-school programs for 4,300 kids this month. This month's match brought total giving to $23,400 — directly supporting BGCA Club programs in Detroit, Austin, and Atlanta.",
+      // impactReport is illustrative — specific club counts and city names are
+      // example equivalencies for demo purposes, not verified program figures.
+      impactReport: "This sample match illustrates how a corporate partner can amplify donor impact. In this example, $23,400 of the $50,000 match pool has been claimed — representing thousands of additional after-school hours that could be funded across BGCA Club locations. Match partners receive a quarterly impact report directly from BGCA.",
     },
     brand: {
       appName: 'BGCA Round-Up',

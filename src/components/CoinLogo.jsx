@@ -9,6 +9,7 @@
  */
 import logo from '../assets/logo.png';
 
+// eslint-disable-next-line no-unused-vars
 export default function CoinLogo({ size = 180, animate = true, showName = true, className = '' }) {
   return (
     <div

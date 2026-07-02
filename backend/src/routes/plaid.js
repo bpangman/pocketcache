@@ -2,23 +2,25 @@
  * Plaid API routes
  * POST /api/plaid/link-token     — frontend calls this to open Plaid Link
  * POST /api/plaid/exchange       — frontend calls this after user links card
+ *
+ * All routes require auth. req.userId comes from the JWT token (never from request body).
  */
 
 import express from 'express';
 import { createLinkToken, exchangePublicToken, getAccounts } from '../services/plaid.js';
+import { encrypt } from '../lib/crypto.js';
+import { requireAuth } from '../middleware/auth.js';
 import db from '../db/index.js';
 import { randomUUID } from 'crypto';
 
 const router = express.Router();
 
-// POST /api/plaid/link-token
-// Returns a short-lived link_token for the frontend to open Plaid Link
-router.post('/link-token', async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
+router.use(requireAuth);
 
+// POST /api/plaid/link-token
+router.post('/link-token', async (req, res) => {
   try {
-    const linkToken = await createLinkToken(userId);
+    const linkToken = await createLinkToken(req.userId);
     res.json({ link_token: linkToken });
   } catch (err) {
     console.error('Plaid link-token error:', err.message);
@@ -27,12 +29,11 @@ router.post('/link-token', async (req, res) => {
 });
 
 // POST /api/plaid/exchange
-// Called after user completes Plaid Link — exchanges public_token for access_token
-// Also identifies the specific account (card) the user selected
+// Called after user completes Plaid Link. Stores the access_token ENCRYPTED.
 router.post('/exchange', async (req, res) => {
-  const { userId, publicToken, accountId } = req.body;
-  if (!userId || !publicToken || !accountId) {
-    return res.status(400).json({ error: 'userId, publicToken, and accountId required' });
+  const { publicToken, accountId } = req.body;
+  if (!publicToken || !accountId) {
+    return res.status(400).json({ error: 'publicToken and accountId required' });
   }
 
   try {
@@ -40,17 +41,19 @@ router.post('/exchange', async (req, res) => {
     const accounts = await getAccounts(accessToken);
     const selectedAccount = accounts.find(a => a.account_id === accountId);
 
-    // Store connection — access_token is sensitive, never returned to frontend
+    // SECURITY: encrypt access_token before storing — never persisted in plaintext
+    const encryptedToken = encrypt(accessToken);
+
     db.prepare(`
       INSERT OR REPLACE INTO plaid_connections (id, user_id, access_token, item_id, institution, last4, account_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(),
-      userId,
-      accessToken,
+      req.userId,                                    // from JWT, not body
+      encryptedToken,                                // encrypted at rest
       itemId,
       selectedAccount?.institution_name ?? null,
-      selectedAccount?.mask ?? null,  // last 4 digits
+      selectedAccount?.mask ?? null,
       accountId
     );
 

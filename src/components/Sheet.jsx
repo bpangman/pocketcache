@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
 
 export default function Sheet({ show, onClose, title, children }) {
