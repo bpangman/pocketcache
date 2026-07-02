@@ -10,7 +10,7 @@ import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
 import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
-import { NONPROFITS } from '../data/nonprofits';
+import { findOrgByCode } from '../store/orgStore';
 import { MONTHLY_DATA } from '../data/transactions';
 import { DEMO_USER } from '../data/derived';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
@@ -18,9 +18,7 @@ import bgcaLogoUrl from '../assets/bgca-logo.png';
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 
 function findNonprofitByCode(code) {
-  if (!code) return null;
-  const lower = code.toLowerCase().trim();
-  return NONPROFITS.find(n => n.id === lower || n.shortName.toLowerCase() === lower) ?? null;
+  return findOrgByCode(code);
 }
 
 const CARD_ELEMENT_OPTIONS = {
@@ -485,7 +483,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
 
   const rawAmount = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   const amountStr = rawAmount.toFixed(2);
-  const totalWithFee = (rawAmount + 0.50).toFixed(2);
+  const totalWithFee = (rawAmount + 1.00).toFixed(2);
   const belowMin = rawAmount < (nonprofit?.monthlyMinimum ?? 10);
 
   return (
@@ -524,10 +522,10 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               className="w-full py-4 rounded-2xl text-white font-bold text-base mb-3"
               style={{ background: brand.gradient }}
             >
-              Donate ${amountStr} + $0.50 fee &amp; cancel
+              Donate ${amountStr} + $1 fee &amp; cancel
             </motion.button>
             <p className="text-gray-400 text-xs text-center mb-3">
-              Total charge: ${totalWithFee} (round-ups + $0.50 processing fee)
+              Final settle-up: ${totalWithFee} total — your round-ups plus the $1 fee. Nothing after this, ever.
             </p>
             <button
               onClick={handleCancelOnly}
@@ -536,7 +534,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               Cancel without donating
             </button>
             <p className="text-gray-400 text-xs text-center">
-              This month&apos;s round-ups won&apos;t be charged — as if the month never happened.
+              Skip it and your round-ups this month are simply waived — like the month never happened.
             </p>
           </>
         )}
@@ -695,13 +693,11 @@ export default function Settings() {
           className="bg-amber-50 rounded-3xl px-4 py-3.5" style={{ border: '1px solid #fde68a' }}>
           <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
           <p className="text-xs text-amber-800 leading-relaxed">
-            Your round-ups are charged once a month (minimum $10) directly on{' '}
-            {selectedNonprofit.shortName}&apos;s Stripe account — they are the merchant of record.
-            100% of your round-ups go to {selectedNonprofit.shortName} — collected on their own Stripe account
-            (standard card-processing costs apply, as with any donation). PocketCache&apos;s only revenue is the flat{' '}
-            <strong>$0.50/month</strong> processing fee (you can opt to cover it). {selectedNonprofit.shortName} emails
-            your tax receipt directly. If a payment fails, we&apos;ll retry once after 3 days. When you cancel, we&apos;ll
-            ask if you&apos;d like to make this month&apos;s donation first.
+            One monthly charge on {selectedNonprofit.shortName}&apos;s Stripe — minimum ${selectedNonprofit.monthlyMinimum}.
+            You pre-selected the <strong>$1/month</strong> fee, so 100% of your round-ups reach {selectedNonprofit.shortName}.
+            If you opted out, the dollar splits: 50¢ from your round-ups, 50¢ from them. Months under ${selectedNonprofit.monthlyMinimum} roll over; we settle every 3 months at most.
+            Cancel and a final charge clears your accrued round-ups.{' '}
+            {selectedNonprofit.shortName} sends your tax receipt — the $1 fee isn&apos;t deductible, but your donations are.
           </p>
         </motion.div>
 

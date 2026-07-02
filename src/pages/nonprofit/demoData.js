@@ -112,8 +112,10 @@ export const CHARGE_HISTORY = Array.from({ length: 6 }, (_, m) => {
   );
 
   const coveringFee = Math.floor(eligibleDonors.length * 0.68);
-  const feesCovered  = parseFloat((coveringFee * 0.50).toFixed(2));
-  const feesDeducted = parseFloat(((eligibleDonors.length - coveringFee) * 0.50).toFixed(2));
+  const optOutCount = eligibleDonors.length - coveringFee;
+  const feesCovered  = parseFloat((coveringFee * 1.00).toFixed(2));
+  const feesDeducted = parseFloat((optOutCount * 0.50).toFixed(2));
+  const feesNpBilled = parseFloat((optOutCount * 0.50).toFixed(2));
 
   return {
     period,
@@ -123,6 +125,7 @@ export const CHARGE_HISTORY = Array.from({ length: 6 }, (_, m) => {
     gross,
     feesCovered,
     feesDeducted,
+    feesNpBilled,
     failures:       failureCount,
     failureStatus:  failureCount > 0 ? 'retrying' : null,
   };

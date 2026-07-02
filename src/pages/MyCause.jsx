@@ -82,10 +82,14 @@ export default function MyCause() {
             <h1 className="text-white font-bold text-xl leading-snug mt-0.5" style={{ letterSpacing: '-0.3px' }}>
               {np.name}
             </h1>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Star size={11} className="text-amber-300 fill-amber-300" />
-              <span className="text-white/80 text-xs font-semibold">{np.rating} · {np.category}</span>
-            </div>
+            {(np.rating || np.category) && (
+              <div className="flex items-center gap-1.5 mt-1">
+                {np.rating && <Star size={11} className="text-amber-300 fill-amber-300" />}
+                <span className="text-white/80 text-xs font-semibold">
+                  {[np.rating && `${np.rating}`, np.category].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -103,21 +107,23 @@ export default function MyCause() {
         </motion.div>
 
         {/* Impact stat */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.06 }}
-          className="rounded-3xl p-5 text-white relative overflow-hidden"
-          style={{ background: brand.gradient }}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3" />
-          <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1 relative z-10">Impact</p>
-          <p className="text-white font-bold text-base leading-snug relative z-10">&ldquo;{np.impact}&rdquo;</p>
-          <div className="flex items-center gap-2 mt-3 relative z-10">
-            <OrgLogo nonprofit={np} size={7} rounded="full" className="shrink-0" />
-            <p className="text-white/70 text-xs">{np.name}</p>
-          </div>
-        </motion.div>
+        {np.impact && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.06 }}
+            className="rounded-3xl p-5 text-white relative overflow-hidden"
+            style={{ background: brand.gradient }}
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3" />
+            <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1 relative z-10">Impact</p>
+            <p className="text-white font-bold text-base leading-snug relative z-10">&ldquo;{np.impact}&rdquo;</p>
+            <div className="flex items-center gap-2 mt-3 relative z-10">
+              <OrgLogo nonprofit={np} size={7} rounded="full" className="shrink-0" />
+              <p className="text-white/70 text-xs">{np.name}</p>
+            </div>
+          </motion.div>
+        )}
 
         {/* Your impact storytelling card */}
         <motion.div
@@ -136,25 +142,28 @@ export default function MyCause() {
           </div>
         </motion.div>
 
-        {/* Stats grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 gap-3"
-        >
-          {[
-            { label: 'Total Raised', value: `$${(np.raised / 1e6).toFixed(1)}M` },
-            { label: 'Donors', value: np.donors.toLocaleString() },
-            { label: 'EIN', value: np.ein },
-            { label: 'Rating', value: `${np.rating}/5.0` },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-2xl px-4 py-3 card-shadow">
-              <p className="text-gray-400 text-xs font-medium">{stat.label}</p>
-              <p className="text-gray-900 font-bold text-base mt-0.5">{stat.value}</p>
+        {/* Stats grid — only show fields the org actually has */}
+        {(np.raised != null || np.donors != null || np.ein || np.rating != null) && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                np.raised != null && { label: 'Total Raised', value: `$${(np.raised / 1e6).toFixed(1)}M` },
+                np.donors != null && { label: 'Donors', value: np.donors.toLocaleString() },
+                np.ein && { label: 'EIN', value: np.ein },
+                np.rating != null && { label: 'Rating', value: `${np.rating}/5.0` },
+              ].filter(Boolean).map((stat) => (
+                <div key={stat.label} className="bg-white rounded-2xl px-4 py-3 card-shadow">
+                  <p className="text-gray-400 text-xs font-medium">{stat.label}</p>
+                  <p className="text-gray-900 font-bold text-base mt-0.5">{stat.value}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </motion.div>
+          </motion.div>
+        )}
 
         {/* Corporate match badge — "Example" tag shown when match.sample is true */}
         {match?.active && (

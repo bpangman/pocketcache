@@ -14,14 +14,12 @@ import CoinMark from '../components/CoinMark';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
-import { NONPROFITS } from '../data/nonprofits';
+import { findOrgByCode, buildOrgFromSignup, saveCustomOrg } from '../store/orgStore';
 import OrgLogo from '../components/OrgLogo';
 
 
 function findNonprofitByCode(code) {
-  if (!code) return null;
-  const lower = code.toLowerCase().trim();
-  return NONPROFITS.find(n => n.id === lower || n.shortName.toLowerCase() === lower) ?? null;
+  return findOrgByCode(code);
 }
 
 const SLIDES = [
@@ -35,7 +33,7 @@ const SLIDES = [
       </div>
     ),
     title: '',
-    subtitle: 'PocketCache gives every nonprofit its own branded micro-donation experience. Set up in minutes. Flat pricing. No percentages. Just giving.',
+    subtitle: 'Your own branded giving app — live in minutes. Donors give with every purchase. Flat pricing, no percentages, just giving.',
     cta: 'Get Started',
   },
   {
@@ -72,8 +70,8 @@ const SLIDES = [
         </motion.div>
       </div>
     ),
-    title: 'Round Up Every\nPurchase',
-    subtitle: 'Every purchase rounds up to the nearest dollar. The spare change goes to your nonprofit. Cover the small flat fee and 100% of your round-ups reach them — we never take a percentage.',
+    title: 'Spare Change\nAdds Up',
+    subtitle: 'Every purchase rounds up to the next dollar. Coffee for $3.40? That 60¢ goes straight to your cause. Cover the $1/month fee and 100% of your round-ups reach them — never a percentage.',
     cta: 'Next',
   },
   {
@@ -123,7 +121,7 @@ const SLIDES = [
       </div>
     ),
     title: 'Watch Your\nImpact Grow',
-    subtitle: 'Track every donation, see your cumulative impact, and share your generosity with others.',
+    subtitle: 'Every round-up adds up. Track your giving, hit milestones, and share your story with friends.',
     cta: 'Sign Up →',
   },
 ];
@@ -219,10 +217,10 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg }) {
           <PocketCacheLogo size={32} onDark={true} />
         </div>
         <p className="text-white font-semibold text-sm text-center leading-relaxed mb-1 px-2">
-          Give your nonprofit its own round-up giving app.
+          Your own giving app. Live today.
         </p>
         <p className="text-white/70 text-xs text-center leading-relaxed px-2">
-          Flat pricing, no percentage of donations, and donors bind directly to your program via code or QR.
+          Free when donors cover the $1/month fee. Set up in minutes — no tech team needed.
         </p>
       </div>
 
@@ -652,10 +650,10 @@ function SignUpScreen({ onNext, nonprofit }) {
         <div className="px-5 pb-8 pt-3 space-y-3">
           <label
             className="flex items-start gap-3 cursor-pointer"
+            onClick={e => { if (e.target.tagName !== 'A') { setAgreedTerms(v => !v); setShowTermsHint(false); } }}
             style={showTermsHint && !agreedTerms ? { outline: '2px solid #f59e0b', borderRadius: 8, padding: 4 } : {}}
           >
             <div
-              onClick={() => { setAgreedTerms(v => !v); setShowTermsHint(false); }}
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
               style={{ borderColor: agreedTerms ? '#003865' : '#d1d5db', background: agreedTerms ? '#003865' : '#fff' }}
             >
@@ -756,7 +754,7 @@ function ConnectCardScreen({ onNext }) {
           Which card should{'\n'}we track?
         </h1>
         <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-          We&apos;ll track your everyday purchases on this card to calculate your round-ups.
+          Every purchase on this card rounds up — the change goes straight to your cause.
         </p>
       </div>
 
@@ -775,7 +773,7 @@ function ConnectCardScreen({ onNext }) {
               <CheckCircle size={22} className="shrink-0" style={{ color: '#0D9488' }} />
               <div>
                 <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{connected.name} connected</p>
-                <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll watch your purchases and calculate round-ups automatically</p>
+                <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll track your purchases and calculate round-ups as they happen</p>
               </div>
             </motion.div>
           ) : (
@@ -913,7 +911,7 @@ function PaymentMethodScreen({ onNext }) {
           How should we collect{'\n'}your round-up payments?
         </h1>
         <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-          Once a month, we&apos;ll add up your round-ups and charge your chosen payment method.
+          Once a month, your round-ups total up into one clean charge — to the payment method you choose below.
         </p>
       </div>
 
@@ -961,7 +959,7 @@ function PaymentMethodScreen({ onNext }) {
           ))}
 
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
-            You can change this anytime in Settings. Donations are processed securely via Stripe.
+            Change this anytime in Settings. Payments are processed by Stripe — not us.
           </p>
         </div>
 
@@ -979,8 +977,7 @@ function PaymentMethodScreen({ onNext }) {
             {selected ? 'Continue →' : 'Choose a payment method'}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
-            Your round-ups are charged once a month on behalf of {npName}. {npShort}&apos;s statement descriptor
-            will appear on your bank statement. Receipts are issued by {npShort}.
+            Your round-ups charge once a month through {npName}&apos;s Stripe. You&apos;ll see &ldquo;{npShort}&rdquo; on your statement. They issue your receipt.
           </p>
         </div>
       </div>
@@ -1097,14 +1094,14 @@ function CardEntryScreen({ onNext }) {
             Add your card
           </h1>
           <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Saved securely via Stripe. Your round-ups are collected monthly on {npShort}&apos;s behalf.
+            Stripe handles your card — we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
           </p>
         </div>
 
         <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-6 pb-10">
           <CardEntryForm onSuccess={onNext} />
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
-            Round-ups are charged once a month on behalf of {npShort}. {npShort} issues your tax receipt directly.
+            Round-ups collect monthly on {npShort}&apos;s behalf. They issue your tax receipt directly.
           </p>
         </div>
       </motion.div>
@@ -1118,7 +1115,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
   const { selectedNonprofit, pendingRoundUps } = useApp();
   const [coverFee, setCoverFee] = useState(true);
   const roundUps = pendingRoundUps ?? 4.63;
-  const fee = 0.50;
+  const fee = 1.00;
   const total = coverFee ? roundUps + fee : roundUps;
 
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
@@ -1161,8 +1158,8 @@ function CheckoutConfirmScreen({ onConfirm }) {
             </div>
             {coverFee && (
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-500">Processing fee (you&apos;re covering it)</span>
-                <span className="text-sm text-gray-500">+$0.50</span>
+                <span className="text-sm text-gray-500">App fee (you&apos;re covering it)</span>
+                <span className="text-sm text-gray-500">+$1.00</span>
               </div>
             )}
             <div className="h-px bg-slate-200 my-2" />
@@ -1177,20 +1174,21 @@ function CheckoutConfirmScreen({ onConfirm }) {
 
           {/* Cover fee checkbox */}
           <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl"
+            onClick={() => setCoverFee(v => !v)}
             style={{ background: coverFee ? '#d1fae5' : '#f9fafb', border: coverFee ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}>
-            <div onClick={() => setCoverFee(v => !v)}
+            <div
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
               style={{ borderColor: coverFee ? '#059669' : '#d1d5db', background: coverFee ? '#059669' : '#fff' }}>
               {coverFee && <CheckCircle size={12} className="text-white" />}
             </div>
             <div>
               <span className="text-sm font-semibold text-gray-900">
-                Cover the processing fee ($0.50/mo) so 100% of my round-ups go to {npShort}
+                Cover the $1/month fee — 100% of your round-ups reach {npShort}.
               </span>
               <p className="text-xs text-gray-500 mt-0.5">
                 {coverFee
-                  ? `Cover the small flat fee and 100% of your $${roundUps.toFixed(2)} in round-ups reaches ${npShort} — we never take a percentage.`
-                  : `The $0.50 fee will be deducted from your round-ups instead. ${npShort} receives $${Math.max(0, roundUps - fee).toFixed(2)}.`}
+                  ? `The $1/month keeps the app running. Every dollar of your $${roundUps.toFixed(2)} in round-ups lands at ${npShort}.`
+                  : `Opted out — 50¢ comes from your round-ups and 50¢ is billed to ${npShort}. Your round-ups still reach ${npShort}.`}
               </p>
             </div>
           </label>
@@ -1199,17 +1197,17 @@ function CheckoutConfirmScreen({ onConfirm }) {
           <div className="rounded-2xl p-4 bg-gray-50">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">How charges work</p>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Once a month, {npName} charges your payment method for your accumulated round-ups. The charge
-              appears as <strong>&ldquo;{npShort}&rdquo;</strong> on your statement.
+              Once a month, {npName} bundles your round-ups into one charge. You&apos;ll see{' '}
+              <strong>&ldquo;{npShort}&rdquo;</strong> on your statement — not PocketCache.
             </p>
             <p className="text-xs text-gray-500 mt-2">
-              {npShort} emails your tax receipt directly.
+              {npShort} sends your tax receipt — they&apos;re the ones receiving your donation.
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              Note: the $0.50/mo processing fee is not tax-deductible. Your donation amount is.
+              The $1/month fee keeps the app running and isn&apos;t tax-deductible, but your donation is. Opt out and the dollar splits: 50¢ from your round-ups, 50¢ from {npShort}. Months under ${selectedNonprofit?.monthlyMinimum ?? 10} just roll forward — we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Round-up tracking starts when your card is linked. Your <strong>first charge happens on the 1st of the following month</strong> — nothing before your signup is ever charged.
+              Tracking starts the moment your card is linked. Your <strong>first charge hits on the 1st of next month</strong> — nothing before today ever counts.
             </p>
           </div>
         </div>
@@ -1347,6 +1345,8 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
       monthlyMinimum,
       adminEmail,
       joinCode,
+      ein,
+      orgAddress,
     });
   }
 
@@ -1456,7 +1456,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
         {step === 'stripe' && (
           <div className="space-y-4">
             <p className="text-gray-500 text-sm">
-              Connect your organization&apos;s Stripe account. You are the merchant of record — donations charge directly on your Stripe.
+              Connect your Stripe account. Donations charge directly on your Stripe — you&apos;re the merchant of record the whole time.
             </p>
             {stripeConnected ? (
               <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
@@ -1477,7 +1477,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 Continue →
               </motion.button>
             )}
-            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches donation funds — they settle directly into your Stripe account.</p>
+            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches the money — it goes straight from donors into your Stripe account.</p>
           </div>
         )}
 
@@ -1574,7 +1574,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
           <form onSubmit={handleAccept} className="space-y-4">
             <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
             <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
-              <p><strong>Flat fee:</strong> $0.50/active linked user/month. Never a % of donations.</p>
+              <p><strong>Free for you when donors keep the $1/month fee</strong> (it&apos;s pre-selected — most do). You&apos;re billed a flat $0.50/donor/month only for donors who opt out. Never a % of donations.</p>
               <p><strong>You are the merchant of record.</strong> Donations charge directly on your Stripe. PocketCache never holds donation funds.</p>
               <p><strong>You issue tax receipts</strong> directly to donors. PocketCache does not.</p>
               <p><strong>You handle charitable solicitation registration</strong> in applicable states.</p>
@@ -1584,8 +1584,8 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               className="block text-center text-sm font-semibold underline" style={{ color: '#003865' }}>
               Read full license →
             </a>
-            <label className="flex items-start gap-3 cursor-pointer">
-              <div onClick={() => setAccepted(v => !v)}
+            <label className="flex items-start gap-3 cursor-pointer" onClick={() => setAccepted(v => !v)}>
+              <div
                 className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
                 style={{ borderColor: accepted ? '#059669' : '#d1d5db', background: accepted ? '#059669' : '#fff' }}>
                 {accepted && <CheckCircle size={12} className="text-white" />}
@@ -1616,6 +1616,12 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               <p className="text-green-700 text-sm font-mono">
                 pocketcache.app/{joinCode.toLowerCase()}
               </p>
+            </div>
+            {/* Join code — primary thing to share */}
+            <div className="rounded-2xl p-5 text-center" style={{ background: '#f0fdf4', border: '2px solid #86efac' }}>
+              <p className="text-xs font-bold text-green-700 uppercase tracking-widest mb-1">Your Donor Join Code</p>
+              <p className="text-5xl font-black tracking-wider mb-2" style={{ color: '#065f46' }}>{joinCode}</p>
+              <p className="text-green-700 text-xs">Donors enter this in the PocketCache app to join your program</p>
             </div>
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">QR Code</p>
@@ -1670,15 +1676,29 @@ export default function Onboarding() {
   }
 
   function handleGoLive(config) {
-    setNpOrg({
+    // Build and persist the real org object
+    const org = buildOrgFromSignup({
       name:           config.name,
-      shortName:      config.shortName,
-      color:          config.color,
-      logoPreview:    config.logoPreview,
-      mission:        config.mission,
-      monthlyMinimum: config.monthlyMinimum,
       adminEmail:     config.adminEmail,
-      joinCode:       config.joinCode,
+      story:          config.mission,
+      color:          config.color,
+      logoPreview:    config.logoPreview !== bgcaLogoUrl ? config.logoPreview : null,
+      monthlyMinimum: config.monthlyMinimum,
+      ein:            config.ein,
+      orgAddress:     config.orgAddress,
+    });
+    saveCustomOrg(org);
+
+    setNpOrg({
+      name:           org.name,
+      shortName:      org.shortName,
+      color:          config.color,
+      logoPreview:    org.logoUrl,
+      mission:        org.description,
+      monthlyMinimum: org.monthlyMinimum,
+      adminEmail:     org.adminEmail,
+      joinCode:       org.shortName,
+      _orgId:         org.id,
     });
     setNpSignedIn(true);
     setPage('np-dashboard');
@@ -1703,9 +1723,18 @@ export default function Onboarding() {
   // Dynamic slide-2 subtitle based on bound nonprofit
   function slide2Subtitle() {
     if (selectedNonprofit) {
-      return `This app is powered by PocketCache for ${selectedNonprofit.name}. Your round-ups go directly to ${selectedNonprofit.shortName} every month.`;
+      return `This app is built for ${selectedNonprofit.name}. Your spare change goes straight to them every month — nothing in between.`;
     }
-    return 'This app is powered by PocketCache for your nonprofit. Your round-ups go directly to them every month.';
+    return 'This app is built for your cause. Your spare change goes straight to them every month — nothing in between.';
+  }
+
+  // Slide 0 welcomes whoever is actually looking at it: a donor who just joined
+  // their nonprofit's app shouldn't see the pitch written for nonprofits.
+  function slide0Subtitle() {
+    if (selectedNonprofit) {
+      return `${selectedNonprofit.shortName ?? selectedNonprofit.name} has its own giving app — and you're in. Round up your everyday purchases and your spare change quietly adds up for them.`;
+    }
+    return SLIDES[0].subtitle;
   }
 
   if (step === 'gate') return (
@@ -1771,7 +1800,7 @@ export default function Onboarding() {
               </h1>
             ) : null}
             <p className="text-white/80 text-base mt-4 leading-relaxed">
-              {slide === 2 ? slide2Subtitle() : current.subtitle}
+              {slide === 2 ? slide2Subtitle() : slide === 0 ? slide0Subtitle() : current.subtitle}
             </p>
           </div>
 
@@ -1819,7 +1848,7 @@ export default function Onboarding() {
               className="w-full mt-3 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm border-2 border-white/40 bg-white/15"
               style={{ color: '#fff' }}
             >
-              Are you a nonprofit? Create your free page →
+              Nonprofits: get your own giving app free →
             </motion.button>
           )}
         </motion.div>

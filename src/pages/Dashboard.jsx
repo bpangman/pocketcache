@@ -372,18 +372,18 @@ export default function Dashboard() {
             <p className="text-gray-400 text-xs">Month start</p>
             {belowMinimum ? (
               <p className="text-xs font-semibold text-amber-600">
-                ${pendingRoundUps.toFixed(2)} accumulated — building toward ${monthlyMinimum} minimum
+                ${pendingRoundUps.toFixed(2)} so far — rolls over at month-end
               </p>
             ) : (
               <p className="text-xs font-semibold" style={{ color: '#059669' }}>
-                ${pendingRoundUps.toFixed(2)} ready to send · +$0.50 fee if you&apos;re covering it
+                ${pendingRoundUps.toFixed(2)} ready to send · +$1 fee if you&apos;re covering it
               </p>
             )}
             <p className="text-gray-400 text-xs">Month end</p>
           </div>
           {belowMinimum && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
-              Amounts under ${monthlyMinimum} roll over to next month — your giving accumulates until it reaches the minimum.
+              Not quite ${monthlyMinimum} yet — your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
             </p>
           )}
         </motion.div>

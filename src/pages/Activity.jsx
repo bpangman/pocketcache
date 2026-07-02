@@ -70,10 +70,9 @@ export default function Activity() {
         >
           <p className="font-bold text-sm mb-1">Monthly Charges</p>
           <p className="text-white/80 text-xs leading-relaxed">
-            Your round-ups are charged monthly on {selectedNonprofit.shortName}&apos;s Stripe.{' '}
-            {selectedNonprofit.shortName} is the merchant of record — your statement shows
-            &ldquo;{selectedNonprofit.shortName}&rdquo;. PocketCache takes no percentage.{' '}
-            {selectedNonprofit.shortName} emails your tax receipt directly.
+            Once a month, your round-ups roll up into one charge on {selectedNonprofit.shortName}&apos;s Stripe.
+            The $1/month fee is pre-selected — opt out anytime in Settings. Months under ${selectedNonprofit.monthlyMinimum ?? 10} carry forward; we settle every 3 months at most.{' '}
+            {selectedNonprofit.shortName} sends your tax receipt. (The $1 fee isn&apos;t tax-deductible, but your round-ups are.)
           </p>
         </motion.div>
 

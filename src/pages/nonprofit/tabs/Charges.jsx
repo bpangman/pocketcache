@@ -33,13 +33,13 @@ export default function Charges() {
         <div className="flex items-center gap-2">
           <CheckCircle size={16} className="text-green-600 shrink-0" />
           <p className="text-green-800 text-sm font-bold">
-            Funds settle directly in YOUR Stripe account — PocketCache never touches them.
+            Every donation lands in your Stripe. PocketCache never touches it.
           </p>
         </div>
         <p className="text-green-700 text-xs pl-6 leading-relaxed">
-          Each charge run processes payments on your Stripe Connect account. Gross round-ups are
-          collected by you. PocketCache invoices you separately for platform fees — we never
-          deduct from donation funds.
+          Most donors keep the pre-selected $1/month fee — you pay nothing for them.
+          For the rare donor who opts out, 50¢ comes from their round-ups and 50¢ is on you.
+          Never a percentage of donations, ever.
         </p>
         <a
           href="https://dashboard.stripe.com"
@@ -75,13 +75,19 @@ export default function Charges() {
           {/* Fee breakdown */}
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 text-xs">Donors who covered fee</span>
+              <span className="text-gray-500 text-xs">Donors who covered fee ($1/mo each)</span>
               <span className="font-semibold text-xs text-gray-700">${run.feesCovered.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 text-xs">Fee deducted from round-ups</span>
+              <span className="text-gray-500 text-xs">Fee deducted from opt-out round-ups (50¢/ea)</span>
               <span className="font-semibold text-xs text-gray-500">−${run.feesDeducted.toFixed(2)}</span>
             </div>
+            {run.feesNpBilled > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 text-xs">Invoiced to you for opt-out donors (50¢/ea)</span>
+                <span className="font-semibold text-xs text-orange-600">−${run.feesNpBilled.toFixed(2)}</span>
+              </div>
+            )}
             <div className="h-px bg-gray-100" />
             <div className="flex justify-between items-center">
               <span className="text-gray-700 text-xs font-semibold">Net to your Stripe</span>

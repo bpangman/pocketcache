@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { Home, Heart, Activity, Settings, Share2 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
@@ -17,7 +17,7 @@ export default function TabBar() {
 
   return (
     <div className="tab-bar absolute bottom-0 left-0 right-0 flex items-center px-1 pb-6 pt-2">
-      {TABS.map(({ id, label, icon: Icon }) => {
+      {TABS.map(({ id, label, icon: Icon }) => { // eslint-disable-line no-unused-vars
         const active = tab === id;
         return (
           <button

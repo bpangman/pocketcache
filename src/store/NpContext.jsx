@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState } from 'react';
+import { saveCustomOrg, getCustomOrg, saveBgcaOverrides, computeBrandFromColor } from './orgStore';
 
 // localStorage keys — all prefixed pc_np_ so they don't collide with donor keys
 const NP_KEYS = {
@@ -42,6 +43,34 @@ export function NpProvider({ children }) {
   function setNpOrg(org) {
     npSave(NP_KEYS.org, org);
     setNpOrgState(org);
+    // Propagate to donor-side org store
+    const id = org._orgId || (org.joinCode ? org.joinCode.toLowerCase() : null);
+    if (id && id !== 'bgca') {
+      // Custom org: update the stored org
+      const existing = getCustomOrg(id);
+      if (existing) {
+        saveCustomOrg({
+          ...existing,
+          name: org.name,
+          description: org.mission || existing.description,
+          monthlyMinimum: org.monthlyMinimum ?? existing.monthlyMinimum,
+          adminEmail: org.adminEmail || existing.adminEmail,
+          logoUrl: org.logoPreview !== undefined ? org.logoPreview : existing.logoUrl,
+          brand: org.color
+            ? { ...existing.brand, ...computeBrandFromColor(org.color, existing.shortName) }
+            : existing.brand,
+        });
+      }
+    } else if (!id || id === 'bgca') {
+      // BGCA demo session — save overrides
+      saveBgcaOverrides({
+        name: org.name,
+        description: org.mission,
+        monthlyMinimum: org.monthlyMinimum,
+        color: org.color,
+        logoUrl: org.logoPreview,
+      });
+    }
   }
 
   function setNpTab(tab) {

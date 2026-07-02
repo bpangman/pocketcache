@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import { LogOut, ExternalLink, CheckCircle } from 'lucide-react';
@@ -21,10 +21,13 @@ export default function NpSettings() {
   const [minAmt,  setMinAmt]  = useState(npOrg.monthlyMinimum);
   const [email,   setEmail]   = useState(npOrg.adminEmail);
   const [saved,   setSaved]   = useState(false);
+  const [logoPreview, setLogoPreview] = useState(npOrg.logoPreview ?? null);
+  const [logoUrlInput, setLogoUrlInput] = useState('');
+  const fileInputRef = useRef(null);
 
   function handleSave(e) {
     e.preventDefault();
-    setNpOrg({ ...npOrg, name, color, mission, monthlyMinimum: minAmt, adminEmail: email });
+    setNpOrg({ ...npOrg, name, color, mission, monthlyMinimum: minAmt, adminEmail: email, logoPreview });
     setSaved(true);
     setTimeout(() => setSaved(false), 2200);
   }
@@ -138,6 +141,28 @@ export default function NpSettings() {
             required
             className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
           />
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logo</label>
+          {logoPreview && (
+            <div className="flex items-center gap-3 mb-2">
+              <img src={logoPreview} alt="Logo" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
+              <button type="button" onClick={() => { setLogoPreview(null); setLogoUrlInput(''); }}
+                className="text-xs text-red-400 font-semibold">Remove</button>
+            </div>
+          )}
+          <input type="file" accept="image/*" ref={fileInputRef} className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) setLogoPreview(URL.createObjectURL(f)); }} />
+          <button type="button" onClick={() => fileInputRef.current?.click()}
+            className="w-full py-3 rounded-2xl border-2 border-dashed border-teal-300 text-teal-600 text-sm font-semibold mb-2">
+            Upload logo image
+          </button>
+          <input type="url" placeholder="or paste a logo URL" value={logoUrlInput}
+            onChange={e => setLogoUrlInput(e.target.value)}
+            onBlur={e => { if (e.target.value) setLogoPreview(e.target.value); }}
+            className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400" />
+          <p className="text-gray-400 text-xs mt-1">Shown to donors as your app mark.</p>
         </div>
 
         <motion.button

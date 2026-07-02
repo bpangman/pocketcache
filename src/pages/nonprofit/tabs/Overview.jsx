@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { AlertCircle, CalendarDays, TrendingUp, Users } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
@@ -40,6 +40,20 @@ export default function Overview() {
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live snapshot</p>
         <DemoPill />
       </div>
+
+      {/* Fee model framing */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl p-4 flex flex-col gap-1.5"
+        style={{ background: '#f0fdf4', border: '1.5px solid #86efac' }}
+      >
+        <p className="text-green-800 text-sm font-bold">Free for you — donors cover the $1/month app fee</p>
+        <p className="text-green-700 text-xs leading-relaxed">
+          Pre-selected at signup: 100% of donor round-ups reach you. You&apos;re only billed 50¢/month for donors
+          who opt out (rare). PocketCache never takes a percentage of donations.
+        </p>
+      </motion.div>
 
       {/* Hero stat: active donors + MTD */}
       <motion.div
@@ -142,7 +156,7 @@ export default function Overview() {
         </div>
         <p className="text-amber-600 text-xs">47% used · $26,600 remaining · Resets next month</p>
         <p className="text-amber-600 text-xs mt-1 italic">
-          This is an example partnership. Work with PocketCache to add your own corporate match sponsor.
+          This is an example partnership. Have a corporate partner who&apos;d match donations? Add your own match campaign here.
         </p>
       </motion.div>
     </div>

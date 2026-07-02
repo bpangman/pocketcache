@@ -24,7 +24,7 @@ export default function Share() {
 
   // Legal note: PocketCache is a technology vendor — it does not make donations
   // or solicitations. Share copy positions it as the tool, not the benefactor.
-  const shareText = `I've been rounding up my purchases for ${selectedNonprofit.name} using ${brand.appName} — my spare change goes straight to them. Join me! 💙`;
+  const shareText = `I give to ${selectedNonprofit.name} with every purchase I make — spare change that actually adds up. You should try it too. 💙`;
 
   function handleCopy() {
     navigator.clipboard?.writeText(`${shareText}\n${shareUrl}`);
@@ -106,7 +106,7 @@ export default function Share() {
           </div>
           <div className="bg-white px-5 py-3 flex items-center gap-2">
             <span className="text-2xl">{selectedNonprofit.logo}</span>
-            <p className="text-gray-500 text-xs flex-1">Every purchase I make rounds up and donates the change 💙</p>
+            <p className="text-gray-500 text-xs flex-1">Spare change from every purchase — it adds up. 💙</p>
           </div>
         </motion.div>
 
@@ -158,10 +158,10 @@ export default function Share() {
           className="rounded-3xl p-5 text-white"
           style={{ background: brand.gradient }}
         >
-          <p className="font-bold text-base mb-1">Refer a Friend</p>
+          <p className="font-bold text-base mb-1">Invite a Friend</p>
           <p className="text-white/80 text-sm leading-relaxed mb-4">
-            When a friend joins with your link, we waive their first month&apos;s $0.50 processing fee —
-            100% of their first round-ups go straight to {selectedNonprofit.name}.
+            When someone joins with your link, we cover their first month&apos;s 50¢ processing fee —
+            so 100% of their very first round-ups go straight to {selectedNonprofit.name}.
           </p>
           <div className="bg-white/20 rounded-2xl px-4 py-3 flex items-center justify-between">
             <span className="font-mono text-white font-bold tracking-wider text-sm">{referralCode}</span>

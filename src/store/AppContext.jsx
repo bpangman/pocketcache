@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useMemo } from 'react';
-import { NONPROFITS } from '../data/nonprofits';
 import { CURRENT_MONTH_PENDING, PRIOR_MONTHS_SUM } from '../data/transactions';
+import { findOrgByCode } from './orgStore';
 
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [
@@ -70,7 +70,7 @@ export function AppProvider({ children }) {
 
   // Derive the full nonprofit object from its stored id — switching cause never bleeds old state
   const selectedNonprofit = useMemo(
-    () => NONPROFITS.find(n => n.id === selectedNonprofitId) ?? null,
+    () => findOrgByCode(selectedNonprofitId),
     [selectedNonprofitId],
   );
 
