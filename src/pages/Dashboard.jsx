@@ -1,20 +1,24 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink, Building2, Flame } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import CoinMark from '../components/CoinMark';
 import { useTheme } from '../store/ThemeContext';
 import { MONTHLY_DATA } from '../data/transactions';
+import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import CustomTooltip from '../components/CustomTooltip';
 import Sheet from '../components/Sheet';
+import GiveExtraSheet from '../components/sheets/GiveExtraSheet';
+import BoostToast from '../components/sheets/BoostToast';
+import VolunteerSheet from '../components/sheets/VolunteerSheet';
+import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
+import MatchDetailsSheet from '../components/sheets/MatchDetailsSheet';
 
 const MILESTONE_EMOJIS = ['🌱', '⭐', '🏆', '💎', '🦸', '🚀', '🌟', '👑', '🎯', '🔮'];
 
 function getMilestoneAt(index) {
-  // 1-2.5-5 decade pattern indexed from 0:
-  // index 0 → 10, 1 → 25, 2 → 50, 3 → 100, 4 → 250, 5 → 500, 6 → 1000, ...
   const tier = Math.floor(index / 3);
   const pos = index % 3;
   const multiplier = pos === 0 ? 1 : pos === 1 ? 2.5 : 5;
@@ -45,153 +49,11 @@ function daysUntilMonthEnd() {
   return Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
 }
 
-const BOOST_PRESETS = [1, 5, 10, 25];
-const LARGE_DONATION_THRESHOLD = 1000;
-
-function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, brand }) {
-  const [selected, setSelected] = useState(5);
-  const [custom, setCustom] = useState('');
-  const [showConfirm, setShowConfirm] = useState(false);
-  const inputRef = useRef(null);
-  const amount = custom ? parseFloat(custom) : selected;
-  const valid = amount > 0 && !isNaN(amount);
-  const isLarge = valid && amount >= LARGE_DONATION_THRESHOLD;
-
-  // Reset state every time the sheet opens
-  useEffect(() => {
-    if (show) {
-      setSelected(5);
-      setCustom('');
-      setShowConfirm(false);
-    }
-  }, [show]);
-
-  function handlePrimaryTap() {
-    if (!valid) return;
-    if (isLarge) { setShowConfirm(true); return; }
-    onConfirm(amount);
-    onClose();
-  }
-
-  function handleConfirmedLarge() {
-    onConfirm(amount);
-    setShowConfirm(false);
-    onClose();
-  }
-
-  const displayAmount = valid
-    ? (Number.isInteger(amount) ? amount : amount.toFixed(2))
-    : '—';
-
-  return (
-    <Sheet show={show} onClose={onClose} title="Give Extra Now">
-      <div className="px-6 py-5 pb-8">
-        <p className="text-gray-500 text-sm mb-5">
-          Make a one-time donation to{' '}
-          <span className="font-semibold text-gray-900">{nonprofit?.shortName}</span>{' '}
-          on top of your round-ups.
-        </p>
-
-        {/* Preset amounts */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {BOOST_PRESETS.map(p => (
-            <motion.button
-              key={p}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => { setSelected(p); setCustom(''); }}
-              className="py-3 rounded-2xl font-bold text-sm transition-all"
-              style={selected === p && !custom
-                ? { background: brand.gradient, color: '#fff' }
-                : { background: '#f3f4f6', color: '#374151' }}
-            >
-              ${p}
-            </motion.button>
-          ))}
-        </div>
-
-        {/* Custom amount */}
-        <div
-          className="flex items-center gap-2 rounded-2xl px-4 py-3 mb-5 border-2 transition-colors"
-          style={{ background: '#f9fafb', borderColor: custom ? brand.primary : 'transparent' }}
-        >
-          <span className="text-gray-400 font-semibold">$</span>
-          <input
-            ref={inputRef}
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="Custom amount"
-            value={custom}
-            onChange={e => { setCustom(e.target.value); setSelected(null); }}
-            className="flex-1 bg-transparent text-gray-900 text-sm outline-none placeholder:text-gray-400"
-          />
-        </div>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handlePrimaryTap}
-          className="w-full py-4 rounded-2xl text-white font-bold text-base"
-          style={{ background: brand.gradient, opacity: valid ? 1 : 0.4 }}
-        >
-          Give ${displayAmount} Now
-        </motion.button>
-
-        {/* Large-amount confirmation overlay */}
-        <AnimatePresence>
-          {showConfirm && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute inset-x-6 bottom-8 bg-white border-2 border-amber-200 rounded-3xl p-5 shadow-xl"
-              style={{ background: '#fffbeb' }}
-            >
-              <p className="font-bold text-amber-900 text-base mb-1">Just to confirm…</p>
-              <p className="text-amber-700 text-sm mb-4">
-                You're about to donate <span className="font-bold">${displayAmount}</span> to{' '}
-                {nonprofit?.shortName}. Was that intentional?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowConfirm(false)}
-                  className="flex-1 py-3 rounded-2xl bg-white border border-amber-200 text-amber-700 font-semibold text-sm"
-                >
-                  Go back
-                </button>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleConfirmedLarge}
-                  className="flex-1 py-3 rounded-2xl text-white font-bold text-sm"
-                  style={{ background: brand.gradient }}
-                >
-                  Yes, give ${displayAmount}
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </Sheet>
-  );
-}
-
-function BoostToast({ amount, nonprofit, onClose }) {
-  return (
-    <motion.div
-      initial={{ y: -80, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: -80, opacity: 0 }}
-      className="absolute top-20 left-4 right-4 z-30 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
-    >
-      <div className="text-3xl">💚</div>
-      <div className="flex-1">
-        <p className="font-bold text-gray-900 text-sm">Extra ${typeof amount === 'number' && !Number.isInteger(amount) ? amount.toFixed(2) : amount} sent!</p>
-        <p className="text-gray-500 text-xs">Added to your {nonprofit?.shortName} donation</p>
-      </div>
-      <button onClick={onClose}><X size={16} className="text-gray-300" /></button>
-    </motion.div>
-  );
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 function MilestoneToast({ milestone, onClose }) {
@@ -212,126 +74,8 @@ function MilestoneToast({ milestone, onClose }) {
   );
 }
 
-function CorporateMatchSheet({ show, onClose, nonprofit, brand }) {
-  const [company, setCompany] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    setTimeout(() => { setSubmitted(true); }, 600);
-  }
-
-  return (
-    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setCompany(''); }} title="Suggest a Match Sponsor">
-      <div className="px-6 py-5 pb-8">
-        {submitted ? (
-          <div className="text-center py-8">
-            <div className="text-5xl mb-4">&#127962;</div>
-            <p className="font-bold text-gray-900 text-lg">Inquiry Sent!</p>
-            <p className="text-gray-500 text-sm mt-2">BGCA's corporate partnerships team will follow up with {company} about sponsoring the monthly match.</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-gray-500 text-sm mb-5">Know a company that should be matching your round-ups for BGCA? Let us know — BGCA's corporate partnerships team will reach out to them.</p>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <input type="text" placeholder="Company you'd like to suggest" value={company} onChange={e => setCompany(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: company ? 1 : 0.4 }}>
-                Send Suggestion
-              </motion.button>
-            </form>
-          </>
-        )}
-      </div>
-    </Sheet>
-  );
-}
-
-function BecomeMatchSponsorSheet({ show, onClose, nonprofit, brand }) {
-  const [companyName, setCompanyName] = useState('');
-  const [contactName, setContactName] = useState('');
-  const [email, setEmail] = useState('');
-  const [budget, setBudget] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    setTimeout(() => { setSubmitted(true); }, 600);
-  }
-
-  return (
-    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setCompanyName(''); setContactName(''); setEmail(''); setBudget(''); }} title="Become a Match Sponsor">
-      <div className="px-6 py-5 pb-8">
-        {submitted ? (
-          <div className="text-center py-8">
-            <div className="text-5xl mb-4">🤝</div>
-            <p className="font-bold text-gray-900 text-lg">Application Sent!</p>
-            <p className="text-gray-500 text-sm mt-2">BGCA's corporate partnerships team will be in touch within 2 business days.</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-gray-500 text-sm mb-5">Partner with BGCA this month. Your company sponsors the monthly round-up match — donors see your logo, you get a community impact report.</p>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <input type="text" placeholder="Company name" value={companyName} onChange={e => setCompanyName(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <input type="text" placeholder="Contact name" value={contactName} onChange={e => setContactName(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <input type="text" placeholder="$10,000–$50,000" value={budget} onChange={e => setBudget(e.target.value)}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: companyName && email ? 1 : 0.4 }}>
-                Submit to BGCA Partnerships
-              </motion.button>
-            </form>
-          </>
-        )}
-      </div>
-    </Sheet>
-  );
-}
-
-function VolunteerSheet({ show, onClose, nonprofit, brand }) {
-  const [interest, setInterest] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    setTimeout(() => { setSubmitted(true); }, 600);
-  }
-
-  return (
-    <Sheet show={show} onClose={() => { onClose(); setSubmitted(false); setInterest(''); }} title="Volunteer">
-      <div className="px-6 py-5 pb-8">
-        {submitted ? (
-          <div className="text-center py-8">
-            <div className="text-5xl mb-4">&#128588;</div>
-            <p className="font-bold text-gray-900 text-lg">Interest Noted!</p>
-            <p className="text-gray-500 text-sm mt-2">{nonprofit?.shortName} will reach out about volunteer opportunities near you.</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-gray-500 text-sm mb-5">Express your interest in volunteering with {nonprofit?.shortName}.</p>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <textarea placeholder="Tell us how you'd like to help..." value={interest} onChange={e => setInterest(e.target.value)} required rows={3}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 resize-none" />
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: interest ? 1 : 0.4 }}>
-                Express Interest
-              </motion.button>
-            </form>
-          </>
-        )}
-      </div>
-    </Sheet>
-  );
-}
-
+// Displays the active corporate match progress inline on the Dashboard.
+// Clicking the Corp Match hero button opens MatchDetailsSheet instead.
 function MatchBanner({ m, pct }) {
   return (
     <motion.div
@@ -343,11 +87,14 @@ function MatchBanner({ m, pct }) {
     >
       <div className="flex items-center gap-3 mb-2">
         {m.logoUrl && (
-          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0" style={{ border: '1px solid #f3f4f6' }}>
-            <img src={m.logoUrl} alt="GM" style={{ height: 28, objectFit: 'contain' }} />
+          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0"
+            style={{ border: '1px solid #f3f4f6' }}>
+            <img src={m.logoUrl} alt={m.companyShort} style={{ height: 28, objectFit: 'contain' }} />
           </div>
         )}
-        <p className="font-bold text-amber-900 text-sm flex-1">{m.companyShort} is matching your round-ups this month — up to ${(m.maxAmount / 1000).toFixed(0)}K (${(m.matched / 1000).toFixed(1)}K matched so far)</p>
+        <p className="font-bold text-amber-900 text-sm flex-1">
+          {m.companyShort} is matching your round-ups this month — up to ${(m.maxAmount / 1000).toFixed(0)}K (${(m.matched / 1000).toFixed(1)}K matched so far)
+        </p>
       </div>
       <div className="h-2 bg-amber-100 rounded-full overflow-hidden mb-1.5">
         <motion.div
@@ -368,20 +115,18 @@ function MatchBanner({ m, pct }) {
   );
 }
 
-const MONTHS_GIVING = 6;
-
 export default function Dashboard() {
-  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab } = useApp();
+  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, signOut } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pc_seen_milestone') ?? '0'); } catch { return 0; }
   });
   const [showBoost, setShowBoost] = useState(false);
-  const [showMatch, setShowMatch] = useState(false);
+  const [showMatchDetails, setShowMatchDetails] = useState(false);
   const [showVolunteer, setShowVolunteer] = useState(false);
+  const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const [boostToast, setBoostToast] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const toastTimerRef = useRef(null);
   const daysLeft = daysUntilMonthEnd();
 
@@ -393,6 +138,14 @@ export default function Dashboard() {
     : 100;
   const shouldShowMilestone = latestAchieved && latestAchieved.amount > seenMilestoneAmount;
 
+  const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 10;
+  const belowMinimum = pendingRoundUps < monthlyMinimum;
+
+  // MoM display: "↑ 14% vs last" or "↓ 5% vs last" or "First month"
+  const momDisplay = momChange === null
+    ? 'First month'
+    : `${momChange >= 0 ? '↑' : '↓'} ${Math.abs(momChange).toFixed(0)}% vs last`;
+
   if (!selectedNonprofit) return null;
 
   function handleBoostConfirm(amount) {
@@ -401,6 +154,8 @@ export default function Dashboard() {
     setBoostToast(amount);
     toastTimerRef.current = setTimeout(() => setBoostToast(null), 3500);
   }
+
+  const match = selectedNonprofit.corporateMatch;
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative">
@@ -419,7 +174,7 @@ export default function Dashboard() {
             onClose={() => {
               const amount = latestAchieved.amount;
               setSeenMilestoneAmount(amount);
-              try { localStorage.setItem('pc_seen_milestone', JSON.stringify(amount)); } catch {}
+              try { localStorage.setItem('pc_seen_milestone', JSON.stringify(amount)); } catch { /* ignore */ }
             }}
           />
         )}
@@ -434,9 +189,35 @@ export default function Dashboard() {
         brand={brand}
       />
 
-      <CorporateMatchSheet show={showMatch} onClose={() => setShowMatch(false)} nonprofit={selectedNonprofit} brand={brand} />
-      <VolunteerSheet show={showVolunteer} onClose={() => setShowVolunteer(false)} nonprofit={selectedNonprofit} brand={brand} />
-      <BecomeMatchSponsorSheet show={showSponsorSheet} onClose={() => setShowSponsorSheet(false)} nonprofit={selectedNonprofit} brand={brand} />
+      {/* Corp Match button opens match DETAILS when match is active;
+          falls back to Become a Sponsor when no match is running */}
+      {match?.active ? (
+        <MatchDetailsSheet
+          show={showMatchDetails}
+          onClose={() => setShowMatchDetails(false)}
+          match={match}
+        />
+      ) : (
+        <BecomeMatchSponsorSheet
+          show={showMatchDetails}
+          onClose={() => setShowMatchDetails(false)}
+          nonprofit={selectedNonprofit}
+          brand={brand}
+        />
+      )}
+
+      <VolunteerSheet
+        show={showVolunteer}
+        onClose={() => setShowVolunteer(false)}
+        nonprofit={selectedNonprofit}
+        brand={brand}
+      />
+      <BecomeMatchSponsorSheet
+        show={showSponsorSheet}
+        onClose={() => setShowSponsorSheet(false)}
+        nonprofit={selectedNonprofit}
+        brand={brand}
+      />
 
       {/* Header */}
       <motion.div
@@ -446,7 +227,7 @@ export default function Dashboard() {
       >
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-white/70 text-sm font-medium">Good morning, Alex 👋</p>
+            <p className="text-white/70 text-sm font-medium">{getGreeting()}, {DEMO_USER.name} 👋</p>
             <h1 className="text-white text-2xl font-bold mt-1" style={{ letterSpacing: '-0.3px' }}>
               {brand.appName}
             </h1>
@@ -456,8 +237,7 @@ export default function Dashboard() {
             className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30 active:scale-95 transition-transform relative"
             aria-label="Open account settings"
           >
-            A
-            {/* Subtle pulse ring to hint it's tappable */}
+            {DEMO_USER.name[0]}
             <span className="absolute inset-0 rounded-full border border-white/40 animate-ping opacity-30" style={{ animationDuration: '3s' }} />
           </button>
         </div>
@@ -479,10 +259,11 @@ export default function Dashboard() {
             <div className="mt-1">
               <span className="text-5xl font-bold">${totalDonated.toFixed(2)}</span>
             </div>
-            <p className="text-white/60 text-sm mt-2">Since Jan 2026 · All time</p>
+            {/* Subtitle derived from MONTHLY_DATA range — never hardcoded */}
+            <p className="text-white/60 text-sm mt-2">{sinceLabel} · All time</p>
             <div className="mt-2 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
               <Flame size={13} className="text-amber-300" />
-              <span className="text-white/90 text-xs font-semibold">{MONTHS_GIVING}-month giving streak</span>
+              <span className="text-white/90 text-xs font-semibold">{monthsGiving}-month giving streak</span>
             </div>
             <div className="mt-5 pt-4 border-t border-white/20 flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
@@ -493,13 +274,17 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 shrink-0">
-                <button onClick={() => setShowBoost(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
+                <button onClick={() => setShowBoost(true)}
+                  className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
                   <Plus size={12} /> Give Extra
                 </button>
-                <button onClick={() => setShowMatch(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
+                {/* Corp Match button: opens match DETAILS when active, not a suggestion form */}
+                <button onClick={() => setShowMatchDetails(true)}
+                  className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
                   <Building2 size={12} /> Corp Match
                 </button>
-                <button onClick={() => setShowVolunteer(true)} className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
+                <button onClick={() => setShowVolunteer(true)}
+                  className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
                   &#128588; Volunteer
                 </button>
               </div>
@@ -508,36 +293,54 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Corporate match banner */}
-        {selectedNonprofit.corporateMatch?.active && (() => {
-          const m = selectedNonprofit.corporateMatch;
-          const pct = Math.round((m.matched / m.maxAmount) * 100);
-          return (
-            <MatchBanner m={m} pct={pct} />
-          );
+        {match?.active && (() => {
+          const pct = Math.round((match.matched / match.maxAmount) * 100);
+          return <MatchBanner m={match} pct={pct} />;
         })()}
 
-        {/* Stats row */}
+        {/* Stats row — all values computed from real data via derived.js */}
         <div className="flex gap-3">
           {[
-            { icon: <Zap size={18} />, label: 'Pending', value: `$${pendingRoundUps.toFixed(2)}`, sub: 'This month', iconColor: brand.primary, textColor: '#059669', note: null },
-            { icon: <TrendingUp size={18} />, label: 'Avg/mo', value: '$10.10', sub: '+12% vs last', iconColor: brand.secondary, textColor: brand.secondary, note: null },
-            { icon: <Heart size={18} />, label: 'Round-ups', value: '247', sub: 'All time', iconColor: brand.secondary, textColor: brand.secondary, note: null },
+            {
+              icon: <Zap size={18} />,
+              label: 'Pending',
+              value: `$${pendingRoundUps.toFixed(2)}`,
+              sub: 'This month',
+              iconColor: brand.primary,
+              textColor: '#059669',
+            },
+            {
+              icon: <TrendingUp size={18} />,
+              label: 'Avg/mo',
+              value: `$${avgPerMonth.toFixed(2)}`,
+              sub: momDisplay,
+              iconColor: brand.secondary,
+              textColor: momChange !== null && momChange < 0 ? '#dc2626' : '#059669',
+            },
+            {
+              icon: <Heart size={18} />,
+              label: 'Round-ups',
+              value: String(totalRoundupsCount),
+              sub: 'All time (est.)',
+              iconColor: brand.secondary,
+              textColor: brand.secondary,
+            },
           ].map((s, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.05 }}
               className="bg-white rounded-3xl p-4 flex-1 card-shadow">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: s.iconColor + '18' }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
+                style={{ background: s.iconColor + '18' }}>
                 <span style={{ color: s.iconColor }}>{s.icon}</span>
               </div>
               <div className="text-2xl font-bold text-gray-900 leading-none">{s.value}</div>
               <div className="text-xs text-gray-400 mt-1.5 font-medium">{s.label}</div>
               <div className="text-xs mt-1 font-semibold" style={{ color: s.textColor }}>{s.sub}</div>
-              {s.note && <div className="text-xs mt-1 text-gray-400">{s.note}</div>}
             </motion.div>
           ))}
         </div>
 
-        {/* Quarterly payout countdown */}
+        {/* Monthly Charge card — shows rollover state when pending < $10 minimum */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -546,7 +349,9 @@ export default function Dashboard() {
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="font-bold text-gray-900 text-sm">Monthly Charge to {selectedNonprofit.shortName}</p>
+              <p className="font-bold text-gray-900 text-sm">
+                Monthly Charge to {selectedNonprofit.shortName}
+              </p>
               <p className="text-gray-400 text-xs mt-0.5">Next charge: end of month</p>
             </div>
             <div className="text-right">
@@ -554,7 +359,7 @@ export default function Dashboard() {
               <p className="text-gray-400 text-xs">days left</p>
             </div>
           </div>
-          <div className="h-2 bg-gray.100 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${100 - (daysLeft / 30) * 100}%` }}
@@ -565,9 +370,22 @@ export default function Dashboard() {
           </div>
           <div className="flex justify-between mt-1.5">
             <p className="text-gray-400 text-xs">Month start</p>
-            <p className="text-xs font-semibold" style={{ color: '#059669' }}>${pendingRoundUps.toFixed(2)} ready to send</p>
+            {belowMinimum ? (
+              <p className="text-xs font-semibold text-amber-600">
+                ${pendingRoundUps.toFixed(2)} accumulated — building toward ${monthlyMinimum} minimum
+              </p>
+            ) : (
+              <p className="text-xs font-semibold" style={{ color: '#059669' }}>
+                ${pendingRoundUps.toFixed(2)} ready to send · +$0.50 fee if you&apos;re covering it
+              </p>
+            )}
             <p className="text-gray-400 text-xs">Month end</p>
           </div>
+          {belowMinimum && (
+            <p className="text-amber-600 text-xs mt-2 leading-relaxed">
+              Amounts under ${monthlyMinimum} roll over to next month — your giving accumulates until it reaches the minimum.
+            </p>
+          )}
         </motion.div>
 
         {/* Milestones */}
@@ -624,12 +442,13 @@ export default function Dashboard() {
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-900 text-base">Monthly Giving</h3>
-            <span className="text-xs text-gray-400">Last 6 months</span>
+            <span className="text-xs text-gray-400">Last {monthsGiving} months</span>
           </div>
           <div className="h-28">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={MONTHLY_DATA} barSize={22}>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false}
+                  tick={{ fill: '#9ca3af', fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} cursor={false} />
                 <Bar dataKey="donated" radius={[8, 8, 0, 0]} fill={brand.primary} />
               </BarChart>
@@ -648,7 +467,7 @@ export default function Dashboard() {
           <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3" />
           <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Your Impact</p>
           <p className="text-white font-bold text-base leading-snug relative z-10">
-            "{selectedNonprofit.impact}"
+            &ldquo;{selectedNonprofit.impact}&rdquo;
           </p>
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
@@ -671,19 +490,19 @@ export default function Dashboard() {
 
       </div>
 
-      {/* ── Profile / Account sheet ── */}
+      {/* Profile / Account sheet */}
       <Sheet show={showProfile} onClose={() => setShowProfile(false)} title="Your Account">
         <div className="px-6 pt-2 pb-8 space-y-1">
           {/* Avatar + name block */}
           <div className="flex flex-col items-center py-6 gap-2">
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg relative"
+              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
               style={{ background: brand.gradient }}
             >
-              A
+              {DEMO_USER.name[0]}
             </div>
-            <p className="font-bold text-gray-900 text-lg mt-1">Alex</p>
-            <p className="text-gray-400 text-sm">alex@example.com</p>
+            <p className="font-bold text-gray-900 text-lg mt-1">{DEMO_USER.name}</p>
+            <p className="text-gray-400 text-sm">{DEMO_USER.email}</p>
           </div>
 
           {/* Menu rows */}
@@ -691,12 +510,11 @@ export default function Dashboard() {
             { icon: <Settings size={18} />, label: 'Account Settings', action: () => { setShowProfile(false); setTab('settings'); } },
             { icon: <CreditCard size={18} />, label: 'Payment Method', action: () => { setShowProfile(false); setTab('settings'); } },
             { icon: <Bell size={18} />, label: 'Notifications', action: () => { setShowProfile(false); setTab('settings'); } },
-            { icon: <HelpCircle size={18} />, label: 'Help & Support', action: null },
+            { icon: <HelpCircle size={18} />, label: 'Help & Support', action: () => window.open('mailto:support@pocketcache.app') },
           ].map(({ icon, label, action }) => (
             <button
               key={label}
-              onClick={action ?? undefined}
-              disabled={!action}
+              onClick={action}
               className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-gray-50 active:bg-gray-100 transition-colors text-left"
             >
               <span className="text-gray-500">{icon}</span>
@@ -706,13 +524,18 @@ export default function Dashboard() {
           ))}
 
           <div className="pt-2">
-            <button className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-red-50 active:bg-red-100 transition-colors text-left">
+            <button
+              onClick={() => { setShowProfile(false); signOut(); }}
+              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-red-50 active:bg-red-100 transition-colors text-left"
+            >
               <span className="text-red-400"><LogOut size={18} /></span>
               <span className="flex-1 text-red-500 font-medium text-sm">Sign Out</span>
             </button>
           </div>
 
-          <p className="text-center text-gray-300 text-xs pt-4 flex items-center gap-1 justify-center"><CoinMark size={14} />PocketCache · v1.0.0</p>
+          <p className="text-center text-gray-300 text-xs pt-4 flex items-center gap-1 justify-center">
+            <CoinMark size={14} />PocketCache · v1.0.0
+          </p>
         </div>
       </Sheet>
     </div>

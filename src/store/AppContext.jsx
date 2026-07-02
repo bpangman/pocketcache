@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useMemo } from 'react';
 import { NONPROFITS } from '../data/nonprofits';
+import { CURRENT_MONTH_PENDING, PRIOR_MONTHS_SUM } from '../data/transactions';
 
-// Keys to clear on ?reset=1 or ?fresh=1
+// Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [
   'pc_page',
   'pc_cause_id',
@@ -10,6 +11,7 @@ const RESET_KEYS = [
   'pc_total_donated',
   'pc_seen_milestone',
   'pc_dismiss_countdown',
+  'pc_prefs',
 ];
 
 function clearDemoState() {
@@ -41,8 +43,11 @@ function save(key, value) {
 
 const AppContext = createContext(null);
 
-
-const BASE_PENDING = 4.63;
+// BASE_PENDING is derived from the current billing cycle's transaction round-ups.
+// In production the server computes this from Plaid webhook events in real time.
+// Note: the multiplier applies to future transactions server-side in production;
+// here we apply it to BASE_PENDING for demo illustration purposes only.
+const BASE_PENDING = CURRENT_MONTH_PENDING; // 4.63 — computed from transactions data
 
 export function AppProvider({ children }) {
   const [page, setPageState] = useState(() => load('pc_page', 'onboarding'));
@@ -52,9 +57,15 @@ export function AppProvider({ children }) {
   const [linkedCards, setLinkedCardsState] = useState(() => load('pc_cards', [
     { id: 1, last4: '4242', brand: 'Visa', name: 'Chase Sapphire' },
   ]));
-  const [totalDonated, setTotalDonated] = useState(() => load('pc_total_donated', 60.58));
 
-  // pendingRoundUps is always derived from the multiplier — changing it in Settings now has effect
+  // Initial totalDonated = sum of PRIOR completed months only.
+  // "Donated" means actually charged to the nonprofit's Stripe; the current
+  // pending month is NOT included until it clears at month-end.
+  const [totalDonated, setTotalDonated] = useState(
+    () => load('pc_total_donated', PRIOR_MONTHS_SUM),
+  );
+
+  // pendingRoundUps is always derived from the multiplier
   const pendingRoundUps = parseFloat((BASE_PENDING * roundUpMultiplier).toFixed(2));
 
   // Derive the full nonprofit object from its stored id — switching cause never bleeds old state
@@ -95,6 +106,17 @@ export function AppProvider({ children }) {
     });
   }
 
+  // signOut: clear all demo localStorage state and return to onboarding gate.
+  function signOut() {
+    clearDemoState();
+    setSelectedNonprofitIdState(null);
+    setRoundUpMultiplierState(1);
+    setLinkedCardsState([{ id: 1, last4: '4242', brand: 'Visa', name: 'Chase Sapphire' }]);
+    setTotalDonated(PRIOR_MONTHS_SUM);
+    setTab('dashboard');
+    setPageState('onboarding');
+  }
+
   return (
     <AppContext.Provider value={{
       page, setPage,
@@ -105,10 +127,12 @@ export function AppProvider({ children }) {
       totalDonated,
       boostDonation,
       pendingRoundUps,
+      signOut,
     }}>
       {children}
     </AppContext.Provider>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => useContext(AppContext);

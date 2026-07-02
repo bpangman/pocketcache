@@ -1,5 +1,5 @@
 import { ExternalLink } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 
 export default function MatchBadge({ match, compact = false }) {
   if (!match?.active) return null;
@@ -16,12 +16,18 @@ export default function MatchBadge({ match, compact = false }) {
     <div className="rounded-2xl p-4" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
       <div className="flex items-center gap-3 mb-2">
         {match.logoUrl && (
-          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0" style={{ border: '1px solid #f3f4f6' }}>
-            <img src={match.logoUrl} alt="GM" style={{ height: 20, objectFit: 'contain' }} />
+          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0"
+            style={{ border: '1px solid #f3f4f6' }}>
+            {/* alt derived from match object — not hardcoded */}
+            <img src={match.logoUrl} alt={match.companyShort} style={{ height: 20, objectFit: 'contain' }} />
           </div>
         )}
-        <p className="text-xs font-bold text-amber-800 flex-1">{match.company} is matching your round-ups this month</p>
-        <span className="text-xs font-semibold text-amber-700 shrink-0">${(match.matched / 1000).toFixed(1)}K / ${(match.maxAmount / 1000).toFixed(0)}K</span>
+        <p className="text-xs font-bold text-amber-800 flex-1">
+          {match.company} is matching your round-ups this month
+        </p>
+        <span className="text-xs font-semibold text-amber-700 shrink-0">
+          ${(match.matched / 1000).toFixed(1)}K / ${(match.maxAmount / 1000).toFixed(0)}K
+        </span>
       </div>
       <div className="h-1.5 bg-amber-100 rounded-full overflow-hidden mb-1.5">
         <motion.div

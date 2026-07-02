@@ -1,14 +1,18 @@
 import { AppProvider, useApp } from './store/AppContext';
+import { NpProvider } from './store/NpContext';
 import { ThemeProvider, useTheme } from './store/ThemeContext';
 import Onboarding from './pages/Onboarding';
 import AppShell from './components/AppShell';
-import CoinLogo from './components/CoinLogo';
+import NpShell from './pages/nonprofit/NpShell';
 import CoinMark from './components/CoinMark';
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
 function AppContent() {
   const { page } = useApp();
-  return page === 'onboarding' ? <Onboarding /> : <AppShell />;
+  if (page === 'onboarding') return <Onboarding />;
+  if (page === 'np-dashboard') return <NpShell />;
+  return <AppShell />;
 }
 
 function PhoneFrame({ children }) {
@@ -91,7 +95,9 @@ function ThemedApp() {
 export default function App() {
   return (
     <AppProvider>
-      <ThemedApp />
+      <NpProvider>
+        <ThemedApp />
+      </NpProvider>
     </AppProvider>
   );
 }
