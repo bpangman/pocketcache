@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { CreditCard, Bell, Shield, ChevronRight, Plus, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock } from 'lucide-react';
+import { CreditCard, Bell, Shield, ChevronRight, Plus, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
@@ -468,6 +468,9 @@ function AppIconSheet({ show, onClose, brand }) {
 
 function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonate }) {
   const [result, setResult] = useState(null); // 'donated' | 'cancelled'
+  // Donor chooses whether the final $1 fee is theirs to cover or falls to the
+  // nonprofit's side — pre-checked, always their call. Never a penalty to leave.
+  const [coverFinalFee, setCoverFinalFee] = useState(true);
 
   function handleDonate() {
     const amount = pendingRoundUps;
@@ -483,7 +486,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
 
   const rawAmount = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   const amountStr = rawAmount.toFixed(2);
-  const totalWithFee = (rawAmount + 1.00).toFixed(2);
+  const finalTotal = (coverFinalFee ? rawAmount + 1.00 : rawAmount).toFixed(2);
   const belowMin = rawAmount < (nonprofit?.monthlyMinimum ?? 10);
 
   return (
@@ -516,16 +519,32 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
                 Note: ${amountStr} is below the ${nonprofit?.monthlyMinimum ?? 10} minimum — in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
               </p>
             )}
+            <label
+              className="flex items-start gap-3 cursor-pointer p-3 rounded-2xl mb-3"
+              onClick={() => setCoverFinalFee(v => !v)}
+              style={{ background: coverFinalFee ? '#d1fae5' : '#f9fafb', border: coverFinalFee ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}
+            >
+              <div
+                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                style={{ borderColor: coverFinalFee ? '#059669' : '#d1d5db', background: coverFinalFee ? '#059669' : '#fff' }}
+              >
+                {coverFinalFee && <CheckCircle size={12} className="text-white" />}
+              </div>
+              <span className="text-xs text-gray-600 leading-relaxed">
+                Cover the final $1 app fee so it doesn&apos;t come out of {nonprofit?.shortName ?? 'your cause'}&apos;s side.
+                {!coverFinalFee && ' Unchecked: the dollar splits — 50¢ from your round-ups, 50¢ billed to them.'}
+              </span>
+            </label>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleDonate}
               className="w-full py-4 rounded-2xl text-white font-bold text-base mb-3"
               style={{ background: brand.gradient }}
             >
-              Donate ${amountStr} + $1 fee &amp; cancel
+              Send ${finalTotal} &amp; cancel
             </motion.button>
             <p className="text-gray-400 text-xs text-center mb-3">
-              Final settle-up: ${totalWithFee} total — your round-ups plus the $1 fee. Nothing after this, ever.
+              One last charge, then nothing ever again. These are round-ups from purchases you already made — there&apos;s never a fee for leaving.
             </p>
             <button
               onClick={handleCancelOnly}

@@ -65,9 +65,24 @@ router.post('/me/cancel', async (req, res) => {
   if (user.status === 'cancelled') return res.status(409).json({ error: 'Account already cancelled' });
 
   try {
-    // 1. Final settle-up charge (minimum waived, idempotent)
-    const { runFinalCharge } = await import('../jobs/monthly-charge.js');
-    const chargeResult = await runFinalCharge(userId);
+    // 0. The cancel screen asks the donor whether they'll cover the final fee
+    //    (pre-checked, always their call — never a penalty for leaving). Persist
+    //    the choice BEFORE the final charge so the settle-up honors it.
+    if (typeof req.body?.coverFee === 'boolean') {
+      db.prepare(`UPDATE users SET cover_fee = ? WHERE id = ?`).run(req.body.coverFee ? 1 : 0, userId);
+    }
+
+    // 1. Final settle-up charge (minimum waived, idempotent) — unless the donor
+    //    declined the final donation (body.donate === false), in which case their
+    //    uncharged round-ups and fee accruals are waived per Terms §12.
+    let chargeResult = null;
+    if (req.body?.donate === false) {
+      db.prepare(`UPDATE roundups SET status = 'reversed' WHERE user_id = ? AND included_in IS NULL`).run(userId);
+      db.prepare(`DELETE FROM fee_accruals WHERE user_id = ? AND included_in IS NULL`).run(userId);
+    } else {
+      const { runFinalCharge } = await import('../jobs/monthly-charge.js');
+      chargeResult = await runFinalCharge(userId);
+    }
 
     // 2. Mark account cancelled
     db.prepare(`UPDATE users SET status = 'cancelled' WHERE id = ?`).run(userId);
