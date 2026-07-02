@@ -10,32 +10,37 @@ PocketCache is a **pure tech vendor**. We are white-label SaaS software; we are 
 - PocketCache **never holds, receives, or controls donation funds**.
 - PocketCache **never takes a percentage** of donations.
 - PocketCache **never issues tax receipts** — the nonprofit does.
-- Revenue is exactly two **flat fees**:
-  - **A.** $0.50 application fee per monthly donor charge (via Stripe `application_fee_amount` on direct charges)
-  - **B.** $0.50 per active linked user per month, invoiced to the nonprofit as SaaS
+- Revenue is **flat accrual-based fees** (approved 2026-07-01):
+  - **A.** Per-donor-per-active-month service fee, routed via Stripe `application_fee_amount` on each monthly direct charge
+  - **B.** $0.50/active-user/month owed by the nonprofit as SaaS software fee (invoiced separately — invoice automation is a TODO; see `fee_accruals` rows where `covered=0`)
 
 ## How Money Flows
 
 ```
 Donor's card/bank
-      │  one charge on the 1st of the month (round-ups, if >= nonprofit's minimum)
+      │  one charge on the 1st (round-ups + accrued fees if donor covers)
       ▼
 Nonprofit's own Stripe Connect account   ← nonprofit is merchant of record
       │
-      └── $0.50 application fee routes to PocketCache's platform Stripe balance
+      └── accrued fee amount routes to PocketCache's platform Stripe balance
 ```
 
-Cover-fee choice (set by the donor):
-- **Donor covers the fee** (`cover_fee = 1`): charge = round-ups + $0.50 → nonprofit receives the full round-up amount (minus Stripe processing fees).
-- **Donor doesn't cover** (`cover_fee = 0`): charge = round-ups only → nonprofit receives round-ups − $0.50 (minus Stripe processing fees).
+**Fee accrual scheme (approved 2026-07-01):** For each calendar month in which a donor accrued at least one round-up ("active month"), one `fee_accruals` row is written. These fees settle in the monthly charge alongside the round-ups (`application_fee_amount` = sum of swept `fee_accruals`).
 
-In both cases the application fee is always exactly 50 cents. All money is stored and computed as **integer cents** — never floats.
+Cover-fee choice (set by the donor at onboarding; default = covers):
+
+| Setting | `cover_fee` | Fee per active month | What donor pays | Nonprofit gets | Nonprofit owes separately |
+|---|---|---|---|---|---|
+| Donor covers (default, pre-checked) | `1` | $1.00 | round-ups + $1.00×months | full round-ups | $0 |
+| Donor opts out | `0` | $0.50 | round-ups only | round-ups − $0.50×months | $0.50×months via SaaS invoice |
+
+All money is stored and computed as **integer cents** — never floats.
 
 ## Key Rules
 
 - Donors bind to exactly **one nonprofit** via join code / QR.
 - Nonprofit switches are **staged** and applied at the 12:01am daily job (clean day boundary); round-ups are locked to the nonprofit at accrual time.
-- Per-nonprofit configurable **monthly minimum** (default $10.00 = 1000 cents). Balances below it **roll over** to next month — no charge.
+- Per-nonprofit configurable **monthly minimum** (default $10.00 = 1000 cents). Balances below it **roll over** to next month — no charge. Exception: **3-month settle-up floor** — if the oldest unswept round-up is 3+ calendar months old, the charge fires regardless of minimum (caps Plaid float exposure).
 - **California donors are blocked at signup** (server-side enforced, `CA_BLOCKED`).
 - Only **posted** Plaid transactions generate round-ups — pending transactions are skipped.
 - Plaid access tokens are stored **encrypted at rest** (AES-256-GCM, `src/lib/crypto.js`).
@@ -44,11 +49,11 @@ In both cases the application fee is always exactly 50 cents. All money is store
 
 | Time | Job | What it does |
 |---|---|---|
-| 12:01am daily | `src/jobs/daily-roundups.js` | Apply staged nonprofit switches, sync Plaid transactions (added/modified/removed), log round-ups |
-| 6:00am on the 1st | `src/jobs/monthly-charge.js` | Charge each eligible donor once (sum ≥ nonprofit minimum), direct charge on the nonprofit's Stripe account |
+| 12:01am daily | `src/jobs/daily-roundups.js` | Apply staged nonprofit switches, sync Plaid transactions (added/modified/removed), log round-ups; zombie auto-disconnect (90-day inactivity) |
+| 6:00am on the 1st | `src/jobs/monthly-charge.js` | Write `fee_accruals` for all active months; charge each eligible donor (minimum or 3-month floor); sweep roundups + fees atomically |
 | 7:00am daily | `src/jobs/retry-charges.js` | Retry charges that failed 3+ days ago; second failure pauses the donor |
 
-Jobs are idempotent — `monthly_charges.idempotency_key` (`charge_{userId}_{period}`, UNIQUE) plus Stripe idempotency keys make re-runs safe. The `charge_roundups` join table records exactly which round-ups each charge swept, so async (ACH) webhook confirmations mark the right rows.
+Jobs are idempotent — `monthly_charges.idempotency_key` (`charge_{userId}_{period}` or `charge_{userId}_final`, UNIQUE) plus Stripe idempotency keys make re-runs safe. The `charge_roundups` and `charge_fee_accruals` join tables record exactly which rows each charge swept, so async (ACH) webhook confirmations mark only the right rows.
 
 ## Setup
 
@@ -85,6 +90,7 @@ Generate random keys: `node -e "console.log(require('crypto').randomBytes(32).to
 ## API Overview
 
 - `POST /api/users/register` — donor signup (public; CA blocked)
+- `POST /api/users/me/cancel` — final settle-up charge + account cancellation + Plaid disconnect (auth)
 - `GET /api/nonprofits/by-code/:code` — public branding for the join/gate screen
 - `POST /api/plaid/link-token`, `POST /api/plaid/exchange` — card linking (auth required)
 - `POST /api/stripe/setup-intent`, `financial-session`, `save-payment-method` — payment setup (auth)
@@ -102,7 +108,7 @@ This backend is **not production-ready**. Per PRELAUNCH.md at the repo root, Poc
 - **Real identity auth**: replace symmetric HS256 dev tokens with Apple/Google sign-in verification against their public keys.
 - **Nonprofit admin roles**: nonprofit dashboard routes currently only require a valid user token — they need admin-scoped authorization.
 - **Failed-payment notifications**: users are paused after a second failure but not yet emailed.
-- **SaaS invoicing (fee B)**: the $0.50/active-user/month invoice to nonprofits is not yet automated.
+- **SaaS invoicing (fee B)**: `fee_accruals` rows with `covered=0` now track the per-donor per-month $0.50 owed by each nonprofit, but the invoice generation job is not yet automated (TODO).
 - **Self-charge filter limitation**: our own monthly charge is detected by amount+date matching (documented trade-off in `daily-roundups.js`); revisit with better transaction metadata.
 - **Managed database + backups** (currently local SQLite), secrets management, monitoring/alerting.
 - Legal/ops items: E&O + cyber insurance, license review, liability caps — see PRELAUNCH.md.

@@ -53,8 +53,9 @@ export async function runRetryCharges() {
     };
 
     try {
-      // Use the stored roundup_cents — do NOT re-sum from roundups (amounts were locked at charge creation)
-      const result = await chargeDonor(userObj, pmObj, nonprofitObj, charge.roundup_cents, charge.id);
+      // Use the stored roundup_cents and fee_cents — do NOT re-sum from roundups or fee_accruals
+      // (amounts were locked at charge creation; fee_cents is already in the monthly_charges row)
+      const result = await chargeDonor(userObj, pmObj, nonprofitObj, charge.roundup_cents, charge.fee_cents, charge.id);
 
       db.prepare(`UPDATE monthly_charges SET retry_count = ?, stripe_payment_intent_id = ? WHERE id = ?`)
         .run(retryN, result.paymentIntentId, charge.id);

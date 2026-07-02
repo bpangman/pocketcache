@@ -107,6 +107,19 @@ export async function fetchTransactionUpdates(accessToken, cursor) {
 }
 
 /**
+ * Remove a Plaid item (disconnects the linked account).
+ * Called on cancellation and zombie auto-disconnect to stop Plaid billing.
+ * The caller should tolerate failure (log and continue) — the user record
+ * and accruals are preserved regardless of whether this API call succeeds.
+ *
+ * @param {string} accessToken - DECRYPTED Plaid access token
+ */
+export async function removeItem(accessToken) {
+  const response = await plaidClient.itemRemove({ access_token: accessToken });
+  return response.data;
+}
+
+/**
  * Calculate the round-up amount for a single transaction.
  *
  * Round-up = ceiling(amount) - amount.

@@ -2,6 +2,7 @@
  * User routes
  *
  * POST /api/users/register                    — create donor account (CA blocked)
+ * POST /api/users/me/cancel                   — final settle-up charge + account cancellation
  * POST /api/users/:id/switch-nonprofit        — stage a nonprofit switch (day-boundary)
  * GET  /api/users/:id/nonprofit               — current + pending nonprofit
  * GET  /api/users/:id/roundups                — recent round-ups
@@ -50,6 +51,65 @@ router.post('/register', (req, res) => {
 
 // All routes below require auth
 router.use(requireAuth);
+
+// POST /api/users/me/cancel
+// Immediately runs a final settle-up charge of all accrued round-ups + fees (minimum waived),
+// then marks the account cancelled and disconnects all Plaid items.
+// Idempotency key: charge_{userId}_final — safe to call more than once.
+// NOTE: declare BEFORE /:id routes so 'me' is matched literally, not as a user ID.
+router.post('/me/cancel', async (req, res) => {
+  const userId = req.userId; // from JWT — never from body
+
+  const user = db.prepare(`SELECT id, status FROM users WHERE id = ?`).get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.status === 'cancelled') return res.status(409).json({ error: 'Account already cancelled' });
+
+  try {
+    // 1. Final settle-up charge (minimum waived, idempotent)
+    const { runFinalCharge } = await import('../jobs/monthly-charge.js');
+    const chargeResult = await runFinalCharge(userId);
+
+    // 2. Mark account cancelled
+    db.prepare(`UPDATE users SET status = 'cancelled' WHERE id = ?`).run(userId);
+
+    // 3. Disconnect all active Plaid items — stops Plaid billing.
+    //    Tolerate individual failures (log and continue); user is cancelled regardless.
+    const { removeItem } = await import('../services/plaid.js');
+    const { decrypt } = await import('../lib/crypto.js');
+
+    const connections = db.prepare(`
+      SELECT id, access_token FROM plaid_connections WHERE user_id = ? AND status = 'active'
+    `).all(userId);
+
+    for (const conn of connections) {
+      try {
+        const accessToken = decrypt(conn.access_token);
+        await removeItem(accessToken);
+      } catch (err) {
+        console.warn(`[cancel] Plaid removeItem failed for connection ${conn.id}:`, err.message);
+        // Tolerate failure — connection is marked disconnected regardless
+      }
+      db.prepare(`
+        UPDATE plaid_connections SET status = 'disconnected', disconnected_at = unixepoch()
+        WHERE id = ?
+      `).run(conn.id);
+    }
+
+    console.log(`[cancel] User ${userId} cancelled. Plaid connections disconnected: ${connections.length}`);
+
+    return res.json({
+      cancelled: true,
+      finalCharge: chargeResult ?? null,
+      message: chargeResult
+        ? 'Account cancelled. Your final balance has been charged.'
+        : 'Account cancelled. No outstanding balance to charge.',
+    });
+
+  } catch (err) {
+    console.error(`[cancel] Error cancelling user ${userId}:`, err.message);
+    return res.status(500).json({ error: 'Cancellation failed. Please try again or contact support.' });
+  }
+});
 
 // POST /api/users/:id/switch-nonprofit
 // Stages a nonprofit switch. Takes effect at next 12:01am job.

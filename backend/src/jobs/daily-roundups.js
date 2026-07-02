@@ -24,7 +24,7 @@
  */
 
 import db from '../db/index.js';
-import { fetchTransactionUpdates, calculateRoundup } from '../services/plaid.js';
+import { fetchTransactionUpdates, calculateRoundup, removeItem } from '../services/plaid.js';
 import { randomUUID } from 'crypto';
 
 export async function runDailyRoundups() {
@@ -53,6 +53,7 @@ export async function runDailyRoundups() {
     FROM plaid_connections pc
     JOIN users u ON pc.user_id = u.id
     WHERE u.status = 'active' AND u.nonprofit_id IS NOT NULL
+      AND pc.status = 'active'
   `).all();
 
   console.log(`[daily-roundups] Processing ${connections.length} active connections`);
@@ -183,6 +184,51 @@ export async function runDailyRoundups() {
       console.error(`[daily-roundups] Error processing connection ${conn.id}:`, err.message);
       // Don't throw — continue with other users
     }
+  }
+
+  // ── Zombie auto-disconnect ─────────────────────────────────────────────────
+  // Connections with zero new round-ups in the last 90 days are "zombie" connections:
+  // they're keeping a Plaid item alive (and incurring Plaid billing) but generating nothing.
+  // Remove the Plaid item, mark the connection disconnected, and preserve the user + accruals.
+  // TODO: send notification email to user that their linked account was auto-disconnected.
+  const ninetyDaysAgo = Math.floor(Date.now() / 1000) - (90 * 86400);
+
+  const zombies = db.prepare(`
+    SELECT pc.id, pc.user_id, pc.access_token, pc.item_id
+    FROM plaid_connections pc
+    JOIN users u ON pc.user_id = u.id
+    WHERE pc.status = 'active'
+      AND (pc.last_synced_at IS NULL OR pc.last_synced_at <= ?)
+      AND NOT EXISTS (
+        SELECT 1 FROM roundups r
+        WHERE r.user_id = pc.user_id
+          AND r.created_at >= ?
+      )
+  `).all(ninetyDaysAgo, ninetyDaysAgo);
+
+  if (zombies.length > 0) {
+    console.log(`[daily-roundups] Found ${zombies.length} zombie connection(s) to auto-disconnect`);
+  }
+
+  for (const conn of zombies) {
+    try {
+      const { decrypt } = await import('../lib/crypto.js');
+      const accessToken = decrypt(conn.access_token);
+      await removeItem(accessToken);
+    } catch (err) {
+      // Tolerate Plaid errors — the item may already be removed or expired.
+      // We still mark the connection disconnected so we stop trying to sync it.
+      console.warn(`[daily-roundups] Zombie disconnect: Plaid removeItem failed for connection ${conn.id}:`, err.message);
+    }
+
+    db.prepare(`
+      UPDATE plaid_connections
+      SET status = 'disconnected', disconnected_at = unixepoch()
+      WHERE id = ?
+    `).run(conn.id);
+
+    console.log(`[daily-roundups] Zombie auto-disconnected: connection ${conn.id} (user ${conn.user_id}) — ` +
+      `no new round-ups in 90+ days`);
   }
 
   console.log('[daily-roundups] Done.');

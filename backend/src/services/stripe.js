@@ -6,18 +6,21 @@
  * All donation charges are DIRECT CHARGES on the nonprofit's connected account.
  * PocketCache NEVER holds or controls donation funds.
  *
- * FLAT FEE MODEL (no percentages):
- *   application_fee_amount = 50 cents, always, on every charge
- *   The $0.50 routes to the PocketCache platform Stripe balance.
+ * FEE MODEL (accrual-based, no percentages):
+ *   Fees accrue monthly — one fee_accrual row per active month per donor.
+ *   application_fee_amount = sum of unswept fee_accruals swept in this charge.
+ *   The fee routes to the PocketCache platform Stripe balance.
  *
- * COVER-FEE LOGIC:
- *   If donor opted to cover the fee (cover_fee = 1):
- *     total charged = roundup_cents + 50
- *     nonprofit receives = roundup_cents (after Stripe takes its cut + our $0.50 app fee)
- *   If donor opted out (cover_fee = 0):
- *     total charged = roundup_cents
- *     nonprofit receives = roundup_cents - 50 (after app fee)
- *   In BOTH cases, application_fee_amount = 50 cents.
+ * COVER-FEE LOGIC (per donor preference):
+ *   cover_fee = 1 (default): $1.00/month accrues per active month.
+ *     total charged = roundup_cents + fee_cents
+ *     nonprofit receives = roundup_cents (PocketCache collects $1.00/active-month via app fee)
+ *     → covers both PocketCache's processing fee AND nonprofit's software fee; nonprofit pays $0
+ *   cover_fee = 0 (opted out): $0.50/month accrues per active month.
+ *     total charged = roundup_cents only
+ *     nonprofit receives = roundup_cents - fee_cents (PocketCache collects $0.50/month via app fee)
+ *     → remaining $0.50/month owed by nonprofit via SaaS invoice (see fee_accruals.covered=0)
+ *   In BOTH cases, application_fee_amount = fee_cents (the sum of swept accruals).
  *
  * CONNECT NUANCE — payment method cloning:
  *   A platform-level Customer/PaymentMethod CANNOT be used directly on a connected account.
@@ -40,10 +43,6 @@ import { randomUUID } from 'crypto';
 dotenv.config();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-// FLAT FEE — $0.50 per monthly charge, always, no exceptions.
-// This is the application_fee_amount passed to Stripe Connect direct charges.
-const FEE_CENTS = 50;
 
 /**
  * Get or create a platform-level Stripe Customer for a user.
@@ -133,29 +132,32 @@ async function getOrCreateConnectedCustomer(user, pm, nonprofit) {
 }
 
 /**
- * Charge a donor for their monthly round-up accumulation.
+ * Charge a donor for their monthly round-up accumulation plus accrued service fees.
  *
  * Creates ONE PaymentIntent as a DIRECT CHARGE on the nonprofit's connected Stripe account.
- * application_fee_amount = 50 cents in ALL cases (routes to PocketCache platform balance).
+ * application_fee_amount = feeCents (sum of fee_accruals swept in this charge).
  *
  * Cover-fee logic (per donor preference set at checkout):
- *   cover_fee = 1: donor pays round-ups + $0.50 → nonprofit gets round-ups (minus Stripe fees)
- *   cover_fee = 0: donor pays round-ups only  → nonprofit gets round-ups - $0.50 (minus Stripe fees)
+ *   cover_fee = 1: donor pays round-ups + feeCents → nonprofit gets round-ups (minus Stripe fees)
+ *   cover_fee = 0: donor pays round-ups only       → nonprofit gets round-ups - feeCents (minus Stripe fees)
+ *
+ * feeCents is computed upstream as: 100¢ × active-months if covered, 50¢ × active-months if opted-out.
  *
  * @param {object} user      - { id, stripe_customer_id, cover_fee }
  * @param {object} pm        - { stripe_payment_method_id }
  * @param {object} nonprofit - { id, stripe_account_id, name }
  * @param {number} roundupCents - INTEGER cents, total round-ups to charge
+ * @param {number} feeCents  - INTEGER cents, total accrued fees swept in this charge
  * @param {string} chargeId  - monthly_charges.id (for metadata + idempotency)
  * @returns {Promise<{paymentIntentId: string, status: string, totalChargedCents: number}>}
  */
-export async function chargeDonor(user, pm, nonprofit, roundupCents, chargeId) {
+export async function chargeDonor(user, pm, nonprofit, roundupCents, feeCents, chargeId) {
   // All money is integers (cents). No floats in money math.
   const coverFee = user.cover_fee === 1;
-  // If donor covers fee: they pay round-ups + $0.50
-  // If donor doesn't cover: they pay round-ups (nonprofit receives round-ups - $0.50)
-  // In both cases, application_fee_amount = $0.50 to PocketCache.
-  const totalChargedCents = coverFee ? roundupCents + FEE_CENTS : roundupCents;
+  // cover_fee=1: donor pays round-ups + fees → nonprofit gets round-ups (fees route to PocketCache)
+  // cover_fee=0: donor pays round-ups only   → nonprofit gets round-ups - fees (fees route to PocketCache)
+  // In both cases, application_fee_amount = feeCents.
+  const totalChargedCents = coverFee ? roundupCents + feeCents : roundupCents;
 
   // Sanitize nonprofit name for statement descriptor (Stripe rules: ≤22 chars, alphanumeric + spaces/dashes)
   const descriptorSuffix = nonprofit.name
@@ -174,7 +176,7 @@ export async function chargeDonor(user, pm, nonprofit, roundupCents, chargeId) {
       currency: 'usd',
       customer: connectedCustomerId,
       payment_method: connectedPaymentMethodId,
-      application_fee_amount: FEE_CENTS, // $0.50 always — routes to PocketCache platform balance
+      application_fee_amount: feeCents, // routes to PocketCache platform balance (100¢×months or 50¢×months)
       off_session: true,
       confirm: true,
       statement_descriptor_suffix: descriptorSuffix,
