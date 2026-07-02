@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
-import { LogOut, ExternalLink, CheckCircle } from 'lucide-react';
+import { LogOut, ExternalLink, CheckCircle, ChevronRight } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
 import { useApp } from '../../../store/AppContext';
+import { findOrgByCode } from '../../../store/orgStore';
 import CoinMark from '../../../components/CoinMark';
 
 const PRESET_COLORS = [
@@ -13,7 +14,7 @@ const PRESET_COLORS = [
 
 export default function NpSettings() {
   const { npOrg, setNpOrg, npSignOut } = useNp();
-  const { setPage } = useApp();
+  const { setPage, hasAccount, setSelectedNonprofit } = useApp();
 
   const [name,    setName]    = useState(npOrg.name);
   const [color,   setColor]   = useState(npOrg.color || '#003865');
@@ -189,6 +190,46 @@ export default function NpSettings() {
         <ExternalLink size={14} />
         Nonprofit License Agreement
       </a>
+
+      {/* Switch hats — donor account */}
+      <div className="bg-gray-50 rounded-3xl overflow-hidden">
+        <div className="px-4 pt-4 pb-1">
+          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Donor Account</p>
+        </div>
+        {hasAccount ? (
+          <button
+            onClick={() => setPage('home')}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base" style={{ background: '#0D948818' }}>
+              <span style={{ color: '#0D9488' }}>🪙</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-gray-900 text-sm font-semibold">Switch to your donor account</p>
+              <p className="text-gray-400 text-xs mt-0.5">View your giving dashboard</p>
+            </div>
+            <ChevronRight size={16} className="text-gray-300 shrink-0" />
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              const org = findOrgByCode(npOrg.joinCode);
+              if (org) setSelectedNonprofit(org);
+              setPage('onboarding');
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base" style={{ background: '#0D948818' }}>
+              <span style={{ color: '#0D9488' }}>🪙</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-gray-900 text-sm font-semibold">Want to give too?</p>
+              <p className="text-gray-400 text-xs mt-0.5">Create your donor account — pre-linked to {npOrg.shortName}</p>
+            </div>
+            <ChevronRight size={16} className="text-gray-300 shrink-0" />
+          </button>
+        )}
+      </div>
 
       {/* Sign out */}
       <div className="border-t border-gray-100 pt-4">

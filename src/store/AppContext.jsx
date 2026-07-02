@@ -12,6 +12,8 @@ const RESET_KEYS = [
   'pc_seen_milestone',
   'pc_dismiss_countdown',
   'pc_prefs',
+  'pc_account_status',
+  'pc_has_account',
 ];
 
 function clearDemoState() {
@@ -44,10 +46,7 @@ function save(key, value) {
 const AppContext = createContext(null);
 
 // BASE_PENDING is derived from the current billing cycle's transaction round-ups.
-// In production the server computes this from Plaid webhook events in real time.
-// Note: the multiplier applies to future transactions server-side in production;
-// here we apply it to BASE_PENDING for demo illustration purposes only.
-const BASE_PENDING = CURRENT_MONTH_PENDING; // 4.63 — computed from transactions data
+const BASE_PENDING = CURRENT_MONTH_PENDING;
 
 export function AppProvider({ children }) {
   const [page, setPageState] = useState(() => load('pc_page', 'onboarding'));
@@ -58,17 +57,22 @@ export function AppProvider({ children }) {
     { id: 1, last4: '4242', brand: 'Visa', name: 'Chase Sapphire' },
   ]));
 
-  // Initial totalDonated = sum of PRIOR completed months only.
-  // "Donated" means actually charged to the nonprofit's Stripe; the current
-  // pending month is NOT included until it clears at month-end.
   const [totalDonated, setTotalDonated] = useState(
     () => load('pc_total_donated', PRIOR_MONTHS_SUM),
   );
 
-  // pendingRoundUps is always derived from the multiplier
+  // Account lifecycle state
+  const [accountStatus, setAccountStatusState] = useState(() => load('pc_account_status', 'active'));
+  const [hasAccount, setHasAccountState] = useState(() => load('pc_has_account', null));
+
+  // Toast notification
+  const [toast, setToastState] = useState(null);
+
+  // initialOnboardingStep: used to deep-link into a specific onboarding step
+  const [initialOnboardingStep, setInitialOnboardingStepState] = useState(null);
+
   const pendingRoundUps = parseFloat((BASE_PENDING * roundUpMultiplier).toFixed(2));
 
-  // Derive the full nonprofit object from its stored id — switching cause never bleeds old state
   const selectedNonprofit = useMemo(
     () => findOrgByCode(selectedNonprofitId),
     [selectedNonprofitId],
@@ -106,6 +110,44 @@ export function AppProvider({ children }) {
     });
   }
 
+  function setAccountStatus(v) {
+    save('pc_account_status', v);
+    setAccountStatusState(v);
+  }
+
+  function setHasAccount(stub) {
+    save('pc_has_account', stub);
+    setHasAccountState(stub);
+  }
+
+  function showToast(msg, ms = 2200) {
+    setToastState(msg);
+    setTimeout(() => setToastState(null), ms);
+  }
+
+  function cancelAccount() {
+    save('pc_account_status', 'cancelled');
+    setAccountStatusState('cancelled');
+    save('pc_page', 'onboarding');
+    setPageState('onboarding');
+  }
+
+  function reactivateAccount() {
+    save('pc_account_status', 'active');
+    setAccountStatusState('active');
+    showToast('Welcome back!');
+  }
+
+  function goToOnboardingStep(step) {
+    setInitialOnboardingStepState(step);
+    save('pc_page', 'onboarding');
+    setPageState('onboarding');
+  }
+
+  function clearInitialOnboardingStep() {
+    setInitialOnboardingStepState(null);
+  }
+
   // signOut: clear all demo localStorage state and return to onboarding gate.
   function signOut() {
     clearDemoState();
@@ -114,6 +156,8 @@ export function AppProvider({ children }) {
     setLinkedCardsState([{ id: 1, last4: '4242', brand: 'Visa', name: 'Chase Sapphire' }]);
     setTotalDonated(PRIOR_MONTHS_SUM);
     setTab('dashboard');
+    setAccountStatusState('active');
+    setHasAccountState(null);
     setPageState('onboarding');
   }
 
@@ -128,6 +172,14 @@ export function AppProvider({ children }) {
       boostDonation,
       pendingRoundUps,
       signOut,
+      accountStatus, setAccountStatus,
+      hasAccount, setHasAccount,
+      cancelAccount,
+      reactivateAccount,
+      toast, showToast,
+      initialOnboardingStep,
+      clearInitialOnboardingStep,
+      goToOnboardingStep,
     }}>
       {children}
     </AppContext.Provider>

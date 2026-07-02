@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { CreditCard, Bell, Shield, ChevronRight, Plus, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
 import { useApp } from '../store/AppContext';
+import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
@@ -466,11 +467,18 @@ function AppIconSheet({ show, onClose, brand }) {
   );
 }
 
-function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonate }) {
+function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonate, onCancelled }) {
   const [result, setResult] = useState(null); // 'donated' | 'cancelled'
   // Donor chooses whether the final $1 fee is theirs to cover or falls to the
   // nonprofit's side — pre-checked, always their call. Never a penalty to leave.
   const [coverFinalFee, setCoverFinalFee] = useState(true);
+
+  useEffect(() => {
+    if (result) {
+      const t = setTimeout(() => { onCancelled?.(); }, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [result, onCancelled]);
 
   function handleDonate() {
     const amount = pendingRoundUps;
@@ -566,8 +574,9 @@ export default function Settings() {
   const {
     linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier,
     setRoundUpMultiplier, totalDonated, setSelectedNonprofit, pendingRoundUps,
-    boostDonation, signOut,
+    boostDonation, signOut, cancelAccount, goToOnboardingStep, setPage,
   } = useApp();
+  const { npSignedIn } = useNp();
   const brand = useTheme();
 
   // All toggle preferences persisted to pc_prefs in localStorage
@@ -744,6 +753,33 @@ export default function Settings() {
           />
         </motion.div>
 
+        {/* Nonprofit / Switch hats */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
+          className="bg-white rounded-3xl overflow-hidden card-shadow">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Nonprofit</p>
+          </div>
+          {npSignedIn ? (
+            <SettingRow
+              icon={<span className="text-base">🏛️</span>}
+              label="Switch to your admin dashboard"
+              sub="Manage your nonprofit program"
+              color={brand.primary}
+              onPress={() => setPage('np-dashboard')}
+              right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+            />
+          ) : (
+            <SettingRow
+              icon={<span className="text-base">🏛️</span>}
+              label="Run a nonprofit?"
+              sub="Create your free page in minutes"
+              color={brand.primary}
+              onPress={() => goToOnboardingStep('nonprofit-signup')}
+              right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+            />
+          )}
+        </motion.div>
+
         {/* Preferences — persisted to localStorage */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="bg-white rounded-3xl overflow-hidden card-shadow">
@@ -897,6 +933,7 @@ export default function Settings() {
         brand={brand}
         nonprofit={selectedNonprofit}
         onDonate={(amount) => boostDonation(amount)}
+        onCancelled={() => { setShowCancel(false); cancelAccount(); }}
       />
     </div>
   );

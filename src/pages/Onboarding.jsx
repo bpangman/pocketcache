@@ -15,6 +15,7 @@ import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { findOrgByCode, buildOrgFromSignup, saveCustomOrg } from '../store/orgStore';
+import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 
 
@@ -129,7 +130,7 @@ const SLIDES = [
 // ─── Org Gate Screen ─────────────────────────────────────────────────────────
 // Layout (per founder direction): nonprofit entry first, donor entry below.
 
-function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg }) {
+function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, hasAccount, onWelcomeBack }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
@@ -216,11 +217,8 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg }) {
           <p className="text-white/80 font-semibold text-base leading-tight mb-1">Welcome to</p>
           <PocketCacheLogo size={32} onDark={true} />
         </div>
-        <p className="text-white font-semibold text-sm text-center leading-relaxed mb-1 px-2">
-          Your own giving app. Live today.
-        </p>
-        <p className="text-white/70 text-xs text-center leading-relaxed px-2">
-          Free when donors cover the $1/month fee. Set up in minutes — no tech team needed.
+        <p className="text-white font-semibold text-sm text-center leading-relaxed mb-4 px-2">
+          Your own round-up app. Live in minutes!
         </p>
       </div>
 
@@ -237,27 +235,44 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg }) {
               className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-base mb-2"
               style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', color: '#fff' }}
             >
-              Create your nonprofit page →
+              Create your nonprofit page
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={onNpSignIn}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm"
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-base"
               style={{ background: '#f0f4f8', color: '#0B2A4A' }}
             >
-              Nonprofit sign in
+              Login to your Admin Account
             </motion.button>
           </div>
 
           {/* Divider */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-gray-100" />
-            <p className="text-gray-400 text-xs font-medium">Joining a nonprofit?</p>
+            <p className="text-gray-400 text-xs font-medium">Looking to support a nonprofit?</p>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
           {/* ── FOR DONORS (secondary) ── */}
           <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Welcome back shortcut */}
+            {hasAccount && (
+              <motion.button
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={onWelcomeBack}
+                className="w-full flex items-center gap-2 px-3 py-3 rounded-2xl border text-left mb-1"
+                style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
+              >
+                <span className="text-amber-500">👋</span>
+                <span className="text-amber-800 text-sm font-semibold flex-1">
+                  Welcome back — continue as {hasAccount.name} →
+                </span>
+              </motion.button>
+            )}
             {scanned ? (
               <div className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-green-400 bg-green-50 text-green-700">
                 <CheckCircle size={16} className="text-green-500" />
@@ -431,7 +446,7 @@ const US_STATES = [
   { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
 ];
 
-function SignUpScreen({ onNext, nonprofit }) {
+function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
   const [chosen, setChosen] = useState(null);
   const [showEmail, setShowEmail] = useState(false);
   const [email, setEmail] = useState('');
@@ -439,15 +454,36 @@ function SignUpScreen({ onNext, nonprofit }) {
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [selectedState, setSelectedState] = useState('');
   const [showTermsHint, setShowTermsHint] = useState(false);
+  const [welcomeBack, setWelcomeBack] = useState(false);
   const isCA = selectedState === 'CA';
   const canContinue = agreedTerms && selectedState !== '' && !isCA;
 
   const npName = nonprofit?.name ?? 'your nonprofit';
 
   function handleSSO(provider) {
+    if (hasAccount) {
+      if (accountStatus === 'cancelled') {
+        onGoToDashboard?.();
+        return;
+      }
+      setWelcomeBack(true);
+      setTimeout(() => onGoToDashboard?.(), 900);
+      return;
+    }
     if (!canContinue) { setShowTermsHint(true); return; }
+    onProviderChosen?.(provider);
     setChosen(provider);
     setTimeout(() => onNext(), 700);
+  }
+
+  function handleSignIn() {
+    if (!hasAccount) return;
+    if (accountStatus === 'cancelled') {
+      onGoToDashboard?.();
+      return;
+    }
+    setWelcomeBack(true);
+    setTimeout(() => onGoToDashboard?.(), 900);
   }
 
   function handleEmail(e) {
@@ -613,6 +649,14 @@ function SignUpScreen({ onNext, nonprofit }) {
               >
                 Use email &amp; password
               </button>
+              {/* Already have an account? */}
+              <button
+                onClick={handleSignIn}
+                className="w-full text-center py-2"
+              >
+                <span className="text-gray-400 text-sm">Already have an account? </span>
+                <span className="text-sm font-semibold underline" style={{ color: '#003865' }}>Sign in</span>
+              </button>
             </>
           ) : (
             <form onSubmit={handleEmail} className="space-y-3">
@@ -683,6 +727,21 @@ function SignUpScreen({ onNext, nonprofit }) {
           )}
         </div>
       </div>
+      {/* Welcome back overlay */}
+      <AnimatePresence>
+        {welcomeBack && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 px-8"
+            style={{ background: 'rgba(0, 56, 101, 0.97)' }}
+          >
+            <div className="text-5xl">👋</div>
+            <p className="text-white font-bold text-2xl text-center">Welcome back, {hasAccount?.name}!</p>
+            <p className="text-white/70 text-sm text-center">Taking you to your dashboard…</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -1658,17 +1717,31 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { setPage, setSelectedNonprofit, selectedNonprofit } = useApp();
+  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep } = useApp();
   const { setNpOrg, setNpSignedIn } = useNp();
   const [slide, setSlide] = useState(0);
+  const [signupProvider, setSignupProvider] = useState('demo');
   const [step, setStep] = useState(() => {
-    // Start at gate if no nonprofit is bound
+    try {
+      const v = localStorage.getItem('pc_account_status');
+      const status = v != null ? JSON.parse(v) : 'active';
+      if (status === 'cancelled') return 'gate';
+    } catch { /* ignore */ }
     const stored = localStorage.getItem('pc_cause_id');
     return stored && stored !== 'null' ? 'slides' : 'gate';
   }); // 'gate' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup' | 'np-signin'
 
   const urlParams = new URLSearchParams(window.location.search);
   const autoBindOrg = urlParams.get('org') || new URLSearchParams(window.location.hash.replace('#', '?')).get('org') || null;
+
+  // Handle deep-link from other screens (Feature 3)
+  useEffect(() => {
+    if (initialOnboardingStep) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStep(initialOnboardingStep);
+      clearInitialOnboardingStep();
+    }
+  }, [initialOnboardingStep, clearInitialOnboardingStep]);
 
   function handleBind(np) {
     setSelectedNonprofit(np);
@@ -1743,6 +1816,8 @@ export default function Onboarding() {
       onNonprofitSignup={() => setStep('nonprofit-signup')}
       onNpSignIn={() => setStep('np-signin')}
       autoBindOrg={autoBindOrg}
+      hasAccount={hasAccount}
+      onWelcomeBack={() => setPage('home')}
     />
   );
   if (step === 'np-signin') return (
@@ -1751,11 +1826,27 @@ export default function Onboarding() {
   if (step === 'nonprofit-signup') return (
     <NonprofitSignupFlow onBack={() => setStep('gate')} onGoLive={handleGoLive} />
   );
-  if (step === 'checkout-confirm') return <CheckoutConfirmScreen onConfirm={() => setPage('home')} />;
+  if (step === 'checkout-confirm') return <CheckoutConfirmScreen onConfirm={() => {
+    setHasAccount({
+      name: DEMO_USER.name,
+      email: DEMO_USER.email,
+      provider: signupProvider || 'demo',
+      joinedAt: new Date().toISOString(),
+    });
+    setAccountStatus('active');
+    setPage('home');
+  }} />;
   if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('checkout-confirm')} />;
   if (step === 'payment-method') return <PaymentMethodScreen onNext={method => setStep(method === 'card' ? 'card-entry' : 'checkout-confirm')} />;
   if (step === 'connect-card') return <ConnectCardScreen onNext={() => setStep('payment-method')} />;
-  if (step === 'signup') return <SignUpScreen onNext={() => setStep('connect-card')} nonprofit={selectedNonprofit} />;
+  if (step === 'signup') return <SignUpScreen
+    onNext={() => setStep('connect-card')}
+    nonprofit={selectedNonprofit}
+    hasAccount={hasAccount}
+    accountStatus={accountStatus}
+    onGoToDashboard={() => setPage('home')}
+    onProviderChosen={p => setSignupProvider(p)}
+  />;
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">

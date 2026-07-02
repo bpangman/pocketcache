@@ -6,13 +6,81 @@ import AppShell from './components/AppShell';
 import NpShell from './pages/nonprofit/NpShell';
 import CoinMark from './components/CoinMark';
 // eslint-disable-next-line no-unused-vars
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+
+function CancelledOverlay({ onReactivate, onBack }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-50 flex items-center justify-center px-6"
+      style={{ background: 'rgba(11, 42, 74, 0.55)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center"
+      >
+        <div className="text-4xl mb-3">🔒</div>
+        <p className="font-bold text-gray-900 text-lg mb-2">Your account is closed</p>
+        <p className="text-gray-500 text-sm mb-5 leading-relaxed">
+          Your donation history and settings are still here — just reactivate to pick up where you left off.
+        </p>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={onReactivate}
+          className="w-full py-3.5 rounded-2xl text-white font-bold text-base mb-3"
+          style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)' }}
+        >
+          Reactivate my account
+        </motion.button>
+        <button
+          onClick={onBack}
+          className="w-full py-3 rounded-2xl text-gray-500 font-semibold text-sm bg-gray-50"
+        >
+          Back to start
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function Toast({ message }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm font-semibold shadow-lg whitespace-nowrap"
+    >
+      {message}
+    </motion.div>
+  );
+}
 
 function AppContent() {
-  const { page } = useApp();
+  const { page, accountStatus, reactivateAccount, setPage, toast } = useApp();
   if (page === 'onboarding') return <Onboarding />;
   if (page === 'np-dashboard') return <NpShell />;
-  return <AppShell />;
+  return (
+    <div className="w-full h-full relative">
+      <AppShell />
+      <AnimatePresence>
+        {accountStatus === 'cancelled' && (
+          <CancelledOverlay
+            key="cancelled"
+            onReactivate={reactivateAccount}
+            onBack={() => setPage('onboarding')}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {toast && <Toast key="toast" message={toast} />}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 function PhoneFrame({ children }) {
