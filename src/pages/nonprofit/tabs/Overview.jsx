@@ -158,6 +158,9 @@ export default function Overview() {
         <p className="text-amber-600 text-xs mt-1 italic">
           This is an example partnership. Have a corporate partner who&apos;d match donations? Add your own match campaign here.
         </p>
+        <p className="text-amber-700 text-xs mt-2">
+          Match campaigns: sponsors pay PocketCache a flat tooling fee — never a percentage. Match dollars go straight from the sponsor to you.
+        </p>
       </motion.div>
     </div>
   );

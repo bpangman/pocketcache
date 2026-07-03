@@ -487,6 +487,9 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
             No passwords here — your Apple or Google account is your key, including its two-factor protection.
           </p>
+          <p className="text-gray-400 text-xs text-center px-2">
+            Tax receipts from {nonprofit?.shortName ?? 'your nonprofit'} go to your sign-in email.
+          </p>
 
           {/* Already have an account? */}
           <button
@@ -520,7 +523,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
           </label>
           <label
             className="flex items-start gap-3 cursor-pointer"
-            onClick={() => setCommsOptin(v => !v)}
+            onClick={e => { if (e.target.tagName !== 'A') setCommsOptin(v => !v); }}
           >
             <div
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
@@ -529,7 +532,8 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
               {commsOptin && <CheckCircle size={12} className="text-white" />}
             </div>
             <span className="text-xs text-gray-500 leading-relaxed">
-              Keep me in the loop: PocketCache and {nonprofit?.shortName ?? 'your nonprofit'} may email me and send app notifications about my account — upcoming charges, receipts, and updates or opportunities — and PocketCache may share my contact info and giving activity with {nonprofit?.shortName ?? 'your nonprofit'} for their newsletters and campaigns. (Unsubscribe anytime.)
+              PocketCache and {nonprofit?.shortName ?? 'your nonprofit'} may contact me with account and giving updates — details in our{' '}
+              <a href="/legal/terms/#communications" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Terms</a>.
             </span>
           </label>
           {selectedState === '' && (
@@ -1679,6 +1683,8 @@ export default function Onboarding() {
   const [connectedBank, setConnectedBank] = useState(null);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
   const [step, setStep] = useState(() => {
+    const urlP = new URLSearchParams(window.location.search);
+    if (urlP.get('npsignin') === '1') return 'gate-signin';
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
     return loadKey('pc_cause_id') ? 'slides' : 'gate';
   }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'

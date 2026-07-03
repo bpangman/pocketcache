@@ -38,8 +38,11 @@ export default function BecomeMatchSponsorSheet({ show, onClose, nonprofit, bran
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm mb-5">
+            <p className="text-gray-500 text-sm mb-2">
               Partner with {orgName} this month. Your company sponsors the monthly round-up match — donors see your logo, you get a community impact report.
+            </p>
+            <p className="text-xs text-gray-400 mb-4 font-medium">
+              Flat campaign fee. 100% of your match goes to {orgName}.
             </p>
             <form onSubmit={handleSubmit} className="space-y-3">
               <input type="text" placeholder="Company name" value={companyName}

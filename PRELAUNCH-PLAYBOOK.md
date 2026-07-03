@@ -166,6 +166,21 @@ or nonprofit), fixing botched org setups — without depending on anyone. Three 
    deployed; endpoints spec above is the contract.
 **Agent brief pointer:** build phase-2 endpoints in the same pass as the staging deploy
 (#3 above); the panel is a fast follow.
+**Scope additions (2026-07-03):** god mode must also manage the org MICRO-SITES
+(pocketcache.app/CODE landing pages): edit/reset any org's landing content and branding,
+reassign or retire vanity slugs, and take a page offline. Note for the demo era: all
+"edits" a user makes live only in THAT device's localStorage — nothing is shared or
+server-side until the backend exists, so "resetting" a played-with org = visiting
+/demo/?reset=1 on that device. Production = org data server-side, admin CRUD applies.
+
+## Corporate match monetization (researched + decided 2026-07-03)
+Never a percentage of match dollars — same classification poison as donation cuts
+(platforms that take %, like Benevity, are registered foundations/DAFs; the clean comp,
+Double the Donation, charges flat SaaS). PocketCache's model: the CORPORATE SPONSOR pays
+a flat campaign-tooling fee (plain B2B SaaS to a company — no charitable regulation);
+match dollars flow sponsor → nonprofit directly, never through PocketCache. Pricing TBD
+at first real sponsor (comps suggest low hundreds/campaign/month). In-app copy reflects
+this; add sponsor-fee terms to Nathan's docket when the first match campaign is real.
 
 ## The one-screen version
 

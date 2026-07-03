@@ -9,6 +9,7 @@ import CoinMark from './components/CoinMark';
 import ScaleFit from './components/ScaleFit';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
+import OrgLandingPage from './pages/OrgLandingPage';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
 // (full-bleed, proportionally scaled to viewport width).
@@ -310,6 +311,10 @@ function ThemedApp() {
 }
 
 export default function App() {
+  const orgPageCode = new URLSearchParams(window.location.search).get('orgpage');
+  if (orgPageCode) {
+    return <OrgLandingPage code={orgPageCode} />;
+  }
   return (
     <AppProvider>
       <NpProvider>

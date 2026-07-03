@@ -39,6 +39,7 @@ export function NpProvider({ children }) {
           ...existing,
           name: org.name,
           description: org.mission || existing.description,
+          longDescription: org.longDescription !== undefined ? org.longDescription : (existing.longDescription ?? ''),
           monthlyMinimum: org.monthlyMinimum ?? existing.monthlyMinimum,
           adminEmail: org.adminEmail || existing.adminEmail,
           logoUrl: org.logoPreview !== undefined ? org.logoPreview : existing.logoUrl,
@@ -52,6 +53,7 @@ export function NpProvider({ children }) {
       saveBgcaOverrides({
         name: org.name,
         description: org.mission,
+        longDescription: org.longDescription,
         monthlyMinimum: org.monthlyMinimum,
         color: org.color,
         logoUrl: org.logoPreview,

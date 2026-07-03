@@ -38,13 +38,14 @@ export default function NpSettings() {
   const [email,   setEmail]   = useState(npOrg.adminEmail);
   const [saved,   setSaved]   = useState(false);
   const [logoPreview, setLogoPreview] = useState(npOrg.logoPreview ?? null);
+  const [longDesc, setLongDesc] = useState(npOrg.longDescription ?? '');
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const [logoUrlError, setLogoUrlError] = useState(null);
   const fileInputRef = useRef(null);
 
   function handleSave(e) {
     e.preventDefault();
-    setNpOrg({ ...npOrg, name, color, mission, monthlyMinimum: minAmt, adminEmail: email, logoPreview });
+    setNpOrg({ ...npOrg, name, color, mission, monthlyMinimum: minAmt, adminEmail: email, logoPreview, longDescription: longDesc });
     setSaved(true);
     setTimeout(() => setSaved(false), 2200);
   }
@@ -184,6 +185,24 @@ export default function NpSettings() {
             className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400" />
           {logoUrlError && <p className="text-red-500 text-xs mt-1">{logoUrlError}</p>}
           <p className="text-gray-400 text-xs mt-1">Shown to donors as your app mark.</p>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">
+            Your Landing Page
+          </label>
+          <p className="text-gray-400 text-xs mb-2">
+            This appears on your public page at pocketcache.app/{npOrg.joinCode?.toLowerCase() ?? 'your-code'} — room for the full story, way beyond the app&apos;s short mission.
+          </p>
+          <textarea
+            value={longDesc}
+            onChange={e => setLongDesc(e.target.value.slice(0, 5000))}
+            rows={6}
+            maxLength={5000}
+            placeholder="Tell your full story here — your history, impact, programs, why you exist…"
+            className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 resize-none"
+          />
+          <p className="text-gray-400 text-xs text-right mt-0.5">{longDesc.length}/5,000</p>
         </div>
 
         <motion.button

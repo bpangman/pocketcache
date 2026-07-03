@@ -79,6 +79,7 @@ export function buildOrgFromSignup({ name, adminEmail, story, color, logoPreview
     shortName,
     tagline: story ? story.slice(0, 80) : `Supporting ${name}`,
     description: story || '',
+    longDescription: story || '',
     logoUrl: logoPreview || null,
     monthlyMinimum: monthlyMinimum || 5,
     ein: ein || '',
