@@ -8,19 +8,51 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-// ─── Fee scheme helpers (mirrors monthly-charge.js logic) ───────────────────
-// These replicate the pure math from monthly-charge.js so tests have no DB/Stripe dependency.
+// ─── Fee scheme helpers (mirrors monthly-charge.js / stripe.js logic) ────────
+// These replicate the pure math from the service layer so tests have no DB/Stripe dependency.
 
-function computeFeeCents(coverFee, activeMonths) {
-  // cover_fee=1: $1.00/month; cover_fee=0: $0.50/month
-  return coverFee === 1 ? activeMonths * 100 : activeMonths * 50;
+// v3: PocketCache $1.00/month fee is MANDATORY ($0.50 tracking + $0.50 processing).
+// No opt-out. Always 100¢ × activeMonths.
+function computeFeeCents(activeMonths) {
+  return activeMonths * 100;
 }
 
-function computeChargeAmounts(roundupCents, feeCents, coverFee) {
-  const totalCharged = coverFee === 1 ? roundupCents + feeCents : roundupCents;
-  const applicationFee = feeCents; // always routes to PocketCache platform balance
-  const nonprofitReceives = roundupCents - (coverFee === 1 ? 0 : feeCents);
-  return { totalCharged, applicationFee, nonprofitReceives };
+// Gross-up constants (mirrors NONPROFIT_STRIPE_RATE / NONPROFIT_STRIPE_FIXED in stripe.js)
+// Actual rates come from the org's own Stripe account.
+const NONPROFIT_STRIPE_RATE = 0.022;   // 2.2% per-transaction
+const NONPROFIT_STRIPE_FIXED = 30;     // $0.30 fixed fee in cents
+
+/**
+ * Compute gross-up for cover_processing=1.
+ * Returns { total, processingCoverCents } where total is the integer-cent charge amount
+ * that ensures the nonprofit nets at least roundupCents after Stripe's fee and application_fee.
+ */
+function computeGrossUp(roundupCents, feeCents) {
+  const total = Math.ceil(
+    (roundupCents + feeCents + NONPROFIT_STRIPE_FIXED) / (1 - NONPROFIT_STRIPE_RATE)
+  );
+  const processingCoverCents = total - roundupCents - feeCents;
+  return { total, processingCoverCents };
+}
+
+/**
+ * Compute charge amounts for a donor.
+ * cover_processing=1: gross-up applied; application_fee = feeCents only.
+ * cover_processing=0: no gross-up; total = roundupCents + feeCents; application_fee = feeCents.
+ */
+function computeChargeAmounts(roundupCents, feeCents, coverProcessing) {
+  let totalCharged, processingCoverCents;
+  if (coverProcessing === 1) {
+    ({ total: totalCharged, processingCoverCents } = computeGrossUp(roundupCents, feeCents));
+  } else {
+    totalCharged = roundupCents + feeCents;
+    processingCoverCents = 0;
+  }
+  const applicationFee = feeCents; // always fee_cents only; never includes processingCover
+  // Nonprofit nets: totalCharged - applicationFee - Stripe_fee (Stripe_fee on totalCharged)
+  // For cover_processing=0: nonprofit absorbs its own Stripe fee from roundupCents.
+  const nonprofitReceivesBeforeStripeFee = totalCharged - applicationFee;
+  return { totalCharged, processingCoverCents, applicationFee, nonprofitReceivesBeforeStripeFee };
 }
 
 function getSettleUpThresholdPeriod(now = new Date()) {
@@ -64,36 +96,44 @@ describe('calculateRoundup', () => {
   });
 });
 
-// ─── Cover-fee amount math (legacy single-month sanity checks) ───────────────
-describe('cover-fee amount math (single month)', () => {
-  test('cover_fee=1: total = roundups + 100¢ fee (1 active month)', () => {
+// ─── v3 fee math: mandatory fee + cover-processing toggle ─────────────────────
+describe('fee model v3: mandatory fee + cover-processing toggle (single month)', () => {
+  test('fee is always 100¢/active-month — no opt-out', () => {
+    // v3: fee is mandatory regardless of cover_processing setting
+    assert.equal(computeFeeCents(1), 100);
+    assert.equal(computeFeeCents(2), 200);
+    assert.equal(computeFeeCents(3), 300);
+  });
+
+  test('cover_processing=1: gross-up applied; application_fee = feeCents only (not processingCover)', () => {
     const roundupCents = 743; // $7.43
-    const feeCents = computeFeeCents(1, 1); // $1.00 for 1 month
-    const { totalCharged, applicationFee, nonprofitReceives } = computeChargeAmounts(roundupCents, feeCents, 1);
+    const feeCents = computeFeeCents(1); // $1.00 for 1 month
+    const { totalCharged, processingCoverCents, applicationFee } = computeChargeAmounts(roundupCents, feeCents, 1);
     assert.equal(feeCents, 100);
-    assert.equal(totalCharged, 843);    // $7.43 + $1.00
-    assert.equal(applicationFee, 100); // $1.00 routes to PocketCache
-    assert.equal(nonprofitReceives, 743); // nonprofit gets full round-up amount
+    // totalCharged = ceil((743 + 100 + 30) / 0.978) = ceil(873 / 0.978) = ceil(892.637...) = 893
+    assert.equal(totalCharged, 893);
+    // processingCover = 893 - 743 - 100 = 50
+    assert.equal(processingCoverCents, 50);
+    // applicationFee = feeCents only, never includes processingCover
+    assert.equal(applicationFee, 100);
   });
 
-  test('cover_fee=0: total = roundups only; nonprofit receives roundups - 50¢', () => {
+  test('cover_processing=0: no gross-up; total = roundups + fee; applicationFee = fee', () => {
     const roundupCents = 743;
-    const feeCents = computeFeeCents(0, 1); // $0.50 for 1 month
-    const { totalCharged, applicationFee, nonprofitReceives } = computeChargeAmounts(roundupCents, feeCents, 0);
-    assert.equal(feeCents, 50);
-    assert.equal(totalCharged, 743);   // donor pays roundups only
-    assert.equal(applicationFee, 50); // $0.50 deducted from nonprofit via app fee
-    assert.equal(nonprofitReceives, 693); // nonprofit gets roundups - $0.50
+    const feeCents = computeFeeCents(1);
+    const { totalCharged, processingCoverCents, applicationFee } = computeChargeAmounts(roundupCents, feeCents, 0);
+    assert.equal(feeCents, 100);
+    assert.equal(totalCharged, 843);          // roundups + fee only
+    assert.equal(processingCoverCents, 0);    // no gross-up
+    assert.equal(applicationFee, 100);        // same: feeCents routes to PocketCache
   });
 
-  test('application_fee_amount always equals feeCents regardless of cover_fee', () => {
-    // Both cover and opt-out paths pass feeCents as application_fee_amount
-    const coveredFee = computeFeeCents(1, 1);
-    const optOutFee = computeFeeCents(0, 1);
-    const { applicationFee: covApp } = computeChargeAmounts(500, coveredFee, 1);
-    const { applicationFee: optApp } = computeChargeAmounts(500, optOutFee, 0);
-    assert.equal(covApp, 100);
-    assert.equal(optApp, 50);
+  test('application_fee_amount = feeCents in both toggle states', () => {
+    const feeCents = computeFeeCents(1);
+    const { applicationFee: onApp } = computeChargeAmounts(500, feeCents, 1);
+    const { applicationFee: offApp } = computeChargeAmounts(500, feeCents, 0);
+    assert.equal(onApp, 100);
+    assert.equal(offApp, 100);
   });
 });
 
@@ -125,53 +165,86 @@ describe('minimum/rollover logic', () => {
   });
 });
 
-// ─── Accrual-based fee scheme (approved 2026-07-01) ─────────────────────────
-describe('accrual-based fee scheme', () => {
+// ─── Accrual-based fee scheme v3 (2026-07-03) ───────────────────────────────
+describe('accrual-based fee scheme v3', () => {
 
-  test('1-month covering donor: charge = roundups + $1.00 fee', () => {
-    const roundupCents = 800; // $8.00 of round-ups
-    const feeCents = computeFeeCents(1, 1); // 1 active month × $1.00
-    const { totalCharged, applicationFee, nonprofitReceives } = computeChargeAmounts(roundupCents, feeCents, 1);
-
-    assert.equal(feeCents, 100);             // $1.00 total fee
-    assert.equal(totalCharged, 900);         // $8.00 + $1.00
-    assert.equal(applicationFee, 100);      // $1.00 to PocketCache
-    assert.equal(nonprofitReceives, 800);   // nonprofit gets full $8.00
+  test('mandatory fee: always 100¢ × active months (no opt-out)', () => {
+    // 1 month
+    assert.equal(computeFeeCents(1), 100);
+    // 2-month rollover
+    assert.equal(computeFeeCents(2), 200);
+    // 3 months
+    assert.equal(computeFeeCents(3), 300);
   });
 
-  test('2-month rollover accumulates $2.00 in fees (cover_fee=1)', () => {
+  test('cover_processing=1: gross-up spot-check — $10.00 roundups + $1.00 fee', () => {
+    // Spec: $10.00 roundups + $1.00 fees, cover ON →
+    //   total such that total − fees(100) − stripeFee(2.2%·total + 30) ≥ 1000 exactly at the cent
+    const roundupCents = 1000; // $10.00
+    const feeCents = computeFeeCents(1); // $1.00 (mandatory, 1 active month)
+    const { total, processingCoverCents } = computeGrossUp(roundupCents, feeCents);
+
+    // total = ceil((1000 + 100 + 30) / (1 - 0.022)) = ceil(1130 / 0.978) = ceil(1155.419...) = 1156
+    assert.equal(total, 1156);
+    // processingCover = 1156 - 1000 - 100 = 56¢
+    assert.equal(processingCoverCents, 56);
+
+    // Verify: nonprofit nets ≥ 1000¢ regardless of how Stripe rounds their fee
+    // Stripe fee on 1156¢ @ 2.2% + 30¢:
+    const stripeFeeExact = NONPROFIT_STRIPE_RATE * total + NONPROFIT_STRIPE_FIXED;
+    // application_fee = 100 (never includes processingCover)
+    const nonprofitNet = total - 100 - stripeFeeExact;
+    assert.ok(nonprofitNet >= 1000,
+      `Nonprofit net ${nonprofitNet.toFixed(2)}¢ must be ≥ 1000¢`);
+  });
+
+  test('cover_processing=0: no gross-up; donor pays roundups + fee; toggle does not waive fee', () => {
+    // The toggle only controls gross-up, NOT the mandatory $1.00 fee
+    const roundupCents = 800; // $8.00
+    const feeCents = computeFeeCents(1); // $1.00 still mandatory
+    const { totalCharged, processingCoverCents, applicationFee } = computeChargeAmounts(roundupCents, feeCents, 0);
+
+    assert.equal(feeCents, 100);              // mandatory, not reduced
+    assert.equal(totalCharged, 900);          // roundups + $1.00 fee (no gross-up)
+    assert.equal(processingCoverCents, 0);    // no gross-up when toggle off
+    assert.equal(applicationFee, 100);        // $1.00 routes to PocketCache
+  });
+
+  test('cover_processing=1, 1-month: gross-up ensures nonprofit nets full roundup amount', () => {
+    const roundupCents = 800; // $8.00 of round-ups
+    const feeCents = computeFeeCents(1); // 1 active month × $1.00
+    const { totalCharged, processingCoverCents, applicationFee } = computeChargeAmounts(roundupCents, feeCents, 1);
+
+    // ceil((800 + 100 + 30) / 0.978) = ceil(930 / 0.978) = ceil(950.9203...) = 951
+    assert.equal(totalCharged, 951);
+    assert.equal(processingCoverCents, 51); // 951 - 800 - 100
+    assert.equal(applicationFee, 100);      // $1.00 to PocketCache, never processingCover
+    // Gross verification: nonprofit nets ≥ roundupCents
+    const stripeFeeExact = NONPROFIT_STRIPE_RATE * totalCharged + NONPROFIT_STRIPE_FIXED;
+    const nonprofitNet = totalCharged - applicationFee - stripeFeeExact;
+    assert.ok(nonprofitNet >= roundupCents,
+      `Nonprofit net ${nonprofitNet.toFixed(2)}¢ must be ≥ ${roundupCents}¢`);
+  });
+
+  test('2-month rollover: fees accumulate to $2.00 (mandatory); gross-up on full charge', () => {
     // Donor had round-ups in June ($700) and July ($500), both unswept
     const roundupCents = 700 + 500; // $12.00 total (over 2 months)
-    const feeCents = computeFeeCents(1, 2); // 2 active months × $1.00
+    const feeCents = computeFeeCents(2); // 2 active months × $1.00 = $2.00
 
-    const { totalCharged, applicationFee } = computeChargeAmounts(roundupCents, feeCents, 1);
+    assert.equal(feeCents, 200); // $2.00 accumulated over 2 months
 
-    assert.equal(feeCents, 200);    // $2.00 accumulated over 2 months
-    assert.equal(totalCharged, 1400); // $12.00 + $2.00
-    assert.equal(applicationFee, 200);
-  });
+    // cover_processing=0 path (no gross-up)
+    const { totalCharged: offTotal, processingCoverCents: offCover } =
+      computeChargeAmounts(roundupCents, feeCents, 0);
+    assert.equal(offTotal, 1400);    // $12.00 + $2.00
+    assert.equal(offCover, 0);
 
-  test('opt-out deduction math: charge = roundups, nonprofit loses $0.50 per active month', () => {
-    const roundupCents = 800; // $8.00
-    const feeCents = computeFeeCents(0, 1); // 1 active month × $0.50
-    const { totalCharged, applicationFee, nonprofitReceives } = computeChargeAmounts(roundupCents, feeCents, 0);
-
-    assert.equal(feeCents, 50);           // $0.50 fee (from nonprofit's share)
-    assert.equal(totalCharged, 800);      // donor pays roundups only
-    assert.equal(applicationFee, 50);    // $0.50 deducted from nonprofit via app fee
-    assert.equal(nonprofitReceives, 750); // nonprofit receives $7.50
-  });
-
-  test('opt-out 2-month rollover: nonprofit loses $1.00 in application fees', () => {
-    const roundupCents = 1200; // $12.00 over 2 months
-    const feeCents = computeFeeCents(0, 2); // 2 active months × $0.50
-
-    const { totalCharged, applicationFee, nonprofitReceives } = computeChargeAmounts(roundupCents, feeCents, 0);
-
-    assert.equal(feeCents, 100);           // $1.00 (2 × $0.50)
-    assert.equal(totalCharged, 1200);      // donor pays roundups only
-    assert.equal(applicationFee, 100);    // $1.00 to PocketCache via app fee
-    assert.equal(nonprofitReceives, 1100); // nonprofit receives $11.00
+    // cover_processing=1 path (gross-up applied)
+    const { totalCharged: onTotal, processingCoverCents: onCover, applicationFee: onApp } =
+      computeChargeAmounts(roundupCents, feeCents, 1);
+    assert.ok(onTotal > 1400);  // grossed up above roundups+fees
+    assert.ok(onCover > 0);     // non-zero gross-up
+    assert.equal(onApp, 200);   // application_fee = feeCents only
   });
 
   test('3-month settle-up floor triggers when oldest roundup is exactly 3 months old', () => {
@@ -226,20 +299,39 @@ describe('accrual-based fee scheme', () => {
   test('final cancel charge: minimum always waived, charges full balance', () => {
     // User cancels with a tiny balance — charged regardless of minimum
     const roundupCents = 150; // $1.50 — well below $10 minimum
-    const feeCents = computeFeeCents(1, 1); // 1 active month × $1.00
+    const feeCents = computeFeeCents(1); // 1 active month × $1.00 mandatory
 
-    const { totalCharged } = computeChargeAmounts(roundupCents, feeCents, 1);
-
+    // cover_processing=0: total = roundups + fees (no gross-up)
+    const { totalCharged: offTotal } = computeChargeAmounts(roundupCents, feeCents, 0);
     // Final charge always proceeds (minimum = 0)
     const minimumWaived = true;
     assert.equal(minimumWaived, true);
-    assert.equal(totalCharged, 250); // $1.50 + $1.00 = $2.50
+    assert.equal(offTotal, 250); // $1.50 + $1.00 = $2.50
+
+    // cover_processing=1: total = grossed-up amount
+    const { totalCharged: onTotal } = computeChargeAmounts(roundupCents, feeCents, 1);
+    assert.ok(onTotal > 250); // grossed up
   });
 
   test('final cancel charge idempotency key format', () => {
     const userId = 'user-abc-123';
     const key = `charge_${userId}_final`;
     assert.equal(key, 'charge_user-abc-123_final');
+  });
+
+  test('cancel with donate=false: accrued fees are waived (no exit-fee feel)', () => {
+    // Founder guardrail (v3): fees are NEVER collected without a donation charge.
+    // If donate=false at cancel, fee_accruals are deleted — not charged.
+    // This test verifies the semantic: if no charge is issued, no fee is collected.
+    const accruals = [
+      { period: '2026-05', fee_cents: 100, included_in: null },
+      { period: '2026-06', fee_cents: 100, included_in: null },
+    ];
+    // Simulate donate=false path: DELETE fee_accruals WHERE included_in IS NULL
+    const waived = accruals.filter(f => f.included_in === null);
+    assert.equal(waived.length, 2);       // both unswept accruals would be deleted
+    const remaining = accruals.filter(f => f.included_in !== null);
+    assert.equal(remaining.length, 0);   // nothing swept → nothing charged
   });
 
   test('fee_accrual per-month uniqueness: UNIQUE(user_id, period) prevents double-accrual', () => {

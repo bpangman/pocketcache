@@ -5,9 +5,10 @@
  * The NONPROFIT is the merchant of record on its own Stripe Connect Standard account.
  * PocketCache NEVER holds, receives, or controls donation funds.
  *
- * REVENUE MODEL (flat fees only — no percentages):
- *   A. $0.50 application_fee_amount per monthly donor charge (Stripe Connect)
- *   B. $0.50/active-linked-user/month SaaS invoice to nonprofit
+ * REVENUE MODEL v3 (2026-07-03, flat fees only — no percentages, no SaaS invoices):
+ *   Single stream: $1.00/active-donor/month via Stripe application_fee on each monthly charge.
+ *   Itemized: $0.50 tracking + $0.50 processing. MANDATORY — no opt-out.
+ *   Nonprofits NEVER pay PocketCache directly.
  *
  * FUND FLOW:
  *   Donor → Stripe → Nonprofit's Stripe Connect account

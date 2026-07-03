@@ -6,7 +6,7 @@
  * POST /api/users/:id/switch-nonprofit        — stage a nonprofit switch (day-boundary)
  * GET  /api/users/:id/nonprofit               — current + pending nonprofit
  * GET  /api/users/:id/roundups                — recent round-ups
- * POST /api/users/:id/cover-fee              — update cover_fee preference
+ * POST /api/users/:id/cover-fee              — update cover_processing preference (route path kept stable)
  */
 
 import express from 'express';
@@ -19,7 +19,9 @@ const router = express.Router();
 // POST /api/users/register — public (called before auth token exists)
 // Creates a donor account. California donors are blocked at signup per legal requirements.
 router.post('/register', (req, res) => {
-  const { email, name, state, nonprofitJoinCode, coverFee } = req.body;
+  // coverProcessing: donor toggle to cover the nonprofit's Stripe card-processing costs.
+  // Default ON (pre-checked). Does NOT affect the mandatory $1.00/month PocketCache fee.
+  const { email, name, state, nonprofitJoinCode, coverProcessing } = req.body;
   if (!email || !state || !nonprofitJoinCode) {
     return res.status(400).json({ error: 'email, state, and nonprofitJoinCode required' });
   }
@@ -42,9 +44,9 @@ router.post('/register', (req, res) => {
 
   const id = randomUUID();
   db.prepare(`
-    INSERT INTO users (id, email, name, state, nonprofit_id, cover_fee)
+    INSERT INTO users (id, email, name, state, nonprofit_id, cover_processing)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, email, name ?? null, state.toUpperCase(), nonprofit.id, coverFee === false ? 0 : 1);
+  `).run(id, email, name ?? null, state.toUpperCase(), nonprofit.id, coverProcessing === false ? 0 : 1);
 
   res.status(201).json({ id });
 });
@@ -65,11 +67,11 @@ router.post('/me/cancel', async (req, res) => {
   if (user.status === 'cancelled') return res.status(409).json({ error: 'Account already cancelled' });
 
   try {
-    // 0. The cancel screen asks the donor whether they'll cover the final fee
-    //    (pre-checked, always their call — never a penalty for leaving). Persist
-    //    the choice BEFORE the final charge so the settle-up honors it.
-    if (typeof req.body?.coverFee === 'boolean') {
-      db.prepare(`UPDATE users SET cover_fee = ? WHERE id = ?`).run(req.body.coverFee ? 1 : 0, userId);
+    // 0. The cancel screen lets the donor choose whether to cover the nonprofit's card-processing
+    //    costs on the final charge (pre-checked, always their call — never a penalty for leaving).
+    //    Persist the choice BEFORE the final charge so the settle-up honors it.
+    if (typeof req.body?.coverProcessing === 'boolean') {
+      db.prepare(`UPDATE users SET cover_processing = ? WHERE id = ?`).run(req.body.coverProcessing ? 1 : 0, userId);
     }
 
     // 1. Final settle-up charge (minimum waived, idempotent) — unless the donor
@@ -218,16 +220,20 @@ router.get('/:id/roundups', (req, res) => {
   res.json(roundups);
 });
 
-// POST /api/users/:id/cover-fee — update the cover-fee preference
+// POST /api/users/:id/cover-fee — update the cover-processing preference
+// Route path kept stable (/cover-fee) for API compatibility; semantics updated in v3:
+//   this toggle now controls whether the donor covers the NONPROFIT'S Stripe card-processing
+//   costs via a gross-up. The mandatory $1.00/month PocketCache fee is unaffected by this toggle.
 router.post('/:id/cover-fee', (req, res) => {
   if (req.userId !== req.params.id) return res.status(403).json({ error: 'Forbidden' });
 
-  const { coverFee } = req.body;
-  if (typeof coverFee !== 'boolean' && coverFee !== 0 && coverFee !== 1) {
-    return res.status(400).json({ error: 'coverFee must be boolean or 0/1' });
+  // Accept both old (coverFee) and new (coverProcessing) field names for compatibility
+  const rawValue = req.body.coverProcessing ?? req.body.coverFee;
+  if (typeof rawValue !== 'boolean' && rawValue !== 0 && rawValue !== 1) {
+    return res.status(400).json({ error: 'coverProcessing must be boolean or 0/1' });
   }
 
-  db.prepare(`UPDATE users SET cover_fee = ? WHERE id = ?`).run(coverFee ? 1 : 0, req.params.id);
+  db.prepare(`UPDATE users SET cover_processing = ? WHERE id = ?`).run(rawValue ? 1 : 0, req.params.id);
   res.json({ updated: true });
 });
 

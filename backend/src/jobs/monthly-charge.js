@@ -23,9 +23,15 @@
  * IDEMPOTENCY: idempotency_key = 'charge_{userId}_{period}' stored in monthly_charges
  * (UNIQUE constraint) AND passed to Stripe. Safe to re-run after a crash.
  *
- * FEE SCHEME (approved 2026-07-01):
- *   cover_fee=1 (default): $1.00/active-month → charge = roundups + fees, app_fee = fees
- *   cover_fee=0 (opted out): $0.50/active-month → charge = roundups, app_fee = fees
+ * FEE SCHEME v3 (2026-07-03):
+ *   PocketCache's $1.00/month fee is MANDATORY ($0.50 tracking + $0.50 processing). No opt-out.
+ *   fee_accruals rows always accrue 100¢/active-month; application_fee_amount = accrued fees only.
+ *
+ * COVER-PROCESSING TOGGLE (users.cover_processing, default 1 = ON):
+ *   cover_processing=1: charge is grossed up (in stripe.js) so nonprofit nets 100% of round-ups
+ *     after Stripe fees. The gross-up = processing_cover_cents, stored in monthly_charges.
+ *   cover_processing=0: donor pays roundups + $1.00 fee; nonprofit absorbs its own Stripe fees.
+ *   In BOTH cases, application_fee_amount = feeCents (never includes processing_cover).
  *   fee_accruals table tracks per-month fee rows; charge_fee_accruals records which were swept.
  */
 
@@ -44,7 +50,7 @@ export async function runMonthlyCharge() {
   const candidates = db.prepare(`
     SELECT
       u.id                          AS user_id,
-      u.cover_fee,
+      u.cover_processing,
       u.stripe_customer_id,
       u.nonprofit_id,
       pm.stripe_payment_method_id,
@@ -118,29 +124,29 @@ export async function runMonthlyCharge() {
 
     // Write fee_accruals for all distinct months in the locked roundup rows (idempotent).
     // UNIQUE(user_id, period) means INSERT OR IGNORE is safe on re-run.
-    writeFeesForRoundupMonths(candidate.user_id, candidate.nonprofit_id, candidate.cover_fee, roundupRows);
+    // v3: always 100¢/month (mandatory), cover_processing toggle does not affect fee amount.
+    writeFeesForRoundupMonths(candidate.user_id, candidate.nonprofit_id, roundupRows);
 
     // Get ALL unswept fee_accruals for this user (may span multiple rolled-over months).
     // Exclude fee_accruals already in a pending/retrying charge.
     const feeAccrualRows = getUnsweptFeeAccruals(candidate.user_id);
     const totalFeeCents = feeAccrualRows.reduce((sum, f) => sum + f.fee_cents, 0);
 
-    // CHARGE MATH (all integer cents):
-    //   cover_fee=1: total_charged = roundups + fees; application_fee = fees
-    //   cover_fee=0: total_charged = roundups;         application_fee = fees (deducted from nonprofit)
-    const coverFee = candidate.cover_fee === 1;
-    const totalChargedCents = coverFee ? roundupCents + totalFeeCents : roundupCents;
-
+    // CHARGE MATH: application_fee = feeCents only; gross-up (if any) is computed in stripe.js.
+    // We write processing_cover_cents=0 initially; update after chargeDonor returns the actual value.
     // Create monthly_charges row BEFORE calling Stripe — gives us the charge ID for metadata
     const chargeId = randomUUID();
 
     try {
       db.prepare(`
         INSERT INTO monthly_charges
-          (id, user_id, nonprofit_id, period, roundup_cents, fee_cents, cover_fee, total_charged_cents, idempotency_key)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, user_id, nonprofit_id, period, roundup_cents, fee_cents, cover_processing,
+           processing_cover_cents, total_charged_cents, idempotency_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
       `).run(chargeId, candidate.user_id, candidate.nonprofit_id, period,
-             roundupCents, totalFeeCents, candidate.cover_fee, totalChargedCents, idempotencyKey);
+             roundupCents, totalFeeCents, candidate.cover_processing,
+             roundupCents + totalFeeCents,  // placeholder; updated below after Stripe call
+             idempotencyKey);
     } catch (err) {
       if (err.message?.includes('UNIQUE constraint failed')) {
         // Race: another process inserted the same idempotency key — safe to skip
@@ -170,7 +176,7 @@ export async function runMonthlyCharge() {
     const userObj = {
       id: candidate.user_id,
       stripe_customer_id: candidate.stripe_customer_id,
-      cover_fee: candidate.cover_fee,
+      cover_processing: candidate.cover_processing,
     };
     const pmObj = { stripe_payment_method_id: candidate.stripe_payment_method_id };
     const nonprofitObj = {
@@ -182,9 +188,14 @@ export async function runMonthlyCharge() {
     try {
       const result = await chargeDonor(userObj, pmObj, nonprofitObj, roundupCents, totalFeeCents, chargeId);
 
+      // Update the row with the actual totalChargedCents and processingCoverCents from stripe.js
       db.prepare(`
-        UPDATE monthly_charges SET stripe_payment_intent_id = ? WHERE id = ?
-      `).run(result.paymentIntentId, chargeId);
+        UPDATE monthly_charges
+        SET stripe_payment_intent_id = ?,
+            processing_cover_cents   = ?,
+            total_charged_cents      = ?
+        WHERE id = ?
+      `).run(result.paymentIntentId, result.processingCoverCents, result.totalChargedCents, chargeId);
 
       if (result.status === 'succeeded') {
         await onChargeSucceeded(chargeId);
@@ -242,10 +253,12 @@ export async function onChargeSucceeded(chargeId, paymentIntentId) {
   })();
 
   const charge = db.prepare(
-    `SELECT user_id, roundup_cents, fee_cents, total_charged_cents FROM monthly_charges WHERE id = ?`
+    `SELECT user_id, roundup_cents, fee_cents, processing_cover_cents, total_charged_cents FROM monthly_charges WHERE id = ?`
   ).get(chargeId);
   console.log(`[monthly-charge] Charge ${chargeId} succeeded: user ${charge?.user_id}, ` +
-    `${charge?.roundup_cents}¢ round-ups + ${charge?.fee_cents}¢ fees = ${charge?.total_charged_cents}¢ total`);
+    `${charge?.roundup_cents}¢ round-ups + ${charge?.fee_cents}¢ fees` +
+    (charge?.processing_cover_cents > 0 ? ` + ${charge?.processing_cover_cents}¢ processing cover` : '') +
+    ` = ${charge?.total_charged_cents}¢ total`);
 }
 
 /**
@@ -277,7 +290,7 @@ export async function onChargeFailed(chargeId) {
  */
 export async function runFinalCharge(userId) {
   const user = db.prepare(`
-    SELECT u.id, u.stripe_customer_id, u.cover_fee, u.nonprofit_id,
+    SELECT u.id, u.stripe_customer_id, u.cover_processing, u.nonprofit_id,
            pm.stripe_payment_method_id
     FROM users u
     JOIN payment_methods pm ON pm.user_id = u.id AND pm.is_default = 1
@@ -313,26 +326,28 @@ export async function runFinalCharge(userId) {
   const nonprofitName = latestRoundup.nonprofit_name;
 
   // Write fee_accruals for all unswept months (idempotent)
-  writeFeesForRoundupMonths(userId, nonprofitId, user.cover_fee, roundupRows);
+  // v3: always 100¢/month mandatory; cover_processing does not affect fee amount
+  writeFeesForRoundupMonths(userId, nonprofitId, roundupRows);
 
   // Get all unswept fee_accruals (excluding any already in a pending/retrying charge)
   const feeAccrualRows = getUnsweptFeeAccruals(userId);
   const roundupCents = roundupRows.reduce((sum, r) => sum + r.roundup_cents, 0);
   const totalFeeCents = feeAccrualRows.reduce((sum, f) => sum + f.fee_cents, 0);
 
-  const coverFee = user.cover_fee === 1;
-  const totalChargedCents = coverFee ? roundupCents + totalFeeCents : roundupCents;
-
   const idempotencyKey = `charge_${userId}_final`;
   const chargeId = randomUUID();
 
   try {
-    // period='final' marks this as a cancellation settle-up (not a regular monthly charge)
+    // period='final' marks this as a cancellation settle-up (not a regular monthly charge).
+    // Write processing_cover_cents=0 placeholder; updated after chargeDonor returns actual value.
     db.prepare(`
       INSERT INTO monthly_charges
-        (id, user_id, nonprofit_id, period, roundup_cents, fee_cents, cover_fee, total_charged_cents, idempotency_key)
-      VALUES (?, ?, ?, 'final', ?, ?, ?, ?, ?)
-    `).run(chargeId, userId, nonprofitId, roundupCents, totalFeeCents, user.cover_fee, totalChargedCents, idempotencyKey);
+        (id, user_id, nonprofit_id, period, roundup_cents, fee_cents, cover_processing,
+         processing_cover_cents, total_charged_cents, idempotency_key)
+      VALUES (?, ?, ?, 'final', ?, ?, ?, 0, ?, ?)
+    `).run(chargeId, userId, nonprofitId, roundupCents, totalFeeCents, user.cover_processing,
+           roundupCents + totalFeeCents,  // placeholder; updated below
+           idempotencyKey);
   } catch (err) {
     if (err.message?.includes('UNIQUE constraint failed')) {
       console.log(`[monthly-charge] Final charge for user ${userId}: already exists (idempotent)`);
@@ -352,13 +367,20 @@ export async function runFinalCharge(userId) {
     for (const row of rows) insertChargeFee.run(chargeId, row.id);
   })(feeAccrualRows);
 
-  const userObj = { id: userId, stripe_customer_id: user.stripe_customer_id, cover_fee: user.cover_fee };
+  const userObj = { id: userId, stripe_customer_id: user.stripe_customer_id, cover_processing: user.cover_processing };
   const pmObj = { stripe_payment_method_id: user.stripe_payment_method_id };
   const nonprofitObj = { id: nonprofitId, stripe_account_id: stripeAccountId, name: nonprofitName };
 
   const result = await chargeDonor(userObj, pmObj, nonprofitObj, roundupCents, totalFeeCents, chargeId);
 
-  db.prepare(`UPDATE monthly_charges SET stripe_payment_intent_id = ? WHERE id = ?`).run(result.paymentIntentId, chargeId);
+  // Update with actual values returned by stripe.js (gross-up computed there)
+  db.prepare(`
+    UPDATE monthly_charges
+    SET stripe_payment_intent_id = ?,
+        processing_cover_cents   = ?,
+        total_charged_cents      = ?
+    WHERE id = ?
+  `).run(result.paymentIntentId, result.processingCoverCents, result.totalChargedCents, chargeId);
 
   if (result.status === 'succeeded') {
     await onChargeSucceeded(chargeId);
@@ -368,7 +390,9 @@ export async function runFinalCharge(userId) {
   }
 
   console.log(`[monthly-charge] Final charge ${chargeId} created: user ${userId}, ` +
-    `${roundupCents}¢ round-ups + ${totalFeeCents}¢ fees = ${totalChargedCents}¢ total`);
+    `${roundupCents}¢ round-ups + ${totalFeeCents}¢ fees` +
+    (result.processingCoverCents > 0 ? ` + ${result.processingCoverCents}¢ processing cover` : '') +
+    ` = ${result.totalChargedCents}¢ total`);
 
   return { chargeId, totalChargedCents, status: result.status };
 }
@@ -379,24 +403,25 @@ export async function runFinalCharge(userId) {
  * Write fee_accruals for every distinct calendar month present in a set of roundup rows.
  * Idempotent — UNIQUE(user_id, period) makes INSERT OR IGNORE safe on re-run.
  *
- * cover_fee=1: 100¢/month ($1.00 — covers processing fee + nonprofit software fee)
- * cover_fee=0: 50¢/month  ($0.50 — deducted from nonprofit via application_fee)
+ * v3: PocketCache's $1.00/month fee is MANDATORY — always 100¢, always covered=1.
+ *   Itemized as: $0.50 tracking + $0.50 processing.
+ *   The cover_processing toggle (nonprofit's card costs) does not affect this amount.
  *
  * @param {string} userId
- * @param {string} nonprofitId - stored for SaaS invoice computation on opted-out donors
- * @param {number} coverFee    - 1 or 0
+ * @param {string} nonprofitId
  * @param {Array}  roundupRows - rows with a 'date' field ('YYYY-MM-DD')
  */
-function writeFeesForRoundupMonths(userId, nonprofitId, coverFee, roundupRows) {
-  const feeCents = coverFee === 1 ? 100 : 50;
+function writeFeesForRoundupMonths(userId, nonprofitId, roundupRows) {
+  // $1.00/month mandatory PocketCache fee ($0.50 tracking + $0.50 processing)
+  const feeCents = 100;
   const insertFeeAccrual = db.prepare(`
     INSERT OR IGNORE INTO fee_accruals (id, user_id, period, fee_cents, covered, nonprofit_id)
-    VALUES (?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 1, ?)
   `);
   const periods = new Set(roundupRows.map(r => r.date.slice(0, 7))); // 'YYYY-MM'
   db.transaction(() => {
     for (const period of periods) {
-      insertFeeAccrual.run(randomUUID(), userId, period, feeCents, coverFee, nonprofitId);
+      insertFeeAccrual.run(randomUUID(), userId, period, feeCents, nonprofitId);
     }
   })();
 }

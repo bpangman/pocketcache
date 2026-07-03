@@ -24,7 +24,7 @@ export async function runRetryCharges() {
     SELECT
       mc.*,
       u.stripe_customer_id,
-      u.cover_fee,
+      u.cover_processing,
       pm.stripe_payment_method_id,
       np.stripe_account_id,
       np.name AS nonprofit_name
@@ -43,7 +43,7 @@ export async function runRetryCharges() {
     const userObj = {
       id: charge.user_id,
       stripe_customer_id: charge.stripe_customer_id,
-      cover_fee: charge.cover_fee,
+      cover_processing: charge.cover_processing,
     };
     const pmObj = { stripe_payment_method_id: charge.stripe_payment_method_id };
     const nonprofitObj = {
@@ -57,8 +57,14 @@ export async function runRetryCharges() {
       // (amounts were locked at charge creation; fee_cents is already in the monthly_charges row)
       const result = await chargeDonor(userObj, pmObj, nonprofitObj, charge.roundup_cents, charge.fee_cents, charge.id);
 
-      db.prepare(`UPDATE monthly_charges SET retry_count = ?, stripe_payment_intent_id = ? WHERE id = ?`)
-        .run(retryN, result.paymentIntentId, charge.id);
+      // Update with actual totals in case gross-up was recomputed (e.g. rate change edge case)
+      db.prepare(`
+        UPDATE monthly_charges
+        SET retry_count = ?, stripe_payment_intent_id = ?,
+            processing_cover_cents = ?, total_charged_cents = ?
+        WHERE id = ?
+      `).run(retryN, result.paymentIntentId,
+             result.processingCoverCents, result.totalChargedCents, charge.id);
 
       if (result.status === 'succeeded') {
         await onChargeSucceeded(charge.id);

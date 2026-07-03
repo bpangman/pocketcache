@@ -10,9 +10,10 @@ PocketCache is a **pure tech vendor**. We are white-label SaaS software; we are 
 - PocketCache **never holds, receives, or controls donation funds**.
 - PocketCache **never takes a percentage** of donations.
 - PocketCache **never issues tax receipts** — the nonprofit does.
-- Revenue is **flat accrual-based fees** (approved 2026-07-01):
-  - **A.** Per-donor-per-active-month service fee, routed via Stripe `application_fee_amount` on each monthly direct charge
-  - **B.** $0.50/active-user/month owed by the nonprofit as SaaS software fee (invoiced separately — invoice automation is a TODO; see `fee_accruals` rows where `covered=0`)
+- Revenue is a **single flat accrual-based fee** (v3, 2026-07-03):
+  - **$1.00/active-donor/month** via Stripe `application_fee_amount` on each monthly direct charge
+  - Itemized as: $0.50 tracking + $0.50 processing
+  - **MANDATORY — no opt-out.** Nonprofits never pay PocketCache.
 
 ## How Money Flows
 
@@ -25,14 +26,19 @@ Nonprofit's own Stripe Connect account   ← nonprofit is merchant of record
       └── accrued fee amount routes to PocketCache's platform Stripe balance
 ```
 
-**Fee accrual scheme (approved 2026-07-01):** For each calendar month in which a donor accrued at least one round-up ("active month"), one `fee_accruals` row is written. These fees settle in the monthly charge alongside the round-ups (`application_fee_amount` = sum of swept `fee_accruals`).
+**Fee accrual scheme (v3, 2026-07-03):** For each calendar month in which a donor accrued at least one round-up ("active month"), one `fee_accruals` row is written for $1.00 (always). These fees settle in the monthly charge alongside the round-ups (`application_fee_amount` = sum of swept `fee_accruals`).
 
-Cover-fee choice (set by the donor at onboarding; default = covers):
+**Cover-processing toggle** (`users.cover_processing`, default ON / pre-checked): controls whether the donor covers the *nonprofit's* Stripe card-processing costs via a gross-up. This is separate from and does not affect the mandatory $1.00/month PocketCache fee.
 
-| Setting | `cover_fee` | Fee per active month | What donor pays | Nonprofit gets | Nonprofit owes separately |
-|---|---|---|---|---|---|
-| Donor covers (default, pre-checked) | `1` | $1.00 | round-ups + $1.00×months | full round-ups | $0 |
-| Donor opts out | `0` | $0.50 | round-ups only | round-ups − $0.50×months | $0.50×months via SaaS invoice |
+| Setting | `cover_processing` | PocketCache fee | What donor pays | Nonprofit nets |
+|---|---|---|---|---|
+| Covers processing (default) | `1` | $1.00/month (mandatory) | round-ups + $1.00×months + gross-up | 100% of round-ups (after Stripe) |
+| Processing toggle off | `0` | $1.00/month (mandatory) | round-ups + $1.00×months | round-ups minus Stripe's fee |
+
+Gross-up formula (nonprofit charity rates: 2.2% + $0.30 — actual rates from org's Stripe account):
+`total = ceil((roundups + fees + 30¢) / (1 − 0.022))` — `processing_cover = total − roundups − fees`
+
+The `processing_cover` portion is additional donor→nonprofit money (part of the direct charge); it is legally a charitable contribution, not PocketCache revenue. `application_fee_amount` = fees only.
 
 All money is stored and computed as **integer cents** — never floats.
 
@@ -94,7 +100,7 @@ Generate random keys: `node -e "console.log(require('crypto').randomBytes(32).to
 - `GET /api/nonprofits/by-code/:code` — public branding for the join/gate screen
 - `POST /api/plaid/link-token`, `POST /api/plaid/exchange` — card linking (auth required)
 - `POST /api/stripe/setup-intent`, `financial-session`, `save-payment-method` — payment setup (auth)
-- `POST /api/users/:id/switch-nonprofit`, `cover-fee`; `GET .../nonprofit`, `.../roundups` (auth, own record only)
+- `POST /api/users/:id/switch-nonprofit`, `cover-fee` (covers nonprofit's processing costs — path stable, field renamed `coverProcessing`); `GET .../nonprofit`, `.../roundups` (auth, own record only)
 - `POST /api/nonprofits`, `POST /api/nonprofits/:id/connect-stripe`, `GET .../summary`, `.../donors`, `.../charges` (auth)
 - `POST /api/webhooks/stripe` — Stripe events (signature-verified, raw body)
 - `GET /health` — unauthenticated uptime check
@@ -108,7 +114,7 @@ This backend is **not production-ready**. Per PRELAUNCH.md at the repo root, Poc
 - **Real identity auth**: replace symmetric HS256 dev tokens with Apple/Google sign-in verification against their public keys.
 - **Nonprofit admin roles**: nonprofit dashboard routes currently only require a valid user token — they need admin-scoped authorization.
 - **Failed-payment notifications**: users are paused after a second failure but not yet emailed.
-- **SaaS invoicing (fee B)**: `fee_accruals` rows with `covered=0` now track the per-donor per-month $0.50 owed by each nonprofit, but the invoice generation job is not yet automated (TODO).
+- **Cover-processing gross-up uses design-constant Stripe rates** (2.2% + $0.30): actual rates come from each org's Stripe account — verify these match before production.
 - **Self-charge filter limitation**: our own monthly charge is detected by amount+date matching (documented trade-off in `daily-roundups.js`); revisit with better transaction metadata.
 - **Managed database + backups** (currently local SQLite), secrets management, monitoring/alerting.
 - Legal/ops items: E&O + cyber insurance, license review, liability caps — see PRELAUNCH.md.

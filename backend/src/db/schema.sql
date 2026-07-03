@@ -29,7 +29,13 @@ CREATE TABLE IF NOT EXISTS users (
   pending_nonprofit_id    TEXT REFERENCES nonprofits(id),     -- staged switch, applied at 12:01am
   stripe_customer_id      TEXT,                      -- cus_... (platform-level customer)
   payment_method          TEXT,                      -- 'ach' | 'apple_pay' | 'card'
-  cover_fee               INTEGER NOT NULL DEFAULT 1, -- 1 = donor covers $0.50 fee, 0 = deducted
+  -- cover_processing: 1 = donor covers the NONPROFIT'S Stripe card-processing costs (default, pre-checked).
+  --   When ON, the charge is grossed up so the nonprofit nets 100% of round-ups after Stripe fees.
+  --   The gross-up portion is additional donor→nonprofit money, not PocketCache revenue.
+  --   When OFF, the nonprofit absorbs its own Stripe fees; donor pays round-ups only.
+  -- NOTE: PocketCache's $1.00/month service fee is MANDATORY regardless of this toggle (see fee_accruals).
+  -- MIGRATION (v2→v3): ALTER TABLE users RENAME COLUMN cover_fee TO cover_processing;
+  cover_processing        INTEGER NOT NULL DEFAULT 1,
   status                  TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'paused' | 'cancelled'
   created_at              INTEGER DEFAULT (unixepoch())
 );
@@ -110,11 +116,14 @@ CREATE TABLE IF NOT EXISTS monthly_charges (
   nonprofit_id              TEXT NOT NULL REFERENCES nonprofits(id),
   period                    TEXT NOT NULL,           -- 'YYYY-MM' or 'final'
   roundup_cents             INTEGER NOT NULL,        -- sum of round-ups swept
-  fee_cents                 INTEGER NOT NULL,        -- sum of fee_accruals swept (100¢×months if covered, 50¢×months if not)
-  cover_fee                 INTEGER NOT NULL,        -- 1 = donor covered fees, 0 = opted out
-  total_charged_cents       INTEGER NOT NULL,        -- roundup_cents + fee_cents if cover_fee=1, else roundup_cents
-  -- net to nonprofit = roundup_cents if cover_fee=1, else (roundup_cents - fee_cents)
-  -- application_fee_amount = fee_cents (routes to PocketCache platform balance)
+  fee_cents                 INTEGER NOT NULL,        -- sum of fee_accruals swept; always 100¢×months (mandatory PocketCache fee)
+  cover_processing          INTEGER NOT NULL,        -- 1 = donor grossed up to cover nonprofit's Stripe processing costs
+  -- MIGRATION (v2→v3): ALTER TABLE monthly_charges RENAME COLUMN cover_fee TO cover_processing;
+  --                    ALTER TABLE monthly_charges ADD COLUMN processing_cover_cents INTEGER NOT NULL DEFAULT 0;
+  processing_cover_cents    INTEGER NOT NULL DEFAULT 0, -- gross-up amount; 0 when cover_processing=0
+  total_charged_cents       INTEGER NOT NULL,        -- roundup_cents + fee_cents + processing_cover_cents
+  -- net to nonprofit = roundup_cents (cover_processing=1, after Stripe fees) or roundup_cents - fee_cents (cover_processing=0)
+  -- application_fee_amount = fee_cents ONLY (processing_cover routes to nonprofit, not PocketCache)
   stripe_payment_intent_id  TEXT,
   idempotency_key           TEXT UNIQUE NOT NULL,    -- 'charge_{userId}_{period}' — safe to re-run job
   status                    TEXT NOT NULL DEFAULT 'pending', -- 'pending'|'succeeded'|'failed'|'retrying'
@@ -139,20 +148,21 @@ CREATE TABLE IF NOT EXISTS charge_roundups (
 -- at least one unswept round-up. Swept alongside roundups in the monthly charge —
 -- same race-safe exact-ID pattern as charge_roundups.
 --
--- cover_fee=1 (default, donor covers): fee_cents = 100 ($1.00/month)
---   → covers both PocketCache's $0.50 processing fee AND nonprofit's $0.50 software fee
---   → nonprofit pays $0 for this donor; entire fee routes to PocketCache via application_fee
--- cover_fee=0 (opted out): fee_cents = 50 ($0.50/month)
---   → deducted from nonprofit's take via application_fee_amount
---   → other $0.50/month owed by nonprofit via SaaS invoice (see nonprofit_id field)
--- TODO: SaaS invoice job — use included_in IS NOT NULL + covered=0 to compute monthly invoice per nonprofit
+-- FEE MODEL v3 (2026-07-03): PocketCache's $1.00/month fee is MANDATORY.
+--   Itemized as: $0.50 tracking + $0.50 processing.
+--   fee_cents = 100 ALWAYS. No opt-out. Nonprofits never pay PocketCache.
+--   The `covered` column is vestigial (always 1 in v3); kept for schema compatibility.
+--   Nonprofit's card-processing costs are handled separately via the cover_processing
+--   gross-up on the monthly charge, not here.
+--
+-- MIGRATION (v2→v3): existing covered=0 rows remain as-is; job now always writes covered=1.
 CREATE TABLE IF NOT EXISTS fee_accruals (
   id              TEXT PRIMARY KEY,
   user_id         TEXT NOT NULL REFERENCES users(id),
   period          TEXT NOT NULL,            -- 'YYYY-MM' of the active month
-  fee_cents       INTEGER NOT NULL,         -- 100 if covered (cover_fee=1), 50 if opted out
-  covered         INTEGER NOT NULL,         -- 1 = donor covers $1.00, 0 = opt-out $0.50
-  nonprofit_id    TEXT NOT NULL REFERENCES nonprofits(id),  -- for SaaS invoice computation
+  fee_cents       INTEGER NOT NULL,         -- always 100 ($1.00/month, mandatory PocketCache fee)
+  covered         INTEGER NOT NULL DEFAULT 1, -- vestigial in v3; always 1
+  nonprofit_id    TEXT NOT NULL REFERENCES nonprofits(id),
   included_in     TEXT REFERENCES monthly_charges(id),      -- NULL until swept
   created_at      INTEGER DEFAULT (unixepoch()),
   UNIQUE(user_id, period)
