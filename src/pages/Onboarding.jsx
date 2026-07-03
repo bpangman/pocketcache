@@ -271,46 +271,46 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
                 </span>
               </motion.button>
             )}
-            {scanned ? (
-              <div className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-green-400 bg-green-50 text-green-700">
-                <CheckCircle size={16} className="text-green-500" />
-                QR scanned — BGCA
-              </div>
-            ) : (
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                type="button"
-                onClick={handleScan}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm border-2 border-dashed"
-                style={{ borderColor: '#FBBF24', color: '#D97706', background: '#FEF3C7' }}
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nonprofit Code</label>
+              {/* Code input with the QR scanner tucked inside as a trailing button */}
+              <div
+                className="relative w-full rounded-2xl border-2 transition-colors bg-gray-50"
+                style={{ borderColor: error ? '#ef4444' : scanned ? '#4ade80' : code ? '#FBBF24' : '#e5e7eb' }}
               >
-                {scanning ? (
-                  <>
+                <input
+                  type="text"
+                  placeholder="Enter code (e.g. BGCA)"
+                  value={code}
+                  onChange={e => { setCode(e.target.value); setError(null); }}
+                  className="w-full bg-transparent rounded-2xl pl-4 pr-14 py-3.5 text-sm outline-none font-mono uppercase"
+                />
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  type="button"
+                  onClick={handleScan}
+                  aria-label="Scan QR code"
+                  title="Scan QR code"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: scanned ? '#dcfce7' : '#FEF3C7' }}
+                >
+                  {scanning ? (
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                       className="w-4 h-4 rounded-full border-2 border-amber-200 border-t-amber-500"
                     />
-                    Scanning…
-                  </>
-                ) : (
-                  <><span>📷</span> Scan QR Code</>
-                )}
-              </motion.button>
-            )}
-
-            <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nonprofit Code</label>
-              <input
-                type="text"
-                placeholder="Enter code (e.g. BGCA)"
-                value={code}
-                onChange={e => { setCode(e.target.value); setError(null); }}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors font-mono uppercase"
-                style={{ borderColor: error ? '#ef4444' : code ? '#FBBF24' : '#e5e7eb' }}
-              />
+                  ) : scanned ? (
+                    <CheckCircle size={18} className="text-green-500" />
+                  ) : (
+                    <span className="text-lg" aria-hidden>📷</span>
+                  )}
+                </motion.button>
+              </div>
               {error && <p className="text-red-500 text-xs mt-1 px-1">{error}</p>}
-              <p className="text-gray-400 text-xs mt-1 px-1">Demo code: BGCA</p>
+              <p className="text-gray-400 text-xs mt-1 px-1">
+                {scanned ? 'QR scanned ✓' : 'Demo code: BGCA · tap 📷 to scan a QR instead'}
+              </p>
             </div>
 
             <motion.button
