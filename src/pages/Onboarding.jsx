@@ -128,7 +128,7 @@ const SLIDES = [
 // ─── Org Gate Screen ─────────────────────────────────────────────────────────
 // Layout (per founder direction): nonprofit entry first, donor entry below.
 
-function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, hasAccount, onWelcomeBack, onUniversalSignIn }) {
+function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onWelcomeBack, onUniversalSignIn }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
@@ -234,14 +234,6 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
               style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', color: '#fff' }}
             >
               Create your nonprofit page
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={onNpSignIn}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-base"
-              style={{ background: '#f0f4f8', color: '#0B2A4A' }}
-            >
-              Login to your Admin Account
             </motion.button>
           </div>
 
@@ -352,53 +344,6 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
 }
 
 // ─── Nonprofit Sign-In Screen (SSO → demo BGCA or custom-org admin dashboard) ──
-
-function NpSignInScreen({ onSignIn, onBack }) {
-  const [chosen, setChosen] = useState(null);
-
-  function handleSSO(provider) {
-    if (chosen) return; // prevent double-tap while animating
-    setChosen(provider);
-    setTimeout(() => onSignIn(), 800);
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 30 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3 }}
-      className="flex flex-col h-full overflow-hidden"
-    >
-      <div
-        className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
-      >
-        <button onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
-          <ArrowLeft size={14} /> Back
-        </button>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center overflow-hidden shadow-lg">
-            <img src={bgcaLogoUrl} alt="BGCA" className="w-full h-full object-contain p-1" />
-          </div>
-          <p className="text-white/70 text-sm font-semibold">Demo — signs into BGCA admin</p>
-        </div>
-        <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
-          Welcome{'\n'}Back
-        </h1>
-        <p className="text-white/70 text-sm mt-2 leading-relaxed">
-          Sign in to your admin account. In production, your Apple or Google identity is matched to your org automatically.
-        </p>
-      </div>
-
-      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10 gap-4">
-        <SsoButtons onPress={handleSSO} chosen={chosen} providers={['apple', 'google']} />
-        <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
-          No passwords here — your Apple or Google account is your key, including its two-factor protection.
-        </p>
-      </div>
-    </motion.div>
-  );
-}
 
 // ─── Sign-up screen ──────────────────────────────────────────────────────────
 
@@ -614,7 +559,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
 //   • No local identity (fresh device) → empty state shown inline
 //   Production: the backend looks up the account by SSO token, not local storage.
 
-function GateSignInScreen({ onBack, hasAccount, onSignIn }) {
+function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin }) {
   const [chosen, setChosen] = useState(null);
   const [emptyState, setEmptyState] = useState(false);
 
@@ -622,14 +567,16 @@ function GateSignInScreen({ onBack, hasAccount, onSignIn }) {
     if (chosen) return; // prevent double-tap
     setChosen(provider);
     setTimeout(() => {
-      if (!hasAccount) {
+      if (!hasAccount && !adminRole) {
         // Production: backend identity lookup by SSO token finds the account anywhere.
         // Demo: no account found on this device — show the empty state.
         setEmptyState(true);
         setChosen(null);
         return;
       }
-      // Active donors land on home; cancelled donors see the Reactivate overlay on home.
+      // One door for everyone: onSignIn routes by the identity's roles —
+      // donor-only → giving, admin-only → dashboard, both → last-used mode.
+      // Cancelled donors see the Reactivate overlay on home.
       onSignIn();
     }, 800);
   }
@@ -669,6 +616,13 @@ function GateSignInScreen({ onBack, hasAccount, onSignIn }) {
           >
             ← Back to gate
           </motion.button>
+          {/* Demo-only shortcut so prospects can see the admin side without creating an org */}
+          <button
+            onClick={onDemoAdmin}
+            className="w-full text-center py-3 mt-2 text-xs text-gray-400"
+          >
+            Demo: preview the BGCA admin dashboard →
+          </button>
         </div>
       </motion.div>
     );
@@ -1687,7 +1641,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(() => {
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
     return loadKey('pc_cause_id') ? 'slides' : 'gate';
-  }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup' | 'np-signin'
+  }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
 
   const urlParams = new URLSearchParams(window.location.search);
   const autoBindOrg = urlParams.get('org') || new URLSearchParams(window.location.hash.replace('#', '?')).get('org') || null;
@@ -1746,8 +1700,13 @@ export default function Onboarding() {
     setPage('np-dashboard');
   }
 
-  // Returning users land in their last-used mode.
+  // One sign-in for every role: donor-only → giving, admin-only → dashboard,
+  // both roles → last-used mode (the profile menus toggle between them).
   function resumeSession() {
+    const donorOnly = hasAccount && !adminRole;
+    const adminOnly = adminRole && !hasAccount;
+    if (adminOnly) { setLastMode('admin'); setPage('np-dashboard'); return; }
+    if (donorOnly) { setLastMode('giving'); setPage('home'); return; }
     setPage(lastMode === 'admin' && adminRole ? 'np-dashboard' : 'home');
   }
 
@@ -1783,7 +1742,6 @@ export default function Onboarding() {
     <OrgGateScreen
       onBind={handleBind}
       onNonprofitSignup={() => setStep('nonprofit-signup')}
-      onNpSignIn={() => setStep('np-signin')}
       autoBindOrg={autoBindOrg}
       hasAccount={hasAccount}
       onWelcomeBack={resumeSession}
@@ -1794,11 +1752,10 @@ export default function Onboarding() {
     <GateSignInScreen
       onBack={() => setStep('gate')}
       hasAccount={hasAccount}
+      adminRole={adminRole}
       onSignIn={resumeSession}
+      onDemoAdmin={handleNpSignIn}
     />
-  );
-  if (step === 'np-signin') return (
-    <NpSignInScreen onSignIn={handleNpSignIn} onBack={() => setStep('gate')} />
   );
   if (step === 'nonprofit-signup') return (
     <NonprofitSignupFlow onBack={() => setStep('gate')} onGoLive={handleGoLive} />
