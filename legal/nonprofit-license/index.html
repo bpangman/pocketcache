@@ -65,7 +65,7 @@
 <div class="body">
 
   <div class="highlight-box">
-    <p><strong>Plain-English summary:</strong> This agreement is between PocketCache, LLC and the nonprofit organization ("Nonprofit") that signs up to use PocketCache's software. PocketCache provides the technology. The Nonprofit runs its own round-up giving program, collects donations on its own Stripe account, and issues tax receipts to donors. PocketCache charges a flat fee — never a percentage of donations.</p>
+    <p><strong>Plain-English summary:</strong> This agreement is between PocketCache, LLC and the nonprofit organization ("Nonprofit") that signs up to use PocketCache's software. PocketCache provides the technology. The Nonprofit runs its own round-up giving program, collects donations on its own Stripe account, and issues tax receipts to donors. PocketCache charges donors a flat fee — never a percentage of donations — and never charges the Nonprofit anything, ever.</p>
   </div>
 
   <h2>1. License Grant</h2>
@@ -73,13 +73,13 @@
 
   <div class="divider"></div>
 
-  <!-- PENDING NATHAN REVIEW: fee mechanics updated 2026-07-01 (donor covers both flat fees by default; application-fee collection) -->
-  <h2>2. Flat Fee Schedule</h2>
+  <!-- PENDING NATHAN REVIEW: fee mechanics updated 2026-07-03 (mandatory $1/mo donor fee; processing-cover toggle is separate election, goes to Nonprofit as donation, deductible; nonprofits never billed under any circumstances) -->
+  <h2>2. Fee Schedule</h2>
   <div class="fee-box">
-    <p><strong>Donor-covered default:</strong> Each active donor's monthly charge includes their round-up total plus a flat <strong>$1.00/month service fee</strong>, pre-selected as "I'll cover it." This $1.00 covers both the $0.50 Stripe processing fee and the $0.50 software fee that would otherwise be invoiced to the Nonprofit — meaning the Nonprofit pays <strong>$0</strong> for any donor who keeps the default selection.</p>
-    <p><strong>Opt-out billing:</strong> If a donor opts out of the $1.00 service fee, $0.50 is deducted from their round-up total before the Nonprofit receives it, and PocketCache invoices the Nonprofit <strong>$0.50/month</strong> for that donor.</p>
-    <p><strong>Rollover and settle-up:</strong> When a donor's accumulated round-ups are below the Nonprofit's monthly minimum (default $10), the charge — including any applicable fee — rolls over to the following month. Regardless of the rollover minimum, a settle-up charge runs at least once every <strong>3 calendar months</strong>, collecting all accrued round-ups and fees. Cancellation triggers an immediate final settle-up charge of all accrued round-ups and fees.</p>
-    <p><strong>No setup fees. No percentage of donation amounts. Ever.</strong></p>
+    <p><strong>Donors pay; Nonprofits never pay:</strong> PocketCache charges donors a flat, mandatory <strong>$1.00/month service fee</strong> per active linked account ($0.50 account/tracking + $0.50 processing). This is PocketCache's only revenue. <strong>PocketCache does not invoice, bill, or assess any fee against the Nonprofit under any circumstances.</strong> The Nonprofit will never receive an invoice from PocketCache.</p>
+    <p><strong>Processing-cover toggle (donor election):</strong> At checkout, donors see a pre-checked option to cover the Nonprofit's card-processing costs (approximately 2.2% + $0.30 per monthly charge). This amount: (a) is a voluntary addition to the donor's donation to the Nonprofit; (b) is tax-deductible to the donor as allowed by law; (c) passes through entirely to the Nonprofit — PocketCache receives none of it; and (d) causes the Nonprofit to net 100% of the donor's round-ups for that billing cycle. If a donor unchecks this option, the Nonprofit receives round-ups minus standard card-processing costs — the same outcome as any card donation.</p>
+    <p><strong>Rollover and settle-up:</strong> When a donor's accumulated round-ups are below the Nonprofit's monthly minimum (default $10), the charge rolls over to the following month. Regardless of the rollover minimum, a settle-up charge runs at least once every <strong>3 calendar months</strong>, collecting all accrued round-ups and fees. At cancellation, a donor may elect a final settle-up or waive all accrued amounts.</p>
+    <p><strong>No setup fees. No percentage of donation amounts. No nonprofit billing. Ever.</strong></p>
     <p><strong>"Active linked user"</strong> means a donor who has at least one linked Plaid account and at least $0.01 in round-ups during the billing month.</p>
   </div>
 
