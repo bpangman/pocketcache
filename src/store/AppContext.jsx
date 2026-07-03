@@ -8,7 +8,7 @@ const DONOR_KEYS = [
   'pc_page', 'pc_cause_id', 'pc_multiplier', 'pc_cards', 'pc_total_donated',
   'pc_seen_milestone', 'pc_dismiss_countdown', 'pc_prefs', 'pc_account_status',
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
-  'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment',
+  'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment', 'pc_fee_months',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];
@@ -54,6 +54,7 @@ export function AppProvider({ children }) {
 
   const [monthlyCap, setMonthlyCapState] = useState(() => loadKey('pc_monthly_cap', null));
   const [chargeAdjustment, setChargeAdjustmentState] = useState(() => loadKey('pc_charge_adjustment', null));
+  const [feeMonths, setFeeMonthsState] = useState(() => loadKey('pc_fee_months', 1));
 
   // Non-persisted: triggers Settings to auto-open a sheet (e.g. from reactivation check-in)
   const [pendingSettingsAction, setPendingSettingsActionState] = useState(null);
@@ -135,6 +136,11 @@ export function AppProvider({ children }) {
     setChargeAdjustmentState(val);
   }
 
+  function setFeeMonths(val) {
+    saveKey('pc_fee_months', val);
+    setFeeMonthsState(val);
+  }
+
   function setPendingSettingsAction(action) {
     setPendingSettingsActionState(action);
   }
@@ -177,6 +183,7 @@ export function AppProvider({ children }) {
     setPaymentMethodState(DEFAULT_PAYMENT_METHOD);
     setMonthlyCapState(null);
     setChargeAdjustmentState(null);
+    setFeeMonthsState(1);
   }
 
   // deleteAccount: deletes the donor role only. If an admin role exists the
@@ -259,6 +266,7 @@ export function AppProvider({ children }) {
       pendingSettingsAction, setPendingSettingsAction, clearPendingSettingsAction,
       monthlyCap, setMonthlyCap,
       chargeAdjustment, setChargeAdjustment,
+      feeMonths, setFeeMonths,
     }}>
       {children}
     </AppContext.Provider>

@@ -94,7 +94,7 @@ export default function MyCause() {
         </div>
       </motion.div>
 
-      <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
+      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
 
         {/* Mission / story */}
         <motion.div

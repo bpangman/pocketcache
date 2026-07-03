@@ -1110,10 +1110,10 @@ function CardEntryScreen({ onNext }) {
 // ─── Checkout confirm screen ─────────────────────────────────────────────────
 
 function CheckoutConfirmScreen({ onConfirm }) {
-  const { selectedNonprofit, pendingRoundUps } = useApp();
+  const { selectedNonprofit, pendingRoundUps, feeMonths } = useApp();
   const [coverProcessing, setCoverProcessing] = useState(true);
   const roundUps = pendingRoundUps ?? 4.63;
-  const appFee = 1.00;
+  const appFee = feeMonths;
   const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
   const total = parseFloat((appFee + roundUps + (coverProcessing ? processingCover : 0)).toFixed(2));
 
@@ -1156,8 +1156,8 @@ function CheckoutConfirmScreen({ onConfirm }) {
               <span className="font-bold text-gray-900">${roundUps.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-500">App fee (flat, not tax-deductible)</span>
-              <span className="text-sm text-gray-500">+$1.00</span>
+              <span className="text-sm text-gray-500">App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+              <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
             </div>
             {coverProcessing && (
               <div className="flex justify-between items-center mb-2">

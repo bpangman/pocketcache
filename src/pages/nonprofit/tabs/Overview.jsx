@@ -36,7 +36,7 @@ export default function Overview() {
   const accent = npOrg.color || '#0D9488';
 
   return (
-    <div className="flex-1 scrollable px-4 pb-28 pt-4 space-y-4">
+    <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live snapshot</p>
         <DemoPill />

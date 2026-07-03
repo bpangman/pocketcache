@@ -13,6 +13,24 @@ const PRESET_COLORS = [
 export default function NpSettings() {
   const { npOrg, setNpOrg } = useNp();
 
+  const TEXT_SCALE_OPTIONS = [
+    { value: 0.85, label: 'Smaller' },
+    { value: 1,    label: 'Default' },
+    { value: 1.1,  label: 'Large' },
+    { value: 1.2,  label: 'XL' },
+  ];
+  const [textScale, setTextScaleState] = useState(() => {
+    try {
+      const v = parseFloat(localStorage.getItem('pc_text_scale'));
+      return [0.85, 1, 1.1, 1.2].includes(v) ? v : 1;
+    } catch { return 1; }
+  });
+  function handleTextScale(v) {
+    localStorage.setItem('pc_text_scale', String(v));
+    setTextScaleState(v);
+    window.dispatchEvent(new CustomEvent('pc-text-scale-change', { detail: v }));
+  }
+
   const [name,    setName]    = useState(npOrg.name);
   const [color,   setColor]   = useState(npOrg.color || '#003865');
   const [mission, setMission] = useState(npOrg.mission);
@@ -32,7 +50,7 @@ export default function NpSettings() {
   }
 
   return (
-    <div className="flex-1 scrollable px-4 pb-28 pt-4 space-y-5">
+    <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-5">
       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Settings</p>
 
       {/* Branding preview */}
@@ -180,6 +198,26 @@ export default function NpSettings() {
           }
         </motion.button>
       </form>
+
+      {/* Text Size preference */}
+      <div className="bg-white rounded-3xl px-4 py-4 space-y-2">
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Text Size</p>
+        <div className="flex gap-1.5">
+          {TEXT_SCALE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => handleTextScale(opt.value)}
+              className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
+              style={textScale === opt.value
+                ? { background: '#003865', color: '#fff' }
+                : { background: '#f3f4f6', color: '#6b7280' }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-gray-400 text-xs">You can also use your phone&apos;s system zoom.</p>
+      </div>
 
       {/* Legal link */}
       <a

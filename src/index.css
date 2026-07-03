@@ -42,6 +42,23 @@ body {
 }
 .scrollable::-webkit-scrollbar { display: none; }
 
+/* Subtle scrollbar for content areas — visible when overflowing */
+.pc-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(11,42,74,0.18) transparent;
+}
+.pc-scrollbar::-webkit-scrollbar {
+  width: 3px;
+  display: block;
+}
+.pc-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(11,42,74,0.18);
+  border-radius: 99px;
+}
+.pc-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* Gradient text — follows the active brand color */
 .gradient-text {
   background: linear-gradient(135deg, var(--brand-primary, #FBBF24), var(--brand-secondary, #0D9488));

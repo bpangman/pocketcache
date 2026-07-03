@@ -469,6 +469,7 @@ function AppIconSheet({ show, onClose, brand }) {
 }
 
 function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonate, onCancelled }) {
+  const { feeMonths } = useApp();
   const [result, setResult] = useState(null); // 'donated' | 'cancelled'
   const [coverProcessing, setCoverProcessing] = useState(true);
 
@@ -493,7 +494,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
 
   const rawAmount = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   const amountStr = rawAmount.toFixed(2);
-  const appFee = 1.00;
+  const appFee = feeMonths;
   const processingCover = parseFloat((rawAmount * 0.022 + 0.30).toFixed(2));
   const finalTotal = (appFee + rawAmount + (coverProcessing ? processingCover : 0)).toFixed(2);
   const belowMin = rawAmount < (nonprofit?.monthlyMinimum ?? 5);
@@ -523,6 +524,29 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               You&apos;ve rounded up <strong>${amountStr}</strong> for {nonprofit?.shortName ?? 'your cause'} this month.
               Would you like to make this month&apos;s donation before cancelling?
             </p>
+            {/* Settle-up estimate */}
+            <div className="rounded-2xl p-4 mb-3" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Final Settle-Up</p>
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-sm text-gray-700">Round-ups</span>
+                <span className="font-bold text-gray-900">${amountStr}</span>
+              </div>
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-sm text-gray-500">App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+                <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
+              </div>
+              {coverProcessing && (
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-sm text-gray-500">Processing cover</span>
+                  <span className="text-sm text-gray-500">+${processingCover.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="h-px bg-slate-200 my-2" />
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-gray-900">Total</span>
+                <span className="font-bold" style={{ color: '#003865' }}>${finalTotal}</span>
+              </div>
+            </div>
             {belowMin && (
               <p className="text-amber-600 text-xs mb-4 leading-relaxed bg-amber-50 rounded-xl px-3 py-2">
                 Note: ${amountStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum — in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
@@ -791,6 +815,24 @@ export default function Settings() {
   const [showTrackCard, setShowTrackCard] = useState(false);
   const [showChangePayment, setShowChangePayment] = useState(false);
 
+  const TEXT_SCALE_OPTIONS = [
+    { value: 0.85, label: 'Smaller' },
+    { value: 1,    label: 'Default' },
+    { value: 1.1,  label: 'Large' },
+    { value: 1.2,  label: 'XL' },
+  ];
+  const [textScale, setTextScaleState] = useState(() => {
+    try {
+      const v = parseFloat(localStorage.getItem('pc_text_scale'));
+      return [0.85, 1, 1.1, 1.2].includes(v) ? v : 1;
+    } catch { return 1; }
+  });
+  function handleTextScale(v) {
+    localStorage.setItem('pc_text_scale', String(v));
+    setTextScaleState(v);
+    window.dispatchEvent(new CustomEvent('pc-text-scale-change', { detail: v }));
+  }
+
   useEffect(() => {
     if (pendingSettingsAction === 'change-payment') {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -845,7 +887,7 @@ export default function Settings() {
         </div>
       </motion.div>
 
-      <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
+      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
 
         {/* Profile card — name/email from DEMO_USER; joinedAt from MONTHLY_DATA start */}
         <motion.div
@@ -1002,6 +1044,7 @@ export default function Settings() {
             Your toggle covers {selectedNonprofit.shortName}&apos;s card-processing costs: on means a small amount (~2.2% + 30¢) is added and passes directly to them — PocketCache never keeps it. Off means {selectedNonprofit.shortName} nets your round-ups minus standard card costs.
             They never pay PocketCache anything — the platform is always free for them.
             Months under ${selectedNonprofit.monthlyMinimum} roll over; we settle every 3 months at most.{' '}
+            If months roll over, each active month adds $1 — your charge breakdown itemizes it (e.g. &lsquo;App fee — $1 × 2 months&rsquo;).{' '}
             {selectedNonprofit.shortName} sends your tax receipt — your round-ups are deductible, the $1 fee is not.
           </p>
         </motion.div>
@@ -1077,6 +1120,25 @@ export default function Settings() {
             onPress={() => setShowAppIcon(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
+          <div className="h-px bg-gray-50 mx-4" />
+          <div className="px-4 pt-3 pb-4">
+            <p className="text-gray-900 text-sm font-semibold mb-2">Text Size</p>
+            <div className="flex gap-1.5">
+              {TEXT_SCALE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => handleTextScale(opt.value)}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
+                  style={textScale === opt.value
+                    ? { background: brand.primary, color: '#fff' }
+                    : { background: '#f3f4f6', color: '#6b7280' }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-gray-400 text-xs mt-2">You can also use your phone&apos;s system zoom.</p>
+          </div>
         </motion.div>
 
         {/* Help & Support */}

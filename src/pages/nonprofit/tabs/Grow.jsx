@@ -40,7 +40,7 @@ export default function Grow() {
   const embedSnippet = `<script src="https://cdn.pocketcache.app/widget.js" data-org="${joinCode.toLowerCase()}"></script>`;
 
   return (
-    <div className="flex-1 scrollable px-4 pb-28 pt-4 space-y-5">
+    <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-5">
       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Grow your donor base</p>
 
       {/* Big join code block */}

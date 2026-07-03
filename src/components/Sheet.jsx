@@ -20,7 +20,7 @@ export default function Sheet({ show, onClose, title, children }) {
               <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
               <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onClose}><X size={20} className="text-gray-400" /></motion.button>
             </div>
-            <div className="flex-1 scrollable">{children}</div>
+            <div className="flex-1 scrollable pc-scrollbar">{children}</div>
           </motion.div>
         </>
       )}

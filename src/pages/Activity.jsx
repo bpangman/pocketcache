@@ -62,7 +62,7 @@ export default function Activity() {
         </div>
       </motion.div>
 
-      <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
+      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
         {/* Monthly Charges info banner — dynamic nonprofit name + tax receipt line */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}

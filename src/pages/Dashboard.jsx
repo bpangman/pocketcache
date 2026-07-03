@@ -172,7 +172,7 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, chargeAdjustment, s
 }
 
 export default function Dashboard() {
-  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment } = useApp();
+  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
@@ -295,7 +295,7 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <div className="flex-1 scrollable px-4 pb-28 space-y-4 pt-4">
+      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
 
         {/* Hero donation card */}
         <motion.div
@@ -436,6 +436,7 @@ export default function Dashboard() {
           {belowMinimum && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
               Not quite ${monthlyMinimum} yet — your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
+              {' '}&middot; $1/month fee rolls too — {feeMonths} month{feeMonths !== 1 ? 's' : ''} so far (${feeMonths}) — itemized on your charge.
             </p>
           )}
           {!belowMinimum && capActive && chargeAdjustment === null && (

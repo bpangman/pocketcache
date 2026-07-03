@@ -51,7 +51,7 @@ function DonorSheet({ donor, onClose, accent }) {
           <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onClose}><X size={20} className="text-gray-400" /></motion.button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+        <div className="flex-1 overflow-y-auto pc-scrollbar px-6 py-5 space-y-4">
           {/* Identity */}
           <div className="flex items-center gap-3">
             <div
@@ -186,7 +186,7 @@ export default function Donors() {
       </div>
 
       {/* Donor list */}
-      <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-1.5">
+      <div className="flex-1 overflow-y-auto pc-scrollbar px-4 pb-28 space-y-1.5">
         {visible.length === 0 ? (
           <p className="text-center text-gray-400 text-sm py-10">No donors match your search.</p>
         ) : (

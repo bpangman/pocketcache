@@ -70,7 +70,7 @@ export default function Share() {
         <p className="text-white/70 text-sm mt-0.5">Spread the word</p>
       </motion.div>
 
-      <div className="flex-1 scrollable px-4 pb-28 pt-4 space-y-4">
+      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-4">
 
         {/* Impact card preview */}
         <motion.div
