@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { NpProvider } from './store/NpContext';
 import { ThemeProvider, useTheme } from './store/ThemeContext';
@@ -6,8 +6,13 @@ import Onboarding from './pages/Onboarding';
 import AppShell from './components/AppShell';
 import NpShell from './pages/nonprofit/NpShell';
 import CoinMark from './components/CoinMark';
+import ScaleFit from './components/ScaleFit';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
+// (full-bleed, proportionally scaled to viewport width).
+const MOBILE_BP = 600;
 
 const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: '🍎', card: '💳' };
 
@@ -277,12 +282,29 @@ function PhoneFrame({ children }) {
   );
 }
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < MOBILE_BP);
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < MOBILE_BP);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return mobile;
+}
+
 function ThemedApp() {
+  const isMobile = useIsMobile();
   return (
     <ThemeProvider>
-      <PhoneFrame>
-        <AppContent />
-      </PhoneFrame>
+      {isMobile ? (
+        <ScaleFit>
+          <AppContent />
+        </ScaleFit>
+      ) : (
+        <PhoneFrame>
+          <AppContent />
+        </PhoneFrame>
+      )}
     </ThemeProvider>
   );
 }

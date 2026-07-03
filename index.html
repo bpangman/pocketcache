@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- maximum-scale=1 prevents iOS auto-zoom when scaled inputs fall below
+         16px; acceptable here because the app is a PWA-style shell, not a
+         document, so pinch-zoom is not expected by users. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <title>PocketCache — Give with every purchase</title>
 
     <!-- PWA -->

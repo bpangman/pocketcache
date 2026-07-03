@@ -2,11 +2,9 @@ import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { fmtMoney } from '../lib/format';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink, Building2, Flame } from 'lucide-react';
+import { Zap, Heart, TrendingUp, X, Share2, Plus, ExternalLink, Building2, Flame } from 'lucide-react';
 import { useApp } from '../store/AppContext';
-import { useNp } from '../store/NpContext';
 import { loadKey, saveKey } from '../store/identityStore';
-import CoinMark from '../components/CoinMark';
 import { useTheme } from '../store/ThemeContext';
 import { MONTHLY_DATA } from '../data/transactions';
 import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER } from '../data/derived';
@@ -118,9 +116,63 @@ function MatchBanner({ m, pct }) {
   );
 }
 
+function AdjustChargeSheet({ show, onClose, pendingRoundUps, chargeAdjustment, setChargeAdjustment, brand }) {
+  // Component is remounted via key when opened, so useState always starts fresh
+  const [value, setValue] = useState(chargeAdjustment ?? pendingRoundUps);
+
+  function handleConfirm() {
+    setChargeAdjustment(value);
+    onClose();
+  }
+
+  return (
+    <Sheet show={show} onClose={onClose} title="Adjust This Month's Charge">
+      <div className="px-6 py-5 pb-8 space-y-5">
+        <p className="text-gray-600 text-sm leading-relaxed">
+          One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
+        </p>
+        <div className="text-center">
+          <p className="text-4xl font-bold text-gray-900">${value.toFixed(2)}</p>
+          <p className="text-gray-400 text-xs mt-1">of ${pendingRoundUps.toFixed(2)} accrued this month</p>
+        </div>
+        <div className="px-2">
+          <input
+            type="range"
+            min={1.00}
+            max={pendingRoundUps}
+            step={0.01}
+            value={value}
+            onChange={e => setValue(parseFloat(e.target.value))}
+            className="w-full accent-teal-600"
+          />
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <span>$1.00</span>
+            <span>${pendingRoundUps.toFixed(2)}</span>
+          </div>
+        </div>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleConfirm}
+          className="w-full py-4 rounded-2xl text-white font-bold text-base"
+          style={{ background: brand.gradient }}
+        >
+          Set Charge to ${value.toFixed(2)}
+        </motion.button>
+        {chargeAdjustment !== null && (
+          <button
+            onClick={() => { setChargeAdjustment(null); onClose(); }}
+            className="w-full py-2 text-sm text-gray-400 font-medium"
+          >
+            Reset to full amount
+          </button>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 export default function Dashboard() {
-  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep } = useApp();
-  const { resetNpContent } = useNp();
+  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
@@ -128,7 +180,7 @@ export default function Dashboard() {
   const [showVolunteer, setShowVolunteer] = useState(false);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const [boostToast, setBoostToast] = useState(null);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showAdjustCharge, setShowAdjustCharge] = useState(false);
   const toastTimerRef = useRef(null);
   const daysLeft = daysUntilMonthEnd();
 
@@ -144,6 +196,12 @@ export default function Dashboard() {
   const nextMonthFirst = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
   const nextChargeDateLabel = nextMonthFirst.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const belowMinimum = pendingRoundUps < monthlyMinimum;
+
+  // Cap + per-charge adjustment logic
+  const capActive = monthlyCap !== null && pendingRoundUps > monthlyCap;
+  const effectiveCharge = chargeAdjustment !== null
+    ? chargeAdjustment
+    : capActive ? monthlyCap : pendingRoundUps;
 
   // MoM display: "↑ 14% vs last" or "↓ 5% vs last" or "First month"
   const momDisplay = momChange === null
@@ -229,21 +287,11 @@ export default function Dashboard() {
         transition={{ duration: 0.6 }}
         className="px-5 pt-14 pb-6"
       >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-white/70 text-sm font-medium">{getGreeting()}, {DEMO_USER.name} 👋</p>
-            <h1 className="text-white text-2xl font-bold mt-1" style={{ letterSpacing: '-0.3px' }}>
-              {brand.appName}
-            </h1>
-          </div>
-          <button
-            onClick={() => setShowProfile(true)}
-            className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30 active:scale-95 transition-transform relative"
-            aria-label="Open account settings"
-          >
-            {DEMO_USER.name[0]}
-            <span className="absolute inset-0 rounded-full border border-white/40 animate-ping opacity-30" style={{ animationDuration: '3s' }} />
-          </button>
+        <div>
+          <p className="text-white/70 text-sm font-medium">{getGreeting()}, {DEMO_USER.name} 👋</p>
+          <h1 className="text-white text-2xl font-bold mt-1" style={{ letterSpacing: '-0.3px' }}>
+            {brand.appName}
+          </h1>
         </div>
       </motion.div>
 
@@ -380,7 +428,7 @@ export default function Dashboard() {
               </p>
             ) : (
               <p className="text-xs font-semibold" style={{ color: '#059669' }}>
-                ${pendingRoundUps.toFixed(2)} + $1 app fee · pending charge
+                ${effectiveCharge.toFixed(2)} + $1 app fee · pending charge
               </p>
             )}
             <p className="text-gray-400 text-xs">Month end</p>
@@ -389,6 +437,25 @@ export default function Dashboard() {
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
               Not quite ${monthlyMinimum} yet — your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
             </p>
+          )}
+          {!belowMinimum && capActive && chargeAdjustment === null && (
+            <p className="text-amber-600 text-xs mt-2 leading-relaxed">
+              Capped at ${monthlyCap.toFixed(2)} — the rest won&apos;t be charged.
+            </p>
+          )}
+          {!belowMinimum && chargeAdjustment !== null && (
+            <p className="text-xs mt-2 font-medium" style={{ color: '#059669' }}>
+              Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
+            </p>
+          )}
+          {!belowMinimum && (
+            <button
+              onClick={() => setShowAdjustCharge(true)}
+              className="text-xs mt-2 font-semibold underline-offset-2 underline block"
+              style={{ color: brand.primary }}
+            >
+              Adjust this charge →
+            </button>
           )}
         </motion.div>
 
@@ -494,74 +561,16 @@ export default function Dashboard() {
 
       </div>
 
-      {/* Profile / Account sheet */}
-      <Sheet show={showProfile} onClose={() => setShowProfile(false)} title="Your Account">
-        <div className="px-6 pt-2 pb-8 space-y-1">
-          {/* Avatar + name block */}
-          <div className="flex flex-col items-center py-6 gap-2">
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
-              style={{ background: brand.gradient }}
-            >
-              {DEMO_USER.name[0]}
-            </div>
-            <p className="font-bold text-gray-900 text-lg mt-1">{DEMO_USER.name}</p>
-            <p className="text-gray-400 text-sm">{DEMO_USER.email}</p>
-          </div>
-
-          {/* Mode switch — top of menu */}
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => {
-              setShowProfile(false);
-              if (adminRole) { setLastMode('admin'); setPage('np-dashboard'); }
-              else goToOnboardingStep('nonprofit-signup');
-            }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-left mb-1"
-            style={adminRole
-              ? { background: 'linear-gradient(135deg,#0B2A4A,#003865)', color: '#fff' }
-              : { background: '#f9fafb', color: '#374151' }}
-          >
-            <span className="text-lg">🏛️</span>
-            <span className="flex-1 font-semibold text-sm">
-              {adminRole ? `Switch to Admin · ${adminRole.joinCode}` : 'Run a nonprofit? Create your page'}
-            </span>
-            <ChevronRight size={16} className={adminRole ? 'text-white/50' : 'text-gray-300'} />
-          </motion.button>
-
-          {/* Menu rows */}
-          {[
-            { icon: <Settings size={18} />, label: 'Account Settings', action: () => { setShowProfile(false); setTab('settings'); } },
-            { icon: <CreditCard size={18} />, label: 'Payment Method', action: () => { setShowProfile(false); setTab('settings'); } },
-            { icon: <Bell size={18} />, label: 'Notifications', action: () => { setShowProfile(false); setTab('settings'); } },
-            { icon: <HelpCircle size={18} />, label: 'Help & Support', action: () => window.open('mailto:support@pocketcache.app') },
-          ].map(({ icon, label, action }) => (
-            <button
-              key={label}
-              onClick={action}
-              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-gray-50 active:bg-gray-100 transition-colors text-left"
-            >
-              <span className="text-gray-500">{icon}</span>
-              <span className="flex-1 text-gray-800 font-medium text-sm">{label}</span>
-              <ChevronRight size={16} className="text-gray-300" />
-            </button>
-          ))}
-
-          <div className="pt-2">
-            <button
-              onClick={() => { setShowProfile(false); resetNpContent(); signOut(); }}
-              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-red-50 active:bg-red-100 transition-colors text-left"
-            >
-              <span className="text-red-400"><LogOut size={18} /></span>
-              <span className="flex-1 text-red-500 font-medium text-sm">Sign Out</span>
-            </button>
-          </div>
-
-          <p className="text-center text-gray-300 text-xs pt-4 flex items-center gap-1 justify-center">
-            <CoinMark size={14} />PocketCache · v1.0.0
-          </p>
-        </div>
-      </Sheet>
+      {/* Adjust charge sheet — key remounts on open so slider initializes fresh */}
+      <AdjustChargeSheet
+        key={showAdjustCharge ? 'open' : 'closed'}
+        show={showAdjustCharge}
+        onClose={() => setShowAdjustCharge(false)}
+        pendingRoundUps={pendingRoundUps}
+        chargeAdjustment={chargeAdjustment}
+        setChargeAdjustment={setChargeAdjustment}
+        brand={brand}
+      />
     </div>
   );
 }

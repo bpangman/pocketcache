@@ -60,6 +60,9 @@ jobs:
           # CNAME for custom domain
           cp CNAME dist-pages/CNAME
 
+          # Vanity join links: 404.html forwards pocketcache.app/CODE → /demo/?org=CODE
+          cp public/404.html dist-pages/404.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

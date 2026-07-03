@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle } from 'lucide-react';
+import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle, HelpCircle } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
@@ -765,6 +765,7 @@ export default function Settings() {
     boostDonation, cancelAccount, adminRole, deleteAccount,
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
     pendingSettingsAction, clearPendingSettingsAction, showToast,
+    monthlyCap, setMonthlyCap,
   } = useApp();
   const brand = useTheme();
 
@@ -893,6 +894,56 @@ export default function Settings() {
           />
         </motion.div>
 
+        {/* Monthly Giving Cap */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          className="bg-white rounded-3xl overflow-hidden card-shadow">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Monthly Giving Cap</p>
+          </div>
+          <div className="px-4 pb-4 pt-1">
+            <div className="flex items-center gap-3 py-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: brand.primary + '18' }}>
+                <span style={{ color: brand.primary }}>🎯</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-gray-900 text-sm font-semibold">Monthly Cap</p>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  {monthlyCap === null ? 'No cap set' : `Capped at $${monthlyCap}/month`}
+                </p>
+              </div>
+              <Toggle value={monthlyCap !== null} onChange={v => setMonthlyCap(v ? 20 : null)} color={brand.primary} />
+            </div>
+            {monthlyCap !== null && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="space-y-2 mt-2"
+              >
+                <div className="text-center py-1">
+                  <span className="text-3xl font-bold text-gray-900">${monthlyCap}</span>
+                  <span className="text-gray-400 text-sm ml-1">/month</span>
+                </div>
+                <input
+                  type="range"
+                  min={5}
+                  max={200}
+                  step={5}
+                  value={monthlyCap}
+                  onChange={e => setMonthlyCap(Number(e.target.value))}
+                  className="w-full accent-teal-600"
+                />
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>$5</span>
+                  <span>$200</span>
+                </div>
+              </motion.div>
+            )}
+            <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+              Cap what you give each month. If your round-ups go over, we only charge up to your cap — the rest is simply never charged.
+            </p>
+          </div>
+        </motion.div>
+
         {/* Card We Track */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
           className="bg-white rounded-3xl overflow-hidden card-shadow">
@@ -947,7 +998,7 @@ export default function Settings() {
           <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
           <p className="text-xs text-amber-800 leading-relaxed">
             One monthly charge on {selectedNonprofit.shortName}&apos;s Stripe — minimum ${selectedNonprofit.monthlyMinimum}.
-            A flat <strong>$1/month</strong> app fee (50¢ tracking + 50¢ processing) is part of every charge — always, never a percentage.
+            A flat <strong>$1/month</strong> app fee — only for months you&apos;re actively rounding up. If a month rolls over, the fee rolls with it and collects in the same single charge.
             Your toggle covers {selectedNonprofit.shortName}&apos;s card-processing costs: on means a small amount (~2.2% + 30¢) is added and passes directly to them — PocketCache never keeps it. Off means {selectedNonprofit.shortName} nets your round-ups minus standard card costs.
             They never pay PocketCache anything — the platform is always free for them.
             Months under ${selectedNonprofit.monthlyMinimum} roll over; we settle every 3 months at most.{' '}
@@ -1025,6 +1076,22 @@ export default function Settings() {
             color={brand.secondary}
             onPress={() => setShowAppIcon(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+          />
+        </motion.div>
+
+        {/* Help & Support */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+          className="bg-white rounded-3xl overflow-hidden card-shadow">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Help &amp; Support</p>
+          </div>
+          <SettingRow
+            icon={<HelpCircle size={18} />}
+            label="Contact support"
+            sub="support@pocketcache.app"
+            color={brand.primary}
+            onPress={() => window.open('mailto:support@pocketcache.app')}
+            right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
         </motion.div>
 

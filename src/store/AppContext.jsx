@@ -8,7 +8,7 @@ const DONOR_KEYS = [
   'pc_page', 'pc_cause_id', 'pc_multiplier', 'pc_cards', 'pc_total_donated',
   'pc_seen_milestone', 'pc_dismiss_countdown', 'pc_prefs', 'pc_account_status',
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
-  'pc_comms_optin',
+  'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];
@@ -51,6 +51,9 @@ export function AppProvider({ children }) {
   const [paymentMethod, setPaymentMethodState] = useState(() =>
     loadKey('pc_payment_method', DEFAULT_PAYMENT_METHOD)
   );
+
+  const [monthlyCap, setMonthlyCapState] = useState(() => loadKey('pc_monthly_cap', null));
+  const [chargeAdjustment, setChargeAdjustmentState] = useState(() => loadKey('pc_charge_adjustment', null));
 
   // Non-persisted: triggers Settings to auto-open a sheet (e.g. from reactivation check-in)
   const [pendingSettingsAction, setPendingSettingsActionState] = useState(null);
@@ -122,6 +125,16 @@ export function AppProvider({ children }) {
     setPaymentMethodState(method);
   }
 
+  function setMonthlyCap(val) {
+    saveKey('pc_monthly_cap', val);
+    setMonthlyCapState(val);
+  }
+
+  function setChargeAdjustment(val) {
+    saveKey('pc_charge_adjustment', val);
+    setChargeAdjustmentState(val);
+  }
+
   function setPendingSettingsAction(action) {
     setPendingSettingsActionState(action);
   }
@@ -162,6 +175,8 @@ export function AppProvider({ children }) {
     setHasAccountState(null);
     setTrackedCardState(DEFAULT_TRACKED_CARD);
     setPaymentMethodState(DEFAULT_PAYMENT_METHOD);
+    setMonthlyCapState(null);
+    setChargeAdjustmentState(null);
   }
 
   // deleteAccount: deletes the donor role only. If an admin role exists the
@@ -242,6 +257,8 @@ export function AppProvider({ children }) {
       trackedCard, setTrackedCard,
       paymentMethod, setPaymentMethod,
       pendingSettingsAction, setPendingSettingsAction, clearPendingSettingsAction,
+      monthlyCap, setMonthlyCap,
+      chargeAdjustment, setChargeAdjustment,
     }}>
       {children}
     </AppContext.Provider>
