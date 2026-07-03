@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { NpProvider } from './store/NpContext';
 import { ThemeProvider, useTheme } from './store/ThemeContext';
@@ -7,6 +8,8 @@ import NpShell from './pages/nonprofit/NpShell';
 import CoinMark from './components/CoinMark';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
+
+const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: '🍎', card: '💳' };
 
 function CancelledOverlay({ onReactivate, onBack }) {
   return (
@@ -47,6 +50,99 @@ function CancelledOverlay({ onReactivate, onBack }) {
   );
 }
 
+function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, onChangePayment }) {
+  const [relinking, setRelinking] = useState(false);
+  const [relinked, setRelinked] = useState(false);
+
+  function handleRelink() {
+    setRelinking(true);
+    // production: Plaid item was removed at cancellation — mandatory re-link via Plaid Link
+    setTimeout(() => { setRelinking(false); setRelinked(true); }, 1200);
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-50 flex items-center justify-center px-6"
+      style={{ background: 'rgba(11, 42, 74, 0.55)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+      >
+        <div className="text-2xl mb-2">👋</div>
+        <p className="font-bold text-gray-900 text-lg mb-1">Welcome back!</p>
+        <p className="text-gray-500 text-sm mb-4 leading-relaxed">
+          Quick check before we restart:
+        </p>
+
+        {/* Card we track */}
+        <div className="bg-gray-50 rounded-2xl p-4 mb-3">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Card we track</p>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🏦</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm truncate">{trackedCard?.name ?? 'Chase Sapphire'}</p>
+              <p className="text-gray-400 text-xs">•••• {trackedCard?.last4 ?? '4242'}</p>
+              <p className="text-xs text-amber-600 mt-0.5 leading-tight">We disconnected this when you left — give it a quick re-link</p>
+            </div>
+            {relinked ? (
+              <span className="text-xs font-semibold text-teal-600 shrink-0">Connected ✓</span>
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={handleRelink}
+                disabled={relinking}
+                className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold text-white"
+                style={{ background: relinking ? '#9ca3af' : 'linear-gradient(135deg, #0d9488, #003865)', cursor: relinking ? 'default' : 'pointer' }}
+              >
+                {relinking ? 'Linking…' : 'Re-link'}
+              </motion.button>
+            )}
+          </div>
+        </div>
+
+        {/* How you pay */}
+        <div className="bg-gray-50 rounded-2xl p-4 mb-5">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">How you pay</p>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">{PAYMENT_TYPE_ICON[paymentMethod?.type] ?? '💳'}</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm truncate">{paymentMethod?.label ?? 'Credit or Debit Card'}</p>
+              {paymentMethod?.last4 && <p className="text-gray-400 text-xs">•••• {paymentMethod.last4}</p>}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-semibold text-teal-600">Keep</span>
+              <span className="text-gray-300 text-xs">·</span>
+              <button onClick={onChangePayment} className="text-xs font-semibold" style={{ color: '#003865' }}>Change</button>
+            </div>
+          </div>
+        </div>
+
+        {/* production: Plaid item was removed at cancellation; re-link is mandatory before round-ups resume */}
+        <motion.button
+          whileTap={relinked ? { scale: 0.97 } : {}}
+          onClick={relinked ? onRestart : undefined}
+          className="w-full py-3.5 rounded-2xl text-white font-bold text-base mb-3"
+          style={{
+            background: relinked ? 'linear-gradient(135deg, #0B2A4A, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+            cursor: relinked ? 'pointer' : 'default',
+          }}
+        >
+          Restart my round-ups
+        </motion.button>
+        <button onClick={onBack} className="w-full py-3 rounded-2xl text-gray-500 font-semibold text-sm bg-gray-50">
+          Back to start
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function Toast({ message }) {
   return (
     <motion.div
@@ -61,7 +157,26 @@ function Toast({ message }) {
 }
 
 function AppContent() {
-  const { page, accountStatus, reactivateAccount, setPage, toast } = useApp();
+  const { page, accountStatus, reactivateAccount, setPage, toast, trackedCard, paymentMethod, setTab, setPendingSettingsAction } = useApp();
+  const [showReactivateCheckin, setShowReactivateCheckin] = useState(false);
+
+  function handleReactivateTap() {
+    setShowReactivateCheckin(true);
+  }
+
+  function handleRestartRoundups() {
+    reactivateAccount('Welcome back — tracking restarted today. Your first new charge comes on the 1st.');
+    setShowReactivateCheckin(false);
+  }
+
+  function handleChangePaymentFromCheckin() {
+    // Reactivate first, then deep-link to Settings → payment method sheet
+    reactivateAccount('Welcome back! Update your payment method in Settings.');
+    setShowReactivateCheckin(false);
+    setTab('settings');
+    setPendingSettingsAction('change-payment');
+  }
+
   if (page === 'onboarding') return <Onboarding />;
   if (page === 'np-dashboard') return <NpShell />;
   return (
@@ -71,8 +186,20 @@ function AppContent() {
         {accountStatus === 'cancelled' && (
           <CancelledOverlay
             key="cancelled"
-            onReactivate={reactivateAccount}
+            onReactivate={handleReactivateTap}
             onBack={() => setPage('onboarding')}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showReactivateCheckin && (
+          <ReactivateCheckinCard
+            key="reactivate-checkin"
+            trackedCard={trackedCard}
+            paymentMethod={paymentMethod}
+            onRestart={handleRestartRoundups}
+            onBack={() => { setShowReactivateCheckin(false); setPage('onboarding'); }}
+            onChangePayment={handleChangePaymentFromCheckin}
           />
         )}
       </AnimatePresence>

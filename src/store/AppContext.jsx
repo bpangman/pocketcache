@@ -7,7 +7,7 @@ import { IDENTITY_KEYS, migrate, loadKey, saveKey, removeKeys, clearIdentityKeys
 const DONOR_KEYS = [
   'pc_page', 'pc_cause_id', 'pc_multiplier', 'pc_cards', 'pc_total_donated',
   'pc_seen_milestone', 'pc_dismiss_countdown', 'pc_prefs', 'pc_account_status',
-  'pc_has_account', 'pc_donor_role',
+  'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];
@@ -34,6 +34,25 @@ export function AppProvider({ children }) {
   const [linkedCards, setLinkedCardsState] = useState(() => loadKey('pc_cards', [
     { id: 1, last4: '4242', brand: 'Visa', name: 'Chase Sapphire' },
   ]));
+
+  const DEFAULT_TRACKED_CARD = { name: 'Chase Sapphire', last4: '4242', brand: 'Visa', institution: 'Chase' };
+  const DEFAULT_PAYMENT_METHOD = { type: 'card', label: 'Credit or Debit Card', last4: '4242' };
+
+  const [trackedCard, setTrackedCardState] = useState(() => {
+    const saved = loadKey('pc_tracked_card', null);
+    if (saved) return saved;
+    // Migrate from legacy pc_cards — first card becomes trackedCard
+    const cards = loadKey('pc_cards', []);
+    if (cards.length > 0) return { name: cards[0].name, last4: cards[0].last4, brand: cards[0].brand, institution: cards[0].name };
+    return DEFAULT_TRACKED_CARD;
+  });
+
+  const [paymentMethod, setPaymentMethodState] = useState(() =>
+    loadKey('pc_payment_method', DEFAULT_PAYMENT_METHOD)
+  );
+
+  // Non-persisted: triggers Settings to auto-open a sheet (e.g. from reactivation check-in)
+  const [pendingSettingsAction, setPendingSettingsActionState] = useState(null);
 
   const [totalDonated, setTotalDonated] = useState(
     () => loadKey('pc_total_donated', PRIOR_MONTHS_SUM),
@@ -92,6 +111,24 @@ export function AppProvider({ children }) {
     });
   }
 
+  function setTrackedCard(card) {
+    saveKey('pc_tracked_card', card);
+    setTrackedCardState(card);
+  }
+
+  function setPaymentMethod(method) {
+    saveKey('pc_payment_method', method);
+    setPaymentMethodState(method);
+  }
+
+  function setPendingSettingsAction(action) {
+    setPendingSettingsActionState(action);
+  }
+
+  function clearPendingSettingsAction() {
+    setPendingSettingsActionState(null);
+  }
+
   function setAccountStatus(v) {
     saveKey('pc_account_status', v);
     setAccountStatusState(v);
@@ -122,6 +159,8 @@ export function AppProvider({ children }) {
     setTab('dashboard');
     setAccountStatusState('active');
     setHasAccountState(null);
+    setTrackedCardState(DEFAULT_TRACKED_CARD);
+    setPaymentMethodState(DEFAULT_PAYMENT_METHOD);
   }
 
   // deleteAccount: deletes the donor role only. If an admin role exists the
@@ -151,10 +190,10 @@ export function AppProvider({ children }) {
     setPageState('onboarding');
   }
 
-  function reactivateAccount() {
+  function reactivateAccount(msg = 'Welcome back!') {
     saveKey('pc_account_status', 'active');
     setAccountStatusState('active');
-    showToast('Welcome back!');
+    showToast(msg);
   }
 
   function goToOnboardingStep(step) {
@@ -199,6 +238,9 @@ export function AppProvider({ children }) {
       adminRole, setAdminRole,
       lastMode, setLastMode,
       deleteAccount,
+      trackedCard, setTrackedCard,
+      paymentMethod, setPaymentMethod,
+      pendingSettingsAction, setPendingSettingsAction, clearPendingSettingsAction,
     }}>
       {children}
     </AppContext.Provider>

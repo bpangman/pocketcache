@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { CreditCard, Bell, Shield, ChevronRight, Plus, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle } from 'lucide-react';
+import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
@@ -91,6 +91,21 @@ const MULTIPLIER_OPTIONS = [
   { value: 2, label: '2×', desc: 'Double your impact' },
   { value: 3, label: '3×', desc: 'Triple your impact' },
 ];
+
+const TRACKED_CARD_BANKS = [
+  { id: 'chase',   name: 'Chase',            sub: 'Sapphire, Freedom, Ink',          color: '#1a56db', emoji: '🏦' },
+  { id: 'capital', name: 'Capital One',       sub: 'Venture, Quicksilver',             color: '#c0392b', emoji: '💳' },
+  { id: 'amex',    name: 'American Express',  sub: 'Gold, Platinum, Blue Cash',        color: '#007bc1', emoji: '💳' },
+  { id: 'bofa',    name: 'Bank of America',   sub: 'Customized Cash, Travel',          color: '#e31837', emoji: '🏦' },
+];
+
+const PAYMENT_METHOD_OPTIONS = [
+  { id: 'ach',       icon: '🏦', label: 'Bank Account',          sub: 'Direct bank transfer · Flat $0.50/month processing fee' },
+  { id: 'apple_pay', icon: '🍎', label: 'Apple Pay',              sub: 'Set up once, fully automatic · Flat $0.50/month processing fee' },
+  { id: 'card',      icon: '💳', label: 'Credit or Debit Card',   sub: 'Visa, Mastercard, Amex, or Discover · Flat $0.50/month processing fee' },
+];
+
+const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: '🍎', card: '💳' };
 
 function AddCardForm({ onAdd, onClose, brand }) {
   const stripe = useStripe();
@@ -555,11 +570,200 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
   );
 }
 
+function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
+  const [connecting, setConnecting] = useState(null);
+  const [connected, setConnected] = useState(null);
+
+  function handleSelect(bank) {
+    if (connected) return;
+    setConnecting(bank.id);
+    setTimeout(() => {
+      const last4 = String(Math.floor(1000 + Math.random() * 9000));
+      setConnecting(null);
+      setConnected({ ...bank, last4 });
+    }, 1200);
+  }
+
+  function handleDone() {
+    onConnected(connected);
+    onClose();
+    setConnected(null);
+    setConnecting(null);
+  }
+
+  return (
+    <Sheet show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); }} title="Track a Different Card">
+      <div className="flex flex-col h-full overflow-hidden" style={{ background: '#f0fdfb' }}>
+        <div className="flex-1 px-4 pt-5 pb-2 space-y-2.5 overflow-y-auto">
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">
+            Currently tracking: {currentCard?.name ?? 'Chase Sapphire'} ···· {currentCard?.last4 ?? '4242'}
+          </p>
+          <p className="text-gray-500 text-xs px-1 pb-1">Select the card you want us to watch. Read-only access — we never touch your money, just count round-ups.</p>
+
+          {connected ? (
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="rounded-2xl p-4 flex items-center gap-3"
+              style={{ background: '#f0fdfa', border: '1px solid #99f6e4' }}
+            >
+              <CheckCircle size={22} className="shrink-0" style={{ color: '#0D9488' }} />
+              <div className="flex-1">
+                <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{connected.name} connected</p>
+                <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll watch purchases and calculate round-ups as they happen</p>
+              </div>
+            </motion.div>
+          ) : (
+            TRACKED_CARD_BANKS.map(bank => (
+              <motion.button
+                key={bank.id}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleSelect(bank)}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
+                style={{ background: '#fff', border: '1.5px solid #99f6e4', opacity: connecting && connecting !== bank.id ? 0.4 : 1 }}
+              >
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-xl bg-gray-50">
+                  {bank.emoji}
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-gray-900 text-sm">{bank.name}</p>
+                  <p className="text-gray-400 text-xs">{bank.sub}</p>
+                </div>
+                {connecting === bank.id
+                  ? <span className="text-xs text-teal-600 font-semibold">Connecting…</span>
+                  : <ChevronRight size={16} className="text-gray-300 shrink-0" />
+                }
+              </motion.button>
+            ))
+          )}
+
+          <div className="flex items-center gap-2 px-1 pt-1">
+            <Lock size={12} className="text-gray-400 shrink-0" />
+            <p className="text-gray-400 text-xs">Read-only access via Plaid · Your credentials are never stored by PocketCache</p>
+          </div>
+        </div>
+
+        <div className="px-4 pb-10 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb' }}>
+          <motion.button
+            whileTap={connected ? { scale: 0.97 } : {}}
+            onClick={() => connected && handleDone()}
+            className="w-full py-4 rounded-2xl text-white font-bold text-base"
+            style={{
+              background: connected ? 'linear-gradient(135deg, #0d9488, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+              cursor: connected ? 'pointer' : 'default',
+            }}
+          >
+            {connected ? `Use ${connected.name} →` : 'Select a bank to continue'}
+          </motion.button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+function ChangePaymentSheet({ show, onClose, brand, onMethodChanged }) {
+  const [selected, setSelected] = useState(null);
+  const [setting, setSetting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [showAddCard, setShowAddCard] = useState(false);
+
+  function handleSelect(optId) {
+    if (optId === 'card') {
+      setShowAddCard(true);
+      return;
+    }
+    setSelected(optId);
+    setSetting(true);
+    setTimeout(() => {
+      setSetting(false);
+      setDone(true);
+    }, 1200);
+  }
+
+  function handleCardAdded(card) {
+    const method = { type: 'card', label: 'Credit or Debit Card', last4: card.last4 };
+    onMethodChanged(method);
+    setShowAddCard(false);
+    onClose();
+    setSelected(null);
+    setDone(false);
+  }
+
+  function handleConfirm() {
+    const opt = PAYMENT_METHOD_OPTIONS.find(o => o.id === selected);
+    const method = { type: selected, label: opt?.label ?? selected, last4: null };
+    onMethodChanged(method);
+    onClose();
+    setSelected(null);
+    setDone(false);
+  }
+
+  return (
+    <>
+      <Sheet show={show} onClose={() => { onClose(); setSelected(null); setDone(false); setSetting(false); }} title="Change Payment Method">
+        <div className="px-4 pt-5 pb-10 space-y-3">
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
+          <p className="text-gray-500 text-sm px-1 pb-1">Charged once a month for your round-ups total.</p>
+
+          {PAYMENT_METHOD_OPTIONS.map(opt => (
+            <motion.button
+              key={opt.id}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => !done && handleSelect(opt.id)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl text-left transition-all"
+              style={selected === opt.id
+                ? { background: '#FEF3C7', border: '2px solid #FBBF24' }
+                : { background: '#fff', border: '1.5px solid #e5e7eb' }
+              }
+            >
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-2xl bg-gray-50">
+                {opt.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-900 text-sm">{opt.label}</p>
+                <p className="text-gray-400 text-xs mt-0.5">{opt.sub}</p>
+              </div>
+              {selected === opt.id && setting && <span className="text-xs text-amber-600 font-semibold shrink-0">Setting up…</span>}
+              {selected === opt.id && done && <CheckCircle size={18} className="shrink-0" style={{ color: '#0D9488' }} />}
+            </motion.button>
+          ))}
+
+          {done && (
+            <motion.button
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleConfirm}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base mt-2"
+              style={{ background: brand.gradient }}
+            >
+              Confirm →
+            </motion.button>
+          )}
+
+          <p className="text-gray-400 text-xs text-center px-2 pt-1">
+            Payments are processed by Stripe — not us. Change this anytime.
+          </p>
+        </div>
+      </Sheet>
+
+      <AddCardSheet
+        show={showAddCard}
+        onClose={() => setShowAddCard(false)}
+        onAdd={handleCardAdded}
+        brand={brand}
+      />
+    </>
+  );
+}
+
 export default function Settings() {
   const {
-    linkedCards, setLinkedCards, selectedNonprofit, roundUpMultiplier,
+    linkedCards, selectedNonprofit, roundUpMultiplier,
     setRoundUpMultiplier, totalDonated, setSelectedNonprofit, pendingRoundUps,
     boostDonation, cancelAccount, adminRole, deleteAccount,
+    trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
+    pendingSettingsAction, clearPendingSettingsAction, showToast,
   } = useApp();
   const brand = useTheme();
 
@@ -572,11 +776,20 @@ export default function Settings() {
   }
 
   const [showMultiplier, setShowMultiplier] = useState(false);
-  const [showAddCard, setShowAddCard] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showSwitchOrg, setShowSwitchOrg] = useState(false);
   const [showAppIcon, setShowAppIcon] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
+  const [showTrackCard, setShowTrackCard] = useState(false);
+  const [showChangePayment, setShowChangePayment] = useState(false);
+
+  useEffect(() => {
+    if (pendingSettingsAction === 'change-payment') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowChangePayment(true);
+      clearPendingSettingsAction();
+    }
+  }, [pendingSettingsAction, clearPendingSettingsAction]);
 
   // "Member since" derived from DEMO_USER.joinedAt which is consistent with MONTHLY_DATA start
   const memberSince = DEMO_USER.joinedAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -673,29 +886,50 @@ export default function Settings() {
           />
         </motion.div>
 
-        {/* Linked accounts */}
+        {/* Card We Track */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
           className="bg-white rounded-3xl overflow-hidden card-shadow">
           <div className="px-4 pt-4 pb-2">
-            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Linked Cards</p>
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Card We Track</p>
           </div>
-          {linkedCards.map((card) => (
-            <SettingRow
-              key={card.id}
-              icon={<CreditCard size={18} />}
-              label={card.name}
-              sub={`•••• ${card.last4} · ${card.brand}`}
-              color={brand.secondary}
-              right={<span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ color: '#0D9488', background: '#f0fdfa' }}>Active</span>}
-            />
-          ))}
+          <SettingRow
+            icon={<CreditCard size={18} />}
+            label={trackedCard?.name ?? 'Chase Sapphire'}
+            sub={`•••• ${trackedCard?.last4 ?? '4242'} · Read-only via Plaid`}
+            color="#0D9488"
+            right={<span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ color: '#0D9488', background: '#f0fdfa' }}>Watching</span>}
+          />
           <div className="h-px bg-gray-50 mx-4" />
           <SettingRow
-            icon={<Plus size={18} />}
-            label="Add a card"
-            sub="Link another bank or credit card"
+            icon={<span className="text-base">🔄</span>}
+            label="Track a different card"
+            sub="Switch which card we watch for round-ups"
             color={brand.primary}
-            onPress={() => setShowAddCard(true)}
+            onPress={() => setShowTrackCard(true)}
+            right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+          />
+        </motion.div>
+
+        {/* How You Pay */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
+          className="bg-white rounded-3xl overflow-hidden card-shadow">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">How You Pay</p>
+          </div>
+          <SettingRow
+            icon={<span className="text-base">{PAYMENT_TYPE_ICON[paymentMethod?.type] ?? '💳'}</span>}
+            label={paymentMethod?.label ?? 'Credit or Debit Card'}
+            sub={`${paymentMethod?.last4 ? `•••• ${paymentMethod.last4} · ` : ''}Charged once a month`}
+            color={brand.primary}
+            right={<span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ color: '#0D9488', background: '#f0fdfa' }}>Active</span>}
+          />
+          <div className="h-px bg-gray-50 mx-4" />
+          <SettingRow
+            icon={<span className="text-base">🔄</span>}
+            label="Change payment method"
+            sub="Bank account, Apple Pay, or card"
+            color={brand.primary}
+            onPress={() => setShowChangePayment(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
         </motion.div>
@@ -844,12 +1078,26 @@ export default function Settings() {
         </div>
       </Sheet>
 
-      {/* Add Card sheet */}
-      <AddCardSheet
-        show={showAddCard}
-        onClose={() => setShowAddCard(false)}
-        onAdd={(card) => setLinkedCards(c => [...c, card])}
+      {/* Track Card sheet */}
+      <TrackCardSheet
+        show={showTrackCard}
+        onClose={() => setShowTrackCard(false)}
+        currentCard={trackedCard}
+        onConnected={(bank) => {
+          setTrackedCard({ name: bank.name, last4: bank.last4, brand: bank.name, institution: bank.name });
+          showToast(`Now tracking ${bank.name}. Round-ups from your old card stop today; new purchases on this card count from now on.`);
+        }}
+      />
+
+      {/* Change Payment sheet */}
+      <ChangePaymentSheet
+        show={showChangePayment}
+        onClose={() => setShowChangePayment(false)}
         brand={brand}
+        onMethodChanged={(method) => {
+          setPaymentMethod(method);
+          showToast('Payment method updated.');
+        }}
       />
 
       {/* Privacy & Security sheet */}

@@ -328,16 +328,17 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
           </form>
         </div>
 
-        {/* Quiet "already have account?" link — visible even without local identity (fresh device / new phone) */}
-        <div className="px-5 pb-1 text-center">
-          <button
+        {/* "Already have an account?" — full-size, visible even without local identity (fresh device / new phone) */}
+        <div className="px-5 pb-1">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             type="button"
             onClick={onUniversalSignIn}
-            className="text-gray-400 text-xs py-2"
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-base"
+            style={{ background: '#f0f4f8', color: '#0B2A4A' }}
           >
-            Already have an account?{' '}
-            <span className="font-semibold" style={{ color: '#6b7280' }}>Sign in</span>
-          </button>
+            Already have an account? Sign in
+          </motion.button>
         </div>
 
         <div className="px-5 pb-8 pt-0">
@@ -425,9 +426,6 @@ const US_STATES = [
 
 function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
   const [chosen, setChosen] = useState(null);
-  const [showEmail, setShowEmail] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [selectedState, setSelectedState] = useState('');
   const [showTermsHint, setShowTermsHint] = useState(false);
@@ -451,13 +449,6 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
     setChosen(provider);
     setTimeout(() => onNext(), 700);
   }
-
-  function handleEmail(e) {
-    e.preventDefault();
-    if (!canContinue) { setShowTermsHint(true); return; }
-    if (email && password) onNext();
-  }
-
 
   return (
     <motion.div
@@ -542,62 +533,21 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
             </select>
           </div>
 
-          {!showEmail ? (
-            <>
-              <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} />
+          <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} />
 
-              <div className="flex items-center gap-3 px-1">
-                <div className="flex-1 h-px bg-gray-100" />
-                <p className="text-gray-400 text-xs">or</p>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>
+          {/* SSO only, by design — PocketCache never stores a password */}
+          <p className="text-gray-400 text-xs text-center px-2 pt-1">
+            No passwords here — your Apple or Google account is your key, including its two-factor protection.
+          </p>
 
-              <button
-                onClick={() => setShowEmail(true)}
-                className="w-full py-3.5 rounded-2xl font-semibold text-sm"
-                style={{ color: '#003865', background: '#e8f0fa' }}
-              >
-                Use email &amp; password
-              </button>
-              {/* Already have an account? */}
-              <button
-                onClick={handleSignIn}
-                className="w-full text-center py-2"
-              >
-                <span className="text-gray-400 text-sm">Already have an account? </span>
-                <span className="text-sm font-semibold underline" style={{ color: '#003865' }}>Sign in</span>
-              </button>
-            </>
-          ) : (
-            <form onSubmit={handleEmail} className="space-y-3">
-              <button type="button" onClick={() => setShowEmail(false)}
-                className="text-sm font-semibold" style={{ color: '#003865' }}>
-                ← Back
-              </button>
-              <input
-                type="email" placeholder="Email address" value={email}
-                onChange={e => setEmail(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
-              />
-              <input
-                type="password" placeholder="Create password" value={password}
-                onChange={e => setPassword(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
-              />
-              <motion.button
-                whileTap={canContinue ? { scale: 0.97 } : {}}
-                type="submit"
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{
-                  background: 'linear-gradient(135deg, #003865, #001a33)',
-                  opacity: canContinue ? 1 : 0.4,
-                  cursor: canContinue ? 'pointer' : 'default',
-                }}
-              >
-                Create Account
-              </motion.button>
-            </form>
-          )}
+          {/* Already have an account? */}
+          <button
+            onClick={handleSignIn}
+            className="w-full text-center py-2"
+          >
+            <span className="text-gray-400 text-sm">Already have an account? </span>
+            <span className="text-sm font-semibold underline" style={{ color: '#003865' }}>Sign in</span>
+          </button>
         </div>
 
         {/* Consent checkbox */}
@@ -771,7 +721,11 @@ function ConnectCardScreen({ onNext }) {
   function handleSelect(bank) {
     if (connected) return;
     setConnecting(bank.id);
-    setTimeout(() => { setConnecting(null); setConnected(bank); }, 1200);
+    setTimeout(() => {
+      const last4 = String(Math.floor(1000 + Math.random() * 9000));
+      setConnecting(null);
+      setConnected({ ...bank, last4 });
+    }, 1200);
   }
 
   return (
@@ -894,7 +848,7 @@ function ConnectCardScreen({ onNext }) {
         <div className="px-4 pb-10 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb' }}>
           <motion.button
             whileTap={connected ? { scale: 0.97 } : {}}
-            onClick={() => connected && onNext()}
+            onClick={() => connected && onNext(connected)}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{
               background: connected ? 'linear-gradient(135deg, #0d9488, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
@@ -1034,7 +988,11 @@ function PaymentMethodScreen({ onNext }) {
         <div className="px-4 pb-10 pt-3 bg-gray-50 border-t border-gray-100">
           <motion.button
             whileTap={selected ? { scale: 0.97 } : {}}
-            onClick={() => selected && onNext(selected)}
+            onClick={() => {
+              if (!selected) return;
+              const opt = PAYMENT_OPTIONS.find(o => o.id === selected);
+              onNext(selected, { type: selected, label: opt?.label ?? selected, last4: null });
+            }}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{
               background: selected ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
@@ -1087,7 +1045,8 @@ function CardEntryForm({ onSuccess }) {
 
     // Simulate success (replace with real stripe.confirmCardSetup in production)
     setLoading(false);
-    onSuccess();
+    const last4 = String(Math.floor(1000 + Math.random() * 9000));
+    onSuccess({ last4 });
   }
 
   return (
@@ -1167,7 +1126,7 @@ function CardEntryScreen({ onNext }) {
         </div>
 
         <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-6 pb-10">
-          <CardEntryForm onSuccess={onNext} />
+          <CardEntryForm onSuccess={(info) => onNext(info)} />
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
             Round-ups collect monthly on {npShort}&apos;s behalf. They issue your tax receipt directly.
           </p>
@@ -1719,10 +1678,12 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, adminRole, setAdminRole, lastMode, setLastMode } = useApp();
+  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
   const { setNpOrg } = useNp();
   const [slide, setSlide] = useState(0);
   const [signupProvider, setSignupProvider] = useState('demo');
+  const [connectedBank, setConnectedBank] = useState(null);
+  const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
   const [step, setStep] = useState(() => {
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
     return loadKey('pc_cause_id') ? 'slides' : 'gate';
@@ -1851,11 +1812,17 @@ export default function Onboarding() {
     });
     setAccountStatus('active');
     setLastMode('giving');
+    if (connectedBank) {
+      setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
+    }
+    if (pendingPaymentMethod) {
+      setPaymentMethod(pendingPaymentMethod);
+    }
     setPage('home');
   }} />;
-  if (step === 'card-entry') return <CardEntryScreen onNext={() => setStep('checkout-confirm')} />;
-  if (step === 'payment-method') return <PaymentMethodScreen onNext={method => setStep(method === 'card' ? 'card-entry' : 'checkout-confirm')} />;
-  if (step === 'connect-card') return <ConnectCardScreen onNext={() => setStep('payment-method')} />;
+  if (step === 'card-entry') return <CardEntryScreen onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null }); setStep('checkout-confirm'); }} />;
+  if (step === 'payment-method') return <PaymentMethodScreen onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
+  if (step === 'connect-card') return <ConnectCardScreen onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
   if (step === 'signup') return <SignUpScreen
     onNext={() => setStep('connect-card')}
     nonprofit={selectedNonprofit}

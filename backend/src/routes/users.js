@@ -126,6 +126,30 @@ router.post('/me/cancel', async (req, res) => {
   }
 });
 
+// POST /api/users/me/reactivate
+// Reactivates a cancelled account. Only callable from status 'cancelled'.
+// Frontend must run Plaid Link again after this call — the Plaid item was removed
+// at cancellation (see /me/cancel), so needsPlaidRelink is always true.
+// New round-ups accrue from the re-link date. Fee accrual resumes with activity.
+router.post('/me/reactivate', async (req, res) => {
+  const userId = req.userId; // from JWT — never from body
+
+  const user = db.prepare(`SELECT id, status FROM users WHERE id = ?`).get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.status !== 'cancelled') {
+    return res.status(409).json({ error: 'Account is not cancelled — cannot reactivate' });
+  }
+
+  db.prepare(`UPDATE users SET status = 'active' WHERE id = ?`).run(userId);
+
+  return res.json({
+    reactivated: true,
+    // Plaid item was removed at cancellation; frontend must run Plaid Link again.
+    // Round-ups accrue from re-link date only; fee accrual resumes with activity.
+    needsPlaidRelink: true,
+  });
+});
+
 // POST /api/users/:id/switch-nonprofit
 // Stages a nonprofit switch. Takes effect at next 12:01am job.
 // req.userId (from JWT) must match :id — prevents IDOR.
