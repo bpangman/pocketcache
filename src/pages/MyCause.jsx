@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { Plus, Star, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import OrgLogo from '../components/OrgLogo';
@@ -82,12 +82,9 @@ export default function MyCause() {
             <h1 className="text-white font-bold text-xl leading-snug mt-0.5" style={{ letterSpacing: '-0.3px' }}>
               {np.name}
             </h1>
-            {(np.rating || np.category) && (
+            {np.category && (
               <div className="flex items-center gap-1.5 mt-1">
-                {np.rating && <Star size={11} className="text-amber-300 fill-amber-300" />}
-                <span className="text-white/80 text-xs font-semibold">
-                  {[np.rating && `${np.rating}`, np.category].filter(Boolean).join(' · ')}
-                </span>
+                <span className="text-white/80 text-xs font-semibold">{np.category}</span>
               </div>
             )}
           </div>
@@ -143,18 +140,22 @@ export default function MyCause() {
         </motion.div>
 
         {/* Stats grid — only show fields the org actually has */}
-        {(np.raised != null || np.donors != null || np.ein || np.rating != null) && (
+        {(np.raised != null || np.donors != null || np.ein) && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
+            {np.sampleStats && (
+              <p className="text-right mb-1">
+                <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Demo data</span>
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               {[
                 np.raised != null && { label: 'Total Raised', value: `$${(np.raised / 1e6).toFixed(1)}M` },
                 np.donors != null && { label: 'Donors', value: np.donors.toLocaleString() },
                 np.ein && { label: 'EIN', value: np.ein },
-                np.rating != null && { label: 'Rating', value: `${np.rating}/5.0` },
               ].filter(Boolean).map((stat) => (
                 <div key={stat.label} className="bg-white rounded-2xl px-4 py-3 card-shadow">
                   <p className="text-gray-400 text-xs font-medium">{stat.label}</p>

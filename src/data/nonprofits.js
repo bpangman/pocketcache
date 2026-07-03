@@ -14,12 +14,14 @@ export const NONPROFITS = [
     categoryColor: '#003865',
     logo: '🏀',
     logoUrl: bgcaLogoUrl,
+    // sampleStats: demo figures for the pitch — production reads real totals from
+    // the backend (charge history) once live
+    sampleStats: true,
     raised: 3841209,
     donors: 112340,
     impact: '4.3M youth served at 5,000+ club locations',
     description: "Boys & Girls Clubs of America provides after-school programs, mentoring, and safe spaces for young people ages 6–18, helping them build the skills and confidence to succeed.",
     ein: '13-5562976',
-    rating: 4.8,
     featured: true,
     monthlyMinimum: 5,
     corporateMatch: {

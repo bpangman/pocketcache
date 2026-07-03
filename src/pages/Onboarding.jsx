@@ -117,6 +117,7 @@ const SLIDES = [
             </motion.div>
           ))}
         </div>
+        <p className="text-white/50 text-xs mt-3">Example — your numbers grow from zero.</p>
       </div>
     ),
     title: 'Watch Your\nImpact Grow',
