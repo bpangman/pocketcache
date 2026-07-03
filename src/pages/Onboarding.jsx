@@ -18,6 +18,7 @@ import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode } fr
 import { loadKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
+import SsoButtons from '../components/SsoButtons';
 
 
 const SLIDES = [
@@ -127,7 +128,7 @@ const SLIDES = [
 // ─── Org Gate Screen ─────────────────────────────────────────────────────────
 // Layout (per founder direction): nonprofit entry first, donor entry below.
 
-function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, hasAccount, onWelcomeBack }) {
+function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, hasAccount, onWelcomeBack, onUniversalSignIn }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
@@ -327,7 +328,19 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
           </form>
         </div>
 
-        <div className="px-5 pb-8 pt-2">
+        {/* Quiet "already have account?" link — visible even without local identity (fresh device / new phone) */}
+        <div className="px-5 pb-1 text-center">
+          <button
+            type="button"
+            onClick={onUniversalSignIn}
+            className="text-gray-400 text-xs py-2"
+          >
+            Already have an account?{' '}
+            <span className="font-semibold" style={{ color: '#6b7280' }}>Sign in</span>
+          </button>
+        </div>
+
+        <div className="px-5 pb-8 pt-0">
           <p className="text-center text-gray-400 text-xs">
             PocketCache — round-up giving software for nonprofits
           </p>
@@ -337,20 +350,15 @@ function OrgGateScreen({ onBind, onNonprofitSignup, onNpSignIn, autoBindOrg, has
   );
 }
 
-// ─── Nonprofit Sign-In Screen (simple email → demo BGCA dashboard) ────────────
+// ─── Nonprofit Sign-In Screen (SSO → demo BGCA or custom-org admin dashboard) ──
 
 function NpSignInScreen({ onSignIn, onBack }) {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [chosen, setChosen] = useState(null);
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (!email) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      onSignIn();
-    }, 900);
+  function handleSSO(provider) {
+    if (chosen) return; // prevent double-tap while animating
+    setChosen(provider);
+    setTimeout(() => onSignIn(), 800);
   }
 
   return (
@@ -371,49 +379,21 @@ function NpSignInScreen({ onSignIn, onBack }) {
           <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center overflow-hidden shadow-lg">
             <img src={bgcaLogoUrl} alt="BGCA" className="w-full h-full object-contain p-1" />
           </div>
-          <p className="text-white/70 text-sm font-semibold">Demo — signs into BGCA</p>
+          <p className="text-white/70 text-sm font-semibold">Demo — signs into BGCA admin</p>
         </div>
         <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
-          Nonprofit{'\n'}Sign In
+          Welcome{'\n'}Back
         </h1>
-        <p className="text-white/70 text-sm mt-2">
-          In the live product, you&apos;d receive a magic link. For this demo, any email works.
+        <p className="text-white/70 text-sm mt-2 leading-relaxed">
+          Sign in to your admin account. In production, your Apple or Google identity is matched to your org automatically.
         </p>
       </div>
 
-      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10">
-        <form onSubmit={handleSubmit} className="space-y-4 flex-1">
-          <div>
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Admin Email</label>
-            <input
-              type="email"
-              required
-              placeholder="admin@yourorg.org"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
-            />
-          </div>
-
-          <motion.button
-            whileTap={email ? { scale: 0.97 } : {}}
-            type="submit"
-            className="w-full py-4 rounded-2xl text-white font-bold text-base"
-            style={{
-              background: email ? 'linear-gradient(135deg, #0d9488, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-              opacity: email ? 1 : 0.5,
-            }}
-          >
-            {loading
-              ? <span className="flex items-center justify-center gap-2">
-                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                    className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white" />
-                  Signing in…
-                </span>
-              : 'Sign In →'
-            }
-          </motion.button>
-        </form>
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10 gap-4">
+        <SsoButtons onPress={handleSSO} chosen={chosen} providers={['apple', 'google']} />
+        <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
+          No passwords here — your Apple or Google account is your key, including its two-factor protection.
+        </p>
       </div>
     </motion.div>
   );
@@ -478,45 +458,6 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
     if (email && password) onNext();
   }
 
-  const ssoButtons = [
-    {
-      id: 'apple',
-      label: 'Continue with Apple',
-      bg: '#000',
-      color: '#fff',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 814 1000" fill="white">
-          <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105-42.1-150.3-109.6C27.1 733.7 1 614.9 1 502.1 1 303.7 117.8 197.4 232.8 197.4c68.7 0 125.2 45.8 164.9 45.8 38.1 0 103.7-48.3 181-48.3zm-192-131.9c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/>
-        </svg>
-      ),
-    },
-    {
-      id: 'google',
-      label: 'Continue with Google',
-      bg: '#fff',
-      color: '#374151',
-      border: '1.5px solid #e5e7eb',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 48 48">
-          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-        </svg>
-      ),
-    },
-    {
-      id: 'facebook',
-      label: 'Continue with Facebook',
-      bg: '#1877f2',
-      color: '#fff',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-        </svg>
-      ),
-    },
-  ];
 
   return (
     <motion.div
@@ -603,24 +544,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
 
           {!showEmail ? (
             <>
-              {ssoButtons.map((btn) => (
-                <motion.button
-                  key={btn.id}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => handleSSO(btn.id)}
-                  className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-semibold text-sm transition-all"
-                  style={{
-                    background: chosen === btn.id ? '#e0f0ff' : btn.bg,
-                    color: btn.color,
-                    border: btn.border ?? 'none',
-                    opacity: !canContinue ? 0.4 : chosen && chosen !== btn.id ? 0.5 : 1,
-                    cursor: canContinue ? 'pointer' : 'default',
-                  }}
-                >
-                  {btn.icon}
-                  {btn.label}
-                </motion.button>
-              ))}
+              <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} />
 
               <div className="flex items-center gap-3 px-1">
                 <div className="flex-1 h-px bg-gray-100" />
@@ -728,6 +652,105 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
           </motion.div>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─── Gate Sign-In Screen (universal "already have an account?" path) ─────────
+// Shown when a returning user taps "Already have an account? Sign in" from the gate.
+// Three demo outcomes after an SSO tap:
+//   • Local identity found + active   → onSignIn() → resumeSession() → last-used mode
+//   • Local identity found + cancelled → onSignIn() → resumeSession() → home (reactivate overlay)
+//   • No local identity (fresh device) → empty state shown inline
+//   Production: the backend looks up the account by SSO token, not local storage.
+
+function GateSignInScreen({ onBack, hasAccount, onSignIn }) {
+  const [chosen, setChosen] = useState(null);
+  const [emptyState, setEmptyState] = useState(false);
+
+  function handleSSO(provider) {
+    if (chosen) return; // prevent double-tap
+    setChosen(provider);
+    setTimeout(() => {
+      if (!hasAccount) {
+        // Production: backend identity lookup by SSO token finds the account anywhere.
+        // Demo: no account found on this device — show the empty state.
+        setEmptyState(true);
+        setChosen(null);
+        return;
+      }
+      // Active donors land on home; cancelled donors see the Reactivate overlay on home.
+      onSignIn();
+    }, 800);
+  }
+
+  if (emptyState) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: 30 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex flex-col h-full overflow-hidden"
+      >
+        <div
+          className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+        >
+          <button onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
+            <ArrowLeft size={14} /> Back
+          </button>
+          <div className="text-4xl mb-4">🔍</div>
+          <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+            No Account{'\n'}Found
+          </h1>
+          <p className="text-white/70 text-sm mt-2 leading-relaxed">
+            We couldn&apos;t find an account on this device.
+          </p>
+        </div>
+        <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col justify-center px-6 pb-10">
+          <p className="text-gray-500 text-sm text-center leading-relaxed mb-6 px-2">
+            In the real app, signing in with Apple or Google finds your account anywhere — no device lock-in.
+          </p>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={onBack}
+            className="w-full py-4 rounded-2xl font-semibold text-sm"
+            style={{ background: '#f0f4f8', color: '#0B2A4A' }}
+          >
+            ← Back to gate
+          </motion.button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex flex-col h-full overflow-hidden"
+    >
+      <div
+        className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+      >
+        <button onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
+          <ArrowLeft size={14} /> Back
+        </button>
+        <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          Welcome{'\n'}Back
+        </h1>
+        <p className="text-white/70 text-sm mt-2 leading-relaxed">
+          Sign in with the account you used before.
+        </p>
+      </div>
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10 gap-4">
+        <SsoButtons onPress={handleSSO} chosen={chosen} />
+        <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
+          No passwords here — your Apple or Google account is your key, including its two-factor protection.
+        </p>
+      </div>
     </motion.div>
   );
 }
@@ -1703,7 +1726,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(() => {
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
     return loadKey('pc_cause_id') ? 'slides' : 'gate';
-  }); // 'gate' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup' | 'np-signin'
+  }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup' | 'np-signin'
 
   const urlParams = new URLSearchParams(window.location.search);
   const autoBindOrg = urlParams.get('org') || new URLSearchParams(window.location.hash.replace('#', '?')).get('org') || null;
@@ -1753,7 +1776,11 @@ export default function Onboarding() {
   }
 
   function handleNpSignIn() {
-    setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    // Production: backend verifies the SSO token and returns the org linked to this identity.
+    // Demo: use an existing custom-org admin role if one was created; otherwise default to BGCA.
+    if (!adminRole) {
+      setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    }
     setLastMode('admin');
     setPage('np-dashboard');
   }
@@ -1799,6 +1826,14 @@ export default function Onboarding() {
       autoBindOrg={autoBindOrg}
       hasAccount={hasAccount}
       onWelcomeBack={resumeSession}
+      onUniversalSignIn={() => setStep('gate-signin')}
+    />
+  );
+  if (step === 'gate-signin') return (
+    <GateSignInScreen
+      onBack={() => setStep('gate')}
+      hasAccount={hasAccount}
+      onSignIn={resumeSession}
     />
   );
   if (step === 'np-signin') return (
