@@ -34,6 +34,46 @@ router.get('/by-code/:code', (req, res) => {
   res.json(nonprofit);
 });
 
+// ── PUBLIC: Per-org public stats ──────────────────────────────────────────────
+// DEPLOY NOTE: include this endpoint in the rate-limiting middleware at launch
+// (public, no auth — serves the org landing page and donor-facing stats grid).
+//
+// Stat definitions:
+//   totalRaisedCents — SUM(roundup_cents) from monthly_charges WHERE status='succeeded'
+//     for this org. Donation portion only (round-ups directed to the nonprofit, not fees
+//     or processing cover). Honest public headline: what donors sent to the org.
+//   totalDonors     — COUNT(DISTINCT user_id) from monthly_charges WHERE status='succeeded'
+//     for this org. Lifetime unique donors with ≥1 completed charge.
+//   activeDonors    — COUNT of users WHERE nonprofit_id = this AND status = 'active'.
+//     Currently-linked donors who will accrue and be charged in the next cycle.
+router.get('/by-code/:code/stats', (req, res) => {
+  const np = db.prepare(`
+    SELECT id FROM nonprofits WHERE join_code = ? AND status = 'active'
+  `).get(req.params.code.toUpperCase());
+
+  if (!np) return res.status(404).json({ error: 'Nonprofit not found or inactive' });
+
+  const { totalRaisedCents } = db.prepare(`
+    SELECT COALESCE(SUM(roundup_cents), 0) AS totalRaisedCents
+    FROM monthly_charges
+    WHERE nonprofit_id = ? AND status = 'succeeded'
+  `).get(np.id);
+
+  const { totalDonors } = db.prepare(`
+    SELECT COUNT(DISTINCT user_id) AS totalDonors
+    FROM monthly_charges
+    WHERE nonprofit_id = ? AND status = 'succeeded'
+  `).get(np.id);
+
+  const { activeDonors } = db.prepare(`
+    SELECT COUNT(*) AS activeDonors
+    FROM users
+    WHERE nonprofit_id = ? AND status = 'active'
+  `).get(np.id);
+
+  res.json({ totalRaisedCents, totalDonors, activeDonors });
+});
+
 // ── AUTH'd routes ─────────────────────────────────────────────────────────────
 router.use(requireAuth);
 

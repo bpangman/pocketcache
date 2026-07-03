@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { findOrgByCode } from '../store/orgStore';
 import { fmtMoney, fmtCount } from '../lib/format';
-import { ACTIVE_COUNT } from './nonprofit/demoData';
+import { getOrgStats } from '../lib/orgStats';
 import CoinMark from '../components/CoinMark';
 import OrgLogo from '../components/OrgLogo';
 
@@ -25,6 +25,12 @@ function DemoPill() {
 export default function OrgLandingPage({ code }) {
   const org = findOrgByCode(code);
   const [shareClicked, setShareClicked] = useState(false);
+  const [orgStats, setOrgStats] = useState(null);
+  useEffect(() => {
+    const targetOrg = findOrgByCode(code);
+    if (!targetOrg) return;
+    getOrgStats(targetOrg).then(setOrgStats);
+  }, [code]);
 
   if (!org) {
     return (
@@ -48,10 +54,14 @@ export default function OrgLandingPage({ code }) {
   const vanityUrl = `https://pocketcache.app/${orgCode}`;
   const shareText = `Join ${org.name} on PocketCache: ${vanityUrl}`;
 
-  // Public stats — BGCA: seeded demo numbers. Custom orgs: dashes.
-  const activeDonors = isBgca ? fmtCount(ACTIVE_COUNT) : null;
-  const totalRaised  = isBgca ? `$${fmtMoney(org.raised ?? 3841209)}` : null;
+  // Public stats: live data when VITE_API_BASE is set (orgStats.isDemo=false);
+  // seeded demo numbers otherwise. matchStatus always comes from org metadata.
+  const displayRaised = orgStats?.raised ?? (isBgca ? (org.raised ?? 3841209) : null);
+  const displayDonors = orgStats?.donors ?? null;
+  const totalDonors  = displayDonors != null ? fmtCount(displayDonors) : null;
+  const totalRaised  = displayRaised != null ? `$${fmtMoney(displayRaised)}` : null;
   const matchStatus  = isBgca ? (org.corporateMatch?.active ? 'Active' : 'None') : null;
+  const showDemoPill = orgStats != null ? orgStats.isDemo : isBgca;
 
   const storyText = org.longDescription || org.description || '';
 
@@ -110,9 +120,9 @@ export default function OrgLandingPage({ code }) {
       <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '1.25rem 0' }}>
         <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 1.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap', justifyContent: 'center' }}>
           {[
-            { label: 'Active donors',    value: activeDonors,  showPill: isBgca },
-            { label: 'Total donated',    value: totalRaised,   showPill: isBgca },
-            { label: 'Corporate match',  value: matchStatus,   showPill: isBgca },
+            { label: 'Total donors',     value: totalDonors,   showPill: showDemoPill },
+            { label: 'Total donated',    value: totalRaised,   showPill: showDemoPill },
+            { label: 'Corporate match',  value: matchStatus,   showPill: showDemoPill },
           ].map(({ label, value, showPill }) => (
             <div key={label} style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '1.4rem', fontWeight: 800, color: value ? brandColor : '#9ca3af' }}>

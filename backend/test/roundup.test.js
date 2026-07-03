@@ -5,8 +5,9 @@
  * In-memory SQLite via better-sqlite3 for DB tests.
  */
 
-import { test, describe } from 'node:test';
+import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
 
 // ─── Fee scheme helpers (mirrors monthly-charge.js / stripe.js logic) ────────
 // These replicate the pure math from the service layer so tests have no DB/Stripe dependency.
@@ -421,5 +422,87 @@ describe('pending→posted dedup', () => {
       amount: 4.30,
     };
     assert.equal(!!txn.pending_transaction_id, false);
+  });
+});
+
+// ─── /by-code/:code/stats SQL math ──────────────────────────────────────────
+// In-memory SQLite fixture verifying the stat definitions used by the stats endpoint.
+describe('/by-code/:code/stats SQL math', () => {
+  let db;
+
+  before(() => {
+    db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE nonprofits (id TEXT PRIMARY KEY, join_code TEXT, status TEXT);
+      CREATE TABLE users (id TEXT PRIMARY KEY, nonprofit_id TEXT, status TEXT);
+      CREATE TABLE monthly_charges (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        nonprofit_id TEXT,
+        roundup_cents INTEGER,
+        status TEXT
+      );
+    `);
+    // Org fixture
+    db.prepare('INSERT INTO nonprofits VALUES (?, ?, ?)').run('np-1', 'BGCA', 'active');
+    // 3 users: u-1 and u-2 active, u-3 paused
+    db.prepare('INSERT INTO users VALUES (?, ?, ?)').run('u-1', 'np-1', 'active');
+    db.prepare('INSERT INTO users VALUES (?, ?, ?)').run('u-2', 'np-1', 'active');
+    db.prepare('INSERT INTO users VALUES (?, ?, ?)').run('u-3', 'np-1', 'paused');
+    // Charges: u-1 two succeeded, u-2 one succeeded + one failed, u-3 one succeeded
+    db.prepare('INSERT INTO monthly_charges VALUES (?, ?, ?, ?, ?)').run('c-1', 'u-1', 'np-1', 500, 'succeeded');
+    db.prepare('INSERT INTO monthly_charges VALUES (?, ?, ?, ?, ?)').run('c-2', 'u-1', 'np-1', 800, 'succeeded');
+    db.prepare('INSERT INTO monthly_charges VALUES (?, ?, ?, ?, ?)').run('c-3', 'u-2', 'np-1', 300, 'succeeded');
+    db.prepare('INSERT INTO monthly_charges VALUES (?, ?, ?, ?, ?)').run('c-4', 'u-2', 'np-1', 700, 'failed'); // excluded
+    db.prepare('INSERT INTO monthly_charges VALUES (?, ?, ?, ?, ?)').run('c-5', 'u-3', 'np-1', 200, 'succeeded');
+  });
+
+  test('totalRaisedCents = SUM(roundup_cents) of succeeded charges only', () => {
+    // 500 + 800 + 300 + 200 = 1800 (failed 700 excluded)
+    const { totalRaisedCents } = db.prepare(`
+      SELECT COALESCE(SUM(roundup_cents), 0) AS totalRaisedCents
+      FROM monthly_charges WHERE nonprofit_id = ? AND status = 'succeeded'
+    `).get('np-1');
+    assert.equal(totalRaisedCents, 1800);
+  });
+
+  test('totalDonors = COUNT(DISTINCT user_id) with at least one succeeded charge', () => {
+    // u-1, u-2, u-3 all have >= 1 succeeded charge
+    const { totalDonors } = db.prepare(`
+      SELECT COUNT(DISTINCT user_id) AS totalDonors
+      FROM monthly_charges WHERE nonprofit_id = ? AND status = 'succeeded'
+    `).get('np-1');
+    assert.equal(totalDonors, 3);
+  });
+
+  test('activeDonors = COUNT of users with status=active bound to org', () => {
+    // u-1 and u-2 are active; u-3 is paused
+    const { activeDonors } = db.prepare(`
+      SELECT COUNT(*) AS activeDonors FROM users WHERE nonprofit_id = ? AND status = 'active'
+    `).get('np-1');
+    assert.equal(activeDonors, 2);
+  });
+
+  test('failed charges do NOT contribute to totalRaisedCents', () => {
+    // u-2 failed charge of 700 must be excluded; total remains 1800
+    const { totalRaisedCents } = db.prepare(`
+      SELECT COALESCE(SUM(roundup_cents), 0) AS totalRaisedCents
+      FROM monthly_charges WHERE nonprofit_id = ? AND status = 'succeeded'
+    `).get('np-1');
+    assert.equal(totalRaisedCents, 1800);
+  });
+
+  test('org with zero charges returns totalRaisedCents=0, totalDonors=0', () => {
+    db.prepare('INSERT INTO nonprofits VALUES (?, ?, ?)').run('np-empty', 'EMPTY', 'active');
+    const { totalRaisedCents } = db.prepare(`
+      SELECT COALESCE(SUM(roundup_cents), 0) AS totalRaisedCents
+      FROM monthly_charges WHERE nonprofit_id = ? AND status = 'succeeded'
+    `).get('np-empty');
+    const { totalDonors } = db.prepare(`
+      SELECT COUNT(DISTINCT user_id) AS totalDonors
+      FROM monthly_charges WHERE nonprofit_id = ? AND status = 'succeeded'
+    `).get('np-empty');
+    assert.equal(totalRaisedCents, 0);
+    assert.equal(totalDonors, 0);
   });
 });

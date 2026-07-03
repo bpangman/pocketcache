@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { Plus, Sparkles } from 'lucide-react';
 import { useApp } from '../store/AppContext';
@@ -10,6 +10,8 @@ import BoostToast from '../components/sheets/BoostToast';
 import CorporateMatchSheet from '../components/sheets/CorporateMatchSheet';
 import VolunteerSheet from '../components/sheets/VolunteerSheet';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
+import { getOrgStats } from '../lib/orgStats';
+import { fmtMoneyCompact } from '../lib/format';
 
 // Impact tier copy uses "example equivalency" language to be honest about
 // the approximate nature of impact figures.
@@ -29,6 +31,11 @@ export default function MyCause() {
   const [showSponsorSheet, setShowSponsorSheet] = useState(false); // "Become a Match Sponsor"
   const [boostToast, setBoostToast] = useState(null);
   const toastTimerRef = useRef(null);
+  const [orgStats, setOrgStats] = useState(null);
+  useEffect(() => {
+    if (!selectedNonprofit) return;
+    getOrgStats(selectedNonprofit).then(setOrgStats);
+  }, [selectedNonprofit]);
 
   if (!selectedNonprofit) return null;
 
@@ -140,21 +147,21 @@ export default function MyCause() {
         </motion.div>
 
         {/* Stats grid — only show fields the org actually has */}
-        {(np.raised != null || np.donors != null || np.ein) && (
+        {((orgStats?.raised ?? np.raised) != null || (orgStats?.donors ?? np.donors) != null || np.ein) && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            {np.sampleStats && (
+            {(orgStats != null ? orgStats.isDemo : !!np.sampleStats) && (
               <p className="text-right mb-1">
                 <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Demo data</span>
               </p>
             )}
             <div className="grid grid-cols-2 gap-3">
               {[
-                np.raised != null && { label: 'Total Raised', value: `$${(np.raised / 1e6).toFixed(1)}M` },
-                np.donors != null && { label: 'Donors', value: np.donors.toLocaleString() },
+                (orgStats?.raised ?? np.raised) != null && { label: 'Total Raised', value: fmtMoneyCompact(orgStats?.raised ?? np.raised) },
+                (orgStats?.donors ?? np.donors) != null && { label: 'Donors', value: (orgStats?.donors ?? np.donors).toLocaleString() },
                 np.ein && { label: 'EIN', value: np.ein },
               ].filter(Boolean).map((stat) => (
                 <div key={stat.label} className="bg-white rounded-2xl px-4 py-3 card-shadow">
