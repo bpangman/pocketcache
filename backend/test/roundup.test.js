@@ -141,19 +141,19 @@ describe('fee model v3: mandatory fee + cover-processing toggle (single month)',
 describe('minimum/rollover logic', () => {
   test('charges when total >= minimum', () => {
     const totalCents = 1200; // $12.00
-    const minimumCents = 1000; // $10.00
+    const minimumCents = 500; // $5.00 — schema default (per-nonprofit configurable)
     assert.equal(totalCents >= minimumCents, true);
   });
 
   test('rolls over when total < minimum', () => {
-    const totalCents = 800; // $8.00
-    const minimumCents = 1000;
+    const totalCents = 400; // $4.00
+    const minimumCents = 500; // $5.00 default
     assert.equal(totalCents >= minimumCents, false);
   });
 
   test('charges at exactly the minimum', () => {
-    const totalCents = 1000;
-    const minimumCents = 1000;
+    const totalCents = 500;
+    const minimumCents = 500; // $5.00 default
     assert.equal(totalCents >= minimumCents, true);
   });
 
@@ -248,8 +248,8 @@ describe('accrual-based fee scheme v3', () => {
   });
 
   test('3-month settle-up floor triggers when oldest roundup is exactly 3 months old', () => {
-    const roundupCents = 500; // $5.00 — below $10.00 minimum
-    const minimumCents = 1000;
+    const roundupCents = 500; // $5.00 — below this nonprofit's configured $10.00 minimum
+    const minimumCents = 1000; // per-nonprofit configured minimum (fixture uses $10; schema default is $5)
     // Today = July 2026 → threshold = April 2026
     const threshold = getSettleUpThresholdPeriod(new Date('2026-07-01'));
     const oldestPeriod = '2026-04'; // exactly 3 months old
@@ -259,14 +259,14 @@ describe('accrual-based fee scheme v3', () => {
     const shouldCharge = meetsMinimum || meetsSettleUp;
 
     assert.equal(threshold, '2026-04');
-    assert.equal(meetsMinimum, false);  // below $10 minimum
+    assert.equal(meetsMinimum, false);  // below the configured minimum
     assert.equal(meetsSettleUp, true);  // April = exactly 3 months old → floor triggers
     assert.equal(shouldCharge, true);   // charge despite sub-minimum balance
   });
 
   test('3-month settle-up floor triggers when oldest roundup is older than 3 months', () => {
     const roundupCents = 300; // $3.00
-    const minimumCents = 1000;
+    const minimumCents = 1000; // per-nonprofit configured minimum (fixture uses $10)
     const threshold = getSettleUpThresholdPeriod(new Date('2026-07-01'));
     const oldestPeriod = '2026-02'; // 5 months old
 
@@ -277,7 +277,7 @@ describe('accrual-based fee scheme v3', () => {
 
   test('3-month settle-up floor does NOT trigger when oldest roundup is only 2 months old', () => {
     const roundupCents = 500;
-    const minimumCents = 1000;
+    const minimumCents = 1000; // per-nonprofit configured minimum (fixture uses $10)
     const threshold = getSettleUpThresholdPeriod(new Date('2026-07-01'));
     const oldestPeriod = '2026-05'; // only 2 months old — too recent
 
@@ -298,7 +298,7 @@ describe('accrual-based fee scheme v3', () => {
 
   test('final cancel charge: minimum always waived, charges full balance', () => {
     // User cancels with a tiny balance — charged regardless of minimum
-    const roundupCents = 150; // $1.50 — well below $10 minimum
+    const roundupCents = 150; // $1.50 — well below any minimum
     const feeCents = computeFeeCents(1); // 1 active month × $1.00 mandatory
 
     // cover_processing=0: total = roundups + fees (no gross-up)

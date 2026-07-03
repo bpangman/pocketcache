@@ -15,7 +15,7 @@ import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode } from '../store/orgStore';
-import { loadKey } from '../store/identityStore';
+import { loadKey, saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
@@ -372,6 +372,7 @@ const US_STATES = [
 function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
   const [chosen, setChosen] = useState(null);
   const [agreedTerms, setAgreedTerms] = useState(false);
+  const [commsOptin, setCommsOptin] = useState(true);
   const [selectedState, setSelectedState] = useState('');
   const [showTermsHint, setShowTermsHint] = useState(false);
   const [welcomeBack, setWelcomeBack] = useState(false);
@@ -392,6 +393,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
     if (!canContinue) { setShowTermsHint(true); return; }
     onProviderChosen?.(provider);
     setChosen(provider);
+    saveKey('pc_comms_optin', commsOptin);
     setTimeout(() => onNext(), 700);
   }
 
@@ -447,12 +449,13 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
               <p className="text-white/75 text-sm leading-relaxed mb-6">
                 PocketCache isn&apos;t available in California yet. We&apos;re working on it! Ask your favorite nonprofit for updates.
               </p>
-              <button
+              <motion.button
+                whileTap={{ scale: 0.9, opacity: 0.6 }}
                 onClick={() => setSelectedState('')}
                 className="bg-white/20 text-white font-semibold px-6 py-3 rounded-2xl text-sm"
               >
                 ← Go Back
-              </button>
+              </motion.button>
             </div>
           </motion.div>
         )}
@@ -513,6 +516,20 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
               <a href="/legal/terms/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Terms of Service</a>
               {' '}and{' '}
               <a href="/legal/privacy/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Privacy Policy</a>.
+            </span>
+          </label>
+          <label
+            className="flex items-start gap-3 cursor-pointer"
+            onClick={() => setCommsOptin(v => !v)}
+          >
+            <div
+              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+              style={{ borderColor: commsOptin ? '#003865' : '#d1d5db', background: commsOptin ? '#003865' : '#fff' }}
+            >
+              {commsOptin && <CheckCircle size={12} className="text-white" />}
+            </div>
+            <span className="text-xs text-gray-500 leading-relaxed">
+              Keep me in the loop: PocketCache and {nonprofit?.shortName ?? 'your nonprofit'} may email me and send app notifications about my account — upcoming charges, receipts, and updates or opportunities — and PocketCache may share my contact info and giving activity with {nonprofit?.shortName ?? 'your nonprofit'} for their newsletters and campaigns. (Unsubscribe anytime.)
             </span>
           </label>
           {selectedState === '' && (
@@ -593,9 +610,9 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
           className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
           style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
         >
-          <button onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
+          <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
             <ArrowLeft size={14} /> Back
-          </button>
+          </motion.button>
           <div className="text-4xl mb-4">🔍</div>
           <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
             No Account{'\n'}Found
@@ -609,7 +626,7 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
             In the real app, signing in with Apple or Google finds your account anywhere — no device lock-in.
           </p>
           <motion.button
-            whileTap={{ scale: 0.97 }}
+            whileTap={{ scale: 0.9, opacity: 0.6 }}
             onClick={onBack}
             className="w-full py-4 rounded-2xl font-semibold text-sm"
             style={{ background: '#f0f4f8', color: '#0B2A4A' }}
@@ -639,9 +656,9 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
         className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
         style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
       >
-        <button onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
+        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
           <ArrowLeft size={14} /> Back
-        </button>
+        </motion.button>
         <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
           Welcome{'\n'}Back
         </h1>
@@ -880,7 +897,7 @@ function PaymentMethodScreen({ onNext }) {
             transition={{ delay: 0.6 }}
             className="flex items-center gap-2 bg-white/20 rounded-2xl px-4 py-2"
           >
-            <span className="text-white text-sm font-semibold">Charged once a month · $10 minimum</span>
+            <span className="text-white text-sm font-semibold">Charged once a month · $5 minimum</span>
           </motion.div>
         </motion.div>
         <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
@@ -1190,7 +1207,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               {npShort} sends your tax receipt — they&apos;re the ones receiving your donation.
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 10} roll forward — we settle up within 3 months at most.
+              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward — we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
               Tracking starts the moment your card is linked. Your <strong>first charge hits on the 1st of next month</strong> — nothing before today ever counts.
@@ -1258,9 +1275,10 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   const [color, setColor] = useState('#003865');
   const [accepted, setAccepted] = useState(false);
   const [showLicenseHint, setShowLicenseHint] = useState(false);
-  const [monthlyMinimum, setMonthlyMinimum] = useState(10);
+  const [monthlyMinimum, setMonthlyMinimum] = useState(5);
   const [logoPreview, setLogoPreview] = useState(bgcaLogoUrl);
   const [logoUrlInput, setLogoUrlInput] = useState('');
+  const [logoUrlError, setLogoUrlError] = useState(null);
   const fileInputRef = useRef(null);
 
   const joinCode = generateJoinCode(orgName);
@@ -1344,7 +1362,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
       {/* Header */}
       <div className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
         style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '30%' }}>
-        <button onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</button>
+        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</motion.button>
         <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
           {step === 'ein'          && 'Verify Your\nNonprofit'}
           {step === 'confirm-org'  && 'Confirm\nYour Org'}
@@ -1521,14 +1539,22 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 placeholder="or paste a logo URL"
                 value={logoUrlInput}
                 onChange={e => setLogoUrlInput(e.target.value)}
-                onBlur={e => { if (e.target.value) setLogoPreview(e.target.value); }}
+                onBlur={e => {
+                  const url = e.target.value.trim();
+                  if (!url) return;
+                  const img = new Image();
+                  img.onload = () => { setLogoPreview(url); setLogoUrlError(null); };
+                  img.onerror = () => { setLogoUrlError("We couldn't load that image — check the link or upload a file instead"); };
+                  img.src = url;
+                }}
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400"
               />
+              {logoUrlError && <p className="text-red-500 text-xs mt-1">{logoUrlError}</p>}
               <p className="text-gray-400 text-xs mt-1">If you skip this, a default emoji is used as your app mark.</p>
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">
-                Monthly Minimum — ${monthlyMinimum} <span className="text-gray-400 font-normal normal-case">(default $10)</span>
+                Monthly Minimum — ${monthlyMinimum} <span className="text-gray-400 font-normal normal-case">(default $5)</span>
               </label>
               <input
                 type="range"
@@ -1628,6 +1654,15 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             <p className="text-gray-400 text-xs text-center">Check your email for next steps from PocketCache.</p>
           </div>
         )}
+
+        <div className="pt-2 text-center border-t border-gray-100">
+          <a
+            href="mailto:support@pocketcache.app"
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Stuck? Email us — support@pocketcache.app
+          </a>
+        </div>
 
       </div>
     </motion.div>

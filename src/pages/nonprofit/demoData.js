@@ -156,7 +156,7 @@ export const GROWTH_CHART = Array.from({ length: 6 }, (_, idx) => {
 
 // ── Summary figures ───────────────────────────────────────────────────────────
 const nextChargeDate = new Date(thisYear, thisMonth + 1, 1);
-export const NEXT_CHARGE_DATE    = nextChargeDate.toLocaleDateString('default', { month: 'long', day: 'numeric' });
+export const NEXT_CHARGE_DATE    = nextChargeDate.toLocaleDateString('default', { month: 'short', day: 'numeric' });
 export const LAST_MONTH_GROSS    = CHARGE_HISTORY[0]?.gross ?? 0;
 export const AVG_PER_DONOR       = parseFloat((LAST_MONTH_GROSS / Math.max(1, CHARGE_HISTORY[0]?.donorsCharged ?? 1)).toFixed(2));
 export const FAILED_COUNT        = CHARGE_HISTORY[0]?.failures ?? 0;

@@ -21,6 +21,7 @@ export default function NpSettings() {
   const [saved,   setSaved]   = useState(false);
   const [logoPreview, setLogoPreview] = useState(npOrg.logoPreview ?? null);
   const [logoUrlInput, setLogoUrlInput] = useState('');
+  const [logoUrlError, setLogoUrlError] = useState(null);
   const fileInputRef = useRef(null);
 
   function handleSave(e) {
@@ -120,7 +121,7 @@ export default function NpSettings() {
             className="w-full accent-teal-600"
           />
           <p className="text-gray-400 text-xs mt-1">
-            Donors below this in a month roll over to the next. Default $10.
+            Donors below this in a month roll over to the next. Default $5.
           </p>
         </div>
 
@@ -154,8 +155,16 @@ export default function NpSettings() {
           </button>
           <input type="url" placeholder="or paste a logo URL" value={logoUrlInput}
             onChange={e => setLogoUrlInput(e.target.value)}
-            onBlur={e => { if (e.target.value) setLogoPreview(e.target.value); }}
+            onBlur={e => {
+              const url = e.target.value.trim();
+              if (!url) return;
+              const img = new Image();
+              img.onload = () => { setLogoPreview(url); setLogoUrlError(null); };
+              img.onerror = () => { setLogoUrlError("We couldn't load that image — check the link or upload a file instead"); };
+              img.src = url;
+            }}
             className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400" />
+          {logoUrlError && <p className="text-red-500 text-xs mt-1">{logoUrlError}</p>}
           <p className="text-gray-400 text-xs mt-1">Shown to donors as your app mark.</p>
         </div>
 
@@ -182,6 +191,13 @@ export default function NpSettings() {
       >
         <ExternalLink size={14} />
         Nonprofit License Agreement
+      </a>
+
+      <a
+        href="mailto:support@pocketcache.app"
+        className="flex items-center justify-center gap-1.5 text-sm py-2 text-gray-400 hover:text-gray-600"
+      >
+        Contact PocketCache support
       </a>
 
     </div>

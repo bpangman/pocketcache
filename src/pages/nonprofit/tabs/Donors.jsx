@@ -48,7 +48,7 @@ function DonorSheet({ donor, onClose, accent }) {
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
           <h3 className="font-bold text-gray-900 text-lg">Donor Detail</h3>
-          <button onClick={onClose}><X size={20} className="text-gray-400" /></button>
+          <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onClose}><X size={20} className="text-gray-400" /></motion.button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">

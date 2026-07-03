@@ -21,7 +21,7 @@ export const NONPROFITS = [
     ein: '13-5562976',
     rating: 4.8,
     featured: true,
-    monthlyMinimum: 10,
+    monthlyMinimum: 5,
     corporateMatch: {
       company: 'General Motors',
       companyShort: 'GM',

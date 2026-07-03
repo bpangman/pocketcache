@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS nonprofits (
   logo_url              TEXT,
   brand_color           TEXT,                        -- hex color e.g. '#1A7F5A'
   mission               TEXT,
-  monthly_minimum_cents INTEGER NOT NULL DEFAULT 1000,  -- $10.00 — roll over if below
+  monthly_minimum_cents INTEGER NOT NULL DEFAULT 500,   -- $5.00 — roll over if below (configurable per nonprofit)
   admin_email           TEXT NOT NULL,
   license_accepted_at   INTEGER,                     -- unixepoch when license was accepted
   status                TEXT NOT NULL DEFAULT 'active', -- 'active' | 'paused'
@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
   -- NOTE: PocketCache's $1.00/month service fee is MANDATORY regardless of this toggle (see fee_accruals).
   -- MIGRATION (v2→v3): ALTER TABLE users RENAME COLUMN cover_fee TO cover_processing;
   cover_processing        INTEGER NOT NULL DEFAULT 1,
+  comms_optin             INTEGER NOT NULL DEFAULT 1,      -- marketing/data-sharing election; transactional messages (charge notices, receipts, security) always sent regardless
   status                  TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'paused' | 'cancelled'
   created_at              INTEGER DEFAULT (unixepoch())
 );

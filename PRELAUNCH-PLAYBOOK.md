@@ -147,6 +147,26 @@ today's fee-model change, which is the point.**
 
 ---
 
+## Platform admin ("god mode") — added 2026-07-03 per Blake
+
+**Analysis:** Blake needs unilateral control: refunds, editing/deleting any account (donor
+or nonprofit), fixing botched org setups — without depending on anyone. Three phases:
+1. **Now (demo):** nothing needed — all demo state is localStorage; nothing real to fix.
+2. **Staging/pilot:** (a) Refunds — the platform can refund any charge it created on a
+   connected account via the Stripe API; add an auth'd `POST /api/admin/refund` that
+   calls `stripe.refunds.create({charge}, {stripeAccount})`, and note Blake can also see
+   every platform-created charge + application fee in HIS Stripe dashboard's Connect
+   view. (b) Account edits — auth'd `/api/admin/*` endpoints (search/edit/pause/delete
+   donors and orgs, edit org branding/minimum) gated by a `platform_admin` role bound to
+   Blake's identity ONLY, with an append-only audit log of every admin action (also the
+   E&O story).
+3. **Launch:** a simple internal web panel at an unlisted admin URL (Blake sign-in only)
+   over those endpoints: donor/org search, charge history w/ one-click refund,
+   edit-org, pause/cancel, resend receipts. Half-day agent brief once the backend is
+   deployed; endpoints spec above is the contract.
+**Agent brief pointer:** build phase-2 endpoints in the same pass as the staging deploy
+(#3 above); the panel is a fast follow.
+
 ## The one-screen version
 
 | Now (this week) | Owner |

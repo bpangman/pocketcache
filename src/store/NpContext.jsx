@@ -15,7 +15,7 @@ export const DEFAULT_NP_ORG = {
   color:          '#003865',
   logoPreview:    null,        // null → NpShell falls back to bgca-logo.png for joinCode===BGCA
   mission:        'Enabling young people to reach their full potential as productive, caring, responsible citizens.',
-  monthlyMinimum: 10,
+  monthlyMinimum: 5,
   adminEmail:     'info@bgca.org',
   joinCode:       'BGCA',
 };

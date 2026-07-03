@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ExternalLink, CheckCircle, RefreshCw } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
 import { CHARGE_HISTORY } from '../demoData';
+import { fmtMoney } from '../../../lib/format';
 
 function DemoPill() {
   return (
@@ -66,7 +67,7 @@ export default function Charges() {
               <p className="text-gray-400 text-xs">{run.donorsCharged} donors charged</p>
             </div>
             <p className="font-bold text-xl" style={{ color: '#059669' }}>
-              ${run.gross.toFixed(2)}
+              ${fmtMoney(run.gross)}
             </p>
           </div>
 
@@ -74,25 +75,25 @@ export default function Charges() {
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between items-center">
               <span className="text-gray-500 text-xs">Gross round-ups from donors</span>
-              <span className="font-semibold text-xs text-gray-700">${run.gross.toFixed(2)}</span>
+              <span className="font-semibold text-xs text-gray-700">${fmtMoney(run.gross)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 text-xs">Processing covered by donors (to you)</span>
-              <span className="font-semibold text-xs text-green-600">+${run.processingCovered.toFixed(2)}</span>
+              <span className="font-semibold text-xs text-green-600">+${fmtMoney(run.processingCovered)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 text-xs">Card costs absorbed (opt-out donors)</span>
-              <span className="font-semibold text-xs text-gray-500">−${run.processingAbsorbed.toFixed(2)}</span>
+              <span className="font-semibold text-xs text-gray-500">−${fmtMoney(run.processingAbsorbed)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 text-xs">App fees (donor-paid, to PocketCache)</span>
-              <span className="font-semibold text-xs text-gray-400">${run.appFees.toFixed(2)}</span>
+              <span className="font-semibold text-xs text-gray-400">${fmtMoney(run.appFees)}</span>
             </div>
             <div className="h-px bg-gray-100" />
             <div className="flex justify-between items-center">
               <span className="text-gray-700 text-xs font-semibold">Net to your Stripe</span>
               <span className="font-bold text-xs" style={{ color: accent }}>
-                ${run.netToStripe.toFixed(2)}
+                ${fmtMoney(run.netToStripe)}
               </span>
             </div>
           </div>

@@ -8,6 +8,7 @@ const DONOR_KEYS = [
   'pc_page', 'pc_cause_id', 'pc_multiplier', 'pc_cards', 'pc_total_donated',
   'pc_seen_milestone', 'pc_dismiss_countdown', 'pc_prefs', 'pc_account_status',
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
+  'pc_comms_optin',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];

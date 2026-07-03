@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { AlertCircle, CalendarDays, TrendingUp, Users } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
+import { fmtMoney } from '../../../lib/format';
 import {
   ACTIVE_COUNT, MTD_TOTAL, NEXT_CHARGE_DATE,
   LAST_MONTH_GROSS, AVG_PER_DONOR, FAILED_COUNT, GROWTH_CHART,
@@ -70,7 +71,7 @@ export default function Overview() {
             </div>
             <div className="border-l border-white/25 pl-6">
               <p className="text-white/70 text-xs font-semibold uppercase tracking-widest">This Month</p>
-              <p className="text-5xl font-bold mt-1" style={{ color: '#86efac' }}>${MTD_TOTAL.toFixed(2)}</p>
+              <p className="text-5xl font-bold mt-1" style={{ color: '#86efac' }}>${fmtMoney(MTD_TOTAL)}</p>
               <p className="text-white/50 text-xs mt-1">accruing</p>
             </div>
           </div>
@@ -80,8 +81,8 @@ export default function Overview() {
       {/* Stat cards row */}
       <div className="flex gap-3">
         <StatCard iconComponent={CalendarDays} label="Next charge" value={NEXT_CHARGE_DATE} accent={accent} />
-        <StatCard iconComponent={TrendingUp}   label="Last month"  value={`$${LAST_MONTH_GROSS.toFixed(2)}`} sub="collected" accent={accent} />
-        <StatCard iconComponent={Users}        label="Avg / donor" value={`$${AVG_PER_DONOR.toFixed(2)}`}    accent={accent} />
+        <StatCard iconComponent={TrendingUp}   label="Last month"  value={`$${fmtMoney(LAST_MONTH_GROSS)}`} sub="collected" accent={accent} />
+        <StatCard iconComponent={Users}        label="Avg / donor" value={`$${fmtMoney(AVG_PER_DONOR)}`}    accent={accent} />
       </div>
 
       {/* Failed charges alert */}

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
+import { fmtMoney } from '../lib/format';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { Zap, Heart, TrendingUp, X, Share2, Plus, Settings, CreditCard, Bell, HelpCircle, LogOut, ChevronRight, ExternalLink, Building2, Flame } from 'lucide-react';
 import { useApp } from '../store/AppContext';
@@ -139,7 +140,9 @@ export default function Dashboard() {
     : 100;
   const shouldShowMilestone = latestAchieved && latestAchieved.amount > seenMilestoneAmount;
 
-  const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 10;
+  const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
+  const nextMonthFirst = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+  const nextChargeDateLabel = nextMonthFirst.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const belowMinimum = pendingRoundUps < monthlyMinimum;
 
   // MoM display: "↑ 14% vs last" or "↓ 5% vs last" or "First month"
@@ -258,7 +261,7 @@ export default function Dashboard() {
           <div className="relative z-10">
             <p className="text-white/70 text-sm font-medium uppercase tracking-widest">Total Donated</p>
             <div className="mt-1">
-              <span className="text-5xl font-bold">${totalDonated.toFixed(2)}</span>
+              <span className="text-5xl font-bold">${fmtMoney(totalDonated)}</span>
             </div>
             {/* Subtitle derived from MONTHLY_DATA range — never hardcoded */}
             <p className="text-white/60 text-sm mt-2">{sinceLabel} · All time</p>
@@ -341,7 +344,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Monthly Charge card — shows rollover state when pending < $10 minimum */}
+        {/* Monthly Charge card — shows rollover state when pending is below the monthly minimum */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -353,7 +356,7 @@ export default function Dashboard() {
               <p className="font-bold text-gray-900 text-sm">
                 Monthly Charge to {selectedNonprofit.shortName}
               </p>
-              <p className="text-gray-400 text-xs mt-0.5">Next charge: end of month</p>
+              <p className="text-gray-400 text-xs mt-0.5">Next charge: {nextChargeDateLabel}</p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl" style={{ color: '#0B2A4A' }}>{daysLeft}</p>

@@ -21,7 +21,7 @@ const router = express.Router();
 router.post('/register', (req, res) => {
   // coverProcessing: donor toggle to cover the nonprofit's Stripe card-processing costs.
   // Default ON (pre-checked). Does NOT affect the mandatory $1.00/month PocketCache fee.
-  const { email, name, state, nonprofitJoinCode, coverProcessing } = req.body;
+  const { email, name, state, nonprofitJoinCode, coverProcessing, commsOptin } = req.body;
   if (!email || !state || !nonprofitJoinCode) {
     return res.status(400).json({ error: 'email, state, and nonprofitJoinCode required' });
   }
@@ -44,9 +44,9 @@ router.post('/register', (req, res) => {
 
   const id = randomUUID();
   db.prepare(`
-    INSERT INTO users (id, email, name, state, nonprofit_id, cover_processing)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, email, name ?? null, state.toUpperCase(), nonprofit.id, coverProcessing === false ? 0 : 1);
+    INSERT INTO users (id, email, name, state, nonprofit_id, cover_processing, comms_optin)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, email, name ?? null, state.toUpperCase(), nonprofit.id, coverProcessing === false ? 0 : 1, commsOptin === false ? 0 : 1);
 
   res.status(201).json({ id });
 });

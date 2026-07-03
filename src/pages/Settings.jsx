@@ -12,6 +12,7 @@ import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
 import { findOrgByCode } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
+import { fmtMoney } from '../lib/format';
 import { MONTHLY_DATA } from '../data/transactions';
 import { DEMO_USER } from '../data/derived';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
@@ -495,7 +496,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
   const appFee = 1.00;
   const processingCover = parseFloat((rawAmount * 0.022 + 0.30).toFixed(2));
   const finalTotal = (appFee + rawAmount + (coverProcessing ? processingCover : 0)).toFixed(2);
-  const belowMin = rawAmount < (nonprofit?.monthlyMinimum ?? 10);
+  const belowMin = rawAmount < (nonprofit?.monthlyMinimum ?? 5);
 
   return (
     <Sheet show={show} onClose={() => { onClose(); setResult(null); }} title="Before you go…">
@@ -524,7 +525,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
             </p>
             {belowMin && (
               <p className="text-amber-600 text-xs mb-4 leading-relaxed bg-amber-50 rounded-xl px-3 py-2">
-                Note: ${amountStr} is below the ${nonprofit?.monthlyMinimum ?? 10} minimum — in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
+                Note: ${amountStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum — in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
               </p>
             )}
             <label
@@ -775,6 +776,12 @@ export default function Settings() {
     saveKey('pc_prefs', next);
   }
 
+  const [commsOptin, setCommsOptinState] = useState(() => loadKey('pc_comms_optin', true));
+  function updateCommsOptin(v) {
+    setCommsOptinState(v);
+    saveKey('pc_comms_optin', v);
+  }
+
   const [showMultiplier, setShowMultiplier] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showSwitchOrg, setShowSwitchOrg] = useState(false);
@@ -858,7 +865,7 @@ export default function Settings() {
           </div>
           <div className="text-right">
             <p className="text-gray-400 text-xs">Donated</p>
-            <p className="text-gray-900 font-bold text-lg">${totalDonated.toFixed(2)}</p>
+            <p className="text-gray-900 font-bold text-lg">${fmtMoney(totalDonated)}</p>
           </div>
         </motion.div>
 
@@ -992,6 +999,14 @@ export default function Settings() {
             sub="Notify me before my monthly charge"
             color={brand.primary}
             right={<Toggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} color={brand.primary} />}
+          />
+          <div className="h-px bg-gray-50 mx-4" />
+          <SettingRow
+            icon={<Bell size={18} />}
+            label="Account emails & nonprofit updates"
+            sub="Charges, receipts, and updates from PocketCache and your nonprofit"
+            color={brand.secondary}
+            right={<Toggle value={commsOptin} onChange={updateCommsOptin} color={brand.primary} />}
           />
           <div className="h-px bg-gray-50 mx-4" />
           <SettingRow

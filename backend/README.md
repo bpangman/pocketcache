@@ -46,7 +46,7 @@ All money is stored and computed as **integer cents** — never floats.
 
 - Donors bind to exactly **one nonprofit** via join code / QR.
 - Nonprofit switches are **staged** and applied at the 12:01am daily job (clean day boundary); round-ups are locked to the nonprofit at accrual time.
-- Per-nonprofit configurable **monthly minimum** (default $10.00 = 1000 cents). Balances below it **roll over** to next month — no charge. Exception: **3-month settle-up floor** — if the oldest unswept round-up is 3+ calendar months old, the charge fires regardless of minimum (caps Plaid float exposure).
+- Per-nonprofit configurable **monthly minimum** (default $5.00 = 500 cents). Balances below it **roll over** to next month — no charge. Exception: **3-month settle-up floor** — if the oldest unswept round-up is 3+ calendar months old, the charge fires regardless of minimum (caps Plaid float exposure).
 - **California donors are blocked at signup** (server-side enforced, `CA_BLOCKED`).
 - Only **posted** Plaid transactions generate round-ups — pending transactions are skipped.
 - Plaid access tokens are stored **encrypted at rest** (AES-256-GCM, `src/lib/crypto.js`).

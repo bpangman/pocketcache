@@ -6,6 +6,8 @@ import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import { momChange } from '../data/derived';
 import CustomTooltip from '../components/CustomTooltip';
 import OrgLogo from '../components/OrgLogo';
+import { fmtMoney } from '../lib/format';
+import { categoryEmoji } from '../lib/categoryEmoji';
 
 function groupByDate(transactions) {
   const groups = {};
@@ -71,7 +73,7 @@ export default function Activity() {
           <p className="font-bold text-sm mb-1">Monthly Charges</p>
           <p className="text-white/80 text-xs leading-relaxed">
             Once a month, your round-ups roll up into one charge on {selectedNonprofit.shortName}&apos;s Stripe — plus a flat $1 app fee (always included).
-            Your toggle controls whether you also cover {selectedNonprofit.shortName}&apos;s card-processing costs; most donors keep it on. Months under ${selectedNonprofit.monthlyMinimum ?? 10} carry forward; we settle every 3 months at most.{' '}
+            Your toggle controls whether you also cover {selectedNonprofit.shortName}&apos;s card-processing costs; most donors keep it on. Months under ${selectedNonprofit.monthlyMinimum ?? 5} carry forward; we settle every 3 months at most.{' '}
             {selectedNonprofit.shortName} sends your tax receipt — your round-ups are deductible, the app fee is not.
           </p>
         </motion.div>
@@ -89,7 +91,7 @@ export default function Activity() {
             </div>
             <div className="text-right">
               <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">All Time</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">${totalDonated.toFixed(2)}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">${fmtMoney(totalDonated)}</p>
               {momDisplay && (
                 <p style={{ color: momChange >= 0 ? '#059669' : '#dc2626' }}
                   className="text-xs font-semibold mt-1">
@@ -160,7 +162,7 @@ export default function Activity() {
                 <div key={tx.id}
                   className={`flex items-center gap-3 px-4 py-3.5 ${i < txs.length - 1 ? 'border-b border-gray-50' : ''}`}>
                   <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-xl shrink-0">
-                    {tx.icon}
+                    {categoryEmoji(tx.category)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-900 text-sm font-semibold truncate">{tx.merchant}</p>
