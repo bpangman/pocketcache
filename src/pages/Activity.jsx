@@ -70,9 +70,9 @@ export default function Activity() {
         >
           <p className="font-bold text-sm mb-1">Monthly Charges</p>
           <p className="text-white/80 text-xs leading-relaxed">
-            Once a month, your round-ups roll up into one charge on {selectedNonprofit.shortName}&apos;s Stripe.
-            The $1/month fee is pre-selected — opt out anytime in Settings. Months under ${selectedNonprofit.monthlyMinimum ?? 10} carry forward; we settle every 3 months at most.{' '}
-            {selectedNonprofit.shortName} sends your tax receipt. (The $1 fee isn&apos;t tax-deductible, but your round-ups are.)
+            Once a month, your round-ups roll up into one charge on {selectedNonprofit.shortName}&apos;s Stripe — plus a flat $1 app fee (always included).
+            Your toggle controls whether you also cover {selectedNonprofit.shortName}&apos;s card-processing costs; most donors keep it on. Months under ${selectedNonprofit.monthlyMinimum ?? 10} carry forward; we settle every 3 months at most.{' '}
+            {selectedNonprofit.shortName} sends your tax receipt — your round-ups are deductible, the app fee is not.
           </p>
         </motion.div>
 

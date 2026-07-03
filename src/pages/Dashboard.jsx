@@ -377,7 +377,7 @@ export default function Dashboard() {
               </p>
             ) : (
               <p className="text-xs font-semibold" style={{ color: '#059669' }}>
-                ${pendingRoundUps.toFixed(2)} ready to send · +$1 fee if you&apos;re covering it
+                ${pendingRoundUps.toFixed(2)} + $1 app fee · pending charge
               </p>
             )}
             <p className="text-gray-400 text-xs">Month end</p>

@@ -160,8 +160,8 @@ export default function Share() {
         >
           <p className="font-bold text-base mb-1">Invite a Friend</p>
           <p className="text-white/80 text-sm leading-relaxed mb-4">
-            When someone joins with your link, we cover their first month&apos;s 50¢ processing fee —
-            so 100% of their very first round-ups go straight to {selectedNonprofit.name}.
+            When someone joins with your link, we waive their first month&apos;s $1 app fee —
+            so their very first charge is pure giving to {selectedNonprofit.name}.
           </p>
           <div className="bg-white/20 rounded-2xl px-4 py-3 flex items-center justify-between">
             <span className="font-mono text-white font-bold tracking-wider text-sm">{referralCode}</span>

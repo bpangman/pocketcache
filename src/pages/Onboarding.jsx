@@ -70,7 +70,7 @@ const SLIDES = [
       </div>
     ),
     title: 'Spare Change\nAdds Up',
-    subtitle: 'Every purchase rounds up to the next dollar. Coffee for $3.40? That 60¢ goes straight to your cause. Cover the $1/month fee and 100% of your round-ups reach them — never a percentage.',
+    subtitle: 'Every purchase rounds up to the next dollar. Coffee for $3.40? That 60¢ goes straight to your cause. A flat $1/month keeps the app running — never a percentage of what you give.',
     cta: 'Next',
   },
   {
@@ -824,21 +824,21 @@ const PAYMENT_OPTIONS = [
     id: 'ach',
     icon: '🏦',
     label: 'Bank Account',
-    sub: 'Direct bank transfer · Flat $0.50/month processing fee',
+    sub: 'Direct bank transfer · Includes flat $1/month app fee',
     badge: null,
   },
   {
     id: 'apple_pay',
     icon: '🍎',
     label: 'Apple Pay',
-    sub: 'Set up once, fully automatic · Flat $0.50/month processing fee',
+    sub: 'Set up once, fully automatic · Includes flat $1/month app fee',
     badge: null,
   },
   {
     id: 'card',
     icon: '💳',
     label: 'Credit or Debit Card',
-    sub: 'Visa, Mastercard, Amex, or Discover · Flat $0.50/month processing fee',
+    sub: 'Visa, Mastercard, Amex, or Discover · Includes flat $1/month app fee',
     badge: null,
   },
 ];
@@ -1094,10 +1094,11 @@ function CardEntryScreen({ onNext }) {
 
 function CheckoutConfirmScreen({ onConfirm }) {
   const { selectedNonprofit, pendingRoundUps } = useApp();
-  const [coverFee, setCoverFee] = useState(true);
+  const [coverProcessing, setCoverProcessing] = useState(true);
   const roundUps = pendingRoundUps ?? 4.63;
-  const fee = 1.00;
-  const total = coverFee ? roundUps + fee : roundUps;
+  const appFee = 1.00;
+  const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
+  const total = parseFloat((appFee + roundUps + (coverProcessing ? processingCover : 0)).toFixed(2));
 
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -1137,10 +1138,14 @@ function CheckoutConfirmScreen({ onConfirm }) {
               <span className="text-sm text-gray-700">Round-ups this month</span>
               <span className="font-bold text-gray-900">${roundUps.toFixed(2)}</span>
             </div>
-            {coverFee && (
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-500">App fee (flat, not tax-deductible)</span>
+              <span className="text-sm text-gray-500">+$1.00</span>
+            </div>
+            {coverProcessing && (
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-500">App fee (you&apos;re covering it)</span>
-                <span className="text-sm text-gray-500">+$1.00</span>
+                <span className="text-sm text-gray-500">Processing cover (goes to {npShort})</span>
+                <span className="text-sm text-gray-500">+${processingCover.toFixed(2)}</span>
               </div>
             )}
             <div className="h-px bg-slate-200 my-2" />
@@ -1153,23 +1158,23 @@ function CheckoutConfirmScreen({ onConfirm }) {
             </p>
           </div>
 
-          {/* Cover fee checkbox */}
+          {/* Processing cover toggle */}
           <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl"
-            onClick={() => setCoverFee(v => !v)}
-            style={{ background: coverFee ? '#d1fae5' : '#f9fafb', border: coverFee ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}>
+            onClick={() => setCoverProcessing(v => !v)}
+            style={{ background: coverProcessing ? '#d1fae5' : '#f9fafb', border: coverProcessing ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}>
             <div
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-              style={{ borderColor: coverFee ? '#059669' : '#d1d5db', background: coverFee ? '#059669' : '#fff' }}>
-              {coverFee && <CheckCircle size={12} className="text-white" />}
+              style={{ borderColor: coverProcessing ? '#059669' : '#d1d5db', background: coverProcessing ? '#059669' : '#fff' }}>
+              {coverProcessing && <CheckCircle size={12} className="text-white" />}
             </div>
             <div>
               <span className="text-sm font-semibold text-gray-900">
-                Cover the $1/month fee — 100% of your round-ups reach {npShort}.
+                Cover {npShort}&apos;s card-processing costs too, so 100% of my round-ups reach them.
               </span>
               <p className="text-xs text-gray-500 mt-0.5">
-                {coverFee
-                  ? `The $1/month keeps the app running. Every dollar of your $${roundUps.toFixed(2)} in round-ups lands at ${npShort}.`
-                  : `Opted out — 50¢ comes from your round-ups and 50¢ is billed to ${npShort}. Your round-ups still reach ${npShort}.`}
+                {coverProcessing
+                  ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort} — PocketCache never touches it. It counts as part of your donation.`
+                  : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
               </p>
             </div>
           </label>
@@ -1185,7 +1190,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               {npShort} sends your tax receipt — they&apos;re the ones receiving your donation.
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              The $1/month fee keeps the app running and isn&apos;t tax-deductible, but your donation is. Opt out and the dollar splits: 50¢ from your round-ups, 50¢ from {npShort}. Months under ${selectedNonprofit?.monthlyMinimum ?? 10} just roll forward — we settle up within 3 months at most.
+              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 10} roll forward — we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
               Tracking starts the moment your card is linked. Your <strong>first charge hits on the 1st of next month</strong> — nothing before today ever counts.
@@ -1548,7 +1553,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
           <form onSubmit={handleAccept} className="space-y-4">
             <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
             <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
-              <p><strong>Free for you when donors keep the $1/month fee</strong> (it&apos;s pre-selected — most do). You&apos;re billed a flat $0.50/donor/month only for donors who opt out. Never a % of donations.</p>
+              <p><strong>Always free for you.</strong> Donors pay the flat $1/month app fee, and most also cover your card-processing costs (pre-selected). You never pay PocketCache anything — never a % of donations.</p>
               <p><strong>You are the merchant of record.</strong> Donations charge directly on your Stripe. PocketCache never holds donation funds.</p>
               <p><strong>You issue tax receipts</strong> directly to donors. PocketCache does not.</p>
               <p><strong>You handle charitable solicitation registration</strong> in applicable states.</p>

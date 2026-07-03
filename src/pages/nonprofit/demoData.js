@@ -111,11 +111,18 @@ export const CHARGE_HISTORY = Array.from({ length: 6 }, (_, m) => {
     eligibleDonors.reduce((s, d) => s + d.monthlyAmount, 0).toFixed(2)
   );
 
-  const coveringFee = Math.floor(eligibleDonors.length * 0.68);
-  const optOutCount = eligibleDonors.length - coveringFee;
-  const feesCovered  = parseFloat((coveringFee * 1.00).toFixed(2));
-  const feesDeducted = parseFloat((optOutCount * 0.50).toFixed(2));
-  const feesNpBilled = parseFloat((optOutCount * 0.50).toFixed(2));
+  // ~85% of donors cover processing costs; 15% opt out
+  const coveringProcessing = Math.floor(eligibleDonors.length * 0.85);
+  const optOutProcessing   = eligibleDonors.length - coveringProcessing;
+
+  // Average processing fee per donor (~2.2% of monthly amount + $0.30)
+  const avgMonthly    = gross / Math.max(1, eligibleDonors.length);
+  const avgProcessing = parseFloat((avgMonthly * 0.022 + 0.30).toFixed(2));
+
+  const processingCovered  = parseFloat((coveringProcessing * avgProcessing).toFixed(2));
+  const processingAbsorbed = parseFloat((optOutProcessing   * avgProcessing).toFixed(2));
+  const appFees            = parseFloat((eligibleDonors.length * 1.00).toFixed(2)); // donor-paid, to PocketCache
+  const netToStripe        = parseFloat((gross + processingCovered - processingAbsorbed).toFixed(2));
 
   return {
     period,
@@ -123,9 +130,10 @@ export const CHARGE_HISTORY = Array.from({ length: 6 }, (_, m) => {
     shortLabel:   period.toLocaleString('default', { month: 'short', year: '2-digit' }),
     donorsCharged,
     gross,
-    feesCovered,
-    feesDeducted,
-    feesNpBilled,
+    processingCovered,
+    processingAbsorbed,
+    appFees,
+    netToStripe,
     failures:       failureCount,
     failureStatus:  failureCount > 0 ? 'retrying' : null,
   };

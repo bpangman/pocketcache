@@ -48,10 +48,9 @@ export default function Overview() {
         className="rounded-2xl p-4 flex flex-col gap-1.5"
         style={{ background: '#f0fdf4', border: '1.5px solid #86efac' }}
       >
-        <p className="text-green-800 text-sm font-bold">Free for you — donors cover the $1/month app fee</p>
+        <p className="text-green-800 text-sm font-bold">Always free for you — donors cover everything</p>
         <p className="text-green-700 text-xs leading-relaxed">
-          Pre-selected at signup: 100% of donor round-ups reach you. You&apos;re only billed 50¢/month for donors
-          who opt out (rare). PocketCache never takes a percentage of donations.
+          Donors cover the flat $1 app fee, and most also cover your card-processing costs (pre-selected at signup) — so PocketCache costs you $0, ever. We never take a percentage of donations.
         </p>
       </motion.div>
 

@@ -37,9 +37,7 @@ export default function Charges() {
           </p>
         </div>
         <p className="text-green-700 text-xs pl-6 leading-relaxed">
-          Most donors keep the pre-selected $1/month fee — you pay nothing for them.
-          For the rare donor who opts out, 50¢ comes from their round-ups and 50¢ is on you.
-          Never a percentage of donations, ever.
+          Donors cover the flat $1 app fee — you pay $0 for app costs, ever. Most also cover your card-processing costs (pre-selected). When they do, that amount goes directly to you — PocketCache never keeps it. Never a percentage of donations.
         </p>
         <a
           href="https://dashboard.stripe.com"
@@ -75,24 +73,26 @@ export default function Charges() {
           {/* Fee breakdown */}
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 text-xs">Donors who covered fee ($1/mo each)</span>
-              <span className="font-semibold text-xs text-gray-700">${run.feesCovered.toFixed(2)}</span>
+              <span className="text-gray-500 text-xs">Gross round-ups from donors</span>
+              <span className="font-semibold text-xs text-gray-700">${run.gross.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 text-xs">Fee deducted from opt-out round-ups (50¢/ea)</span>
-              <span className="font-semibold text-xs text-gray-500">−${run.feesDeducted.toFixed(2)}</span>
+              <span className="text-gray-500 text-xs">Processing covered by donors (to you)</span>
+              <span className="font-semibold text-xs text-green-600">+${run.processingCovered.toFixed(2)}</span>
             </div>
-            {run.feesNpBilled > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500 text-xs">Invoiced to you for opt-out donors (50¢/ea)</span>
-                <span className="font-semibold text-xs text-orange-600">−${run.feesNpBilled.toFixed(2)}</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 text-xs">Card costs absorbed (opt-out donors)</span>
+              <span className="font-semibold text-xs text-gray-500">−${run.processingAbsorbed.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 text-xs">App fees (donor-paid, to PocketCache)</span>
+              <span className="font-semibold text-xs text-gray-400">${run.appFees.toFixed(2)}</span>
+            </div>
             <div className="h-px bg-gray-100" />
             <div className="flex justify-between items-center">
               <span className="text-gray-700 text-xs font-semibold">Net to your Stripe</span>
               <span className="font-bold text-xs" style={{ color: accent }}>
-                ${(run.gross - run.feesDeducted).toFixed(2)}
+                ${run.netToStripe.toFixed(2)}
               </span>
             </div>
           </div>

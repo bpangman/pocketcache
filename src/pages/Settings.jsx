@@ -100,9 +100,9 @@ const TRACKED_CARD_BANKS = [
 ];
 
 const PAYMENT_METHOD_OPTIONS = [
-  { id: 'ach',       icon: '🏦', label: 'Bank Account',          sub: 'Direct bank transfer · Flat $0.50/month processing fee' },
-  { id: 'apple_pay', icon: '🍎', label: 'Apple Pay',              sub: 'Set up once, fully automatic · Flat $0.50/month processing fee' },
-  { id: 'card',      icon: '💳', label: 'Credit or Debit Card',   sub: 'Visa, Mastercard, Amex, or Discover · Flat $0.50/month processing fee' },
+  { id: 'ach',       icon: '🏦', label: 'Bank Account',          sub: 'Direct bank transfer · Includes flat $1/month app fee' },
+  { id: 'apple_pay', icon: '🍎', label: 'Apple Pay',              sub: 'Set up once, fully automatic · Includes flat $1/month app fee' },
+  { id: 'card',      icon: '💳', label: 'Credit or Debit Card',   sub: 'Visa, Mastercard, Amex, or Discover · Includes flat $1/month app fee' },
 ];
 
 const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: '🍎', card: '💳' };
@@ -469,9 +469,7 @@ function AppIconSheet({ show, onClose, brand }) {
 
 function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonate, onCancelled }) {
   const [result, setResult] = useState(null); // 'donated' | 'cancelled'
-  // Donor chooses whether the final $1 fee is theirs to cover or falls to the
-  // nonprofit's side — pre-checked, always their call. Never a penalty to leave.
-  const [coverFinalFee, setCoverFinalFee] = useState(true);
+  const [coverProcessing, setCoverProcessing] = useState(true);
 
   useEffect(() => {
     if (result) {
@@ -494,7 +492,9 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
 
   const rawAmount = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   const amountStr = rawAmount.toFixed(2);
-  const finalTotal = (coverFinalFee ? rawAmount + 1.00 : rawAmount).toFixed(2);
+  const appFee = 1.00;
+  const processingCover = parseFloat((rawAmount * 0.022 + 0.30).toFixed(2));
+  const finalTotal = (appFee + rawAmount + (coverProcessing ? processingCover : 0)).toFixed(2);
   const belowMin = rawAmount < (nonprofit?.monthlyMinimum ?? 10);
 
   return (
@@ -529,18 +529,18 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
             )}
             <label
               className="flex items-start gap-3 cursor-pointer p-3 rounded-2xl mb-3"
-              onClick={() => setCoverFinalFee(v => !v)}
-              style={{ background: coverFinalFee ? '#d1fae5' : '#f9fafb', border: coverFinalFee ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}
+              onClick={() => setCoverProcessing(v => !v)}
+              style={{ background: coverProcessing ? '#d1fae5' : '#f9fafb', border: coverProcessing ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}
             >
               <div
                 className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-                style={{ borderColor: coverFinalFee ? '#059669' : '#d1d5db', background: coverFinalFee ? '#059669' : '#fff' }}
+                style={{ borderColor: coverProcessing ? '#059669' : '#d1d5db', background: coverProcessing ? '#059669' : '#fff' }}
               >
-                {coverFinalFee && <CheckCircle size={12} className="text-white" />}
+                {coverProcessing && <CheckCircle size={12} className="text-white" />}
               </div>
               <span className="text-xs text-gray-600 leading-relaxed">
-                Cover the final $1 app fee so it doesn&apos;t come out of {nonprofit?.shortName ?? 'your cause'}&apos;s side.
-                {!coverFinalFee && ' Unchecked: the dollar splits — 50¢ from your round-ups, 50¢ billed to them.'}
+                Cover {nonprofit?.shortName ?? 'your cause'}&apos;s card-processing costs too (pre-selected) — ~${processingCover.toFixed(2)} goes directly to them.
+                {!coverProcessing && ` Unchecked: ${nonprofit?.shortName ?? 'your cause'} nets your round-ups minus standard card costs.`}
               </span>
             </label>
             <motion.button
@@ -552,7 +552,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               Send ${finalTotal} &amp; cancel
             </motion.button>
             <p className="text-gray-400 text-xs text-center mb-3">
-              One last charge, then nothing ever again. These are round-ups from purchases you already made — there&apos;s never a fee for leaving.
+              One last charge (your round-ups + flat $1 app fee), then nothing ever again. There&apos;s never a fee for leaving.
             </p>
             <button
               onClick={handleCancelOnly}
@@ -561,7 +561,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               Cancel without donating
             </button>
             <p className="text-gray-400 text-xs text-center">
-              Skip it and your round-ups this month are simply waived — like the month never happened.
+              Skip it and your round-ups and all fees this month are simply waived — like the month never happened. Never a fee for leaving.
             </p>
           </>
         )}
@@ -940,10 +940,11 @@ export default function Settings() {
           <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
           <p className="text-xs text-amber-800 leading-relaxed">
             One monthly charge on {selectedNonprofit.shortName}&apos;s Stripe — minimum ${selectedNonprofit.monthlyMinimum}.
-            You pre-selected the <strong>$1/month</strong> fee, so 100% of your round-ups reach {selectedNonprofit.shortName}.
-            If you opted out, the dollar splits: 50¢ from your round-ups, 50¢ from them. Months under ${selectedNonprofit.monthlyMinimum} roll over; we settle every 3 months at most.
-            Cancel and a final charge clears your accrued round-ups.{' '}
-            {selectedNonprofit.shortName} sends your tax receipt — the $1 fee isn&apos;t deductible, but your donations are.
+            A flat <strong>$1/month</strong> app fee (50¢ tracking + 50¢ processing) is part of every charge — always, never a percentage.
+            Your toggle covers {selectedNonprofit.shortName}&apos;s card-processing costs: on means a small amount (~2.2% + 30¢) is added and passes directly to them — PocketCache never keeps it. Off means {selectedNonprofit.shortName} nets your round-ups minus standard card costs.
+            They never pay PocketCache anything — the platform is always free for them.
+            Months under ${selectedNonprofit.monthlyMinimum} roll over; we settle every 3 months at most.{' '}
+            {selectedNonprofit.shortName} sends your tax receipt — your round-ups are deductible, the $1 fee is not.
           </p>
         </motion.div>
 
