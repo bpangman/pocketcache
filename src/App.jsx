@@ -217,26 +217,33 @@ function AppContent() {
   );
 }
 
-function useWindowHeight() {
-  const [vh, setVh] = useState(() => window.innerHeight);
+function useWindowSize() {
+  const [size, setSize] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
-    const update = () => setVh(window.innerHeight);
+    const update = () => setSize({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
-  return vh;
+  return size;
 }
 
-function PhoneFrame({ children }) {
+function PhoneFrame({ children, compact = false }) {
   const brand = useTheme();
   const [deviceId, setDeviceId] = useState(loadDevice);
-  const windowH = useWindowHeight();
+  const { w: windowW, h: windowH } = useWindowSize();
 
   const device = DEVICES.find(d => d.id === deviceId) ?? DEVICES[2];
-  // Reserve vertical space for wordmark, chip bar, caption, gaps, and page padding.
-  const CHROME_V = 240;
+  // Reserve vertical space for wordmark, chip bar (desktop only), caption, gaps,
+  // and page padding. Compact mode (real phones) drops the device picker.
+  const chromeV = compact ? 150 : 240;
   const BEZEL = 28; // 14px decorative ring on each side (box-shadow)
-  const outerScale = Math.min(1, (windowH - CHROME_V) / (device.height + BEZEL));
+  const pagePad = compact ? 16 : 32;
+  // Fit by height AND width so the frame never overflows a narrow screen.
+  const outerScale = Math.min(
+    1,
+    (windowH - chromeV) / (device.height + BEZEL),
+    (windowW - 2 * pagePad - BEZEL) / device.width,
+  );
 
   function handleDeviceChange(id) {
     setDeviceId(id);
@@ -245,8 +252,8 @@ function PhoneFrame({ children }) {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-8 relative overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 50%, #0B2A4A 100%)' }}
+      className={`flex items-center justify-center relative overflow-hidden ${compact ? 'p-4' : 'p-8'}`}
+      style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 50%, #0B2A4A 100%)', minHeight: '100dvh' }}
     >
       {/* Ambient glow — follows brand color */}
       <motion.div
@@ -298,8 +305,8 @@ function PhoneFrame({ children }) {
           </div>
         </motion.div>
 
-        {/* Device chip picker — between wordmark and frame */}
-        <DevicePicker selected={deviceId} onChange={handleDeviceChange} />
+        {/* Device chip picker — between wordmark and frame (desktop only) */}
+        {!compact && <DevicePicker selected={deviceId} onChange={handleDeviceChange} />}
 
         {/* Sizer: layout box tracks the SCALED visual size so the flex column never
             reserves phantom space (transform: scale doesn't shrink layout). */}
@@ -362,14 +369,20 @@ function useIsMobile() {
 
 function ThemedApp() {
   const isMobile = useIsMobile();
+  // Donors arriving through an org's join link (?org=CODE) — or admins signing
+  // in from their micro-site (?npsignin=1) — get the real-app, full-bleed
+  // experience on their phones. ?app=1 forces it too. Everyone else, including
+  // phones, gets the phone-mockup demo shell.
+  const params = new URLSearchParams(window.location.search);
+  const appEntry = params.get('org') || params.get('npsignin') === '1' || params.get('app') === '1';
   return (
     <ThemeProvider>
-      {isMobile ? (
+      {isMobile && appEntry ? (
         <ScaleFit>
           <AppContent />
         </ScaleFit>
       ) : (
-        <PhoneFrame>
+        <PhoneFrame compact={isMobile}>
           <AppContent />
         </PhoneFrame>
       )}
