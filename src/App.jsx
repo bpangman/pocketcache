@@ -368,13 +368,51 @@ function useIsMobile() {
   return mobile;
 }
 
+// WebPortal — the browser-native giving portal reached from an org micro-site.
+// No phone chrome: a clean page with the flow in a centered, elevated column
+// (the Acorns-web pattern). Same screens, same account, different presentation.
+function WebPortal({ children }) {
+  const { w, h } = useWindowSize();
+  const colW = Math.min(440, w - 24);
+  const colH = Math.min(920, h - 56);
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-3"
+      style={{ minHeight: '100dvh', background: 'linear-gradient(180deg, #f6f8fb 0%, #e9eef5 100%)', padding: 12 }}
+    >
+      <div
+        style={{
+          width: colW,
+          height: colH,
+          background: '#fff',
+          borderRadius: 24,
+          overflow: 'hidden',
+          position: 'relative',
+          boxShadow: '0 24px 64px rgba(11,42,74,0.16), 0 2px 8px rgba(11,42,74,0.08)',
+        }}
+      >
+        <ScaleFit viewport={{ width: colW, height: colH }}>
+          {children}
+        </ScaleFit>
+      </div>
+      <p style={{ color: '#94a3b8', fontSize: 12, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <CoinMark size={14} />
+        Powered by PocketCache ·{' '}
+        <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Terms</a>{' '}
+        <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Privacy</a>
+      </p>
+    </div>
+  );
+}
+
 function ThemedApp() {
   const isMobile = useIsMobile();
   // Donors arriving through an org's join link (?org=CODE) — or admins signing
-  // in from their micro-site (?npsignin=1) — get the real-app, full-bleed
-  // experience on their phones. ?app=1 forces it too. Everyone else, including
-  // phones, gets the phone-mockup demo shell. Captured ONCE — the pretty-URL
-  // rewrite below strips the params, and re-renders must not flip the shell.
+  // in from their micro-site (?npsignin=1) — get the real app experience:
+  // full-bleed on phones, the WebPortal column in a desktop browser. ?app=1
+  // forces it too. Everyone else gets the phone-mockup demo shell. Captured
+  // ONCE — the pretty-URL rewrite below strips the params, and re-renders
+  // must not flip the shell.
   const [appEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return Boolean(params.get('org') || params.get('npsignin') === '1' || params.get('app') === '1');
@@ -395,10 +433,16 @@ function ThemedApp() {
 
   return (
     <ThemeProvider>
-      {isMobile && appEntry ? (
-        <ScaleFit>
-          <AppContent />
-        </ScaleFit>
+      {appEntry ? (
+        isMobile ? (
+          <ScaleFit>
+            <AppContent />
+          </ScaleFit>
+        ) : (
+          <WebPortal>
+            <AppContent />
+          </WebPortal>
+        )
       ) : (
         <PhoneFrame compact={isMobile}>
           <AppContent />
