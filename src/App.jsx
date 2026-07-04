@@ -11,6 +11,7 @@ import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/Devi
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLandingPage from './pages/OrgLandingPage';
+import { findOrgByCode } from './store/orgStore';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
 // (full-bleed, proportionally scaled to viewport width).
@@ -372,9 +373,26 @@ function ThemedApp() {
   // Donors arriving through an org's join link (?org=CODE) — or admins signing
   // in from their micro-site (?npsignin=1) — get the real-app, full-bleed
   // experience on their phones. ?app=1 forces it too. Everyone else, including
-  // phones, gets the phone-mockup demo shell.
-  const params = new URLSearchParams(window.location.search);
-  const appEntry = params.get('org') || params.get('npsignin') === '1' || params.get('app') === '1';
+  // phones, gets the phone-mockup demo shell. Captured ONCE — the pretty-URL
+  // rewrite below strips the params, and re-renders must not flip the shell.
+  const [appEntry] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return Boolean(params.get('org') || params.get('npsignin') === '1' || params.get('app') === '1');
+  });
+
+  // Org-scoped pretty URL: a join-link entry settles at pocketcache.app/CODE/give
+  // (the 404 forwarder routes that path back to ?org=CODE, so refresh/bookmark
+  // work). Delayed so the gate's auto-bind consumes ?org= first.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('org');
+    if (!code) return;
+    const org = findOrgByCode(code);
+    if (!org) return;
+    const slug = encodeURIComponent((org.shortName || org.id).toUpperCase());
+    const t = setTimeout(() => window.history.replaceState(null, '', `/${slug}/give`), 2500);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <ThemeProvider>
       {isMobile && appEntry ? (

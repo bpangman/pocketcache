@@ -138,18 +138,23 @@ export default function OrgLandingPage({ code }) {
       {/* Body */}
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
 
-        {/* Get the app */}
+        {/* Start giving — the app runs right here on the web */}
         <div style={card}>
-          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827', margin: '0 0 0.4rem' }}>Get the app</h2>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827', margin: '0 0 0.4rem' }}>Start giving in under a minute</h2>
           <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '1rem', lineHeight: 1.55 }}>
             Round up your everyday purchases — spare change goes straight to {org.name}.
+            Nothing to download: sign in, link a card, and you&apos;re giving, right from your browser.
           </p>
           <a
             href={joinUrl}
-            style={{ display: 'block', background: `linear-gradient(135deg, ${brandColor}, #001a33)`, color: '#fff', textAlign: 'center', padding: '0.85rem', borderRadius: 14, fontWeight: 700, fontSize: '0.95rem', textDecoration: 'none', marginBottom: '1rem' }}
+            style={{ display: 'block', background: `linear-gradient(135deg, ${brandColor}, #001a33)`, color: '#fff', textAlign: 'center', padding: '0.85rem', borderRadius: 14, fontWeight: 700, fontSize: '0.95rem', textDecoration: 'none', marginBottom: '0.5rem' }}
           >
-            Join {orgCode} on PocketCache →
+            Start giving to {orgCode} →
           </a>
+          <p style={{ color: '#9ca3af', fontSize: 12, margin: '0 0 1rem', textAlign: 'center' }}>
+            Already a supporter?{' '}
+            <a href={joinUrl} style={{ color: brandColor, fontWeight: 600 }}>Open your giving dashboard</a>
+          </p>
           <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: '0.6rem', textAlign: 'center' }}>Or send it to your phone:</p>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
             <a

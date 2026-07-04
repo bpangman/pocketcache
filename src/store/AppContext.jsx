@@ -24,9 +24,19 @@ if (typeof window !== 'undefined') {
   // route straight into onboarding so the gate auto-binds the scanned org,
   // even if this device was mid-demo, bound to another org, or fully set up.
   // Account/identity survives; only the page + cause binding reset.
+  // EXCEPTION: a returning donor tapping their OWN org's link (micro-site
+  // "open my dashboard", re-scanned QR) goes straight back to wherever they
+  // were — the link doubles as "open the app".
   if (params.get('org')) {
-    saveKey('pc_page', 'onboarding');
-    removeKeys(['pc_cause_id']);
+    const scanned = findOrgByCode(params.get('org'));
+    const alreadyTheirs = scanned
+      && loadKey('pc_cause_id') === scanned.id
+      && loadKey(IDENTITY_KEYS.donorRole)
+      && loadKey(IDENTITY_KEYS.identity);
+    if (!alreadyTheirs) {
+      saveKey('pc_page', 'onboarding');
+      removeKeys(['pc_cause_id']);
+    }
   }
 }
 
