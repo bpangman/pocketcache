@@ -76,6 +76,8 @@ export function AppProvider({ children }) {
 
   // initialOnboardingStep: used to deep-link into a specific onboarding step
   const [initialOnboardingStep, setInitialOnboardingStepState] = useState(null);
+  // Where an exit-level "back" should land after a cross-surface jump (or null).
+  const [navReturn, setNavReturnState] = useState(null);
 
   const pendingRoundUps = parseFloat((BASE_PENDING * roundUpMultiplier).toFixed(2));
 
@@ -220,6 +222,9 @@ export function AppProvider({ children }) {
   }
 
   function goToOnboardingStep(step) {
+    // Remember where the user came from (page + tab) so exit-level back
+    // buttons return them there instead of dumping them at the gate.
+    setNavReturnState({ page, tab });
     setInitialOnboardingStepState(step);
     saveKey('pc_page', 'onboarding');
     setPageState('onboarding');
@@ -227,6 +232,17 @@ export function AppProvider({ children }) {
 
   function clearInitialOnboardingStep() {
     setInitialOnboardingStepState(null);
+  }
+
+  // Cross-surface back memory: one-deep is all the demo's jumps need.
+  function returnFromOnboarding() {
+    if (!navReturn) return false;
+    const { page: p, tab: t } = navReturn;
+    setNavReturnState(null);
+    if (t) setTab(t);
+    saveKey('pc_page', p);
+    setPageState(p);
+    return true;
   }
 
   // signOut: signs out the PERSON — both modes — back to the gate.
@@ -258,6 +274,7 @@ export function AppProvider({ children }) {
       initialOnboardingStep,
       clearInitialOnboardingStep,
       goToOnboardingStep,
+      returnFromOnboarding,
       adminRole, setAdminRole,
       lastMode, setLastMode,
       deleteAccount,

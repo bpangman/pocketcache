@@ -19,6 +19,7 @@ import { loadKey, saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
+import { useHeroCollapse } from '../lib/useHeroCollapse';
 
 
 const SLIDES = [
@@ -216,8 +217,11 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
           <p className="text-white/80 font-semibold text-base leading-tight mb-1">Welcome to</p>
           <PocketCacheLogo size={32} onDark={true} />
         </div>
-        <p className="text-white font-semibold text-sm text-center leading-relaxed mb-4 px-2">
+        <p className="text-white font-semibold text-sm text-center leading-relaxed mb-1 px-2">
           Your own round-up app. Live in minutes!
+        </p>
+        <p className="text-white/70 text-xs text-center leading-relaxed mb-4 px-2">
+          Checkout round-ups raise hundreds of millions for causes every year — this puts that power in your nonprofit&apos;s pocket.
         </p>
       </div>
 
@@ -371,6 +375,10 @@ const US_STATES = [
 ];
 
 function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
+  const { scrollRef, onScroll, progress } = useHeroCollapse();
+  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
+  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
+  const heroMaxHeight = 420 - (420 - 64) * progress;
   const [chosen, setChosen] = useState(null);
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [commsOptin, setCommsOptin] = useState(true);
@@ -407,31 +415,50 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
     >
       {/* Hero */}
       <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: '38%' }}
+        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
+        style={{
+          background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
+          maxHeight: `${heroMaxHeight}px`,
+          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          overflow: 'hidden',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+        }}
       >
-        <motion.div className="mb-5 flex flex-col items-center gap-3">
-          {nonprofit
-            ? <OrgLogo nonprofit={nonprofit} size={16} rounded="2xl" className="bg-white/20 mb-2" />
-            : <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl mb-2">&#127952;</div>
-          }
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-white/20 rounded-2xl px-4 py-2"
-          >
-            <p className="text-white text-xs font-semibold text-center">
-              Supporting {npName}
-            </p>
+        {/* Compact bar — fades in as hero collapses */}
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <span className="text-white font-bold text-sm px-6 truncate max-w-full">Create Your Account</span>
+        </div>
+        {/* Expanded content */}
+        <div
+          className="w-full flex flex-col items-center"
+          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <motion.div className="mb-5 flex flex-col items-center gap-3">
+            {nonprofit
+              ? <OrgLogo nonprofit={nonprofit} size={16} rounded="2xl" className="bg-white/20 mb-2" />
+              : <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl mb-2">&#127952;</div>
+            }
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-white/20 rounded-2xl px-4 py-2"
+            >
+              <p className="text-white text-xs font-semibold text-center">
+                Supporting {npName}
+              </p>
+            </motion.div>
           </motion.div>
-        </motion.div>
-        <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-          Create Your{'\n'}Account
-        </h1>
-        <p className="text-white/80 text-sm mt-2 text-center">
-          Sign up in seconds. No payment required yet.
-        </p>
+          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+            Create Your{'\n'}Account
+          </h1>
+          <p className="text-white/80 text-sm mt-2 text-center">
+            Sign up in seconds. No payment required yet.
+          </p>
+        </div>
       </div>
 
       {/* CA Block overlay */}
@@ -464,7 +491,8 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
 
       {/* Bottom sheet */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div className="flex-1 px-4 pt-5 pb-2 space-y-3 overflow-y-auto">
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
+          <div className="px-4 pt-5 pb-2 space-y-3" style={{ minHeight: 'calc(100% + 160px)' }}>
 
           {/* State selector */}
           <div>
@@ -500,6 +528,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
             <span className="text-gray-400 text-sm">Already have an account? </span>
             <span className="text-sm font-semibold underline" style={{ color: '#003865' }}>Sign in</span>
           </button>
+          </div>
         </div>
 
         {/* Consent checkbox */}
@@ -691,6 +720,10 @@ const BANKS = [
 ];
 
 function ConnectCardScreen({ onNext }) {
+  const { scrollRef, onScroll, progress } = useHeroCollapse();
+  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
+  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
+  const heroMaxHeight = 420 - (420 - 64) * progress;
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
 
@@ -711,53 +744,74 @@ function ConnectCardScreen({ onNext }) {
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="flex flex-col h-full overflow-hidden"
     >
+      {/* Hero */}
       <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '38%' }}
+        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
+        style={{
+          background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)',
+          maxHeight: `${heroMaxHeight}px`,
+          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          overflow: 'hidden',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+        }}
       >
-        <motion.div className="mb-5 flex flex-col items-center gap-3">
-          <motion.div
-            initial={{ rotate: -4, y: 12, opacity: 0 }}
-            animate={{ rotate: -4, y: 0, opacity: 1 }}
-            transition={{ delay: 0.15, type: 'spring', stiffness: 180 }}
-            className="w-64 h-36 rounded-3xl p-5 shadow-2xl relative overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)' }}
-          >
-            <div className="flex justify-between items-start mb-5">
-              <div className="w-9 h-6 rounded bg-white/50" />
-              <div className="flex gap-1">
-                <div className="w-6 h-6 rounded-full bg-white/40" />
-                <div className="w-6 h-6 rounded-full bg-white/25 -ml-2" />
+        {/* Compact bar */}
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <span className="text-white font-bold text-sm px-6 truncate max-w-full">Which card should we track?</span>
+        </div>
+        {/* Expanded content */}
+        <div
+          className="w-full flex flex-col items-center"
+          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <motion.div className="mb-5 flex flex-col items-center gap-3">
+            <motion.div
+              initial={{ rotate: -4, y: 12, opacity: 0 }}
+              animate={{ rotate: -4, y: 0, opacity: 1 }}
+              transition={{ delay: 0.15, type: 'spring', stiffness: 180 }}
+              className="w-64 h-36 rounded-3xl p-5 shadow-2xl relative overflow-hidden"
+              style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)' }}
+            >
+              <div className="flex justify-between items-start mb-5">
+                <div className="w-9 h-6 rounded bg-white/50" />
+                <div className="flex gap-1">
+                  <div className="w-6 h-6 rounded-full bg-white/40" />
+                  <div className="w-6 h-6 rounded-full bg-white/25 -ml-2" />
+                </div>
               </div>
-            </div>
-            <p className="text-white/80 font-mono text-sm tracking-widest">•••• •••• •••• ••••</p>
-            <div className="flex justify-between mt-2">
-              <p className="text-white/60 text-xs">Your Card</p>
-              <p className="text-xs font-semibold text-white/80">👁 Watching purchases</p>
-            </div>
+              <p className="text-white/80 font-mono text-sm tracking-widest">•••• •••• •••• ••••</p>
+              <div className="flex justify-between mt-2">
+                <p className="text-white/60 text-xs">Your Card</p>
+                <p className="text-xs font-semibold text-white/80">👁 Watching purchases</p>
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.5, type: 'spring' }}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl"
+              style={{ background: 'rgba(255,255,255,0.2)' }}
+            >
+              <span className="text-white text-sm">☕ $3.40</span>
+              <span className="text-white/60 text-sm">→</span>
+              <span className="text-white font-bold text-sm">+$0.60 donated 💚</span>
+            </motion.div>
           </motion.div>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.5, type: 'spring' }}
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl"
-            style={{ background: 'rgba(255,255,255,0.2)' }}
-          >
-            <span className="text-white text-sm">☕ $3.40</span>
-            <span className="text-white/60 text-sm">→</span>
-            <span className="text-white font-bold text-sm">+$0.60 donated 💚</span>
-          </motion.div>
-        </motion.div>
-        <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-          Which card should{'\n'}we track?
-        </h1>
-        <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-          Every purchase on this card rounds up — the change goes straight to your cause.
-        </p>
+          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+            Which card should{'\n'}we track?
+          </h1>
+          <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
+            Every purchase on this card rounds up — the change goes straight to your cause.
+          </p>
+        </div>
       </div>
 
       <div className="flex-1 rounded-t-3xl -mt-4 flex flex-col overflow-hidden" style={{ background: '#f0fdfb' }}>
-        <div className="flex-1 px-4 pt-5 pb-2 space-y-2.5 overflow-y-auto">
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
+          <div className="px-4 pt-5 pb-2 space-y-2.5" style={{ minHeight: 'calc(100% + 160px)' }}>
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Select your card issuer</p>
 
@@ -819,6 +873,7 @@ function ConnectCardScreen({ onNext }) {
             <Lock size={12} className="text-gray-400 shrink-0" />
             <p className="text-gray-400 text-xs">Read-only access via Plaid · Your credentials are never stored by PocketCache</p>
           </div>
+          </div>
         </div>
 
         <div className="px-4 pb-10 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb' }}>
@@ -866,6 +921,10 @@ const PAYMENT_OPTIONS = [
 ];
 
 function PaymentMethodScreen({ onNext }) {
+  const { scrollRef, onScroll, progress } = useHeroCollapse();
+  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
+  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
+  const heroMaxHeight = 420 - (420 - 64) * progress;
   const { selectedNonprofit } = useApp();
   const [selected, setSelected] = useState(null);
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -878,43 +937,64 @@ function PaymentMethodScreen({ onNext }) {
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="flex flex-col h-full overflow-hidden"
     >
+      {/* Hero */}
       <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
+        style={{
+          background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
+          maxHeight: `${heroMaxHeight}px`,
+          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          overflow: 'hidden',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+        }}
       >
-        <motion.div className="mb-5 flex flex-col items-center gap-3">
-          <div className="flex gap-3">
-            {['🏦', '🍎', '💳'].map((icon, i) => (
-              <motion.div
-                key={i}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: i * 0.1 + 0.2, type: 'spring', stiffness: 280 }}
-                className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl"
-              >
-                {icon}
-              </motion.div>
-            ))}
-          </div>
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="flex items-center gap-2 bg-white/20 rounded-2xl px-4 py-2"
-          >
-            <span className="text-white text-sm font-semibold">Charged once a month · $5 minimum</span>
+        {/* Compact bar */}
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <span className="text-white font-bold text-sm px-6 truncate max-w-full">Collecting your round-ups</span>
+        </div>
+        {/* Expanded content */}
+        <div
+          className="w-full flex flex-col items-center"
+          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <motion.div className="mb-5 flex flex-col items-center gap-3">
+            <div className="flex gap-3">
+              {['🏦', '🍎', '💳'].map((icon, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: i * 0.1 + 0.2, type: 'spring', stiffness: 280 }}
+                  className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl"
+                >
+                  {icon}
+                </motion.div>
+              ))}
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="flex items-center gap-2 bg-white/20 rounded-2xl px-4 py-2"
+            >
+              <span className="text-white text-sm font-semibold">Charged once a month · $5 minimum</span>
+            </motion.div>
           </motion.div>
-        </motion.div>
-        <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-          How should we collect{'\n'}your round-up payments?
-        </h1>
-        <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-          Once a month, your round-ups total up into one clean charge — to the payment method you choose below.
-        </p>
+          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+            How should we collect{'\n'}your round-up payments?
+          </h1>
+          <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
+            Once a month, your round-ups total up into one clean charge — to the payment method you choose below.
+          </p>
+        </div>
       </div>
 
       <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div className="flex-1 px-4 pt-5 pb-2 space-y-2.5 overflow-y-auto">
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
+          <div className="px-4 pt-5 pb-2 space-y-2.5" style={{ minHeight: 'calc(100% + 160px)' }}>
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
 
@@ -959,6 +1039,7 @@ function PaymentMethodScreen({ onNext }) {
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
             Change this anytime in Settings. Payments are processed by Stripe — not us.
           </p>
+          </div>
         </div>
 
         <div className="px-4 pb-10 pt-3 bg-gray-50 border-t border-gray-100">
@@ -1115,6 +1196,10 @@ function CardEntryScreen({ onNext }) {
 // ─── Checkout confirm screen ─────────────────────────────────────────────────
 
 function CheckoutConfirmScreen({ onConfirm }) {
+  const { scrollRef, onScroll, progress } = useHeroCollapse();
+  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
+  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
+  const heroMaxHeight = 420 - (420 - 64) * progress;
   const { selectedNonprofit, pendingRoundUps, feeMonths } = useApp();
   const [coverProcessing, setCoverProcessing] = useState(true);
   const roundUps = pendingRoundUps ?? 4.63;
@@ -1128,30 +1213,52 @@ function CheckoutConfirmScreen({ onConfirm }) {
   return (
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
       className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: '38%' }}>
-        <motion.div className="mb-5 flex flex-col items-center gap-3">
-          {selectedNonprofit
-            ? <OrgLogo nonprofit={selectedNonprofit} size={16} rounded="2xl" className="bg-white/20" />
-            : <img src={bgcaLogoUrl} alt="logo" className="w-16 h-16 rounded-2xl bg-white object-contain p-2" />}
-          <div className="bg-white/20 rounded-2xl px-4 py-2">
-            <p className="text-white text-xs font-semibold text-center">
-              One monthly charge · {npShort} on your statement
-            </p>
-          </div>
-        </motion.div>
-        <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-          Review &amp;{'\n'}Confirm
-        </h1>
-        <p className="text-white/80 text-sm mt-2 text-center">
-          Your round-ups are collected monthly by {npName}.
-        </p>
+      {/* Hero */}
+      <div
+        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
+        style={{
+          background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
+          maxHeight: `${heroMaxHeight}px`,
+          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          overflow: 'hidden',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+        }}
+      >
+        {/* Compact bar */}
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <span className="text-white font-bold text-sm px-6 truncate max-w-full">Review &amp; Confirm</span>
+        </div>
+        {/* Expanded content */}
+        <div
+          className="w-full flex flex-col items-center"
+          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+        >
+          <motion.div className="mb-5 flex flex-col items-center gap-3">
+            {selectedNonprofit
+              ? <OrgLogo nonprofit={selectedNonprofit} size={16} rounded="2xl" className="bg-white/20" />
+              : <img src={bgcaLogoUrl} alt="logo" className="w-16 h-16 rounded-2xl bg-white object-contain p-2" />}
+            <div className="bg-white/20 rounded-2xl px-4 py-2">
+              <p className="text-white text-xs font-semibold text-center">
+                One monthly charge · {npShort} on your statement
+              </p>
+            </div>
+          </motion.div>
+          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+            Review &amp;{'\n'}Confirm
+          </h1>
+          <p className="text-white/80 text-sm mt-2 text-center">
+            Your round-ups are collected monthly by {npName}.
+          </p>
+        </div>
       </div>
 
       {/* Sheet */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div className="flex-1 px-5 pt-5 pb-2 space-y-4 overflow-y-auto">
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
+          <div className="px-5 pt-5 pb-2 space-y-4" style={{ minHeight: 'calc(100% + 160px)' }}>
 
           {/* Estimate card */}
           <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
@@ -1217,6 +1324,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
               Tracking starts the moment your card is linked. Your <strong>first charge hits on the 1st of next month</strong> — nothing before today ever counts.
             </p>
+          </div>
           </div>
         </div>
 
@@ -1677,7 +1785,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
+  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, returnFromOnboarding, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
   const { setNpOrg } = useNp();
   const [slide, setSlide] = useState(0);
   const [signupProvider, setSignupProvider] = useState('demo');
@@ -1805,7 +1913,9 @@ export default function Onboarding() {
     />
   );
   if (step === 'nonprofit-signup') return (
-    <NonprofitSignupFlow onBack={() => setStep('gate')} onGoLive={handleGoLive} />
+    // Exit-back returns to wherever the user jumped in from (e.g. their donor
+    // dashboard); falls back to the gate for cold visitors.
+    <NonprofitSignupFlow onBack={() => { if (!returnFromOnboarding()) setStep('gate'); }} onGoLive={handleGoLive} />
   );
   if (step === 'checkout-confirm') return <CheckoutConfirmScreen onConfirm={() => {
     setHasAccount({
