@@ -61,9 +61,14 @@ function loadTextScale() {
  *   visual left edge = 50vw − (REF_W × scale / 2)
  *   When scale = vw / REF_W  → visual left = 0  (edge-to-edge, no gap)
  *   When scale = SCALE_CAP   → visual content centred; navy fills the sides
+ *
+ * When `viewport` prop is provided (desktop phone-frame mode):
+ *   - Skips window/ResizeObserver measurement; uses viewport.{width,height} directly.
+ *   - Renders a 100%/100% wrapper (no safe-area insets, no full-window sizing).
+ *   - All scale math is identical.
  */
-export default function ScaleFit({ children }) {
-  const vw = useViewportWidth();
+export default function ScaleFit({ children, viewport }) {
+  const windowVw = useViewportWidth();
   const contentRef = useRef(null);
   const [textScale, setTextScale] = useState(loadTextScale);
 
@@ -79,17 +84,22 @@ export default function ScaleFit({ children }) {
   // Measured height of the inner area (after safe-area padding is removed by
   // the outer wrapper). Used to calculate appH = contentH / scale so the
   // internal layout fills the screen exactly without overflow.
-  const [contentH, setContentH] = useState(
+  const [measuredH, setMeasuredH] = useState(
     () => window.visualViewport?.height ?? window.innerHeight,
   );
 
   useEffect(() => {
+    if (viewport) return; // viewport override: skip ResizeObserver
     const el = contentRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setContentH(entry.contentRect.height));
+    const ro = new ResizeObserver(([entry]) => setMeasuredH(entry.contentRect.height));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [viewport]);
+
+  // Use provided viewport dims or fall back to window measurements
+  const vw = viewport ? viewport.width : windowVw;
+  const contentH = viewport ? viewport.height : measuredH;
 
   const effectiveRef = REF_W / textScale;
   const scale = Math.min(vw / effectiveRef, SCALE_CAP);
@@ -97,6 +107,29 @@ export default function ScaleFit({ children }) {
   // Existing per-tab scroll areas absorb height differences automatically.
   const appH = contentH / scale;
 
+  if (viewport) {
+    // Desktop phone-frame mode: simple wrapper; no safe-area, no full-window sizing.
+    return (
+      <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: `calc(50% - ${REF_W / 2}px)`,
+            width: `${REF_W}px`,
+            height: `${appH}px`,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top center',
+            overflow: 'hidden',
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  // Mobile mode: full window with safe-area insets (original behavior).
   return (
     /*
      * Outer wrapper: full screen, brand navy gradient behind everything.

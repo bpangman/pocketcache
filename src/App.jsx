@@ -7,6 +7,7 @@ import AppShell from './components/AppShell';
 import NpShell from './pages/nonprofit/NpShell';
 import CoinMark from './components/CoinMark';
 import ScaleFit from './components/ScaleFit';
+import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/DevicePicker';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLandingPage from './pages/OrgLandingPage';
@@ -216,11 +217,35 @@ function AppContent() {
   );
 }
 
+function useWindowHeight() {
+  const [vh, setVh] = useState(() => window.innerHeight);
+  useEffect(() => {
+    const update = () => setVh(window.innerHeight);
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return vh;
+}
+
 function PhoneFrame({ children }) {
   const brand = useTheme();
+  const [deviceId, setDeviceId] = useState(loadDevice);
+  const windowH = useWindowHeight();
+
+  const device = DEVICES.find(d => d.id === deviceId) ?? DEVICES[2];
+  // Reserve vertical space for wordmark, chip bar, caption, gaps, and page padding.
+  const CHROME_V = 240;
+  const BEZEL = 28; // 14px decorative ring on each side (box-shadow)
+  const outerScale = Math.min(1, (windowH - CHROME_V) / (device.height + BEZEL));
+
+  function handleDeviceChange(id) {
+    setDeviceId(id);
+    saveDevice(id);
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-8 relative overflow-hidden"
+    <div
+      className="min-h-screen flex items-center justify-center p-8 relative overflow-hidden"
       style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 50%, #0B2A4A 100%)' }}
     >
       {/* Ambient glow — follows brand color */}
@@ -229,10 +254,12 @@ function PhoneFrame({ children }) {
         transition={{ duration: 0.8 }}
         className="absolute w-96 h-96 rounded-full opacity-40 blur-3xl pointer-events-none"
       />
-      <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full opacity-10 blur-3xl pointer-events-none"
-        style={{ background: `radial-gradient(circle, ${brand.secondary}88 0%, transparent 70%)` }} />
+      <div
+        className="absolute bottom-0 right-0 w-80 h-80 rounded-full opacity-10 blur-3xl pointer-events-none"
+        style={{ background: `radial-gradient(circle, ${brand.secondary}88 0%, transparent 70%)` }}
+      />
 
-      <div className="flex flex-col items-center gap-8 relative z-10">
+      <div className="flex flex-col items-center gap-6 relative z-10">
         {/* Brand wordmark outside phone — animates when cause changes */}
         <motion.div
           key={brand.appName}
@@ -246,7 +273,12 @@ function PhoneFrame({ children }) {
               className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden"
               style={{ background: '#fff' }}
             >
-              <img src={brand.brandLogoUrl} alt={brand.appName} className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+              <img
+                src={brand.brandLogoUrl}
+                alt={brand.appName}
+                className="w-full h-full object-contain p-1.5"
+                style={{ display: 'block' }}
+              />
             </div>
           ) : brand.logoEmoji ? (
             <div
@@ -259,21 +291,56 @@ function PhoneFrame({ children }) {
             <CoinMark size={40} />
           )}
           <div>
-            <h1 className="text-white font-bold text-2xl" style={{ letterSpacing: '-0.5px' }}>{brand.appName}</h1>
+            <h1 className="text-white font-bold text-2xl" style={{ letterSpacing: '-0.5px' }}>
+              {brand.appName}
+            </h1>
             <p className="text-slate-400 text-xs font-medium">{brand.tagline}</p>
           </div>
         </motion.div>
 
-        {/* Phone device */}
-        <div className="phone-frame">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-b-3xl z-50" />
-          <div className="absolute top-2 left-6 z-50 text-xs font-semibold text-white mix-blend-difference pointer-events-none">
-            9:41
-          </div>
-          <div className="w-full h-full relative">
-            {children}
-          </div>
-        </div>
+        {/* Device chip picker — between wordmark and frame */}
+        <DevicePicker selected={deviceId} onChange={handleDeviceChange} />
+
+        {/* Sizer: layout box tracks the SCALED visual size so the flex column never
+            reserves phantom space (transform: scale doesn't shrink layout). */}
+        <motion.div
+          animate={{ width: device.width * outerScale, height: device.height * outerScale }}
+          transition={{ duration: 0.35, ease: 'easeInOut' }}
+          style={{ position: 'relative', flexShrink: 0 }}
+        >
+          {/* Phone frame — animates dimensions when device changes */}
+          <motion.div
+            animate={{ width: device.width, height: device.height, scale: outerScale }}
+            transition={{ duration: 0.35, ease: 'easeInOut' }}
+            style={{
+              transformOrigin: 'top left',
+              background: '#fff',
+              borderRadius: 50,
+              overflow: 'hidden',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              boxShadow: '0 0 0 12px #1a1a2e, 0 0 0 14px #2a2a4e, 0 50px 100px rgba(0,0,0,0.8)',
+            }}
+          >
+            {/* Notch */}
+            <div
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-b-3xl z-50"
+            />
+            {/* Status bar */}
+            <div
+              className="absolute top-2 left-6 z-50 text-xs font-semibold text-white mix-blend-difference pointer-events-none"
+            >
+              9:41
+            </div>
+            {/* App content scaled to device viewport */}
+            <div className="w-full h-full relative">
+              <ScaleFit viewport={device}>
+                {children}
+              </ScaleFit>
+            </div>
+          </motion.div>
+        </motion.div>
 
         <p className="text-slate-500 text-xs text-center max-w-xs">
           Interactive prototype · BGCA tenant demo
