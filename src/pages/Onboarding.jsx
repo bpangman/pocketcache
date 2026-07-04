@@ -420,8 +420,10 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
           background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
           maxHeight: `${heroMaxHeight}px`,
           minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
+          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
           overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
         }}
       >
         {/* Compact bar — fades in as hero collapses */}
@@ -751,8 +753,10 @@ function ConnectCardScreen({ onNext }) {
           background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)',
           maxHeight: `${heroMaxHeight}px`,
           minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
+          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
           overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
         }}
       >
         {/* Compact bar */}
@@ -944,8 +948,10 @@ function PaymentMethodScreen({ onNext }) {
           background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
           maxHeight: `${heroMaxHeight}px`,
           minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
+          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
           overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
         }}
       >
         {/* Compact bar */}
@@ -1220,8 +1226,10 @@ function CheckoutConfirmScreen({ onConfirm }) {
           background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
           maxHeight: `${heroMaxHeight}px`,
           minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
+          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
+          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
           overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease',
+          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
         }}
       >
         {/* Compact bar */}
