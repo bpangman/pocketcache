@@ -118,6 +118,30 @@ a solicitation surface: it must pitch the *tool to nonprofits*, never "donate!" 
 (legal memo, Part 1.4). Also planned: deferred deep links so a QR scan → App Store →
 auto-binds the right org on first open; alternate app icons only for anchor partners.
 
+*Deferred deep-link plan (decided 2026-07-04, prompted by Blake's QR question).* iOS
+does NOT pass any link context through an App Store install by default — a QR that
+points straight at the store produces a cold first open and the donor re-enters the
+code. The fix is layered, and our QR URLs already point at our own domain
+(pocketcache.app/…?org=CODE), which is the prerequisite for all of it:
+1. **Universal Links** (apple-app-site-association on pocketcache.app): app already
+   installed → the same QR/text/email link opens the app directly with the org bound.
+   Zero ambiguity; ship with the first native build.
+2. **App Clip** (Apple's built-for-this path): QR scan opens a lightweight branded
+   slice of the app INSTANTLY — no install — with the full invocation URL, so the org
+   is bound from second one; donor can even finish signup in the Clip, then "Get the
+   full app" hands the bound org + session over via shared app group. Best-in-class
+   experience; Apple explicitly designed App Clips for the printed-QR use case.
+3. **Deferred attribution fallback** for store-first installs (e.g. Branch free tier,
+   NOT Firebase Dynamic Links — sunset Aug 2025): landing-page visit fingerprint
+   matched on first app open; ~90-95% accurate. Decide at native phase whether the
+   dependency is worth it vs 4.
+4. **Clipboard handoff + code-under-QR**: the smart landing page (org micro-site)
+   offers "copy my code" before bouncing to the store; first open checks the
+   pasteboard (iOS shows its standard paste prompt) and offers "Join BGCA?". The
+   printed code below every QR stays as the always-works manual path.
+Note: the current web app has NO install gap at all — scan → branded experience in
+one step. That's a real advantage of piloting web-first with BGCA.
+
 **#8 Privacy/terms/license — LIVE + updated today; Nathan is the only remaining step.**
 
 **#9 Push notifications — NATIVE-PHASE.** Weekly feel-good summary only ("Your round-ups
