@@ -375,10 +375,10 @@ const US_STATES = [
 ];
 
 function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
-  const { scrollRef, onScroll, progress } = useHeroCollapse();
-  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
-  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
-  const heroMaxHeight = 420 - (420 - 64) * progress;
+  const {
+    frameRef, scrollRef, heroRef, onScroll,
+    heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
+  } = useHeroCollapse();
   const [chosen, setChosen] = useState(null);
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [commsOptin, setCommsOptin] = useState(true);
@@ -411,32 +411,34 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
       initial={{ opacity: 0, x: 30 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
+      ref={frameRef}
       className="flex flex-col h-full overflow-hidden"
     >
-      {/* Hero */}
-      <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
-        style={{
-          background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
-          maxHeight: `${heroMaxHeight}px`,
-          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
-          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
-          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
-          overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
-        }}
-      >
-        {/* Compact bar — fades in as hero collapses */}
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#003865' }} />
+        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
         <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+          className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
+          style={{
+            height: barHeight,
+            marginBottom: -barHeight,
+            opacity: heroCompactOpacity,
+            background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
+          }}
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Create Your Account</span>
         </div>
+        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        <div
+          ref={heroRef}
+          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
+          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%' }}
+        >
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
-          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+          style={{ opacity: heroExpandedOpacity }}
         >
           <motion.div className="mb-5 flex flex-col items-center gap-3">
             {nonprofit
@@ -463,38 +465,9 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
         </div>
       </div>
 
-      {/* CA Block overlay */}
-      <AnimatePresence>
-        {isCA && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-20 flex items-center justify-center px-8"
-            style={{ background: 'rgba(0,56,101,0.96)' }}
-          >
-            <div className="text-center">
-              <div className="text-5xl mb-4">&#127968;</div>
-              <h2 className="text-white font-bold text-xl mb-3">Not Available in California Yet</h2>
-              <p className="text-white/75 text-sm leading-relaxed mb-6">
-                PocketCache isn&apos;t available in California yet. We&apos;re working on it! Ask your favorite nonprofit for updates.
-              </p>
-              <motion.button
-                whileTap={{ scale: 0.9, opacity: 0.6 }}
-                onClick={() => setSelectedState('')}
-                className="bg-white/20 text-white font-semibold px-6 py-3 rounded-2xl text-sm"
-              >
-                ← Go Back
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Bottom sheet */}
-      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
-          <div className="px-4 pt-5 pb-2 space-y-3" style={{ minHeight: 'calc(100% + 160px)' }}>
+        <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
+          <div className="px-4 pt-5 pb-2 space-y-3">
 
           {/* State selector */}
           <div>
@@ -532,9 +505,38 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
           </button>
           </div>
         </div>
+      </div>
 
-        {/* Consent checkbox */}
-        <div className="px-5 pb-8 pt-3 space-y-3">
+      {/* CA Block overlay */}
+      <AnimatePresence>
+        {isCA && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center px-8"
+            style={{ background: 'rgba(0,56,101,0.96)' }}
+          >
+            <div className="text-center">
+              <div className="text-5xl mb-4">&#127968;</div>
+              <h2 className="text-white font-bold text-xl mb-3">Not Available in California Yet</h2>
+              <p className="text-white/75 text-sm leading-relaxed mb-6">
+                PocketCache isn&apos;t available in California yet. We&apos;re working on it! Ask your favorite nonprofit for updates.
+              </p>
+              <motion.button
+                whileTap={{ scale: 0.9, opacity: 0.6 }}
+                onClick={() => setSelectedState('')}
+                className="bg-white/20 text-white font-semibold px-6 py-3 rounded-2xl text-sm"
+              >
+                ← Go Back
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Consent checkbox — pinned below the scroll area */}
+      <div className="bg-white px-5 pb-8 pt-3 space-y-3">
           <label
             className="flex items-start gap-3 cursor-pointer"
             onClick={e => { if (e.target.tagName !== 'A') { setAgreedTerms(v => !v); setShowTermsHint(false); } }}
@@ -583,7 +585,6 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
               Please confirm this to continue
             </motion.p>
           )}
-        </div>
       </div>
       {/* Welcome back overlay */}
       <AnimatePresence>
@@ -722,10 +723,10 @@ const BANKS = [
 ];
 
 function ConnectCardScreen({ onNext }) {
-  const { scrollRef, onScroll, progress } = useHeroCollapse();
-  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
-  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
-  const heroMaxHeight = 420 - (420 - 64) * progress;
+  const {
+    frameRef, scrollRef, heroRef, onScroll,
+    heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
+  } = useHeroCollapse();
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
 
@@ -744,32 +745,34 @@ function ConnectCardScreen({ onNext }) {
       initial={{ opacity: 0, x: 30 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
+      ref={frameRef}
       className="flex flex-col h-full overflow-hidden"
     >
-      {/* Hero */}
-      <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
-        style={{
-          background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)',
-          maxHeight: `${heroMaxHeight}px`,
-          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
-          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
-          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
-          overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
-        }}
-      >
-        {/* Compact bar */}
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#0d9488' }} />
+        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
         <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+          className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
+          style={{
+            height: barHeight,
+            marginBottom: -barHeight,
+            opacity: heroCompactOpacity,
+            background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)',
+          }}
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Which card should we track?</span>
         </div>
+        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        <div
+          ref={heroRef}
+          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
+          style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%' }}
+        >
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
-          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+          style={{ opacity: heroExpandedOpacity }}
         >
           <motion.div className="mb-5 flex flex-col items-center gap-3">
             <motion.div
@@ -813,9 +816,8 @@ function ConnectCardScreen({ onNext }) {
         </div>
       </div>
 
-      <div className="flex-1 rounded-t-3xl -mt-4 flex flex-col overflow-hidden" style={{ background: '#f0fdfb' }}>
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
-          <div className="px-4 pt-5 pb-2 space-y-2.5" style={{ minHeight: 'calc(100% + 160px)' }}>
+        <div className="rounded-t-3xl -mt-4" style={{ background: '#f0fdfb', minHeight: sheetMinHeight }}>
+          <div className="px-4 pt-5 pb-2 space-y-2.5">
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Select your card issuer</p>
 
@@ -879,8 +881,9 @@ function ConnectCardScreen({ onNext }) {
           </div>
           </div>
         </div>
+      </div>
 
-        <div className="px-4 pb-10 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb' }}>
+      <div className="px-4 pb-10 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb' }}>
           <motion.button
             whileTap={connected ? { scale: 0.97 } : {}}
             onClick={() => connected && onNext(connected)}
@@ -892,7 +895,6 @@ function ConnectCardScreen({ onNext }) {
           >
             {connected ? 'Continue →' : 'Select a card to continue'}
           </motion.button>
-        </div>
       </div>
     </motion.div>
   );
@@ -925,10 +927,10 @@ const PAYMENT_OPTIONS = [
 ];
 
 function PaymentMethodScreen({ onNext }) {
-  const { scrollRef, onScroll, progress } = useHeroCollapse();
-  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
-  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
-  const heroMaxHeight = 420 - (420 - 64) * progress;
+  const {
+    frameRef, scrollRef, heroRef, onScroll,
+    heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
+  } = useHeroCollapse();
   const { selectedNonprofit } = useApp();
   const [selected, setSelected] = useState(null);
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -939,32 +941,34 @@ function PaymentMethodScreen({ onNext }) {
       initial={{ opacity: 0, x: 30 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
+      ref={frameRef}
       className="flex flex-col h-full overflow-hidden"
     >
-      {/* Hero */}
-      <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
-        style={{
-          background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
-          maxHeight: `${heroMaxHeight}px`,
-          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
-          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
-          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
-          overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
-        }}
-      >
-        {/* Compact bar */}
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#0B2A4A' }} />
+        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
         <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+          className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
+          style={{
+            height: barHeight,
+            marginBottom: -barHeight,
+            opacity: heroCompactOpacity,
+            background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
+          }}
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Collecting your round-ups</span>
         </div>
+        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        <div
+          ref={heroRef}
+          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%' }}
+        >
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
-          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+          style={{ opacity: heroExpandedOpacity }}
         >
           <motion.div className="mb-5 flex flex-col items-center gap-3">
             <div className="flex gap-3">
@@ -998,9 +1002,8 @@ function PaymentMethodScreen({ onNext }) {
         </div>
       </div>
 
-      <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
-          <div className="px-4 pt-5 pb-2 space-y-2.5" style={{ minHeight: 'calc(100% + 160px)' }}>
+        <div className="bg-gray-50 rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
+          <div className="px-4 pt-5 pb-2 space-y-2.5">
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
 
@@ -1047,8 +1050,9 @@ function PaymentMethodScreen({ onNext }) {
           </p>
           </div>
         </div>
+      </div>
 
-        <div className="px-4 pb-10 pt-3 bg-gray-50 border-t border-gray-100">
+      <div className="px-4 pb-10 pt-3 bg-gray-50 border-t border-gray-100">
           <motion.button
             whileTap={selected ? { scale: 0.97 } : {}}
             onClick={() => {
@@ -1068,7 +1072,6 @@ function PaymentMethodScreen({ onNext }) {
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
             Your round-ups charge once a month through {npName}&apos;s Stripe. You&apos;ll see &ldquo;{npShort}&rdquo; on your statement. They issue your receipt.
           </p>
-        </div>
       </div>
     </motion.div>
   );
@@ -1202,10 +1205,10 @@ function CardEntryScreen({ onNext }) {
 // ─── Checkout confirm screen ─────────────────────────────────────────────────
 
 function CheckoutConfirmScreen({ onConfirm }) {
-  const { scrollRef, onScroll, progress } = useHeroCollapse();
-  const heroExpandedOpacity = Math.max(0, 1 - progress / 0.6);
-  const heroCompactOpacity = Math.max(0, (progress - 0.6) / 0.4);
-  const heroMaxHeight = 420 - (420 - 64) * progress;
+  const {
+    frameRef, scrollRef, heroRef, onScroll,
+    heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
+  } = useHeroCollapse();
   const { selectedNonprofit, pendingRoundUps, feeMonths } = useApp();
   const [coverProcessing, setCoverProcessing] = useState(true);
   const roundUps = pendingRoundUps ?? 4.63;
@@ -1218,31 +1221,33 @@ function CheckoutConfirmScreen({ onConfirm }) {
 
   return (
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
+      ref={frameRef}
       className="flex flex-col h-full overflow-hidden">
-      {/* Hero */}
-      <div
-        className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0 relative"
-        style={{
-          background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
-          maxHeight: `${heroMaxHeight}px`,
-          minHeight: `max(64px, ${((1 - progress) * 38).toFixed(1)}%)`,
-          paddingTop: `${(56 * (1 - progress)).toFixed(1)}px`,
-          paddingBottom: `${(32 * (1 - progress)).toFixed(1)}px`,
-          overflow: 'hidden',
-          transition: 'max-height 0.25s ease, min-height 0.25s ease, padding 0.25s ease',
-        }}
-      >
-        {/* Compact bar */}
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#003865' }} />
+        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
         <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ opacity: heroCompactOpacity, transition: 'opacity 0.2s ease' }}
+          className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
+          style={{
+            height: barHeight,
+            marginBottom: -barHeight,
+            opacity: heroCompactOpacity,
+            background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
+          }}
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Review &amp; Confirm</span>
         </div>
+        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        <div
+          ref={heroRef}
+          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
+          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%' }}
+        >
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
-          style={{ opacity: heroExpandedOpacity, transition: 'opacity 0.2s ease' }}
+          style={{ opacity: heroExpandedOpacity }}
         >
           <motion.div className="mb-5 flex flex-col items-center gap-3">
             {selectedNonprofit
@@ -1264,9 +1269,8 @@ function CheckoutConfirmScreen({ onConfirm }) {
       </div>
 
       {/* Sheet */}
-      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
-          <div className="px-5 pt-5 pb-2 space-y-4" style={{ minHeight: 'calc(100% + 160px)' }}>
+        <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
+          <div className="px-5 pt-5 pb-2 space-y-4">
 
           {/* Estimate card */}
           <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
@@ -1335,8 +1339,9 @@ function CheckoutConfirmScreen({ onConfirm }) {
           </div>
           </div>
         </div>
+      </div>
 
-        <div className="px-4 pb-10 pt-3 bg-white border-t border-gray-100">
+      <div className="px-4 pb-10 pt-3 bg-white border-t border-gray-100">
           <motion.button whileTap={{ scale: 0.97 }} onClick={onConfirm}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{ background: 'linear-gradient(135deg, #003865, #001a33)' }}>
@@ -1348,7 +1353,6 @@ function CheckoutConfirmScreen({ onConfirm }) {
               Powered by PocketCache, LLC. You can cancel anytime in Settings.
             </span>
           </p>
-        </div>
       </div>
     </motion.div>
   );
