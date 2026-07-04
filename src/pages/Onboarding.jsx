@@ -131,7 +131,10 @@ const SLIDES = [
 // Layout (per founder direction): nonprofit entry first, donor entry below.
 
 function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onWelcomeBack, onUniversalSignIn }) {
-  const [code, setCode] = useState('');
+  // If a join link carried a code this device can't resolve (demo caveat:
+  // custom orgs live in the creator's localStorage), prefill it in the input
+  // rather than failing silently.
+  const [code, setCode] = useState(() => (autoBindOrg && !findOrgByCode(autoBindOrg) ? autoBindOrg : ''));
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -145,6 +148,8 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
         setAutoBound(true);
         setBoundNp(np);
         setTimeout(() => onBind(np), 800);
+      } else {
+        setError('Code not found. Ask your nonprofit for their PocketCache code.');
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

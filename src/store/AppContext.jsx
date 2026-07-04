@@ -20,6 +20,14 @@ if (typeof window !== 'undefined') {
   if (params.get('reset') === '1' || params.get('fresh') === '1') {
     removeKeys(RESET_KEYS);
   }
+  // A scanned QR or shared join link (?org=CODE) is explicit donor intent —
+  // route straight into onboarding so the gate auto-binds the scanned org,
+  // even if this device was mid-demo, bound to another org, or fully set up.
+  // Account/identity survives; only the page + cause binding reset.
+  if (params.get('org')) {
+    saveKey('pc_page', 'onboarding');
+    removeKeys(['pc_cause_id']);
+  }
 }
 
 const AppContext = createContext(null);
