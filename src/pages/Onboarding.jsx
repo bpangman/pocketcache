@@ -1436,6 +1436,13 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   const [orgAddress, setOrgAddress] = useState('');
   const [org501c3, setOrg501c3] = useState(true);
   const [adminEmail, setAdminEmail] = useState('');
+  // Work-email verification (proves the admin actually works at the org)
+  const [workEmail, setWorkEmail] = useState('');
+  const [emailError, setEmailError] = useState(null);
+  const [codeSent, setCodeSent] = useState(false);
+  const [sentCode, setSentCode] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState(null);
   const [story, setStory] = useState('');
   const [color, setColor] = useState('#003865');
   const [accepted, setAccepted] = useState(false);
@@ -1514,12 +1521,55 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
 
   const stepBack = {
     ein:          onBack,
-    'confirm-org': () => setStep('ein'),
-    stripe:        () => setStep('confirm-org'),
-    branding:      () => setStep('stripe'),
-    license:       () => setStep('branding'),
-    live:          () => setStep('license'),
+    'confirm-org':  () => setStep('ein'),
+    'verify-email': () => setStep('confirm-org'),
+    stripe:         () => setStep('verify-email'),
+    branding:       () => setStep('stripe'),
+    license:        () => setStep('branding'),
+    live:           () => setStep('license'),
   };
+
+  // ── Work-email verification helpers ──
+  // Personal-mail domains can never administer a nonprofit. For orgs whose
+  // domain we know (BGCA in the demo), the email must be ON that domain.
+  // Production: domain cross-checked against org records + Stripe KYC, and
+  // the code is actually emailed (see PRELAUNCH.md).
+  const FREE_MAIL = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com', 'live.com', 'msn.com', 'me.com'];
+  const KNOWN_ORG_DOMAINS = { 'boys & girls clubs of america': 'bgca.org' };
+  const requiredDomain = KNOWN_ORG_DOMAINS[orgName?.toLowerCase?.()] ?? null;
+
+  function handleSendCode(e) {
+    e?.preventDefault?.();
+    const email = workEmail.trim().toLowerCase();
+    const domain = email.split('@')[1];
+    if (!domain || !email.includes('@') || domain.indexOf('.') < 1) {
+      setEmailError('Enter a valid email address.');
+      return;
+    }
+    if (requiredDomain && domain !== requiredDomain) {
+      setEmailError(`For ${orgName}, your admin email must end in @${requiredDomain}.`);
+      return;
+    }
+    if (FREE_MAIL.includes(domain)) {
+      setEmailError("Personal email domains (Gmail, Yahoo, iCloud…) can't manage a nonprofit — use your work email on your organization's own domain.");
+      return;
+    }
+    setEmailError(null);
+    setSentCode(String(Math.floor(100000 + Math.random() * 900000)));
+    setCodeInput('');
+    setCodeError(null);
+    setCodeSent(true);
+  }
+
+  function handleVerifyCode(e) {
+    e?.preventDefault?.();
+    if (codeInput.trim() !== sentCode) {
+      setCodeError("That code doesn't match — check the email and try again.");
+      return;
+    }
+    setAdminEmail(workEmail.trim().toLowerCase());
+    setStep('stripe');
+  }
 
   return (
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
@@ -1531,6 +1581,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
         <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
           {step === 'ein'          && 'Verify Your\nNonprofit'}
           {step === 'confirm-org'  && 'Confirm\nYour Org'}
+          {step === 'verify-email' && 'Verify Your\nWork Email'}
           {step === 'stripe'       && 'Connect\nStripe'}
           {step === 'branding'     && 'Customize\nYour Page'}
           {step === 'license'      && 'License\nAgreement'}
@@ -1604,7 +1655,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 </p>
               )}
             </div>
-            <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('stripe')}
+            <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('verify-email')}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
               Confirm — this is us →
@@ -1612,6 +1663,73 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             <button onClick={() => setStep('ein')} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
               No, re-enter EIN
             </button>
+          </div>
+        )}
+
+        {step === 'verify-email' && (
+          <div className="space-y-4">
+            {!codeSent ? (
+              <form onSubmit={handleSendCode} className="space-y-4">
+                <p className="text-gray-500 text-sm">
+                  Prove you work at {orgName}: enter your work email on your organization&apos;s
+                  own domain and we&apos;ll send a 6-digit code. This address becomes your admin sign-in.
+                </p>
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your work email</label>
+                  <input
+                    type="email"
+                    required
+                    value={workEmail}
+                    onChange={e => { setWorkEmail(e.target.value); setEmailError(null); }}
+                    placeholder={requiredDomain ? `you@${requiredDomain}` : 'you@yourorg.org'}
+                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
+                    style={{ borderColor: emailError ? '#ef4444' : '#e5e7eb' }}
+                  />
+                  {emailError && <p className="text-red-500 text-xs mt-1 px-1">{emailError}</p>}
+                </div>
+                <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                  className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: workEmail ? 1 : 0.4 }}>
+                  Email me a verification code →
+                </motion.button>
+                <p className="text-gray-400 text-xs px-1 leading-relaxed">
+                  Personal addresses (Gmail, Yahoo, iCloud…) can&apos;t manage a nonprofit.
+                  No password is ever created — admin sign-in works by emailed code, so there&apos;s
+                  nothing for anyone to steal.
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <p className="text-gray-500 text-sm">
+                  We sent a 6-digit code to <strong className="text-gray-900">{workEmail}</strong>. Enter it to continue.
+                </p>
+                <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200">
+                  <p className="text-xs text-amber-700 font-semibold">
+                    Demo: your code is {sentCode} — the live version emails it to you.
+                  </p>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={codeInput}
+                  onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
+                  placeholder="······"
+                  className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-teal-400 font-mono text-center text-xl tracking-[0.5em]"
+                  style={{ borderColor: codeError ? '#ef4444' : '#e5e7eb' }}
+                />
+                {codeError && <p className="text-red-500 text-xs px-1">{codeError}</p>}
+                <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                  className="w-full py-4 rounded-2xl text-white font-bold text-base"
+                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: codeInput.length === 6 ? 1 : 0.4 }}>
+                  Verify &amp; continue →
+                </motion.button>
+                <div className="flex justify-center gap-4">
+                  <button type="button" onClick={handleSendCode} className="text-sm text-gray-400 font-medium">Resend code</button>
+                  <button type="button" onClick={() => { setCodeSent(false); setCodeInput(''); }} className="text-sm text-gray-400 font-medium">Change email</button>
+                </div>
+              </form>
+            )}
           </div>
         )}
 
@@ -1653,9 +1771,12 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Admin Contact Email</label>
-              <input type="email" required value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="you@yourorg.org"
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400" />
-              <p className="text-gray-400 text-xs mt-1">We&apos;ll use this to reach whoever manages your page.</p>
+              <div className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm border border-gray-200 flex items-center gap-2">
+                <CheckCircle size={14} className="text-green-500 shrink-0" />
+                <span className="text-gray-900 truncate">{adminEmail}</span>
+                <span className="text-xs text-green-700 font-semibold ml-auto shrink-0">Verified</span>
+              </div>
+              <p className="text-gray-400 text-xs mt-1">Verified in the previous step — this is your admin sign-in.</p>
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Mission (shown to donors)</label>

@@ -67,6 +67,16 @@ Each item notes where PocketCache stands today and what "done" looks like.
   WebAuthn platform credentials — the OS really verifies the user's face/finger, but the check
   is client-side only. Production must issue the challenge from the backend and verify the
   assertion server-side (standard passkey flow) before the session is trusted.
+- **Admin auth model (DECIDED by Blake 2026-07-05): passwordless, org-domain email.**
+  Nonprofit admins sign UP by verifying a work email on the org's own domain (free-mail
+  domains rejected; known orgs must match their exact domain) with a 6-digit emailed code —
+  that address IS the admin username. Admins sign IN the same way: an emailed one-time code
+  per login (optionally + passkey after first login). NO passwords are ever created or
+  stored — preserves the zero-password-liability posture that motivated SSO-only. The demo
+  step is live (code shown on screen, labeled Demo); production needs: transactional email
+  provider (Resend/Postmark), server-side code generation with expiry + attempt limits +
+  rate limiting, and org-domain cross-check against IRS/Stripe-KYC records. Donor sign-in
+  remains Apple/Google/Facebook SSO, unchanged.
 - **Why it matters:** Must be locked before a real user's data ever touches the backend.
 - **Done when:** Every backend route requires a valid signed-in session token before returning any
   data.
