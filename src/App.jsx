@@ -11,6 +11,7 @@ import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/Devi
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLandingPage from './pages/OrgLandingPage';
+import WebDashboard from './pages/WebDashboard';
 import { findOrgByCode } from './store/orgStore';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
@@ -439,9 +440,7 @@ function ThemedApp() {
             <AppContent />
           </ScaleFit>
         ) : (
-          <WebPortal>
-            <AppContent />
-          </WebPortal>
+          <WebExperience />
         )
       ) : (
         <PhoneFrame compact={isMobile}>
@@ -449,6 +448,23 @@ function ThemedApp() {
         </PhoneFrame>
       )}
     </ThemeProvider>
+  );
+}
+
+// Desktop browser entry from a micro-site: a signed-in donor gets the real
+// web-native dashboard (WebDashboard); flows that are inherently step-by-step
+// (onboarding/account creation, admin dashboard, cancelled-account reactivation)
+// run in the centered WebPortal column.
+function WebExperience() {
+  const { page, accountStatus, selectedNonprofit } = useApp();
+  const signedInDonor =
+    page !== 'onboarding' && page !== 'np-dashboard' &&
+    accountStatus !== 'cancelled' && selectedNonprofit;
+  if (signedInDonor) return <WebDashboard />;
+  return (
+    <WebPortal>
+      <AppContent />
+    </WebPortal>
   );
 }
 
