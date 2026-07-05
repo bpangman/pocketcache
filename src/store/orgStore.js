@@ -96,6 +96,15 @@ export function listCustomOrgs() {
   return lsGet(CUSTOM_ORGS_KEY, []);
 }
 
+// Admin sign-in: the verified work email IS the admin username. Resolve which
+// custom org (if any) this email administers. Production does this lookup
+// server-side; the demo can only see orgs created on this device.
+export function resolveAdminOrgByEmail(email) {
+  const lower = (email ?? '').trim().toLowerCase();
+  if (!lower) return null;
+  return listCustomOrgs().find(o => (o.adminEmail ?? '').toLowerCase() === lower) ?? null;
+}
+
 export function saveCustomOrg(org) {
   const list = listCustomOrgs();
   const idx = list.findIndex(o => o.id === org.id);

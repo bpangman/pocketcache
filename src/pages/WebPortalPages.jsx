@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { loadKey, saveKey } from '../store/identityStore';
-import { findOrgByCode } from '../store/orgStore';
+import { findOrgByCode, resolveAdminOrgByEmail } from '../store/orgStore';
 import { DEMO_USER, monthsGiving } from '../data/derived';
 import { getOrgStats } from '../lib/orgStats';
 import { fmtMoneyCompact } from '../lib/format';
@@ -123,6 +123,107 @@ function ActionButton({ children, onClick, disabled, tone = 'primary' }) {
     >
       {children}
     </button>
+  );
+}
+
+// ─── Admin sign-in (web page) — passwordless work-email code ────────────────
+// The webpage version of the new admin login protocol: username = the
+// org-domain email verified at signup; a one-time code per sign-in, never a
+// password. Demo: any email works and the code auto-fills (labeled).
+export function WebAdminSignIn() {
+  const { adminRole, setAdminRole, setLastMode, setPage } = useApp();
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState(null);
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState(null);
+
+  function send(e) {
+    e?.preventDefault?.();
+    const domain = email.trim().toLowerCase().split('@')[1];
+    if (!domain || domain.indexOf('.') < 1) { setError('Enter a valid email address.'); return; }
+    setError(null);
+    const c = String(Math.floor(100000 + Math.random() * 900000));
+    setCode(c);
+    setCodeInput(c); // DEMO: auto-filled; live version emails it
+    setCodeError(null);
+    setSent(true);
+  }
+
+  function verify(e) {
+    e?.preventDefault?.();
+    if (codeInput.trim() !== code) { setCodeError("That code doesn't match — check the email and try again."); return; }
+    const custom = resolveAdminOrgByEmail(email);
+    if (custom) setAdminRole({ orgId: custom.id, joinCode: custom.shortName });
+    else if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    setLastMode('admin');
+    setPage('np-dashboard');
+  }
+
+  const input = { width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 14 };
+
+  return (
+    <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
+      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <CoinMark size={30} />
+          <div style={{ lineHeight: 1.15 }}>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary }}>PocketCache</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: INK.muted }}>Nonprofit admin</p>
+          </div>
+        </div>
+      </header>
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ width: 440, maxWidth: '100%', ...CARD, borderRadius: 20, boxShadow: '0 16px 48px rgba(11,42,74,0.10)', padding: 28 }}>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Admin sign-in</h1>
+          <p style={{ margin: '6px 0 18px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+            Sign in with your organization&apos;s work email. No password — we email you a fresh 6-digit code each time.
+          </p>
+          {!sent ? (
+            <form onSubmit={send} style={{ display: 'grid', gap: 10 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>Work email</label>
+              <input type="email" required value={email} placeholder="you@yourorg.org"
+                onChange={e => { setEmail(e.target.value); setError(null); }}
+                style={{ ...input, borderColor: error ? '#ef4444' : '#d1d5db' }} />
+              {error && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{error}</p>}
+              <ActionButton disabled={!email} onClick={send}>Email me a sign-in code →</ActionButton>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
+                Your admin sign-in is the work email verified when your page was created. Nothing to remember, nothing to steal.
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={verify} style={{ display: 'grid', gap: 10 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>
+                We sent a 6-digit code to <strong style={{ color: INK.primary }}>{email}</strong>.
+              </p>
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#92400e' }}>
+                  Demo: we filled the code in for you — the live version emails it.
+                </p>
+              </div>
+              <input type="text" inputMode="numeric" maxLength={6} value={codeInput}
+                onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
+                style={{ ...input, fontFamily: 'monospace', textAlign: 'center', fontSize: 20, letterSpacing: '0.5em', borderColor: codeError ? '#ef4444' : '#d1d5db' }} />
+              {codeError && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{codeError}</p>}
+              <ActionButton disabled={codeInput.length !== 6} onClick={verify}>Sign in →</ActionButton>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
+                <button type="button" onClick={send} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted, fontWeight: 600 }}>Resend code</button>
+                <button type="button" onClick={() => { setSent(false); setCodeInput(''); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted, fontWeight: 600 }}>Change email</button>
+              </div>
+            </form>
+          )}
+        </div>
+      </main>
+      <footer style={{ padding: '0 24px 20px', textAlign: 'center' }}>
+        <p style={{ color: INK.muted, fontSize: 12, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <CoinMark size={14} />
+          Powered by PocketCache ·{' '}
+          <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Terms</a>{' '}
+          <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Privacy</a>
+        </p>
+      </footer>
+    </div>
   );
 }
 

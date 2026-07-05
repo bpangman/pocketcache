@@ -14,7 +14,7 @@ import CoinMark from '../components/CoinMark';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
-import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode } from '../store/orgStore';
+import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode, resolveAdminOrgByEmail } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
@@ -611,6 +611,113 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
   );
 }
 
+// ─── Admin Sign-In (passwordless: work email + one-time code) ────────────────
+// The admin username is the org-domain email verified at signup. No password
+// exists — a fresh code is emailed per sign-in. Demo: any email works and the
+// code auto-fills (labeled); production emails it and enforces the domain.
+
+function AdminSignInScreen({ onBack, onComplete }) {
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState(null);
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState(null);
+
+  function send(e) {
+    e?.preventDefault?.();
+    const domain = email.trim().toLowerCase().split('@')[1];
+    if (!domain || domain.indexOf('.') < 1) { setError('Enter a valid email address.'); return; }
+    setError(null);
+    const c = String(Math.floor(100000 + Math.random() * 900000));
+    setCode(c);
+    setCodeInput(c); // DEMO: auto-filled; live version emails it
+    setCodeError(null);
+    setSent(true);
+  }
+
+  function verify(e) {
+    e?.preventDefault?.();
+    if (codeInput.trim() !== code) { setCodeError("That code doesn't match — check the email and try again."); return; }
+    onComplete(email.trim().toLowerCase());
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex flex-col h-full overflow-hidden"
+    >
+      <div
+        className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+      >
+        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
+          <ArrowLeft size={14} /> Back
+        </motion.button>
+        <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          Nonprofit{'\n'}Admin
+        </h1>
+        <p className="text-white/70 text-sm mt-2 leading-relaxed">
+          Sign in with your organization&apos;s work email. No password — we email you a fresh code each time.
+        </p>
+      </div>
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10">
+        {!sent ? (
+          <form onSubmit={send} className="space-y-3">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Work email</label>
+            <input
+              type="email" required value={email}
+              onChange={e => { setEmail(e.target.value); setError(null); }}
+              placeholder="you@yourorg.org"
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
+              style={{ borderColor: error ? '#ef4444' : '#e5e7eb' }}
+            />
+            {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: email ? 1 : 0.4 }}>
+              Email me a sign-in code →
+            </motion.button>
+            <p className="text-gray-400 text-xs leading-relaxed px-1">
+              Your admin sign-in is the work email verified when your page was created.
+              Nothing to remember, nothing to steal.
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={verify} className="space-y-3">
+            <p className="text-gray-500 text-sm">
+              We sent a 6-digit code to <strong className="text-gray-900">{email}</strong>.
+            </p>
+            <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200">
+              <p className="text-xs text-amber-700 font-semibold">
+                Demo: we filled the code in for you — the live version emails it.
+              </p>
+            </div>
+            <input
+              type="text" inputMode="numeric" maxLength={6} value={codeInput}
+              onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
+              style={{ borderColor: codeError ? '#ef4444' : '#e5e7eb' }}
+            />
+            {codeError && <p className="text-red-500 text-xs px-1">{codeError}</p>}
+            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: codeInput.length === 6 ? 1 : 0.4 }}>
+              Sign in →
+            </motion.button>
+            <div className="flex justify-center gap-4">
+              <button type="button" onClick={send} className="text-sm text-gray-400 font-medium">Resend code</button>
+              <button type="button" onClick={() => { setSent(false); setCodeInput(''); }} className="text-sm text-gray-400 font-medium">Change email</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Gate Sign-In Screen (universal "already have an account?" path) ─────────
 // Shown when a returning user taps "Already have an account? Sign in" from the gate.
 // Three demo outcomes after an SSO tap:
@@ -619,7 +726,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
 //   • No local identity (fresh device) → empty state shown inline
 //   Production: the backend looks up the account by SSO token, not local storage.
 
-function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin }) {
+function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin, onAdminSignIn }) {
   const [chosen, setChosen] = useState(null);
   const [emptyState, setEmptyState] = useState(false);
 
@@ -714,6 +821,11 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
         <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
           No passwords here — your Apple or Google account is your key, including its two-factor protection.
         </p>
+        {onAdminSignIn && (
+          <button onClick={onAdminSignIn} className="text-sm text-gray-400 text-center py-1">
+            Nonprofit admin? <span className="font-semibold underline" style={{ color: '#003865' }}>Sign in with your work email</span>
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -1443,6 +1555,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   const [sentCode, setSentCode] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState(null);
+  const [demoBypassNote, setDemoBypassNote] = useState(null);
   const [story, setStory] = useState('');
   const [color, setColor] = useState('#003865');
   const [accepted, setAccepted] = useState(false);
@@ -1546,17 +1659,19 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
       setEmailError('Enter a valid email address.');
       return;
     }
+    // DEMO: any email passes so Blake can walk the flow; we show what the
+    // LIVE rules would have said. Production enforces these for real.
+    let bypassNote = null;
     if (requiredDomain && domain !== requiredDomain) {
-      setEmailError(`For ${orgName}, your admin email must end in @${requiredDomain}.`);
-      return;
+      bypassNote = `the live version requires an @${requiredDomain} address for ${orgName}`;
+    } else if (FREE_MAIL.includes(domain)) {
+      bypassNote = 'the live version rejects personal email domains — admins must use their work address';
     }
-    if (FREE_MAIL.includes(domain)) {
-      setEmailError("Personal email domains (Gmail, Yahoo, iCloud…) can't manage a nonprofit — use your work email on your organization's own domain.");
-      return;
-    }
+    setDemoBypassNote(bypassNote);
     setEmailError(null);
-    setSentCode(String(Math.floor(100000 + Math.random() * 900000)));
-    setCodeInput('');
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setSentCode(code);
+    setCodeInput(code); // DEMO: auto-filled; live version emails it
     setCodeError(null);
     setCodeSent(true);
   }
@@ -1703,10 +1818,15 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 <p className="text-gray-500 text-sm">
                   We sent a 6-digit code to <strong className="text-gray-900">{workEmail}</strong>. Enter it to continue.
                 </p>
-                <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200">
+                <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200 space-y-1">
                   <p className="text-xs text-amber-700 font-semibold">
-                    Demo: your code is {sentCode} — the live version emails it to you.
+                    Demo: we filled the code in for you — the live version emails it to {workEmail}.
                   </p>
+                  {demoBypassNote && (
+                    <p className="text-xs text-amber-700">
+                      Also demo-only: this email was accepted, but {demoBypassNote}.
+                    </p>
+                  )}
                 </div>
                 <input
                   type="text"
@@ -1966,7 +2086,7 @@ export default function Onboarding() {
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
   const [step, setStep] = useState(() => {
     const urlP = new URLSearchParams(window.location.search);
-    if (urlP.get('npsignin') === '1') return 'gate-signin';
+    if (urlP.get('npsignin') === '1') return 'admin-signin';
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
     return loadKey('pc_cause_id') ? 'slides' : 'gate';
   }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
@@ -2028,6 +2148,20 @@ export default function Onboarding() {
     setPage('np-dashboard');
   }
 
+  // Passwordless admin sign-in complete: the verified work email is the
+  // username. Demo resolves custom orgs created on this device; unknown
+  // emails fall back to the BGCA sample dashboard. Production: server lookup.
+  function completeAdminSignIn(email) {
+    const custom = resolveAdminOrgByEmail(email);
+    if (custom) {
+      setAdminRole({ orgId: custom.id, joinCode: custom.shortName });
+    } else if (!adminRole) {
+      setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    }
+    setLastMode('admin');
+    setPage('np-dashboard');
+  }
+
   // One sign-in for every role: donor-only → giving, admin-only → dashboard,
   // both roles → last-used mode (the profile menus toggle between them).
   function resumeSession() {
@@ -2076,6 +2210,12 @@ export default function Onboarding() {
       onUniversalSignIn={() => setStep('gate-signin')}
     />
   );
+  if (step === 'admin-signin') return (
+    <AdminSignInScreen
+      onBack={() => setStep('gate')}
+      onComplete={completeAdminSignIn}
+    />
+  );
   if (step === 'gate-signin') return (
     <GateSignInScreen
       onBack={() => setStep('gate')}
@@ -2083,6 +2223,7 @@ export default function Onboarding() {
       adminRole={adminRole}
       onSignIn={resumeSession}
       onDemoAdmin={handleNpSignIn}
+      onAdminSignIn={() => setStep('admin-signin')}
     />
   );
   if (step === 'nonprofit-signup') return (

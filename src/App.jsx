@@ -16,6 +16,7 @@ import WebOnboarding from './pages/WebOnboarding';
 import OrgLogo from './components/OrgLogo';
 import { findOrgByCode } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
+import { WebAdminSignIn } from './pages/WebPortalPages';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
 // (full-bleed, proportionally scaled to viewport width).
@@ -511,8 +512,15 @@ function WebExperience() {
     accountStatus !== 'cancelled' && selectedNonprofit;
   if (signedInDonor && bioGate.locked) return <WebLockScreen gate={bioGate} />;
   if (signedInDonor) return <WebDashboard />;
-  if (page === 'onboarding' && !entry.npsignin && accountStatus !== 'cancelled' && (selectedNonprofit || entry.org)) {
+  // Donor signup wizard — including an admin crossing over via "Start giving"
+  // (selectedNonprofit gets bound before the jump, so this wins over npsignin).
+  if (page === 'onboarding' && accountStatus !== 'cancelled' && (selectedNonprofit || (entry.org && !entry.npsignin))) {
     return <WebOnboarding entryOrg={entry.org} />;
+  }
+  // Micro-site "Nonprofit admin? Sign in" — webpage version of the
+  // passwordless work-email protocol (never the app-style column).
+  if (page === 'onboarding' && entry.npsignin) {
+    return <WebAdminSignIn />;
   }
   return (
     <WebPortal>
