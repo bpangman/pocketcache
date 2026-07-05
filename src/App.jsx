@@ -12,6 +12,7 @@ import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/Devi
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLandingPage from './pages/OrgLandingPage';
 import WebDashboard from './pages/WebDashboard';
+import WebOnboarding from './pages/WebOnboarding';
 import OrgLogo from './components/OrgLogo';
 import { findOrgByCode } from './store/orgStore';
 
@@ -484,15 +485,27 @@ function ThemedApp() {
 }
 
 // Desktop browser entry from a micro-site: a signed-in donor gets the real
-// web-native dashboard (WebDashboard); flows that are inherently step-by-step
-// (onboarding/account creation, admin dashboard, cancelled-account reactivation)
-// run in the centered WebPortal column.
+// web-native dashboard (WebDashboard); a new donor gets the web-native signup
+// wizard (WebOnboarding — org implied, no gate/QR/code); everything else
+// (admin dashboard, admin sign-in, cancelled-account reactivation, unknown
+// org) runs in the centered WebPortal column.
 function WebExperience() {
   const { page, accountStatus, selectedNonprofit } = useApp();
+  // Capture the entry context ONCE — the pretty-URL rewrite strips the params.
+  const [entry] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      org: findOrgByCode(params.get('org')),
+      npsignin: params.get('npsignin') === '1',
+    };
+  });
   const signedInDonor =
     page !== 'onboarding' && page !== 'np-dashboard' &&
     accountStatus !== 'cancelled' && selectedNonprofit;
   if (signedInDonor) return <WebDashboard />;
+  if (page === 'onboarding' && !entry.npsignin && accountStatus !== 'cancelled' && (selectedNonprofit || entry.org)) {
+    return <WebOnboarding entryOrg={entry.org} />;
+  }
   return (
     <WebPortal>
       <AppContent />

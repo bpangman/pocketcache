@@ -359,7 +359,8 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
 
 const BASE = import.meta.env.BASE_URL ?? '/';
 
-const US_STATES = [
+// eslint-disable-next-line react-refresh/only-export-components
+export const US_STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
   { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'DC', name: 'District of Columbia' },
@@ -720,7 +721,8 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
 
 // ─── Step 1: Connect card for monitoring ─────────────────────────────────────
 
-const BANKS = [
+// eslint-disable-next-line react-refresh/only-export-components
+export const BANKS = [
   { id: 'chase',   name: 'Chase',        sub: 'Sapphire, Freedom, Ink', color: '#1a56db', emoji: '🏦' },
   { id: 'capital', name: 'Capital One',  sub: 'Venture, Quicksilver',   color: '#c0392b', emoji: '💳' },
   { id: 'amex',    name: 'American Express', sub: 'Gold, Platinum, Blue Cash', color: '#007bc1', emoji: '💳' },
@@ -907,7 +909,8 @@ function ConnectCardScreen({ onNext }) {
 
 // ─── Step 2: Choose payment method ───────────────────────────────────────────
 
-const PAYMENT_OPTIONS = [
+// eslint-disable-next-line react-refresh/only-export-components
+export const PAYMENT_OPTIONS = [
   {
     id: 'ach',
     icon: '🏦',
