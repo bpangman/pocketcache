@@ -23,7 +23,7 @@ const NP_PAGES = {
 };
 
 function NpHeader({ npOrg }) {
-  const { hasAccount, setPage, signOut, setLastMode, setSelectedNonprofit } = useApp();
+  const { hasAccount, setPage, signOut, setLastMode, setSelectedNonprofit, goToOnboardingStep } = useApp();
   const { resetNpContent } = useNp();
   const [menuOpen, setMenuOpen] = useState(false);
   const accent  = npOrg.color || '#003865';
@@ -31,14 +31,18 @@ function NpHeader({ npOrg }) {
 
   function handleSignOut() { setMenuOpen(false); resetNpContent(); signOut(); }
 
-  // One tap to giving mode — dashboard if they're a donor, else donor onboarding pre-bound to their org.
+  // One tap to giving mode — dashboard if they're a donor, else STRAIGHT to
+  // donor account creation pre-bound to their org (they run the org — skip
+  // the gate AND the intro pitch). Their personal donor identity is still a
+  // separate SSO sign-in by design: the admin login belongs to the org and
+  // may be shared/rotated among staff; personal giving stays personal.
   function goGiving() {
     setMenuOpen(false);
     setLastMode('giving');
     if (hasAccount) { setPage('home'); return; }
     const org = findOrgByCode(npOrg.joinCode);
     if (org) setSelectedNonprofit(org);
-    setPage('onboarding');
+    goToOnboardingStep('signup');
   }
 
   return (
