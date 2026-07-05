@@ -12,6 +12,7 @@ import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/Devi
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLandingPage from './pages/OrgLandingPage';
 import WebDashboard from './pages/WebDashboard';
+import OrgLogo from './components/OrgLogo';
 import { findOrgByCode } from './store/orgStore';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
@@ -369,39 +370,70 @@ function useIsMobile() {
   return mobile;
 }
 
-// WebPortal — the browser-native giving portal reached from an org micro-site.
-// No phone chrome: a clean page with the flow in a centered, elevated column
-// (the Acorns-web pattern). Same screens, same account, different presentation.
+// WebPortal — webpage shell for the step-by-step flows (account creation,
+// reactivation, admin) reached from an org micro-site on desktop. Same top-nav
+// webpage chrome as WebDashboard, with the flow presented as a centered panel —
+// the way a web checkout looks — so nothing on desktop ever reads as "an app".
 function WebPortal({ children }) {
   const { w, h } = useWindowSize();
+  const { selectedNonprofit } = useApp();
+  const brand = useTheme();
+  const org = selectedNonprofit;
   const colW = Math.min(440, w - 24);
-  const colH = Math.min(920, h - 56);
+  const colH = Math.max(480, Math.min(860, h - 170));
   return (
-    <div
-      className="flex flex-col items-center justify-center gap-3"
-      style={{ minHeight: '100dvh', background: 'linear-gradient(180deg, #f6f8fb 0%, #e9eef5 100%)', padding: 12 }}
-    >
-      <div
-        style={{
-          width: colW,
-          height: colH,
-          background: '#fff',
-          borderRadius: 24,
-          overflow: 'hidden',
-          position: 'relative',
-          boxShadow: '0 24px 64px rgba(11,42,74,0.16), 0 2px 8px rgba(11,42,74,0.08)',
-        }}
-      >
-        <ScaleFit viewport={{ width: colW, height: colH }}>
-          {children}
-        </ScaleFit>
-      </div>
-      <p style={{ color: '#94a3b8', fontSize: 12, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <CoinMark size={14} />
-        Powered by PocketCache ·{' '}
-        <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Terms</a>{' '}
-        <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Privacy</a>
-      </p>
+    <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
+      {/* Top nav — same chrome as the signed-in dashboard */}
+      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : <CoinMark size={30} />}
+            <div style={{ lineHeight: 1.15 }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: '#0f172a' }}>
+                {brand.appName ?? 'PocketCache'}
+              </p>
+              <p style={{ margin: 0, fontSize: 10.5, color: '#94a3b8' }}>powered by PocketCache</p>
+            </div>
+          </div>
+          {org && (
+            <a
+              href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
+              style={{ fontSize: 13, fontWeight: 600, color: '#003865', textDecoration: 'none' }}
+            >
+              About {org.shortName ?? 'this nonprofit'} →
+            </a>
+          )}
+        </div>
+      </header>
+
+      {/* Flow panel — centered like a web checkout */}
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div
+          style={{
+            width: colW,
+            height: colH,
+            background: '#fff',
+            borderRadius: 20,
+            overflow: 'hidden',
+            position: 'relative',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 16px 48px rgba(11,42,74,0.10), 0 2px 8px rgba(11,42,74,0.06)',
+          }}
+        >
+          <ScaleFit viewport={{ width: colW, height: colH }}>
+            {children}
+          </ScaleFit>
+        </div>
+      </main>
+
+      <footer style={{ padding: '0 24px 20px', textAlign: 'center' }}>
+        <p style={{ color: '#94a3b8', fontSize: 12, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <CoinMark size={14} />
+          Powered by PocketCache ·{' '}
+          <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Terms</a>{' '}
+          <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Privacy</a>
+        </p>
+      </footer>
     </div>
   );
 }
