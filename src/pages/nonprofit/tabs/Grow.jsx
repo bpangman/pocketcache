@@ -37,7 +37,8 @@ export default function Grow() {
   const accent   = npOrg.color || '#0D9488';
   const joinCode = npOrg.joinCode || 'BGCA';
   const shareUrl = `https://pocketcache.app/demo/?org=${joinCode}`;
-  const embedSnippet = `<script src="https://cdn.pocketcache.app/widget.js" data-org="${joinCode.toLowerCase()}"></script>`;
+  const orgDisplayName = npOrg.name || joinCode;
+  const embedSnippet = `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgDisplayName}"></script>`;
 
   return (
     <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-5">
@@ -97,6 +98,28 @@ export default function Grow() {
         <p className="text-gray-400 text-xs mt-3">
           Drop this on your website to show a &quot;Round Up for us&quot; widget that links directly to your program.
         </p>
+
+        {/* Live preview — visually identical to what widget.js renders on the org's site */}
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Preview — what visitors see</p>
+        <div className="rounded-2xl p-4" style={{ background: '#f1f5f9' }}>
+          <div style={{ maxWidth: 340, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(11,42,74,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r="15" fill="#FBBF24" stroke="#E5A800" strokeWidth="1.5" />
+                <path d="M16 23 V11" stroke="#003865" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+                <path d="M11 15.5 L16 10.5 L21 15.5" stroke="#003865" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <strong style={{ fontSize: 14.5, color: '#0f172a' }}>Round up for {orgDisplayName}</strong>
+            </div>
+            <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#475569' }}>
+              Spare change from your everyday purchases, sent to us automatically once a month. Takes a minute to set up.
+            </p>
+            <div style={{ textAlign: 'center', padding: '11px 14px', borderRadius: 12, background: `linear-gradient(135deg, ${accent}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 14 }}>
+              Start giving →
+            </div>
+            <p style={{ margin: '8px 0 0', fontSize: 10.5, color: '#94a3b8', textAlign: 'center' }}>Powered by PocketCache</p>
+          </div>
+        </div>
       </motion.div>
 
       {/* How donors join */}

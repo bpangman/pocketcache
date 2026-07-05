@@ -142,6 +142,18 @@ code. The fix is layered, and our QR URLs already point at our own domain
 Note: the current web app has NO install gap at all — scan → branded experience in
 one step. That's a real advantage of piloting web-first with BGCA.
 
+**#7b Go-live launch-kit email — part of the backend deploy (added 2026-07-06, Blake).**
+When a nonprofit completes signup, the backend auto-sends a welcome email to the
+VERIFIED admin address: micro-site link, donor join code, giving link, the widget
+snippet, the QR as an attached PNG, and admin sign-in instructions. Demo today: a
+prefilled "Email me my launch kit" mailto on the You're-Live page (labeled). Needs the
+same transactional-email provider as the OTP codes (Resend/Postmark). The widget itself
+is REAL as of 2026-07-06: `pocketcache.app/widget.js` (repo `widget/widget.js`, copied
+to site root by deploy.yml) — self-contained, no tracking, links to /CODE/give; live
+preview in dashboard → Grow. No API keys for nonprofits by design — links, QR, and
+widget are copy-paste; their micro-site stats come from the public stats endpoint
+automatically once the backend ships.
+
 **#8 Privacy/terms/license — LIVE + updated today; Nathan is the only remaining step.**
 
 **#9 Push notifications — NATIVE-PHASE.** Weekly feel-good summary only ("Your round-ups

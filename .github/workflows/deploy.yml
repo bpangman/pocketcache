@@ -63,6 +63,9 @@ jobs:
           # Vanity join links: 404.html forwards pocketcache.app/CODE → /demo/?org=CODE
           cp public/404.html dist-pages/404.html
 
+          # Embeddable widget for nonprofit websites
+          cp widget/widget.js dist-pages/widget.js
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

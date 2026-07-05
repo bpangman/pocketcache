@@ -2045,10 +2045,39 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Embed Widget</p>
               <div className="bg-gray-900 rounded-xl p-3 max-w-full overflow-x-auto">
                 <code className="text-green-400 text-xs whitespace-pre-wrap break-all">
-                  {`<script src="https://cdn.pocketcache.app/widget.js" data-org="${joinCode.toLowerCase()}"></script>`}
+                  {`<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`}
                 </code>
               </div>
+              <p className="text-gray-400 text-xs mt-1">See a live preview anytime in your dashboard → Grow tab.</p>
             </div>
+            {/* Launch kit email — production sends this automatically at go-live */}
+            <a
+              href={(() => {
+                const site = `https://pocketcache.app/${joinCode}`;
+                const give = `https://pocketcache.app/${joinCode}/give`;
+                const subject = `${orgName} is live on PocketCache — your launch kit`;
+                const body = [
+                  `Congratulations — ${orgName} is live on PocketCache! 🎉`, '',
+                  `Your page: ${site}`,
+                  `Your donor join code: ${joinCode}`,
+                  `Direct giving link (donors sign up here): ${give}`, '',
+                  `Website widget — paste this where you want the "Round up for us" card to appear:`,
+                  `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`, '',
+                  `Your QR code (points to your giving link) is on your dashboard → Grow tab, ready for posters, newsletters, and event tables.`, '',
+                  `Admin sign-in: https://pocketcache.app/demo/?npsignin=1 — use this email address; we send you a fresh code each time. No password to remember.`, '',
+                  `— The PocketCache team`,
+                ].join('\n');
+                return `mailto:${encodeURIComponent(adminEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+              })()}
+              className="block w-full py-4 rounded-2xl font-bold text-base text-center"
+              style={{ background: '#f0fdf4', border: '2px solid #86efac', color: '#065f46', textDecoration: 'none' }}
+            >
+              📧 Email me my launch kit
+            </a>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Demo: this opens your mail app pre-filled. The live version emails the kit
+              (page link, code, QR, widget) to {adminEmail || 'your verified address'} automatically the moment you go live.
+            </p>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleGoLive}
@@ -2057,7 +2086,6 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             >
               Open your dashboard →
             </motion.button>
-            <p className="text-gray-400 text-xs text-center">Check your email for next steps from PocketCache.</p>
           </div>
         )}
 
