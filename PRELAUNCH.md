@@ -63,6 +63,10 @@ Each item notes where PocketCache stands today and what "done" looks like.
 - **Status:** Apple/Google/Facebook SSO is already the plan — no passwords stored by us, which is
   the right call. But the current backend has **no security on its data routes**; anyone who knew
   the URL could read or write data.
+- **Biometric unlock (added 2026-07-05):** Face ID / Touch ID unlock ships in the demo via
+  WebAuthn platform credentials — the OS really verifies the user's face/finger, but the check
+  is client-side only. Production must issue the challenge from the backend and verify the
+  assertion server-side (standard passkey flow) before the session is trusted.
 - **Why it matters:** Must be locked before a real user's data ever touches the backend.
 - **Done when:** Every backend route requires a valid signed-in session token before returning any
   data.

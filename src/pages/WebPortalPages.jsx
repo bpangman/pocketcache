@@ -9,6 +9,7 @@ import { fmtMoneyCompact } from '../lib/format';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import MatchBadge from '../components/MatchBadge';
+import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 
 // ─── Web-native My Cause / Share / Settings + shared modals ──────────────────
 // True webpage versions of the app's tabs — same store, same account, web
@@ -804,6 +805,17 @@ function SwitchOrgModal({ show, onClose, onBind }) {
 
 function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDeleteAccount }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Face ID / Touch ID unlock — real WebAuthn enrollment, shared with the app
+  const [bioEnrolled, setBioEnrolled] = useState(biometricEnrolled);
+  async function toggleBio(v) {
+    if (v) {
+      const ok = await biometricEnroll({ name: DEMO_USER.name, email: DEMO_USER.email });
+      if (ok) { markSessionUnlocked(); setBioEnrolled(true); }
+    } else {
+      biometricDisable();
+      setBioEnrolled(false);
+    }
+  }
   useEffect(() => {
     if (!show) return;
     const id = setTimeout(() => setConfirmDelete(false), 0);
@@ -826,6 +838,9 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
 
   return (
     <Modal show={show} onClose={onClose} title="Privacy & Security">
+      <Row label="Face ID / Touch ID unlock" sub="Require biometrics to open your giving on this device"
+        right={<WebToggle value={bioEnrolled} onChange={toggleBio} />} />
+      <div style={{ height: 1, background: '#f1f5f9' }} />
       <Row label="Two-factor authentication" sub="Managed by your sign-in provider (Apple / Google)" />
       <div style={{ height: 1, background: '#f1f5f9' }} />
       <Row label="Anonymous analytics" sub="Help us improve (no personal data)"

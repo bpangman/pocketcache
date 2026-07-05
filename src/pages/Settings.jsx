@@ -15,6 +15,7 @@ import { loadKey, saveKey } from '../store/identityStore';
 import { fmtMoney } from '../lib/format';
 import { MONTHLY_DATA } from '../data/transactions';
 import { DEMO_USER } from '../data/derived';
+import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
@@ -807,6 +808,21 @@ export default function Settings() {
     saveKey('pc_comms_optin', v);
   }
 
+  // Face ID / Touch ID unlock — REAL WebAuthn enrollment, not a cosmetic pref.
+  // Enabling triggers the OS biometric prompt; disabling removes the credential.
+  const [bioEnrolled, setBioEnrolled] = useState(biometricEnrolled);
+  async function handleBiometricChange(v) {
+    if (v) {
+      const ok = await biometricEnroll({ name: DEMO_USER.name, email: DEMO_USER.email });
+      if (ok) { markSessionUnlocked(); setBioEnrolled(true); showToast('Face ID unlock is on 🙂'); }
+      else showToast("Couldn't set up Face ID on this device.");
+    } else {
+      biometricDisable();
+      setBioEnrolled(false);
+      showToast('Face ID unlock turned off.');
+    }
+  }
+
   const [showMultiplier, setShowMultiplier] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showSwitchOrg, setShowSwitchOrg] = useState(false);
@@ -1253,8 +1269,8 @@ export default function Settings() {
         onDeleteAccount={() => { setShowPrivacy(false); deleteAccount(); }}
         adminOrgName={adminRole?.joinCode ?? null}
         onDownloadData={handleDownloadData}
-        biometric={prefs.biometric}
-        onBiometricChange={v => updatePref('biometric', v)}
+        biometric={bioEnrolled}
+        onBiometricChange={handleBiometricChange}
         dataSharing={prefs.dataSharing}
         onDataSharingChange={v => updatePref('dataSharing', v)}
         marketingEmails={prefs.marketingEmails}

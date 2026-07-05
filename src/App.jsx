@@ -15,6 +15,7 @@ import WebDashboard from './pages/WebDashboard';
 import WebOnboarding from './pages/WebOnboarding';
 import OrgLogo from './components/OrgLogo';
 import { findOrgByCode } from './store/orgStore';
+import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
 // (full-bleed, proportionally scaled to viewport width).
@@ -170,6 +171,8 @@ function Toast({ message }) {
 function AppContent() {
   const { page, accountStatus, reactivateAccount, setPage, toast, trackedCard, paymentMethod, setTab, setPendingSettingsAction } = useApp();
   const [showReactivateCheckin, setShowReactivateCheckin] = useState(false);
+  const bioGate = useBiometricGate();
+  const bioOffer = useBiometricOffer();
 
   function handleReactivateTap() {
     setShowReactivateCheckin(true);
@@ -189,10 +192,13 @@ function AppContent() {
   }
 
   if (page === 'onboarding') return <Onboarding />;
+  // Face ID / Touch ID gate — everything past sign-in is behind it once enrolled
+  if (bioGate.locked) return <AppLockScreen gate={bioGate} />;
   if (page === 'np-dashboard') return <NpShell />;
   return (
     <div className="w-full h-full relative">
       <AppShell />
+      <BiometricOfferCard offer={bioOffer} surface="app" />
       <AnimatePresence>
         {accountStatus === 'cancelled' && (
           <CancelledOverlay
@@ -491,6 +497,7 @@ function ThemedApp() {
 // org) runs in the centered WebPortal column.
 function WebExperience() {
   const { page, accountStatus, selectedNonprofit } = useApp();
+  const bioGate = useBiometricGate();
   // Capture the entry context ONCE — the pretty-URL rewrite strips the params.
   const [entry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -502,6 +509,7 @@ function WebExperience() {
   const signedInDonor =
     page !== 'onboarding' && page !== 'np-dashboard' &&
     accountStatus !== 'cancelled' && selectedNonprofit;
+  if (signedInDonor && bioGate.locked) return <WebLockScreen gate={bioGate} />;
   if (signedInDonor) return <WebDashboard />;
   if (page === 'onboarding' && !entry.npsignin && accountStatus !== 'cancelled' && (selectedNonprofit || entry.org)) {
     return <WebOnboarding entryOrg={entry.org} />;

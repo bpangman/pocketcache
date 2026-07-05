@@ -6,6 +6,7 @@ import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import { WebMyCause, WebShare, WebSettings, GiveExtraModal } from './WebPortalPages';
+import { useBiometricOffer, BiometricOfferCard } from '../components/BiometricLock';
 
 // ─── The browser-native donor portal ─────────────────────────────────────────
 // This is PocketCache as if it had been built as a web product: top nav, wide
@@ -288,6 +289,7 @@ export default function WebDashboard() {
   const [navTab, setNavTab] = useState('overview');
   const [menuOpen, setMenuOpen] = useState(false);
   const [giveExtra, setGiveExtra] = useState(false);
+  const bioOffer = useBiometricOffer();
 
   const org = selectedNonprofit;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
@@ -301,6 +303,7 @@ export default function WebDashboard() {
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb' }} onClick={() => menuOpen && setMenuOpen(false)}>
       <GiveExtraModal show={giveExtra} onClose={() => setGiveExtra(false)} />
+      <BiometricOfferCard offer={bioOffer} surface="web" />
       {/* ── Top nav ── */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 24 }}>
