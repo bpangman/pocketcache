@@ -939,7 +939,7 @@ function PaymentMethodScreen({ onNext }) {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
-  const { selectedNonprofit } = useApp();
+  const { selectedNonprofit, monthlyCap, setMonthlyCap } = useApp();
   const [selected, setSelected] = useState(null);
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
@@ -1056,6 +1056,38 @@ function PaymentMethodScreen({ onNext }) {
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
             Change this anytime in Settings. Payments are processed by Stripe — not us.
           </p>
+
+          {/* Quiet monthly-max opt-in — deliberately understated (adjust later in Settings) */}
+          <div className="rounded-2xl p-4 bg-white" style={{ border: '1.5px solid #e5e7eb' }}>
+            <label
+              className="flex items-start gap-3 cursor-pointer"
+              onClick={() => setMonthlyCap(monthlyCap === null ? 20 : null)}
+            >
+              <div
+                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                style={{ borderColor: monthlyCap !== null ? '#003865' : '#d1d5db', background: monthlyCap !== null ? '#003865' : '#fff' }}
+              >
+                {monthlyCap !== null && <CheckCircle size={12} className="text-white" />}
+              </div>
+              <span className="text-xs text-gray-500 leading-relaxed">
+                Set a monthly maximum (optional) — round-ups above it are simply never charged.
+              </span>
+            </label>
+            {monthlyCap !== null && (
+              <div className="mt-3">
+                <div className="text-center py-1">
+                  <span className="text-2xl font-bold text-gray-900">${monthlyCap}</span>
+                  <span className="text-gray-400 text-sm ml-1">/month</span>
+                </div>
+                <input
+                  type="range" min={5} max={200} step={5} value={monthlyCap}
+                  onChange={e => setMonthlyCap(Number(e.target.value))}
+                  className="w-full accent-teal-600"
+                />
+                <div className="flex justify-between text-xs text-gray-400"><span>$5</span><span>$200</span></div>
+              </div>
+            )}
+          </div>
           </div>
         </div>
       </div>

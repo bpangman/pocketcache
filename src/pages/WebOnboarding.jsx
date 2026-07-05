@@ -10,6 +10,7 @@ import { US_STATES, BANKS, PAYMENT_OPTIONS } from './Onboarding';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
+import { CapControl } from './WebPortalPages';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
 // The signup journey as a real webpage: the donor arrived from THIS nonprofit's
@@ -124,7 +125,7 @@ export default function WebOnboarding({ entryOrg }) {
   const {
     selectedNonprofit, setSelectedNonprofit, hasAccount, accountStatus,
     setHasAccount, setAccountStatus, setLastMode, setTrackedCard, setPaymentMethod,
-    setPage, pendingRoundUps, feeMonths,
+    setPage, pendingRoundUps, feeMonths, monthlyCap, setMonthlyCap,
     initialOnboardingStep, clearInitialOnboardingStep,
   } = useApp();
   const brand = useTheme();
@@ -357,9 +358,13 @@ export default function WebOnboarding({ entryOrg }) {
                       </button>
                     ))}
                   </div>
-                  <p style={{ fontSize: 12, color: INK.muted, margin: '0 0 16px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 12, color: INK.muted, margin: '0 0 14px', textAlign: 'center' }}>
                     Change this anytime in Settings. Payments are processed by Stripe — not us.
                   </p>
+                  {/* Quiet monthly-max opt-in — deliberately understated */}
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                    <CapControl subtle value={monthlyCap} onChange={setMonthlyCap} />
+                  </div>
                   <PrimaryButton disabled={!paymentSel} onClick={() => setStep('review')}>
                     {paymentSel ? 'Continue →' : 'Choose a payment method'}
                   </PrimaryButton>

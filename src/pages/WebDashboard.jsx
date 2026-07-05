@@ -5,9 +5,7 @@ import { DEMO_USER, avgPerMonth, momChange, sinceLabel, monthsGiving } from '../
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
-import MyCause from './MyCause';
-import Share from './Share';
-import Settings from './Settings';
+import { WebMyCause, WebShare, WebSettings, GiveExtraModal } from './WebPortalPages';
 
 // ─── The browser-native donor portal ─────────────────────────────────────────
 // This is PocketCache as if it had been built as a web product: top nav, wide
@@ -246,17 +244,10 @@ function MatchCard({ match }) {
   );
 }
 
-function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onBoost }) {
-  const [thanked, setThanked] = useState(null);
+function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra }) {
   const fee = feeMonths;
   const total = pending + fee;
   const row = { display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '5px 0' };
-
-  function boost(a) {
-    onBoost(a);
-    setThanked(a);
-    setTimeout(() => setThanked(null), 3500);
-  }
   return (
     <div style={{ ...CARD, padding: 20 }}>
       <SectionTitle>Next charge · {nextChargeLabel()}</SectionTitle>
@@ -269,34 +260,12 @@ function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onBoost }) {
       <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }}>
         Charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''}. Demo data — no real charge is made.
       </p>
-      <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: INK.secondary }}>Give a little extra:</span>
-        {[5, 10, 25].map(a => (
-          <button
-            key={a}
-            onClick={() => boost(a)}
-            style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 999, padding: '4px 12px', fontSize: 12.5, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
-          >
-            ${a}
-          </button>
-        ))}
-      </div>
-      {thanked && (
-        <p style={{ margin: '10px 0 0', fontSize: 12.5, fontWeight: 600, color: '#047857' }}>
-          💚 Thank you — an extra ${thanked} goes to {npShort}.
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ─── Column wrapper for reused app pages (My Cause / Share / Settings) ──────
-function ColumnEmbed({ children }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center' }}>
-      <div style={{ ...CARD, width: 430, maxWidth: '100%', height: 'calc(100vh - 170px)', minHeight: 480, overflow: 'hidden', position: 'relative', borderRadius: 20 }}>
-        {children}
-      </div>
+      <button
+        onClick={onGiveExtra}
+        style={{ width: '100%', marginTop: 14, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
+      >
+        💚 Give a little extra…
+      </button>
     </div>
   );
 }
@@ -312,12 +281,13 @@ const NAV_TABS = [
 
 export default function WebDashboard() {
   const {
-    selectedNonprofit, totalDonated, pendingRoundUps, boostDonation, showToast,
+    selectedNonprofit, totalDonated, pendingRoundUps,
     feeMonths, paymentMethod, signOut, adminRole, setPage, setLastMode, hasAccount,
   } = useApp();
   const brand = useTheme();
   const [navTab, setNavTab] = useState('overview');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [giveExtra, setGiveExtra] = useState(false);
 
   const org = selectedNonprofit;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
@@ -328,13 +298,9 @@ export default function WebDashboard() {
     return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   }, []);
 
-  function handleBoost(amount) {
-    boostDonation(amount);
-    showToast?.(`Thank you! An extra $${amount} goes to ${npShort}. 💚`);
-  }
-
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb' }} onClick={() => menuOpen && setMenuOpen(false)}>
+      <GiveExtraModal show={giveExtra} onClose={() => setGiveExtra(false)} />
       {/* ── Top nav ── */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -460,7 +426,7 @@ export default function WebDashboard() {
                   feeMonths={feeMonths}
                   paymentMethod={paymentMethod}
                   npShort={npShort}
-                  onBoost={handleBoost}
+                  onGiveExtra={() => setGiveExtra(true)}
                 />
               </div>
             </div>
@@ -477,9 +443,9 @@ export default function WebDashboard() {
           </div>
         )}
 
-        {navTab === 'mycause' && <ColumnEmbed><MyCause /></ColumnEmbed>}
-        {navTab === 'share' && <ColumnEmbed><Share /></ColumnEmbed>}
-        {navTab === 'settings' && <ColumnEmbed><Settings /></ColumnEmbed>}
+        {navTab === 'mycause' && <WebMyCause />}
+        {navTab === 'share' && <WebShare />}
+        {navTab === 'settings' && <WebSettings />}
       </main>
 
       <footer style={{ padding: '0 24px 28px', textAlign: 'center' }}>
