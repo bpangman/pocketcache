@@ -176,6 +176,15 @@ Legend for money invariants that can NEVER be violated:
 - [ ] **D13. New phone / cleared storage.** → SSO sign-in restores account server-side
   (nonprofit binding, card link, totals). Demo is localStorage-only; production requires
   the backend session. 🏗️ (known — backend not deployed)
+- [ ] **D14. Admin work-email verification (added 2026-07-05).** Signup requires an email
+  on the org's own domain + 6-digit code before Stripe connect: free-mail domains
+  rejected; known-org domains must match exactly; wrong/expired code rejected; resend and
+  change-email work; code attempts rate-limited server-side. 🏗️ (email send = backend)
+- [ ] **D15. Admin↔donor account separation (added 2026-07-05, Blake's hard rule).**
+  Sign in with ONLY the org admin email on a fresh device: no personal donor data of any
+  individual (giving history, card, payment method) is visible anywhere in the dashboard.
+  Sign in with ONLY a donor SSO: no admin capability. Two colleagues sharing the admin
+  login see identical org-only data. 🏗️ (enforced by backend auth scoping)
 
 ## E. Money display honesty (the app must never lie)
 

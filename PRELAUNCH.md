@@ -77,6 +77,12 @@ Each item notes where PocketCache stands today and what "done" looks like.
   provider (Resend/Postmark), server-side code generation with expiry + attempt limits +
   rate limiting, and org-domain cross-check against IRS/Stripe-KYC records. Donor sign-in
   remains Apple/Google/Facebook SSO, unchanged.
+- **Account separation (hard requirement, per Blake 2026-07-05):** admin and donor are
+  fully separate accounts. An admin session must expose ONLY the org's aggregate/donor-list
+  data appropriate to the dashboard — never any individual's personal donor account, giving
+  history, or payment method. A colleague signing in with the shared org admin email sees
+  nothing personal about anyone. Verify this explicitly during the backend auth-scoping
+  task (playbook #2) and add it to EDGE-CASES.md.
 - **Why it matters:** Must be locked before a real user's data ever touches the backend.
 - **Done when:** Every backend route requires a valid signed-in session token before returning any
   data.
