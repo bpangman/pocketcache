@@ -689,8 +689,8 @@ export function WebSettings() {
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Skip a month"
               sub={skipNextCharge
-                ? 'Your next monthly charge will be skipped — giving resumes automatically after'
-                : "Need a breather? Skip your next charge — that month's round-ups are simply never charged"}
+                ? "Skipping — your round-ups and the $1 fee roll into next month's charge ($1 × 2)"
+                : 'Need a breather? Your round-ups roll into next month instead (the $1 fee rolls too)'}
               right={<WebToggle value={skipNextCharge} onChange={setSkipNextCharge} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <div style={{ paddingTop: 10 }}>

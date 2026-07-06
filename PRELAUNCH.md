@@ -84,6 +84,11 @@ Each item notes where PocketCache stands today and what "done" looks like.
   1st–4th) and a reconciliation buffer for us, instead of same-day tally-and-charge.
   Demo copy updated app+web; backend charge job, Terms §7 language, and the reminder email
   templates must implement/mirror this (flag for Nathan's review list).
+  SKIP-A-MONTH (Blake 2026-07-06): a donor may skip their next charge; the skipped month
+  behaves EXACTLY like a sub-minimum rollover — round-ups carry forward and the $1/active-
+  month fee accrues (next bill shows "App fee — $1 × 2 months"). Nothing is waived, nothing
+  is charged early. The charge-review pop-up acknowledgment ("Looks good") persists for the
+  whole review month; the alert reappears each new cycle.
 - **Account separation (hard requirement, per Blake 2026-07-05):** admin and donor are
   fully separate accounts. An admin session must expose ONLY the org's aggregate/donor-list
   data appropriate to the dashboard — never any individual's personal donor account, giving

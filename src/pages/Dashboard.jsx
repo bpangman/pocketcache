@@ -408,7 +408,7 @@ export default function Dashboard() {
                 Monthly Charge to {selectedNonprofit.shortName}
               </p>
               <p className="text-gray-400 text-xs mt-0.5">
-                Next charge: {skipNextCharge ? 'skipped — resumes next cycle' : nextChargeDateLabel}
+                Next charge: {skipNextCharge ? 'skipped — rolls into next month ($1 × 2 fee)' : nextChargeDateLabel}
               </p>
             </div>
             <div className="text-right">

@@ -13,7 +13,13 @@ function inReviewWindow() {
   return day >= 1 && day <= 4;
 }
 
-const SEEN_KEY = 'pc_review_seen'; // per tab-session: pops again on each new visit
+// Acknowledgment persists for the WHOLE review month: once the donor clicks
+// "Looks good", the alert stays gone on every later visit until next cycle.
+const ACK_KEY = 'pc_review_ack';
+function monthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export default function ChargeReviewAlert({ surface = 'app' }) {
   const {
@@ -21,19 +27,22 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
     pendingRoundUps, feeMonths, chargeAdjustment, setChargeAdjustment,
   } = useApp();
   const [dismissed, setDismissed] = useState(() => {
-    try { return sessionStorage.getItem(SEEN_KEY) === '1'; } catch { return false; }
+    try { return localStorage.getItem(ACK_KEY) === monthKey(); } catch { return false; }
   });
   // ?review=1 preview flag — captured ONCE at mount (the pretty-URL rewrite
   // strips query params later; the alert must not vanish mid-interaction).
+  // ?review=force re-shows it even after "Looks good" (demo convenience).
   const [preview] = useState(() => {
-    try { return new URLSearchParams(window.location.search).get('review') === '1'; } catch { return false; }
+    try { return new URLSearchParams(window.location.search).get('review'); } catch { return null; }
   });
   const [adjusting, setAdjusting] = useState(false);
+  const [closedNow, setClosedNow] = useState(false); // this-render dismissal (covers review=force)
   const roundUps = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   const [value, setValue] = useState(chargeAdjustment ?? roundUps);
 
-  const show = !dismissed && hasAccount && accountStatus === 'active'
-    && !skipNextCharge && selectedNonprofit && (preview || inReviewWindow());
+  const acknowledged = closedNow || (dismissed && preview !== 'force');
+  const show = !acknowledged && hasAccount && accountStatus === 'active'
+    && !skipNextCharge && selectedNonprofit && (!!preview || inReviewWindow());
   if (!show) return null;
 
   const npShort = selectedNonprofit.shortName ?? selectedNonprofit.name;
@@ -43,8 +52,9 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const chargeDay = `${new Date().toLocaleString('en-US', { month: 'short' })} 5`;
 
   function dismiss() {
-    try { sessionStorage.setItem(SEEN_KEY, '1'); } catch { /* noop */ }
+    try { localStorage.setItem(ACK_KEY, monthKey()); } catch { /* noop */ }
     setDismissed(true);
+    setClosedNow(true);
   }
   function confirmAdjust() {
     setChargeAdjustment(value);
