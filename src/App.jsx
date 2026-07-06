@@ -16,6 +16,7 @@ import WebOnboarding from './pages/WebOnboarding';
 import OrgLogo from './components/OrgLogo';
 import { findOrgByCode } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
+import ChargeReviewAlert from './components/ChargeReviewAlert';
 import { WebAdminSignIn } from './pages/WebPortalPages';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
@@ -200,6 +201,7 @@ function AppContent() {
     <div className="w-full h-full relative">
       <AppShell />
       <BiometricOfferCard offer={bioOffer} surface="app" />
+      <ChargeReviewAlert surface="app" />
       <AnimatePresence>
         {accountStatus === 'cancelled' && (
           <CancelledOverlay

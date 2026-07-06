@@ -38,7 +38,7 @@ const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover'];
 // Persisted toggle preferences (pc_prefs). In production these live server-side.
 function loadPrefs() {
   return {
-    notifications: true, chargeReminder: true, autoDeposit: true,
+    notifications: true, chargeReminder: true,
     biometric: true, dataSharing: false, marketingEmails: true,
     ...loadKey('pc_prefs', {}),
   };
@@ -422,8 +422,8 @@ function AppIconSheet({ show, onClose, brand }) {
 
         <div className="space-y-3">
           {[
-            { id: 'pocketcache', label: 'PocketCache Icon', sub: 'Default', emoji: '🪙', logoImg: null },
-            { id: 'bgca', label: 'BGCA Custom Icon', sub: 'Anchor partner benefit', emoji: null, logoImg: bgcaLogoUrl },
+            { id: 'pocketcache', label: 'PocketCache Icon', sub: 'Default', coin: true, logoImg: null },
+            { id: 'bgca', label: 'BGCA Custom Icon', sub: 'Anchor partner benefit', coin: false, logoImg: bgcaLogoUrl },
           ].map(opt => (
             <motion.button
               key={opt.id}
@@ -440,9 +440,10 @@ function AppIconSheet({ show, onClose, brand }) {
                   <img src={opt.logoImg} alt={opt.label} className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm"
-                  style={{ background: selectedIcon === opt.id ? brand.gradient : '#e5e7eb' }}>
-                  {opt.emoji}
+                // The real app icon: navy tile with the official coin (gold + teal block arrow)
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm"
+                  style={{ background: '#0B2A4A', border: selectedIcon === opt.id ? `2px solid ${brand.primary}` : '2px solid transparent' }}>
+                  <CoinMark size={30} />
                 </div>
               )}
               <div className="text-left flex-1">
@@ -791,6 +792,7 @@ export default function Settings() {
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
     pendingSettingsAction, clearPendingSettingsAction, showToast,
     monthlyCap, setMonthlyCap,
+    skipNextCharge, setSkipNextCharge,
   } = useApp();
   const brand = useTheme();
 
@@ -944,11 +946,13 @@ export default function Settings() {
           />
           <div className="h-px bg-gray-50 mx-4" />
           <SettingRow
-            icon={<span className="text-base">🏦</span>}
-            label="Auto-deposit"
-            sub="Send round-ups automatically"
+            icon={<span className="text-base">⏭️</span>}
+            label="Skip a month"
+            sub={skipNextCharge
+              ? 'Your next monthly charge will be skipped — giving resumes automatically after'
+              : "Need a breather? Skip your next charge — that month's round-ups are simply never charged"}
             color={brand.secondary}
-            right={<Toggle value={prefs.autoDeposit} onChange={v => updatePref('autoDeposit', v)} color={brand.primary} />}
+            right={<Toggle value={skipNextCharge} onChange={setSkipNextCharge} color={brand.primary} />}
           />
         </motion.div>
 

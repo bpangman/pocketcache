@@ -40,7 +40,7 @@ const PAYMENT_METHOD_OPTIONS = [
 
 function loadPrefs() {
   return {
-    notifications: true, chargeReminder: true, autoDeposit: true,
+    notifications: true, chargeReminder: true,
     biometric: true, dataSharing: false, marketingEmails: true,
     ...loadKey('pc_prefs', {}),
   };
@@ -631,7 +631,7 @@ export function WebSettings() {
     totalDonated, pendingRoundUps, boostDonation, cancelAccount, adminRole, deleteAccount,
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
     pendingSettingsAction, clearPendingSettingsAction,
-    monthlyCap, setMonthlyCap, hasAccount, feeMonths,
+    monthlyCap, setMonthlyCap, skipNextCharge, setSkipNextCharge, hasAccount, feeMonths,
   } = useApp();
 
   const [prefs, setPrefsState] = useState(loadPrefs);
@@ -687,8 +687,11 @@ export function WebSettings() {
               }
             />
             <div style={{ height: 1, background: '#f1f5f9' }} />
-            <Row label="Auto-deposit" sub="Send round-ups automatically"
-              right={<WebToggle value={prefs.autoDeposit} onChange={v => updatePref('autoDeposit', v)} />} />
+            <Row label="Skip a month"
+              sub={skipNextCharge
+                ? 'Your next monthly charge will be skipped — giving resumes automatically after'
+                : "Need a breather? Skip your next charge — that month's round-ups are simply never charged"}
+              right={<WebToggle value={skipNextCharge} onChange={setSkipNextCharge} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <div style={{ paddingTop: 10 }}>
               <CapControl value={monthlyCap} onChange={setMonthlyCap} />

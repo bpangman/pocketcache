@@ -172,6 +172,15 @@ server-side during the backend deploy. Do not represent it as live before then.
 
 **#9 Push notifications — NATIVE-PHASE.** Weekly feel-good summary only ("Your round-ups
 sent $4.17 to BGCA this week"); templates go through Nathan once (charity-voice rule).
+MANAGEMENT (Blake asked 2026-07-06): opted-in audiences, template editing, send
+scheduling, and per-message opt-out counts all live in the GOD-MODE panel (add to its
+spec alongside the launch-kit sender setting) — nothing notification-related is managed
+from the nonprofit dashboards; orgs never blast donors directly (charity-voice +
+anti-spam posture). The donor-side toggles (push / charge reminder / comms) are consent
+flags the god-mode audience queries respect. Charge-review UX shipped 2026-07-06:
+in-product pop-up alert every visit during the 1st–4th window (ChargeReviewAlert, both
+surfaces, ?review=1 to preview) with inline one-time adjust; production pairs it with
+the locked-amount email/push on the 1st.
 
 **#10 Performance with real data — cheap AGENT task, not blocking.** Brief: extend
 `src/data/transactions.js` generator with a `?fixture=heavy` mode (600 transactions / 18

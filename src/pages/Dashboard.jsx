@@ -172,7 +172,7 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, chargeAdjustment, s
 }
 
 export default function Dashboard() {
-  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths } = useApp();
+  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
@@ -407,7 +407,9 @@ export default function Dashboard() {
               <p className="font-bold text-gray-900 text-sm">
                 Monthly Charge to {selectedNonprofit.shortName}
               </p>
-              <p className="text-gray-400 text-xs mt-0.5">Next charge: {nextChargeDateLabel}</p>
+              <p className="text-gray-400 text-xs mt-0.5">
+                Next charge: {skipNextCharge ? 'skipped — resumes next cycle' : nextChargeDateLabel}
+              </p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl" style={{ color: '#0B2A4A' }}>{daysLeft}</p>

@@ -7,6 +7,7 @@ import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import { WebMyCause, WebShare, WebSettings, GiveExtraModal } from './WebPortalPages';
 import { useBiometricOffer, BiometricOfferCard } from '../components/BiometricLock';
+import ChargeReviewAlert from '../components/ChargeReviewAlert';
 
 // ─── The browser-native donor portal ─────────────────────────────────────────
 // This is PocketCache as if it had been built as a web product: top nav, wide
@@ -252,13 +253,18 @@ function MatchCard({ match }) {
   );
 }
 
-function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra }) {
+function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra, skipped }) {
   const fee = feeMonths;
   const total = pending + fee;
   const row = { display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '5px 0' };
   return (
     <div style={{ ...CARD, padding: 20 }}>
-      <SectionTitle>Next charge · {nextChargeLabel()}</SectionTitle>
+      <SectionTitle>Next charge · {skipped ? 'skipped this month' : nextChargeLabel()}</SectionTitle>
+      {skipped && (
+        <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
+          You&apos;re skipping this month&apos;s charge — turn it back on anytime in Settings. Giving resumes automatically next cycle.
+        </p>
+      )}
       <div style={{ marginTop: 8 }}>
         <div style={row}><span style={{ color: INK.secondary }}>Round-ups so far</span><span style={{ color: INK.primary, fontWeight: 600 }}>${fmtMoney(pending)}</span></div>
         <div style={row}><span style={{ color: INK.secondary }}>App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span style={{ color: INK.secondary }}>+${fmtMoney(fee)}</span></div>
@@ -290,7 +296,7 @@ const NAV_TABS = [
 
 export default function WebDashboard() {
   const {
-    selectedNonprofit, totalDonated, pendingRoundUps,
+    selectedNonprofit, totalDonated, pendingRoundUps, skipNextCharge,
     feeMonths, paymentMethod, signOut, adminRole, setPage, setLastMode, hasAccount,
   } = useApp();
   const brand = useTheme();
@@ -312,6 +318,7 @@ export default function WebDashboard() {
     <div style={{ minHeight: '100dvh', background: '#f6f8fb' }} onClick={() => menuOpen && setMenuOpen(false)}>
       <GiveExtraModal show={giveExtra} onClose={() => setGiveExtra(false)} />
       <BiometricOfferCard offer={bioOffer} surface="web" />
+      <ChargeReviewAlert surface="web" />
       {/* ── Top nav ── */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -399,7 +406,13 @@ export default function WebDashboard() {
                 value={`$${fmtMoney(avgPerMonth)}`}
                 sub={momChange != null ? `${momChange >= 0 ? '▲' : '▼'} ${Math.abs(momChange)}% vs. prior month` : 'across completed months'}
               />
-              <Kpi label="Next charge" value={nextChargeLabel()} sub={`≈ $${fmtMoney(pendingRoundUps + feeMonths)} incl. $1 fee · exact amount locks ${lockLabel()}`} />
+              <Kpi
+                label="Next charge"
+                value={skipNextCharge ? 'Skipped' : nextChargeLabel()}
+                sub={skipNextCharge
+                  ? 'You chose to skip this month — giving resumes automatically'
+                  : `≈ $${fmtMoney(pendingRoundUps + feeMonths)} incl. $1 fee · exact amount locks ${lockLabel()}`}
+              />
             </div>
 
             {/* Main grid */}
@@ -438,6 +451,7 @@ export default function WebDashboard() {
                   paymentMethod={paymentMethod}
                   npShort={npShort}
                   onGiveExtra={() => setGiveExtra(true)}
+                  skipped={skipNextCharge}
                 />
               </div>
             </div>

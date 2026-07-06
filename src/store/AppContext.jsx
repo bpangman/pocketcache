@@ -9,7 +9,7 @@ const DONOR_KEYS = [
   'pc_seen_milestone', 'pc_dismiss_countdown', 'pc_prefs', 'pc_account_status',
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
   'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment', 'pc_fee_months',
-  'pc_bio', 'pc_bio_prompt_dismissed',
+  'pc_bio', 'pc_bio_prompt_dismissed', 'pc_skip_next',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];
@@ -72,6 +72,9 @@ export function AppProvider({ children }) {
   );
 
   const [monthlyCap, setMonthlyCapState] = useState(() => loadKey('pc_monthly_cap', null));
+  // Giving is ALWAYS automatic (no manual-deposit mode) — but a donor can skip
+  // their next monthly charge once; giving resumes automatically after.
+  const [skipNextCharge, setSkipNextChargeState] = useState(() => loadKey('pc_skip_next', false));
   const [chargeAdjustment, setChargeAdjustmentState] = useState(() => loadKey('pc_charge_adjustment', null));
   const [feeMonths, setFeeMonthsState] = useState(() => loadKey('pc_fee_months', 1));
 
@@ -150,6 +153,11 @@ export function AppProvider({ children }) {
   function setMonthlyCap(val) {
     saveKey('pc_monthly_cap', val);
     setMonthlyCapState(val);
+  }
+
+  function setSkipNextCharge(val) {
+    saveKey('pc_skip_next', val);
+    setSkipNextChargeState(val);
   }
 
   function setChargeAdjustment(val) {
@@ -301,6 +309,7 @@ export function AppProvider({ children }) {
       paymentMethod, setPaymentMethod,
       pendingSettingsAction, setPendingSettingsAction, clearPendingSettingsAction,
       monthlyCap, setMonthlyCap,
+      skipNextCharge, setSkipNextCharge,
       chargeAdjustment, setChargeAdjustment,
       feeMonths, setFeeMonths,
     }}>

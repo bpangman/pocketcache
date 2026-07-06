@@ -96,7 +96,7 @@ export default function Grow() {
       <AdminVerifyModal
         show={verifyingCode}
         adminEmail={npOrg.adminEmail || 'your admin email'}
-        warning={`Changing your code to ${codeDraft} changes your link, QR, and widget — anything printed with ${joinCode} stops working.`}
+        warning={`Changing your code to ${codeDraft} changes your link, QR, AND website widget — anything printed with ${joinCode} stops working, and any widget embedded on your website must be re-pasted with the new code.`}
         onConfirm={commitCode}
         onCancel={() => setVerifyingCode(false)}
       />
@@ -122,8 +122,9 @@ export default function Grow() {
             />
             {codeError && <p className="text-red-500 text-xs">{codeError}</p>}
             <p className="text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-left">
-              Heads up: changing your code changes your link, QR, and widget. Anything already
-              printed with the old code will stop working.
+              Heads up: changing your code changes your link, QR, AND website widget. Anything
+              printed with the old code stops working, and any widget already embedded on your
+              website must be re-pasted with the new code.
             </p>
             <div className="flex gap-2 justify-center">
               <button onClick={requestSaveCode} disabled={!!codeError}
