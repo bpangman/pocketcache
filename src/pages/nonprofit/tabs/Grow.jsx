@@ -34,7 +34,7 @@ function CopyButton({ text }) {
 const STEPS = [
   { num: 1, title: 'Share your code or link',  body: "Donors enter your unique code or scan your QR in the PocketCache app to lock in as your supporter." },
   { num: 2, title: 'They link a card once',    body: "Donor connects a debit or credit card through Plaid. Setup takes under 60 seconds and only happens once." },
-  { num: 3, title: 'You collect every month',  body: "On the 1st, PocketCache locks the month's round-ups and emails each donor their exact amount; on the 5th, payment initiates directly to your Stripe account." },
+  { num: 3, title: 'You collect every month',  body: "On the 1st, PocketCache locks the month's round-ups and emails each donor their exact amount; on the 11th, payment initiates directly to your Stripe account." },
 ];
 
 export default function Grow() {

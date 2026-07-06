@@ -86,11 +86,14 @@ Legend for money invariants that can NEVER be violated:
 
 ## C. The monthly charge — the highest-stakes 60 seconds
 
-> **Schedule updated 2026-07-06 (Blake):** the cycle LOCKS on the 1st (exact amount emailed
-> to the donor) and the charge RUNS on the 5th. Every case below that says "the 1st" means
-> lock-day behavior; the charge-execution cases apply on the 5th. Add cases: (a) donor
-> adjusts the locked charge during the 1st–4th window; (b) round-up posting AFTER lock rolls
-> to next month; (c) charge-day failure retries still respect the locked amount.
+> **Schedule updated 2026-07-06 (Blake, rev 2):** the cycle LOCKS on the 1st (exact amount
+> emailed to the donor) and the charge RUNS on the 11th — 10 full days' notice, matching the
+> classic Reg E timing for varying preauthorized debits (Nathan asked whether range-based
+> consent lets us move to the 5th; until he says yes, the 11th is the rule). Every case below
+> that says "the 1st" means lock-day behavior; charge-execution cases apply on the 11th.
+> Add cases: (a) donor adjusts the locked charge during the 1st–10th window; (b) round-up
+> posting AFTER lock rolls to next month; (c) charge-day failure retries still respect the
+> locked amount; (d) skip-a-month set mid-window cancels the pending charge, fee rolls.
 
 - [ ] **C1. Below the minimum** ($4.63 accrued, $10 minimum). → NO charge; balance rolls
   over; app shows "building toward your $10 minimum," not "ready to send." Nonprofit is

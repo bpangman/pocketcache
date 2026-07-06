@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 
 // ─── Charge review alert (the 1st–4th window) ────────────────────────────────
-// The cycle locks on the 1st; the charge runs on the 5th. During that window,
+// The cycle locks on the 1st; the charge runs on the 11th (10 full days'
+// notice — the classic Reg E timing). During that window,
 // every fresh visit pops this alert with the exact amount and the one-time
 // "adjust this charge" control — donors always see it before money moves.
 // Production also sends the same thing by email/push on the 1st.
@@ -10,7 +11,7 @@ import { useApp } from '../store/AppContext';
 
 function inReviewWindow() {
   const day = new Date().getDate();
-  return day >= 1 && day <= 4;
+  return day >= 1 && day <= 10;
 }
 
 // Acknowledgment persists for the WHOLE review month: once the donor clicks
@@ -49,7 +50,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const effective = chargeAdjustment ?? roundUps;
   const total = (effective + feeMonths).toFixed(2);
   const monthName = new Date().toLocaleString('en-US', { month: 'long' });
-  const chargeDay = `${new Date().toLocaleString('en-US', { month: 'short' })} 5`;
+  const chargeDay = `${new Date().toLocaleString('en-US', { month: 'short' })} 11`;
 
   function dismiss() {
     try { localStorage.setItem(ACK_KEY, monthKey()); } catch { /* noop */ }
@@ -69,7 +70,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
           Your {monthName} charge is ready to review
         </p>
         <p style={{ margin: 0, fontSize: 12.5, color: '#64748b' }}>
-          Locked on the 1st · charges {chargeDay} · adjust it any time before then
+          Locked on the 1st · charges {chargeDay} — 10 full days to review or adjust
         </p>
       </div>
 

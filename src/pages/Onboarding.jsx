@@ -1486,7 +1486,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward — we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the 5th</strong> — nothing before today ever counts.
+              Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the 11th</strong> — a full 10 days to review it, and nothing before today ever counts.
             </p>
           </div>
           </div>

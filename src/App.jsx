@@ -181,7 +181,7 @@ function AppContent() {
   }
 
   function handleRestartRoundups() {
-    reactivateAccount('Welcome back — tracking restarted today. Your first new charge comes on the 5th.');
+    reactivateAccount('Welcome back — tracking restarted today. Your first new charge comes on the 11th.');
     setShowReactivateCheckin(false);
   }
 

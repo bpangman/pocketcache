@@ -728,7 +728,7 @@ export function WebSettings() {
             <Row label="Push notifications" sub="Weekly impact summaries"
               right={<WebToggle value={prefs.notifications} onChange={v => updatePref('notifications', v)} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
-            <Row label="Charge reminder" sub="Your exact amount on the 1st — charge runs the 5th"
+            <Row label="Charge reminder" sub="Your exact amount on the 1st — charge runs the 11th"
               right={<WebToggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label={`Account emails & ${npShort} updates`} sub="Giving updates from PocketCache and your cause"

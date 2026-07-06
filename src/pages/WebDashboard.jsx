@@ -29,11 +29,13 @@ function fmtMoney(n) {
 }
 
 // Billing schedule: the month's round-ups LOCK on the 1st (exact amount
-// emailed to the donor) and the charge runs on the 5th — review buffer.
+// emailed to the donor) and the charge runs on the 11th — 10 full days'
+// review notice (classic Reg E timing; Nathan asked whether range-based
+// consent lets us move back to the 5th).
 function nextChargeLabel() {
   const now = new Date();
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return `${next.toLocaleString('en-US', { month: 'short' })} 5`;
+  return `${next.toLocaleString('en-US', { month: 'short' })} 11`;
 }
 function lockLabel() {
   const now = new Date();
@@ -275,7 +277,7 @@ function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra,
       </div>
       <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }}>
         Round-ups accrue through the last day of the month; the exact amount is emailed to you
-        on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 5th. Demo data — no real charge is made.
+        on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 11th. Demo data — no real charge is made.
       </p>
       <button
         onClick={onGiveExtra}

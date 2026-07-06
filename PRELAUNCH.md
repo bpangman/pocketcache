@@ -77,13 +77,17 @@ Each item notes where PocketCache stands today and what "done" looks like.
   provider (Resend/Postmark), server-side code generation with expiry + attempt limits +
   rate limiting, and org-domain cross-check against IRS/Stripe-KYC records. Donor sign-in
   remains Apple/Google/Facebook SSO, unchanged.
-- **Billing schedule (DECIDED by Blake 2026-07-06): lock on the 1st, charge on the 5th.**
-  Round-ups accrue through the last calendar day of the month. On the 1st the cycle CLOSES:
-  the exact amount is locked and emailed to the donor ("here's your charge"). The charge
-  itself runs on the 5th — a 4-day review window for donors (adjust-this-charge works
-  1st–4th) and a reconciliation buffer for us, instead of same-day tally-and-charge.
-  Demo copy updated app+web; backend charge job, Terms §7 language, and the reminder email
-  templates must implement/mirror this (flag for Nathan's review list).
+- **Billing schedule (DECIDED by Blake 2026-07-06, rev 2 same day): lock on the 1st,
+  charge on the 11th.** Round-ups accrue through the last calendar day of the month. On the
+  1st the cycle CLOSES: the exact amount is locked and emailed to the donor ("here's your
+  charge"). The charge runs on the 11th — 10 FULL DAYS' notice, deliberately matching the
+  classic Reg E §1005.10(d) timing for varying preauthorized debits, plus a generous
+  reconciliation buffer. Donors can adjust the locked charge any day from the 1st–10th
+  (in-product pop-up on every visit + the notice email). Blake PREFERS charging on the 5th:
+  Nathan question #11 asks whether range-based consent (our $5 minimum + optional cap
+  bounds every charge) permits the shorter window — if he clears it, move charge day to the
+  5th and shrink the window copy accordingly. Demo copy app+web says the 11th; backend
+  charge job, Terms §7, and reminder templates must mirror whichever Nathan blesses.
   SKIP-A-MONTH (Blake 2026-07-06, corrected same day): a donor may skip their next
   charge. The skipped month's ROUND-UPS ARE SIMPLY NEVER CHARGED (same mechanic as
   monthly-cap overflow — never collected, not owed later), but the $1/active-month fee

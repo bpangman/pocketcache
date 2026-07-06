@@ -194,10 +194,11 @@ export default function Dashboard() {
 
   const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
   // Billing schedule (Blake, 2026-07-06): the month's round-ups LOCK on the
-  // 1st (exact amount emailed) and the charge runs on the 5th — a review +
+  // 1st (exact amount emailed) and the charge runs on the 11th — 10 full
+  // days' review notice (classic Reg E timing) and a reconciliation +
   // reconciliation buffer, so donors are never surprised.
-  const nextMonthFifth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 5);
-  const nextChargeDateLabel = nextMonthFifth.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const nextMonthEleventh = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 11);
+  const nextChargeDateLabel = nextMonthEleventh.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const belowMinimum = pendingRoundUps < monthlyMinimum;
 
   // Cap + per-charge adjustment logic
