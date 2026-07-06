@@ -69,9 +69,22 @@ export function generateJoinCode(name, existingOrgs = []) {
 
 // ── Org object builder ────────────────────────────────────────────────────────
 
-export function buildOrgFromSignup({ name, adminEmail, story, color, logoPreview, monthlyMinimum, ein, orgAddress }) {
+// Format rule shared by signup + settings editing + the 404 vanity forwarder.
+export const JOIN_CODE_RE = /^[A-Z0-9-]{2,12}$/;
+
+// Is this code free to use? (optionally excluding the org that already owns it)
+export function isJoinCodeAvailable(code, excludeOrgId = null) {
+  if (!JOIN_CODE_RE.test(code ?? '')) return false;
+  const hit = findOrgByCode(code);
+  return !hit || hit.id === excludeOrgId;
+}
+
+export function buildOrgFromSignup({ name, adminEmail, story, color, logoPreview, monthlyMinimum, ein, orgAddress, joinCode }) {
   const existing = listCustomOrgs();
-  const shortName = generateJoinCode(name, existing);
+  const custom = (joinCode ?? '').toUpperCase();
+  const shortName = (JOIN_CODE_RE.test(custom) && isJoinCodeAvailable(custom))
+    ? custom
+    : generateJoinCode(name, existing);
   const id = shortName.toLowerCase();
   return {
     id,

@@ -4,6 +4,10 @@ import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Check } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
+import { useApp } from '../../../store/AppContext';
+import { getCustomOrg, saveCustomOrg, isJoinCodeAvailable, JOIN_CODE_RE } from '../../../store/orgStore';
+import CoinMark from '../../../components/CoinMark';
+import PocketCacheLogo from '../../../components/PocketCacheLogo';
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
@@ -33,12 +37,46 @@ const STEPS = [
 ];
 
 export default function Grow() {
-  const { npOrg } = useNp();
+  const { npOrg, setNpOrg } = useNp();
+  const { adminRole, setAdminRole, showToast } = useApp();
   const accent   = npOrg.color || '#0D9488';
   const joinCode = npOrg.joinCode || 'BGCA';
   const shareUrl = `https://pocketcache.app/demo/?org=${joinCode}`;
   const orgDisplayName = npOrg.name || joinCode;
-  const embedSnippet = `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgDisplayName}"></script>`;
+
+  // ── Join-code editing (custom orgs; established codes go through support) ──
+  const isCustomOrg = !!npOrg._orgId;
+  const [editingCode, setEditingCode] = useState(false);
+  const [codeDraft, setCodeDraft] = useState(joinCode);
+  const [codeError, setCodeError] = useState(null);
+
+  function handleCodeDraft(raw) {
+    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+    setCodeDraft(v);
+    if (!JOIN_CODE_RE.test(v)) setCodeError('Letters, numbers, dashes — 2 to 12 characters.');
+    else if (v !== joinCode && !isJoinCodeAvailable(v, npOrg._orgId)) setCodeError('That code is taken — try another.');
+    else setCodeError(null);
+  }
+
+  function saveCode() {
+    if (codeError || codeDraft === joinCode) { setEditingCode(false); setCodeDraft(joinCode); return; }
+    const record = getCustomOrg(npOrg._orgId);
+    if (record) saveCustomOrg({ ...record, shortName: codeDraft });
+    setNpOrg({ ...npOrg, joinCode: codeDraft });
+    if (adminRole?.orgId === npOrg._orgId) setAdminRole({ ...adminRole, joinCode: codeDraft });
+    setEditingCode(false);
+    showToast?.(`Join code updated to ${codeDraft}. Reprint any QR codes that used the old one.`);
+  }
+
+  // ── Widget customization (drives the snippet + live preview) ──
+  const [widgetColor, setWidgetColor] = useState(accent);
+  const [widgetWidth, setWidgetWidth] = useState(340);
+  const [widgetLabel, setWidgetLabel] = useState('Start giving →');
+  const embedSnippet = `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgDisplayName}"`
+    + (widgetColor.toLowerCase() !== '#003865' ? ` data-color="${widgetColor}"` : '')
+    + (widgetWidth !== 340 ? ` data-width="${widgetWidth}"` : '')
+    + (widgetLabel !== 'Start giving →' ? ` data-label="${widgetLabel}"` : '')
+    + `></script>`;
 
   return (
     <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-5">
@@ -54,11 +92,51 @@ export default function Grow() {
         <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>
           Your Donor Join Code
         </p>
-        <p className="text-5xl font-black tracking-wider mb-4" style={{ color: accent }}>{joinCode}</p>
-        <CopyButton text={joinCode} />
-        <p className="text-gray-500 text-xs mt-3">
-          Donors enter this code in the PocketCache app to join your program.
-        </p>
+        {editingCode ? (
+          <div className="space-y-2">
+            <input
+              value={codeDraft}
+              onChange={e => handleCodeDraft(e.target.value)}
+              className="w-full text-center text-3xl font-black tracking-wider bg-white rounded-2xl px-4 py-3 outline-none border-2 font-mono"
+              style={{ borderColor: codeError ? '#ef4444' : accent, color: accent }}
+            />
+            {codeError && <p className="text-red-500 text-xs">{codeError}</p>}
+            <p className="text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-left">
+              Heads up: changing your code changes your link, QR, and widget. Anything already
+              printed with the old code will stop working.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button onClick={saveCode} disabled={!!codeError}
+                className="px-4 py-2 rounded-xl text-white text-xs font-bold"
+                style={{ background: accent, opacity: codeError ? 0.4 : 1 }}>
+                Save new code
+              </button>
+              <button onClick={() => { setEditingCode(false); setCodeDraft(joinCode); setCodeError(null); }}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600">
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="text-5xl font-black tracking-wider mb-4" style={{ color: accent }}>{joinCode}</p>
+            <div className="flex items-center justify-center gap-2">
+              <CopyButton text={joinCode} />
+              {isCustomOrg ? (
+                <button
+                  onClick={() => { setCodeDraft(joinCode); setEditingCode(true); }}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700"
+                >
+                  ✏️ Change code
+                </button>
+              ) : null}
+            </div>
+            <p className="text-gray-500 text-xs mt-3">
+              Donors enter this code in the PocketCache app to join your program.
+              {!isCustomOrg && ' Established codes are changed through support@pocketcache.app (so printed QR codes don’t silently break).'}
+            </p>
+          </>
+        )}
       </motion.div>
 
       {/* QR code */}
@@ -97,31 +175,69 @@ export default function Grow() {
         </div>
         <p className="text-gray-400 text-xs mt-3">
           Drop this on your website to show a &quot;Round Up for us&quot; widget that links directly to your program.
-          Optional tweaks: <code className="text-gray-500">data-color</code> (button color),{' '}
-          <code className="text-gray-500">data-width</code> (240–600px), <code className="text-gray-500">data-label</code> (button text).
+          The snippet updates as you customize below — copy it whenever it looks right.
         </p>
+
+        {/* Customize */}
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Customize</p>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500 w-24 shrink-0">Button color</label>
+            <input type="color" value={widgetColor} onChange={e => setWidgetColor(e.target.value)}
+              className="h-8 w-14 rounded cursor-pointer border border-gray-200" />
+            <span className="text-xs text-gray-400 font-mono">{widgetColor}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500 w-24 shrink-0">Width · {widgetWidth}px</label>
+            <input type="range" min={240} max={600} step={10} value={widgetWidth}
+              onChange={e => setWidgetWidth(Number(e.target.value))} className="flex-1 accent-teal-600" />
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500 w-24 shrink-0">Button text</label>
+            <input type="text" value={widgetLabel} maxLength={40} onChange={e => setWidgetLabel(e.target.value)}
+              className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm outline-none border border-gray-200 focus:border-teal-400" />
+          </div>
+        </div>
 
         {/* Live preview — visually identical to what widget.js renders on the org's site */}
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Preview — what visitors see</p>
-        <div className="rounded-2xl p-4" style={{ background: '#f1f5f9' }}>
-          <div style={{ maxWidth: 340, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(11,42,74,0.08)' }}>
+        <div className="rounded-2xl p-4 overflow-x-auto" style={{ background: '#f1f5f9' }}>
+          <div style={{ maxWidth: widgetWidth, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(11,42,74,0.08)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-                <circle cx="16" cy="16" r="15" fill="#FBBF24" stroke="#E5A800" strokeWidth="1.5" />
-                <path d="M16 23 V11" stroke="#003865" strokeWidth="3.2" fill="none" strokeLinecap="round" />
-                <path d="M11 15.5 L16 10.5 L21 15.5" stroke="#003865" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <CoinMark size={30} />
               <strong style={{ fontSize: 14.5, color: '#0f172a' }}>Round up for {orgDisplayName}</strong>
             </div>
             <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#475569' }}>
               Spare change from your everyday purchases, sent to us automatically once a month. Takes a minute to set up.
             </p>
-            <div style={{ textAlign: 'center', padding: '11px 14px', borderRadius: 12, background: `linear-gradient(135deg, ${accent}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 14 }}>
-              Start giving →
+            <div style={{ textAlign: 'center', padding: '11px 14px', borderRadius: 12, background: `linear-gradient(135deg, ${widgetColor}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 14 }}>
+              {widgetLabel || 'Start giving →'}
             </div>
-            <p style={{ margin: '8px 0 0', fontSize: 10.5, color: '#94a3b8', textAlign: 'center' }}>Powered by PocketCache</p>
+            <p style={{ margin: '8px 0 0', fontSize: 10.5, color: '#94a3b8', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              Powered by <PocketCacheLogo size={11} />
+            </p>
           </div>
         </div>
+
+        {/* Widget performance */}
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Widget performance</p>
+        <div className="flex items-start gap-3">
+          <div className="bg-gray-50 rounded-2xl px-4 py-3 flex-1">
+            <p className="text-gray-400 text-xs font-medium">Website clicks · this month</p>
+            <p className="text-gray-900 font-bold text-xl mt-0.5">128
+              <span className="ml-2 align-middle inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Demo data</span>
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-2xl px-4 py-3 flex-1">
+            <p className="text-gray-400 text-xs font-medium">Donors from widget</p>
+            <p className="text-gray-900 font-bold text-xl mt-0.5">9
+              <span className="ml-2 align-middle inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Demo data</span>
+            </p>
+          </div>
+        </div>
+        <p className="text-gray-400 text-xs mt-2">
+          Every widget click is tagged, so you&apos;ll see real counts here from day one of launch.
+        </p>
       </motion.div>
 
       {/* How donors join */}

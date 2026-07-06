@@ -156,7 +156,17 @@ automatically once the backend ships. Widget supports data-color/data-width/data
 WIDGET TRACKING (Blake, 2026-07-06): widget clicks already carry ?src=widget on the
 giving URL — once GoatCounter is wired (task #6) clicks/conversions are attributable
 per source; per-org widget-click counts on the Grow tab come with the backend
-(impression ping + click beacon, aggregate-only, no donor tracking).
+(impression ping + click beacon, aggregate-only, no donor tracking). Grow tab shows
+the customization controls (color/width/label → live snippet) + a Demo-labeled
+performance tile that switches to real counts at launch. JOIN CODES (2026-07-06):
+settable at signup (validated + uniqueness), editable in Grow for custom orgs with a
+printed-QR warning; established orgs change codes via support. LAUNCH-KIT SENDER:
+demo/sample emails come from info@pocketcache.app (Workspace service account). The
+production transactional sender (default suggestion: hello@pocketcache.app) MUST be a
+god-mode setting — add "launch-kit sender address + reply-to" to the god-mode panel
+spec. AUTO-SEND STATUS: the trigger (fire kit email when signup completes / You're
+Live renders) is specified here but NOT executable from the static demo — it is wired
+server-side during the backend deploy. Do not represent it as live before then.
 
 **#8 Privacy/terms/license — LIVE + updated today; Nathan is the only remaining step.**
 

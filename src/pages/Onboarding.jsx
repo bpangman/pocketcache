@@ -14,7 +14,7 @@ import CoinMark from '../components/CoinMark';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
-import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode, resolveAdminOrgByEmail } from '../store/orgStore';
+import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode, resolveAdminOrgByEmail, isJoinCodeAvailable } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
@@ -1566,7 +1566,19 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   const [logoUrlError, setLogoUrlError] = useState(null);
   const fileInputRef = useRef(null);
 
-  const joinCode = generateJoinCode(orgName);
+  // Join code: auto-suggested from the org name, but the org can set their own
+  // (it becomes their link, QR, and widget identity). Editable later in Grow.
+  const [joinCodeCustom, setJoinCodeCustom] = useState('');
+  const [joinCodeError, setJoinCodeError] = useState(null);
+  const joinCode = joinCodeCustom || generateJoinCode(orgName);
+
+  function handleJoinCodeChange(raw) {
+    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+    setJoinCodeCustom(v);
+    if (v.length > 0 && v.length < 2) setJoinCodeError('At least 2 characters.');
+    else if (v && !isJoinCodeAvailable(v)) setJoinCodeError('That code is taken — try another.');
+    else setJoinCodeError(null);
+  }
 
   async function handleVerifyEIN(e) {
     e.preventDefault();
@@ -1608,6 +1620,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
 
   function handleBrandingNext(e) {
     e.preventDefault();
+    if (joinCodeError) return;
     setStep('license');
   }
 
@@ -1890,6 +1903,16 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400" />
             </div>
             <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Donor Join Code</label>
+              <input type="text" value={joinCode} onChange={e => handleJoinCodeChange(e.target.value)}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono uppercase tracking-widest"
+                style={{ borderColor: joinCodeError ? '#ef4444' : '#e5e7eb' }} />
+              {joinCodeError && <p className="text-red-500 text-xs mt-1 px-1">{joinCodeError}</p>}
+              <p className="text-gray-400 text-xs mt-1">
+                Letters, numbers, dashes (2–12). This becomes your link — pocketcache.app/{joinCode || 'CODE'} — plus your QR code and widget. You can change it later in your dashboard.
+              </p>
+            </div>
+            <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Admin Contact Email</label>
               <div className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm border border-gray-200 flex items-center gap-2">
                 <CheckCircle size={14} className="text-green-500 shrink-0" />
@@ -2056,7 +2079,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               href={(() => {
                 const site = `https://pocketcache.app/${joinCode}`;
                 const give = `https://pocketcache.app/${joinCode}/give`;
-                const subject = `${orgName} is live on PocketCache — launch kit`;
+                const subject = `${orgName} is LIVE on PocketCache!`;
                 const body = [
                   `${orgName} is live on PocketCache! 🎉`, '',
                   `Our page: ${site}`,
@@ -2149,6 +2172,7 @@ export default function Onboarding() {
       monthlyMinimum: config.monthlyMinimum,
       ein:            config.ein,
       orgAddress:     config.orgAddress,
+      joinCode:       config.joinCode,
     });
     saveCustomOrg(org);
 

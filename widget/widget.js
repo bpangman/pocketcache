@@ -44,15 +44,19 @@
     'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
     'line-height:1.45;color:#0f172a;');
 
+  // The official PocketCache coin — gold coin, teal block arrow, white halo
+  function coinSvg(px) {
+    return '<svg width="' + px + '" height="' + px + '" viewBox="0 0 100 100" aria-hidden="true" style="display:inline-block;vertical-align:-0.12em;">' +
+      '<circle cx="50" cy="50" r="50" fill="#E5A800"/>' +
+      '<circle cx="50" cy="50" r="44" fill="#FBBF24"/>' +
+      '<polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>' +
+      '</svg>';
+  }
+
   // Header row: coin mark + title
   var row = el('div', 'display:flex;align-items:center;gap:10px;margin-bottom:8px;');
   var coin = el('span', 'flex-shrink:0;display:inline-flex;');
-  coin.innerHTML =
-    '<svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">' +
-    '<circle cx="16" cy="16" r="15" fill="#FBBF24" stroke="#E5A800" stroke-width="1.5"/>' +
-    '<path d="M16 23 V11" stroke="#003865" stroke-width="3.2" fill="none" stroke-linecap="round"/>' +
-    '<path d="M11 15.5 L16 10.5 L21 15.5" stroke="#003865" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
-    '</svg>';
+  coin.innerHTML = coinSvg(30);
   var title = el('strong', 'font-size:14.5px;font-weight:700;display:block;');
   title.textContent = 'Round up for ' + name;
   row.appendChild(coin);
@@ -73,11 +77,22 @@
   btn.rel = 'noopener';
   card.appendChild(btn);
 
+  // Footer: "Powered by P◉cketCache" — the coin IS the o, per the brand
   var foot = el('p', 'margin:8px 0 0;font-size:10.5px;color:#94a3b8;text-align:center;');
-  var footLink = el('a', 'color:#94a3b8;text-decoration:none;', 'Powered by PocketCache');
+  var footLink = el('a', 'color:#94a3b8;text-decoration:none;');
   footLink.href = 'https://pocketcache.app';
   footLink.target = '_blank';
   footLink.rel = 'noopener';
+  footLink.appendChild(document.createTextNode('Powered by '));
+  var mark = el('span', 'font-weight:800;color:#0B2A4A;letter-spacing:-0.2px;white-space:nowrap;');
+  mark.appendChild(document.createTextNode('P'));
+  var footCoin = el('span', 'display:inline-flex;');
+  footCoin.innerHTML = coinSvg(10);
+  mark.appendChild(footCoin);
+  mark.appendChild(document.createTextNode('cket'));
+  var cache = el('span', 'color:#0D9488;', 'Cache');
+  mark.appendChild(cache);
+  footLink.appendChild(mark);
   foot.appendChild(footLink);
   card.appendChild(foot);
 
