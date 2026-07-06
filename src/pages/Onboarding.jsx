@@ -2050,33 +2050,35 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               </div>
               <p className="text-gray-400 text-xs mt-1">See a live preview anytime in your dashboard → Grow tab.</p>
             </div>
-            {/* Launch kit email — production sends this automatically at go-live */}
+            {/* Launch kit — auto-sent to the verified admin email at go-live;
+                this button forwards a copy to a colleague (recipient left blank) */}
             <a
               href={(() => {
                 const site = `https://pocketcache.app/${joinCode}`;
                 const give = `https://pocketcache.app/${joinCode}/give`;
-                const subject = `${orgName} is live on PocketCache — your launch kit`;
+                const subject = `${orgName} is live on PocketCache — launch kit`;
                 const body = [
-                  `Congratulations — ${orgName} is live on PocketCache! 🎉`, '',
-                  `Your page: ${site}`,
-                  `Your donor join code: ${joinCode}`,
+                  `${orgName} is live on PocketCache! 🎉`, '',
+                  `Our page: ${site}`,
+                  `Donor join code: ${joinCode}`,
                   `Direct giving link (donors sign up here): ${give}`, '',
-                  `Website widget — paste this where you want the "Round up for us" card to appear:`,
+                  `Website widget — paste this where the "Round up for us" card should appear:`,
                   `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`, '',
-                  `Your QR code (points to your giving link) is on your dashboard → Grow tab, ready for posters, newsletters, and event tables.`, '',
-                  `Admin sign-in: https://pocketcache.app/demo/?npsignin=1 — use this email address; we send you a fresh code each time. No password to remember.`, '',
-                  `— The PocketCache team`,
+                  `The QR code (points to the giving link) is on the dashboard → Grow tab, ready for posters, newsletters, and event tables.`, '',
+                  `Admin sign-in: https://pocketcache.app/demo/?npsignin=1 — works for the verified admin email; a fresh code is emailed each time. No password.`, '',
+                  `— Sent from ${orgName}'s PocketCache launch kit`,
                 ].join('\n');
-                return `mailto:${encodeURIComponent(adminEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
               })()}
               className="block w-full py-4 rounded-2xl font-bold text-base text-center"
               style={{ background: '#f0fdf4', border: '2px solid #86efac', color: '#065f46', textDecoration: 'none' }}
             >
-              📧 Email me my launch kit
+              📧 Send the launch kit to a colleague
             </a>
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-              Demo: this opens your mail app pre-filled. The live version emails the kit
-              (page link, code, QR, widget) to {adminEmail || 'your verified address'} automatically the moment you go live.
+              Your launch kit is emailed to {adminEmail || 'your verified admin address'} automatically
+              the moment you go live (demo: shown on this page instead). Use the button above to
+              forward it to a colleague — just add their address.
             </p>
             <motion.button
               whileTap={{ scale: 0.97 }}

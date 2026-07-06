@@ -152,7 +152,11 @@ is REAL as of 2026-07-06: `pocketcache.app/widget.js` (repo `widget/widget.js`, 
 to site root by deploy.yml) — self-contained, no tracking, links to /CODE/give; live
 preview in dashboard → Grow. No API keys for nonprofits by design — links, QR, and
 widget are copy-paste; their micro-site stats come from the public stats endpoint
-automatically once the backend ships.
+automatically once the backend ships. Widget supports data-color/data-width/data-label.
+WIDGET TRACKING (Blake, 2026-07-06): widget clicks already carry ?src=widget on the
+giving URL — once GoatCounter is wired (task #6) clicks/conversions are attributable
+per source; per-org widget-click counts on the Grow tab come with the backend
+(impression ping + click beacon, aggregate-only, no donor tracking).
 
 **#8 Privacy/terms/license — LIVE + updated today; Nathan is the only remaining step.**
 

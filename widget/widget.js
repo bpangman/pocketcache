@@ -7,10 +7,13 @@
  * Optional attributes:
  *   data-name="Boys & Girls Clubs of America"  — display name (defaults to the code)
  *   data-color="#003865"                       — button/brand color
+ *   data-width="340"                           — card max width in px (240–600)
+ *   data-label="Start giving →"                — button text
  *
  * Renders a small self-contained "Round up for us" card exactly where the
- * script tag is placed, linking to the org's giving page. No dependencies,
- * no tracking, no external requests.
+ * script tag is placed, linking to the org's giving page (tagged src=widget
+ * so the org's analytics can attribute clicks). No dependencies, no cookies,
+ * no external requests.
  */
 (function () {
   var s = document.currentScript;
@@ -20,7 +23,10 @@
   if (!org) return;
   var name = s.getAttribute('data-name') || org;
   var color = (s.getAttribute('data-color') || '#003865').replace(/[^#a-zA-Z0-9(),. %-]/g, '');
-  var giveUrl = 'https://pocketcache.app/' + encodeURIComponent(org) + '/give';
+  var width = Math.min(600, Math.max(240, parseInt(s.getAttribute('data-width'), 10) || 340));
+  var label = s.getAttribute('data-label') || 'Start giving →';
+  // src=widget lets the org's analytics attribute donors who came from the widget
+  var giveUrl = 'https://pocketcache.app/' + encodeURIComponent(org) + '/give?src=widget';
 
   // Everything is built with createElement/textContent — org-provided strings
   // are never parsed as HTML.
@@ -32,7 +38,7 @@
   }
 
   var card = el('div',
-    'display:block;box-sizing:border-box;max-width:340px;background:#ffffff;' +
+    'display:block;box-sizing:border-box;max-width:' + width + 'px;background:#ffffff;' +
     'border:1px solid #e5e7eb;border-radius:16px;padding:16px;' +
     'box-shadow:0 2px 8px rgba(11,42,74,0.08);' +
     'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
@@ -61,7 +67,7 @@
     'display:block;text-align:center;padding:11px 14px;border-radius:12px;' +
     'background:linear-gradient(135deg,' + color + ',#001a33);color:#ffffff;' +
     'font-weight:700;font-size:14px;text-decoration:none;');
-  btn.textContent = 'Start giving →';
+  btn.textContent = label;
   btn.href = giveUrl;
   btn.target = '_blank';
   btn.rel = 'noopener';

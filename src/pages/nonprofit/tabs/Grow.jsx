@@ -97,6 +97,8 @@ export default function Grow() {
         </div>
         <p className="text-gray-400 text-xs mt-3">
           Drop this on your website to show a &quot;Round Up for us&quot; widget that links directly to your program.
+          Optional tweaks: <code className="text-gray-500">data-color</code> (button color),{' '}
+          <code className="text-gray-500">data-width</code> (240–600px), <code className="text-gray-500">data-label</code> (button text).
         </p>
 
         {/* Live preview — visually identical to what widget.js renders on the org's site */}
