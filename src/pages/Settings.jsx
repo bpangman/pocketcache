@@ -949,8 +949,8 @@ export default function Settings() {
             icon={<span className="text-base">⏭️</span>}
             label="Skip a month"
             sub={skipNextCharge
-              ? "Skipping — your round-ups and the $1 fee roll into next month's charge ($1 × 2)"
-              : 'Need a breather? Your round-ups roll into next month instead (the $1 fee rolls too)'}
+              ? "Skipping — this month's round-ups are simply never charged; only the $1 fee rolls to next month ($1 × 2)"
+              : "Need a breather? That month's round-ups are simply never charged — only the $1 fee rolls over"}
             color={brand.secondary}
             right={<Toggle value={skipNextCharge} onChange={setSkipNextCharge} color={brand.primary} />}
           />

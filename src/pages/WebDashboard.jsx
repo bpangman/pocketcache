@@ -262,9 +262,9 @@ function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra,
       <SectionTitle>Next charge · {skipped ? 'skipped this month' : nextChargeLabel()}</SectionTitle>
       {skipped && (
         <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
-          You&apos;re skipping this month — your round-ups and the $1 fee roll into next
-          month&apos;s charge (which will show &ldquo;App fee — $1 × 2 months&rdquo;).
-          Un-skip anytime in Settings.
+          You&apos;re skipping this month — these round-ups are simply never charged.
+          Only the $1 app fee rolls into next month&apos;s charge (it will show
+          &ldquo;App fee — $1 × 2 months&rdquo;). Un-skip anytime in Settings.
         </p>
       )}
       <div style={{ marginTop: 8 }}>
@@ -412,7 +412,7 @@ export default function WebDashboard() {
                 label="Next charge"
                 value={skipNextCharge ? 'Skipped' : nextChargeLabel()}
                 sub={skipNextCharge
-                  ? 'Rolling over — round-ups and the $1 fee carry into next month ($1 × 2)'
+                  ? "Skipped — round-ups won't be charged; only the $1 fee rolls to next month ($1 × 2)"
                   : `≈ $${fmtMoney(pendingRoundUps + feeMonths)} incl. $1 fee · exact amount locks ${lockLabel()}`}
               />
             </div>
