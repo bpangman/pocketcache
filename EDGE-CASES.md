@@ -84,7 +84,13 @@ Legend for money invariants that can NEVER be violated:
   transaction is ever lost between "period" boundaries — the roundup's `included_in`
   linkage (not date math) decides which charge sweeps it. ✅ by design — verify.
 
-## C. The monthly charge (1st of the month) — the highest-stakes 60 seconds
+## C. The monthly charge — the highest-stakes 60 seconds
+
+> **Schedule updated 2026-07-06 (Blake):** the cycle LOCKS on the 1st (exact amount emailed
+> to the donor) and the charge RUNS on the 5th. Every case below that says "the 1st" means
+> lock-day behavior; the charge-execution cases apply on the 5th. Add cases: (a) donor
+> adjusts the locked charge during the 1st–4th window; (b) round-up posting AFTER lock rolls
+> to next month; (c) charge-day failure retries still respect the locked amount.
 
 - [ ] **C1. Below the minimum** ($4.63 accrued, $10 minimum). → NO charge; balance rolls
   over; app shows "building toward your $10 minimum," not "ready to send." Nonprofit is

@@ -27,7 +27,14 @@ function fmtMoney(n) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Billing schedule: the month's round-ups LOCK on the 1st (exact amount
+// emailed to the donor) and the charge runs on the 5th — review buffer.
 function nextChargeLabel() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return `${next.toLocaleString('en-US', { month: 'short' })} 5`;
+}
+function lockLabel() {
   const now = new Date();
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   return `${next.toLocaleString('en-US', { month: 'short' })} 1`;
@@ -259,7 +266,8 @@ function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra 
         <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }}>≈ ${fmtMoney(total)}</span></div>
       </div>
       <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }}>
-        Charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''}. Demo data — no real charge is made.
+        Round-ups accrue through the last day of the month; the exact amount is emailed to you
+        on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 5th. Demo data — no real charge is made.
       </p>
       <button
         onClick={onGiveExtra}
@@ -391,7 +399,7 @@ export default function WebDashboard() {
                 value={`$${fmtMoney(avgPerMonth)}`}
                 sub={momChange != null ? `${momChange >= 0 ? '▲' : '▼'} ${Math.abs(momChange)}% vs. prior month` : 'across completed months'}
               />
-              <Kpi label="Next charge" value={nextChargeLabel()} sub={`≈ $${fmtMoney(pendingRoundUps + feeMonths)} incl. $1 app fee`} />
+              <Kpi label="Next charge" value={nextChargeLabel()} sub={`≈ $${fmtMoney(pendingRoundUps + feeMonths)} incl. $1 fee · exact amount locks ${lockLabel()}`} />
             </div>
 
             {/* Main grid */}

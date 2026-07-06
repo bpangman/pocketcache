@@ -77,6 +77,13 @@ Each item notes where PocketCache stands today and what "done" looks like.
   provider (Resend/Postmark), server-side code generation with expiry + attempt limits +
   rate limiting, and org-domain cross-check against IRS/Stripe-KYC records. Donor sign-in
   remains Apple/Google/Facebook SSO, unchanged.
+- **Billing schedule (DECIDED by Blake 2026-07-06): lock on the 1st, charge on the 5th.**
+  Round-ups accrue through the last calendar day of the month. On the 1st the cycle CLOSES:
+  the exact amount is locked and emailed to the donor ("here's your charge"). The charge
+  itself runs on the 5th — a 4-day review window for donors (adjust-this-charge works
+  1st–4th) and a reconciliation buffer for us, instead of same-day tally-and-charge.
+  Demo copy updated app+web; backend charge job, Terms §7 language, and the reminder email
+  templates must implement/mirror this (flag for Nathan's review list).
 - **Account separation (hard requirement, per Blake 2026-07-05):** admin and donor are
   fully separate accounts. An admin session must expose ONLY the org's aggregate/donor-list
   data appropriate to the dashboard — never any individual's personal donor account, giving

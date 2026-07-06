@@ -1486,7 +1486,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward — we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Tracking starts the moment your card is linked. Your <strong>first charge hits on the 1st of next month</strong> — nothing before today ever counts.
+              Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the 5th</strong> — nothing before today ever counts.
             </p>
           </div>
           </div>
@@ -1573,7 +1573,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   const joinCode = joinCodeCustom || generateJoinCode(orgName);
 
   function handleJoinCodeChange(raw) {
-    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
     setJoinCodeCustom(v);
     if (v.length > 0 && v.length < 2) setJoinCodeError('At least 2 characters.');
     else if (v && !isJoinCodeAvailable(v)) setJoinCodeError('That code is taken — try another.');
@@ -1909,7 +1909,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 style={{ borderColor: joinCodeError ? '#ef4444' : '#e5e7eb' }} />
               {joinCodeError && <p className="text-red-500 text-xs mt-1 px-1">{joinCodeError}</p>}
               <p className="text-gray-400 text-xs mt-1">
-                Letters, numbers, dashes (2–12). This becomes your link — pocketcache.app/{joinCode || 'CODE'} — plus your QR code and widget. You can change it later in your dashboard.
+                Letters, numbers, dashes (2–8) — short enough to say out loud. This becomes your link — pocketcache.app/{joinCode || 'CODE'} — plus your QR code and widget. You can change it later in your dashboard.
               </p>
             </div>
             <div>

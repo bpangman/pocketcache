@@ -193,8 +193,11 @@ export default function Dashboard() {
   const shouldShowMilestone = latestAchieved && latestAchieved.amount > seenMilestoneAmount;
 
   const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
-  const nextMonthFirst = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
-  const nextChargeDateLabel = nextMonthFirst.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Billing schedule (Blake, 2026-07-06): the month's round-ups LOCK on the
+  // 1st (exact amount emailed) and the charge runs on the 5th — a review +
+  // reconciliation buffer, so donors are never surprised.
+  const nextMonthFifth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 5);
+  const nextChargeDateLabel = nextMonthFifth.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const belowMinimum = pendingRoundUps < monthlyMinimum;
 
   // Cap + per-charge adjustment logic

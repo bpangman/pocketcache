@@ -1106,7 +1106,7 @@ export default function Settings() {
           <SettingRow
             icon={<Bell size={18} />}
             label="Charge Reminder"
-            sub="Notify me before my monthly charge"
+            sub="Your exact amount on the 1st — charge runs the 5th"
             color={brand.primary}
             right={<Toggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} color={brand.primary} />}
           />

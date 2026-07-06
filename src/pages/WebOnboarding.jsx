@@ -423,7 +423,7 @@ export default function WebOnboarding({ entryOrg }) {
                     Once a month, {org?.name ?? 'your nonprofit'} bundles your round-ups into one charge — you&apos;ll see
                     &ldquo;{npShort}&rdquo; on your statement, not PocketCache, and they send your tax receipt. Months under
                     ${org?.monthlyMinimum ?? 5} roll forward (we settle up within 3 months). Tracking starts now; your{' '}
-                    <strong style={{ color: INK.secondary }}>first charge hits on the 1st of next month</strong> — nothing before today ever counts.
+                    round-ups total through the last day of the month, we email your <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the <strong style={{ color: INK.secondary }}>charge runs on the 5th</strong> — nothing before today ever counts.
                   </p>
 
                   <PrimaryButton onClick={handleConfirm}>Start Giving to {npShort}</PrimaryButton>

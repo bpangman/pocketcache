@@ -8,6 +8,7 @@ import { useApp } from '../../../store/AppContext';
 import { getCustomOrg, saveCustomOrg, isJoinCodeAvailable, JOIN_CODE_RE } from '../../../store/orgStore';
 import CoinMark from '../../../components/CoinMark';
 import PocketCacheLogo from '../../../components/PocketCacheLogo';
+import { AdminVerifyModal, SaveBar } from '../AdminVerify';
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
@@ -33,7 +34,7 @@ function CopyButton({ text }) {
 const STEPS = [
   { num: 1, title: 'Share your code or link',  body: "Donors enter your unique code or scan your QR in the PocketCache app to lock in as your supporter." },
   { num: 2, title: 'They link a card once',    body: "Donor connects a debit or credit card through Plaid. Setup takes under 60 seconds and only happens once." },
-  { num: 3, title: 'You collect every month',  body: "On the 1st of each month, PocketCache tallies round-ups and initiates payment directly to your Stripe account." },
+  { num: 3, title: 'You collect every month',  body: "On the 1st, PocketCache locks the month's round-ups and emails each donor their exact amount; on the 5th, payment initiates directly to your Stripe account." },
 ];
 
 export default function Grow() {
@@ -51,19 +52,30 @@ export default function Grow() {
   const [codeError, setCodeError] = useState(null);
 
   function handleCodeDraft(raw) {
-    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
     setCodeDraft(v);
-    if (!JOIN_CODE_RE.test(v)) setCodeError('Letters, numbers, dashes — 2 to 12 characters.');
+    if (!JOIN_CODE_RE.test(v)) setCodeError('Letters, numbers, dashes — 2 to 8 characters.');
     else if (v !== joinCode && !isJoinCodeAvailable(v, npOrg._orgId)) setCodeError('That code is taken — try another.');
     else setCodeError(null);
   }
 
-  function saveCode() {
-    if (codeError || codeDraft === joinCode) { setEditingCode(false); setCodeDraft(joinCode); return; }
+  // Saving a code change requires email verification (AdminVerifyModal) — and
+  // the modal repeats the printed-QR warning, so it's impossible to miss.
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const codeDirty = editingCode && codeDraft !== joinCode && !codeError && JOIN_CODE_RE.test(codeDraft);
+
+  function requestSaveCode() {
+    if (codeError) return;
+    if (codeDraft === joinCode) { setEditingCode(false); return; }
+    setVerifyingCode(true);
+  }
+
+  function commitCode() {
     const record = getCustomOrg(npOrg._orgId);
     if (record) saveCustomOrg({ ...record, shortName: codeDraft });
     setNpOrg({ ...npOrg, joinCode: codeDraft });
     if (adminRole?.orgId === npOrg._orgId) setAdminRole({ ...adminRole, joinCode: codeDraft });
+    setVerifyingCode(false);
     setEditingCode(false);
     showToast?.(`Join code updated to ${codeDraft}. Reprint any QR codes that used the old one.`);
   }
@@ -80,6 +92,14 @@ export default function Grow() {
 
   return (
     <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-5">
+      <SaveBar show={codeDirty && !verifyingCode} onSave={requestSaveCode} label="Unsaved join-code change" />
+      <AdminVerifyModal
+        show={verifyingCode}
+        adminEmail={npOrg.adminEmail || 'your admin email'}
+        warning={`Changing your code to ${codeDraft} changes your link, QR, and widget — anything printed with ${joinCode} stops working.`}
+        onConfirm={commitCode}
+        onCancel={() => setVerifyingCode(false)}
+      />
       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Grow your donor base</p>
 
       {/* Big join code block */}
@@ -106,7 +126,7 @@ export default function Grow() {
               printed with the old code will stop working.
             </p>
             <div className="flex gap-2 justify-center">
-              <button onClick={saveCode} disabled={!!codeError}
+              <button onClick={requestSaveCode} disabled={!!codeError}
                 className="px-4 py-2 rounded-xl text-white text-xs font-bold"
                 style={{ background: accent, opacity: codeError ? 0.4 : 1 }}>
                 Save new code

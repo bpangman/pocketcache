@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ExternalLink, CheckCircle } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
 import CoinMark from '../../../components/CoinMark';
+import { AdminVerifyModal, SaveBar } from '../AdminVerify';
 
 const PRESET_COLORS = [
   '#003865', '#0D9488', '#059669', '#2563EB', '#4F46E5',
@@ -43,15 +44,39 @@ export default function NpSettings() {
   const [logoUrlError, setLogoUrlError] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Unsaved-change detection → pinned SaveBar → email verification → commit.
+  const dirty =
+    name !== npOrg.name ||
+    color !== (npOrg.color || '#003865') ||
+    mission !== npOrg.mission ||
+    minAmt !== npOrg.monthlyMinimum ||
+    email !== npOrg.adminEmail ||
+    logoPreview !== (npOrg.logoPreview ?? null) ||
+    longDesc !== (npOrg.longDescription ?? '');
+  const [verifying, setVerifying] = useState(false);
+
   function handleSave(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
+    if (!dirty) return;
+    setVerifying(true);
+  }
+
+  function commitSave() {
     setNpOrg({ ...npOrg, name, color, mission, monthlyMinimum: minAmt, adminEmail: email, logoPreview, longDescription: longDesc });
+    setVerifying(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2200);
   }
 
   return (
     <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 pt-4 space-y-5">
+      <SaveBar show={dirty && !verifying} onSave={handleSave} />
+      <AdminVerifyModal
+        show={verifying}
+        adminEmail={npOrg.adminEmail || 'your admin email'}
+        onConfirm={commitSave}
+        onCancel={() => setVerifying(false)}
+      />
       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Settings</p>
 
       {/* Branding preview */}

@@ -69,8 +69,10 @@ export function generateJoinCode(name, existingOrgs = []) {
 
 // ── Org object builder ────────────────────────────────────────────────────────
 
-// Format rule shared by signup + settings editing + the 404 vanity forwarder.
-export const JOIN_CODE_RE = /^[A-Z0-9-]{2,12}$/;
+// Format rule shared by signup + settings editing + the 404 vanity forwarder
+// (which accepts up to 12, so old longer codes keep working). Kept SHORT so
+// codes are easy to say out loud and type: 2–8 characters.
+export const JOIN_CODE_RE = /^[A-Z0-9-]{2,8}$/;
 
 // Is this code free to use? (optionally excluding the org that already owns it)
 export function isJoinCodeAvailable(code, excludeOrgId = null) {
