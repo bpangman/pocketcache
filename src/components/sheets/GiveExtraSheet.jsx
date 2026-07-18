@@ -45,7 +45,7 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
 
   const displayAmount = valid
     ? (Number.isInteger(amount) ? amount : amount.toFixed(2))
-    : '—';
+    : '--';
 
   const orgShort = nonprofit?.shortName ?? 'the nonprofit';
 

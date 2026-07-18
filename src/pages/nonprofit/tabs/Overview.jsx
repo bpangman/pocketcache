@@ -49,9 +49,9 @@ export default function Overview() {
         className="rounded-2xl p-4 flex flex-col gap-1.5"
         style={{ background: '#f0fdf4', border: '1.5px solid #86efac' }}
       >
-        <p className="text-green-800 text-sm font-bold">Always free for you — donors cover everything</p>
+        <p className="text-green-800 text-sm font-bold">Always free for you  -  donors cover everything</p>
         <p className="text-green-700 text-xs leading-relaxed">
-          Donors cover the flat $1 app fee, and most also cover your card-processing costs (pre-selected at signup) — so PocketCache costs you $0, ever. We never take a percentage of donations.
+          Donors cover the flat $1 app fee, and most also cover your card-processing costs (pre-selected at signup)  -  so PocketCache costs you $0, ever. We never take a percentage of donations.
         </p>
       </motion.div>
 
@@ -97,7 +97,7 @@ export default function Overview() {
           <AlertCircle size={18} className="shrink-0 mt-0.5" style={{ color: '#ea580c' }} />
           <div>
             <p className="font-bold text-orange-800 text-sm">
-              {FAILED_COUNT} donor{FAILED_COUNT > 1 ? "s'" : "'s"} payment failed — retrying automatically
+              {FAILED_COUNT} donor{FAILED_COUNT > 1 ? "s'" : "'s"} payment failed  -  retrying automatically
             </p>
             <p className="text-orange-600 text-xs mt-0.5">
               Stripe will retry these charges. No action needed unless retries exhaust.
@@ -132,7 +132,7 @@ export default function Overview() {
         </div>
       </motion.div>
 
-      {/* Corporate match card — GM example */}
+      {/* Corporate match card  -  GM example */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
@@ -159,7 +159,7 @@ export default function Overview() {
           This is an example partnership. Have a corporate partner who&apos;d match donations? Add your own match campaign here.
         </p>
         <p className="text-amber-700 text-xs mt-2">
-          Match campaigns: sponsors pay PocketCache a flat tooling fee — never a percentage. Match dollars go straight from the sponsor to you.
+          Match campaigns: sponsors pay PocketCache a flat tooling fee  -  never a percentage. Match dollars go straight from the sponsor to you.
         </p>
       </motion.div>
     </div>

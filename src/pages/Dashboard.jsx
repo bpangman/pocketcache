@@ -94,7 +94,7 @@ function MatchBanner({ m, pct }) {
           </div>
         )}
         <p className="font-bold text-amber-900 text-sm flex-1">
-          {m.companyShort} is matching your round-ups this month — up to ${(m.maxAmount / 1000).toFixed(0)}K (${(m.matched / 1000).toFixed(1)}K matched so far)
+          {m.companyShort} is matching your round-ups this month  -  up to ${(m.maxAmount / 1000).toFixed(0)}K (${(m.matched / 1000).toFixed(1)}K matched so far)
         </p>
       </div>
       <div className="h-2 bg-amber-100 rounded-full overflow-hidden mb-1.5">
@@ -194,7 +194,7 @@ export default function Dashboard() {
 
   const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
   // Billing schedule (Blake, 2026-07-06): the month's round-ups LOCK on the
-  // 1st (exact amount emailed) and the charge runs on the 11th — 10 full
+  // 1st (exact amount emailed) and the charge runs on the 11th  -  10 full
   // days' review notice (classic Reg E timing) and a reconciliation +
   // reconciliation buffer, so donors are never surprised.
   const nextMonthEleventh = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 11);
@@ -315,7 +315,7 @@ export default function Dashboard() {
             <div className="mt-1">
               <span className="text-5xl font-bold">${fmtMoney(totalDonated)}</span>
             </div>
-            {/* Subtitle derived from MONTHLY_DATA range — never hardcoded */}
+            {/* Subtitle derived from MONTHLY_DATA range  -  never hardcoded */}
             <p className="text-white/60 text-sm mt-2">{sinceLabel} · All time</p>
             <div className="mt-2 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
               <Flame size={13} className="text-amber-300" />
@@ -354,7 +354,7 @@ export default function Dashboard() {
           return <MatchBanner m={match} pct={pct} />;
         })()}
 
-        {/* Stats row — all values computed from real data via derived.js */}
+        {/* Stats row  -  all values computed from real data via derived.js */}
         <div className="flex gap-3">
           {[
             {
@@ -396,7 +396,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Monthly Charge card — shows rollover state when pending is below the monthly minimum */}
+        {/* Monthly Charge card  -  shows rollover state when pending is below the monthly minimum */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -409,7 +409,7 @@ export default function Dashboard() {
                 Monthly Charge to {selectedNonprofit.shortName}
               </p>
               <p className="text-gray-400 text-xs mt-0.5">
-                Next charge: {skipNextCharge ? 'skipped — only the $1 fee rolls over ($1 × 2)' : nextChargeDateLabel}
+                Next charge: {skipNextCharge ? 'skipped  -  only the $1 fee rolls over ($1 × 2)' : nextChargeDateLabel}
               </p>
             </div>
             <div className="text-right">
@@ -430,7 +430,7 @@ export default function Dashboard() {
             <p className="text-gray-400 text-xs">Month start</p>
             {belowMinimum ? (
               <p className="text-xs font-semibold text-amber-600">
-                ${pendingRoundUps.toFixed(2)} so far — rolls over at month-end
+                ${pendingRoundUps.toFixed(2)} so far  -  rolls over at month-end
               </p>
             ) : (
               <p className="text-xs font-semibold" style={{ color: '#059669' }}>
@@ -441,13 +441,13 @@ export default function Dashboard() {
           </div>
           {belowMinimum && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
-              Not quite ${monthlyMinimum} yet — your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
-              {' '}&middot; $1/month fee rolls too — {feeMonths} month{feeMonths !== 1 ? 's' : ''} so far (${feeMonths}) — itemized on your charge.
+              Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
+              {' '}&middot; $1/month fee rolls too  -  {feeMonths} month{feeMonths !== 1 ? 's' : ''} so far (${feeMonths})  -  itemized on your charge.
             </p>
           )}
           {!belowMinimum && capActive && chargeAdjustment === null && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
-              Capped at ${monthlyCap.toFixed(2)} — the rest won&apos;t be charged.
+              Capped at ${monthlyCap.toFixed(2)}  -  the rest won&apos;t be charged.
             </p>
           )}
           {!belowMinimum && chargeAdjustment !== null && (
@@ -568,7 +568,7 @@ export default function Dashboard() {
 
       </div>
 
-      {/* Adjust charge sheet — key remounts on open so slider initializes fresh */}
+      {/* Adjust charge sheet  -  key remounts on open so slider initializes fresh */}
       <AdjustChargeSheet
         key={showAdjustCharge ? 'open' : 'closed'}
         show={showAdjustCharge}

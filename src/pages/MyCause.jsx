@@ -16,9 +16,9 @@ import { fmtMoneyCompact } from '../lib/format';
 // Impact tier copy uses "example equivalency" language to be honest about
 // the approximate nature of impact figures.
 function impactTier(total) {
-  if (total >= 100) return 'About $100 could support roughly a month of after-school programming for one Club member — an example equivalency provided by the nonprofit.';
-  if (total >= 60) return 'About $60 might cover approximately 2 weeks of after-school snacks for a Club member — example equivalency.';
-  if (total >= 25) return 'About $25 could fund art and sports supplies for a Club session — example equivalency.';
+  if (total >= 100) return 'About $100 could support roughly a month of after-school programming for one Club member  -  an example equivalency provided by the nonprofit.';
+  if (total >= 60) return 'About $60 might cover approximately 2 weeks of after-school snacks for a Club member  -  example equivalency.';
+  if (total >= 25) return 'About $25 could fund art and sports supplies for a Club session  -  example equivalency.';
   return 'Every dollar helps fund safe, staffed after-school spaces for young people in their community.';
 }
 
@@ -66,7 +66,7 @@ export default function MyCause() {
         nonprofit={np}
         brand={brand}
       />
-      {/* "Suggest a Match Sponsor" — reachable from the Get More Involved section */}
+      {/* "Suggest a Match Sponsor"  -  reachable from the Get More Involved section */}
       <CorporateMatchSheet
         show={showMatch}
         onClose={() => setShowMatch(false)}
@@ -146,7 +146,7 @@ export default function MyCause() {
           </div>
         </motion.div>
 
-        {/* Stats grid — only show fields the org actually has */}
+        {/* Stats grid  -  only show fields the org actually has */}
         {((orgStats?.raised ?? np.raised) != null || (orgStats?.donors ?? np.donors) != null || np.ein) && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -173,7 +173,7 @@ export default function MyCause() {
           </motion.div>
         )}
 
-        {/* Corporate match badge — "Example" tag shown when match.sample is true */}
+        {/* Corporate match badge  -  "Example" tag shown when match.sample is true */}
         {match?.active && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -183,7 +183,7 @@ export default function MyCause() {
             {match.sample && (
               <div className="mb-1.5 px-1">
                 <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  Example partnership — demo
+                  Example partnership  -  demo
                 </span>
               </div>
             )}

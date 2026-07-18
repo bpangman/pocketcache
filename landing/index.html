@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>PocketCache — Give your nonprofit its own round-up giving app</title>
-<meta name="description" content="PocketCache gives every nonprofit its own branded round-up giving experience — app, web, and widget. Flat pricing, never a percentage. Donations charge directly on your own Stripe account — you're the merchant of record, and PocketCache never touches the money."/>
+<title>PocketCache  -  Give your nonprofit its own round-up giving app</title>
+<meta name="description" content="PocketCache gives every nonprofit its own branded round-up giving experience  -  app, web, and widget. Flat pricing, never a percentage. Donations charge directly on your own Stripe account  -  you're the merchant of record, and PocketCache never touches the money."/>
 <link rel="icon" type="image/png" href="/logo.png"/>
 <link rel="apple-touch-icon" href="/logo.png"/>
-<meta property="og:title" content="PocketCache — Give your nonprofit its own round-up giving app"/>
-<meta property="og:description" content="Every nonprofit gets its own branded micro-donation experience — app, web, and widget. Flat pricing. No percentages. Donations land straight on your own Stripe account; PocketCache never touches the money."/>
+<meta property="og:title" content="PocketCache  -  Give your nonprofit its own round-up giving app"/>
+<meta property="og:description" content="Every nonprofit gets its own branded micro-donation experience  -  app, web, and widget. Flat pricing. No percentages. Donations land straight on your own Stripe account; PocketCache never touches the money."/>
 <meta property="og:image" content="/logo.png"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://pocketcache.app"/>
@@ -476,7 +476,7 @@
     </div>
     <div class="hero-visual">
       <div class="hero-logo-wrap">
-        <img src="/logo.png" alt="PocketCache — round-up giving for nonprofits"/>
+        <img src="/logo.png" alt="PocketCache  -  round-up giving for nonprofits"/>
         <div class="hero-stat-bubble top">
           <div class="bubble-num">5 min</div>
           Live from signup
@@ -721,8 +721,8 @@
   }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-  // Waitlist form — dual capture: Google Form (permanent) + Apps Script (stable).
-  // Google Form entry always works — no dependencies, no expiry.
+  // Waitlist form  -  dual capture: Google Form (permanent) + Apps Script (stable).
+  // Google Form entry always works  -  no dependencies, no expiry.
   // Apps Script URL never changes.
   const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSc_U6f7hC6KxBDFTfqXTHWrgb5cvvZHOM3gvzUlngC7yWtaag/formResponse';
   const GOOGLE_FORM_ENTRY = 'entry.943864096';
@@ -743,7 +743,7 @@
       headers: { 'Title': 'PocketCache Waitlist' }
     }).catch(() => {});
 
-    // Submit to Google Form (permanent record — no-cors since Google Forms doesn't support CORS)
+    // Submit to Google Form (permanent record  -  no-cors since Google Forms doesn't support CORS)
     fetch(GOOGLE_FORM_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -765,7 +765,7 @@
     list.push({ email, ts: new Date().toISOString() });
     localStorage.setItem('pc-waitlist', JSON.stringify(list));
 
-    // Show success regardless — never block UX on network
+    // Show success regardless  -  never block UX on network
     this.style.display = 'none';
     document.getElementById('waitlist-success').style.display = 'block';
     document.querySelector('.waitlist-note').style.display = 'none';

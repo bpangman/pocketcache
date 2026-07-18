@@ -71,7 +71,7 @@ function DonorSheet({ donor, onClose, accent }) {
             {[
               { label: 'Joined',        value: donor.joinedDate.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }) },
               { label: 'Lifetime Given', value: `$${donor.lifetime.toFixed(2)}` },
-              { label: 'MTD Accrued',   value: donor.mtd > 0 ? `$${donor.mtd.toFixed(2)}` : '—' },
+              { label: 'MTD Accrued',   value: donor.mtd > 0 ? `$${donor.mtd.toFixed(2)}` : ' - ' },
               { label: 'Card',          value: donor.cardOk ? 'OK' : 'Failed' },
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-50 rounded-2xl p-3">
@@ -89,7 +89,7 @@ function DonorSheet({ donor, onClose, accent }) {
                 <div key={m.label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                   <span className="text-sm text-gray-600">{m.label}</span>
                   <span className="font-semibold text-sm" style={{ color: m.amount > 0 ? '#059669' : '#9ca3af' }}>
-                    {m.amount > 0 ? `$${m.amount.toFixed(2)}` : '—'}
+                    {m.amount > 0 ? `$${m.amount.toFixed(2)}` : ' - '}
                   </span>
                 </div>
               ))}

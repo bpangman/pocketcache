@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 
-// ─── Charge review alert (the 1st–4th window) ────────────────────────────────
+// ─── Charge review alert (the 1st-4th window) ────────────────────────────────
 // The cycle locks on the 1st; the charge runs on the 11th (10 full days'
-// notice — the classic Reg E timing). During that window,
+// notice  -  the classic Reg E timing). During that window,
 // every fresh visit pops this alert with the exact amount and the one-time
-// "adjust this charge" control — donors always see it before money moves.
+// "adjust this charge" control  -  donors always see it before money moves.
 // Production also sends the same thing by email/push on the 1st.
 // Demo: add ?review=1 to the URL to preview the alert on any calendar day.
 
@@ -30,7 +30,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(ACK_KEY) === monthKey(); } catch { return false; }
   });
-  // ?review=1 preview flag — captured ONCE at mount (the pretty-URL rewrite
+  // ?review=1 preview flag  -  captured ONCE at mount (the pretty-URL rewrite
   // strips query params later; the alert must not vanish mid-interaction).
   // ?review=force re-shows it even after "Looks good" (demo convenience).
   const [preview] = useState(() => {
@@ -70,7 +70,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
           Your {monthName} charge is ready to review
         </p>
         <p style={{ margin: 0, fontSize: 12.5, color: '#64748b' }}>
-          Locked on the 1st · charges {chargeDay} — 10 full days to review or adjust
+          Locked on the 1st · charges {chargeDay}  -  10 full days to review or adjust
         </p>
       </div>
 
@@ -84,7 +84,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
           </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#64748b' }}>
-          <span>App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span>
+          <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span>
           <span>+${feeMonths.toFixed(2)}</span>
         </div>
         <div style={{ height: 1, background: '#cbd5e1', margin: '6px 0' }} />
@@ -106,7 +106,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
             style={{ width: '100%', accentColor: '#0D9488' }}
           />
           <p style={{ margin: '4px 0 10px', fontSize: 11.5, color: '#94a3b8', textAlign: 'center' }}>
-            One-time change for this month only — the $1 app fee still applies.
+            One-time change for this month only  -  the $1 app fee still applies.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             <button onClick={confirmAdjust}
@@ -123,7 +123,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
         <div style={{ display: 'grid', gap: 8 }}>
           <button onClick={dismiss}
             style={{ padding: '12px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #003865, #001a33)', color: '#fff', fontWeight: 700, fontSize: 14 }}>
-            Looks good — charge ${total} on {chargeDay}
+            Looks good  -  charge ${total} on {chargeDay}
           </button>
           <button onClick={() => { setValue(chargeAdjustment ?? roundUps); setAdjusting(true); }}
             style={{ padding: '10px 16px', borderRadius: 12, border: '1px solid #cbd5e1', cursor: 'pointer', background: '#fff', color: '#003865', fontWeight: 700, fontSize: 13 }}>

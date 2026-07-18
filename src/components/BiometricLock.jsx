@@ -57,7 +57,7 @@ function LockBody({ gate, name, dark }) {
       </button>
       {gate.error && (
         <p style={{ margin: '12px 0 0', fontSize: 12.5, color: dark ? '#fecaca' : '#dc2626' }}>
-          Couldn&apos;t verify — try again or sign in below.
+          Couldn&apos;t verify  -  try again or sign in below.
         </p>
       )}
       <button
@@ -137,10 +137,10 @@ export function BiometricOfferCard({ offer, surface = 'web' }) {
       <div style={{ fontSize: 38, marginBottom: 6 }}>🙂</div>
       <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: '#0f172a' }}>Unlock with Face ID?</p>
       <p style={{ margin: '6px 0 16px', fontSize: 13, lineHeight: 1.6, color: '#475569' }}>
-        Skip the sign-in next time — open your giving with a glance (or a touch).
+        Skip the sign-in next time  -  open your giving with a glance (or a touch).
         You can turn this off anytime in Settings → Privacy &amp; Security.
       </p>
-      {failed && <p style={{ margin: '0 0 10px', fontSize: 12, color: '#dc2626' }}>That didn&apos;t go through — you can try again from Settings anytime.</p>}
+      {failed && <p style={{ margin: '0 0 10px', fontSize: 12, color: '#dc2626' }}>That didn&apos;t go through  -  you can try again from Settings anytime.</p>}
       <div style={{ display: 'grid', gap: 8 }}>
         <button
           onClick={async () => { setBusy(true); const ok = await offer.enable(); setBusy(false); if (!ok) { setFailed(true); offer.later(); } }}

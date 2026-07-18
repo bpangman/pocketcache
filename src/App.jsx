@@ -43,7 +43,7 @@ function CancelledOverlay({ onReactivate, onBack }) {
         <div className="text-4xl mb-3">🔒</div>
         <p className="font-bold text-gray-900 text-lg mb-2">Your account is closed</p>
         <p className="text-gray-500 text-sm mb-5 leading-relaxed">
-          Your donation history and settings are still here — just reactivate to pick up where you left off.
+          Your donation history and settings are still here  -  just reactivate to pick up where you left off.
         </p>
         <motion.button
           whileTap={{ scale: 0.97 }}
@@ -70,7 +70,7 @@ function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, 
 
   function handleRelink() {
     setRelinking(true);
-    // production: Plaid item was removed at cancellation — mandatory re-link via Plaid Link
+    // production: Plaid item was removed at cancellation  -  mandatory re-link via Plaid Link
     setTimeout(() => { setRelinking(false); setRelinked(true); }, 1200);
   }
 
@@ -102,7 +102,7 @@ function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, 
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm truncate">{trackedCard?.name ?? 'Chase Sapphire'}</p>
               <p className="text-gray-400 text-xs">•••• {trackedCard?.last4 ?? '4242'}</p>
-              <p className="text-xs text-amber-600 mt-0.5 leading-tight">We disconnected this when you left — give it a quick re-link</p>
+              <p className="text-xs text-amber-600 mt-0.5 leading-tight">We disconnected this when you left  -  give it a quick re-link</p>
             </div>
             {relinked ? (
               <span className="text-xs font-semibold text-teal-600 shrink-0">Connected ✓</span>
@@ -181,7 +181,7 @@ function AppContent() {
   }
 
   function handleRestartRoundups() {
-    reactivateAccount('Welcome back — tracking restarted today. Your first new charge comes on the 11th.');
+    reactivateAccount('Welcome back  -  tracking restarted today. Your first new charge comes on the 11th.');
     setShowReactivateCheckin(false);
   }
 
@@ -194,7 +194,7 @@ function AppContent() {
   }
 
   if (page === 'onboarding') return <Onboarding />;
-  // Face ID / Touch ID gate — everything past sign-in is behind it once enrolled
+  // Face ID / Touch ID gate  -  everything past sign-in is behind it once enrolled
   if (bioGate.locked) return <AppLockScreen gate={bioGate} />;
   if (page === 'np-dashboard') return <NpShell />;
   return (
@@ -268,7 +268,7 @@ function PhoneFrame({ children, compact = false }) {
       className={`flex items-center justify-center relative overflow-hidden ${compact ? 'p-4' : 'p-8'}`}
       style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 50%, #0B2A4A 100%)', minHeight: '100dvh' }}
     >
-      {/* Ambient glow — follows brand color */}
+      {/* Ambient glow  -  follows brand color */}
       <motion.div
         animate={{ background: `radial-gradient(circle, ${brand.primary}55 0%, transparent 70%)` }}
         transition={{ duration: 0.8 }}
@@ -280,7 +280,7 @@ function PhoneFrame({ children, compact = false }) {
       />
 
       <div className="flex flex-col items-center gap-6 relative z-10">
-        {/* Brand wordmark outside phone — animates when cause changes */}
+        {/* Brand wordmark outside phone  -  animates when cause changes */}
         <motion.div
           key={brand.appName}
           initial={{ opacity: 0, y: -8 }}
@@ -318,7 +318,7 @@ function PhoneFrame({ children, compact = false }) {
           </div>
         </motion.div>
 
-        {/* Device chip picker — between wordmark and frame (desktop only) */}
+        {/* Device chip picker  -  between wordmark and frame (desktop only) */}
         {!compact && <DevicePicker selected={deviceId} onChange={handleDeviceChange} />}
 
         {/* Sizer: layout box tracks the SCALED visual size so the flex column never
@@ -328,7 +328,7 @@ function PhoneFrame({ children, compact = false }) {
           transition={{ duration: 0.35, ease: 'easeInOut' }}
           style={{ position: 'relative', flexShrink: 0 }}
         >
-          {/* Phone frame — animates dimensions when device changes */}
+          {/* Phone frame  -  animates dimensions when device changes */}
           <motion.div
             animate={{ width: device.width, height: device.height, scale: outerScale }}
             transition={{ duration: 0.35, ease: 'easeInOut' }}
@@ -380,10 +380,10 @@ function useIsMobile() {
   return mobile;
 }
 
-// WebPortal — webpage shell for the step-by-step flows (account creation,
+// WebPortal  -  webpage shell for the step-by-step flows (account creation,
 // reactivation, admin) reached from an org micro-site on desktop. Same top-nav
-// webpage chrome as WebDashboard, with the flow presented as a centered panel —
-// the way a web checkout looks — so nothing on desktop ever reads as "an app".
+// webpage chrome as WebDashboard, with the flow presented as a centered panel  - 
+// the way a web checkout looks  -  so nothing on desktop ever reads as "an app".
 function WebPortal({ children }) {
   const { w, h } = useWindowSize();
   const { selectedNonprofit } = useApp();
@@ -393,7 +393,7 @@ function WebPortal({ children }) {
   const colH = Math.max(480, Math.min(860, h - 170));
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
-      {/* Top nav — same chrome as the signed-in dashboard */}
+      {/* Top nav  -  same chrome as the signed-in dashboard */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -416,7 +416,7 @@ function WebPortal({ children }) {
         </div>
       </header>
 
-      {/* Flow panel — centered like a web checkout */}
+      {/* Flow panel  -  centered like a web checkout */}
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <div
           style={{
@@ -450,11 +450,11 @@ function WebPortal({ children }) {
 
 function ThemedApp() {
   const isMobile = useIsMobile();
-  // Donors arriving through an org's join link (?org=CODE) — or admins signing
-  // in from their micro-site (?npsignin=1) — get the real app experience:
+  // Donors arriving through an org's join link (?org=CODE)  -  or admins signing
+  // in from their micro-site (?npsignin=1)  -  get the real app experience:
   // full-bleed on phones, the WebPortal column in a desktop browser. ?app=1
   // forces it too. Everyone else gets the phone-mockup demo shell. Captured
-  // ONCE — the pretty-URL rewrite below strips the params, and re-renders
+  // ONCE  -  the pretty-URL rewrite below strips the params, and re-renders
   // must not flip the shell.
   const [appEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -500,13 +500,13 @@ function ThemedApp() {
 
 // Desktop browser entry from a micro-site: a signed-in donor gets the real
 // web-native dashboard (WebDashboard); a new donor gets the web-native signup
-// wizard (WebOnboarding — org implied, no gate/QR/code); everything else
+// wizard (WebOnboarding  -  org implied, no gate/QR/code); everything else
 // (admin dashboard, admin sign-in, cancelled-account reactivation, unknown
 // org) runs in the centered WebPortal column.
 function WebExperience() {
   const { page, accountStatus, selectedNonprofit } = useApp();
   const bioGate = useBiometricGate();
-  // Capture the entry context ONCE — the pretty-URL rewrite strips the params.
+  // Capture the entry context ONCE  -  the pretty-URL rewrite strips the params.
   const [entry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return {
@@ -519,12 +519,12 @@ function WebExperience() {
     accountStatus !== 'cancelled' && selectedNonprofit;
   if (signedInDonor && bioGate.locked) return <WebLockScreen gate={bioGate} />;
   if (signedInDonor) return <WebDashboard />;
-  // Donor signup wizard — including an admin crossing over via "Start giving"
+  // Donor signup wizard  -  including an admin crossing over via "Start giving"
   // (selectedNonprofit gets bound before the jump, so this wins over npsignin).
   if (page === 'onboarding' && accountStatus !== 'cancelled' && (selectedNonprofit || (entry.org && !entry.npsignin))) {
     return <WebOnboarding entryOrg={entry.org} />;
   }
-  // Micro-site "Nonprofit admin? Sign in" — webpage version of the
+  // Micro-site "Nonprofit admin? Sign in"  -  webpage version of the
   // passwordless work-email protocol (never the app-style column).
   if (page === 'onboarding' && entry.npsignin) {
     return <WebAdminSignIn />;

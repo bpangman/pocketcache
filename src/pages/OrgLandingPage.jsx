@@ -5,7 +5,7 @@ import { getOrgStats } from '../lib/orgStats';
 import CoinMark from '../components/CoinMark';
 import OrgLogo from '../components/OrgLogo';
 
-// OrgLandingPage — public micro-site for a nonprofit's vanity URL.
+// OrgLandingPage  -  public micro-site for a nonprofit's vanity URL.
 // Rendered full-viewport (not inside the phone shell) when ?orgpage=CODE is in the URL.
 // This is a normal web page with a simple responsive max-width column layout.
 
@@ -75,7 +75,7 @@ export default function OrgLandingPage({ code }) {
 
   const canShare = typeof navigator !== 'undefined' && !!navigator.share;
 
-  // Inline styles only (no Tailwind — this page lives outside the phone shell and
+  // Inline styles only (no Tailwind  -  this page lives outside the phone shell and
   // should be self-contained and responsive without fighting phone-frame CSS).
   const card = {
     background: '#fff', borderRadius: 20, padding: '1.5rem',
@@ -126,7 +126,7 @@ export default function OrgLandingPage({ code }) {
           ].map(({ label, value, showPill }) => (
             <div key={label} style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '1.4rem', fontWeight: 800, color: value ? brandColor : '#9ca3af' }}>
-                {value ?? '—'}
+                {value ?? '--'}
                 {showPill && value && <DemoPill />}
               </div>
               <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, marginTop: 2 }}>{label}</div>
@@ -138,11 +138,11 @@ export default function OrgLandingPage({ code }) {
       {/* Body */}
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
 
-        {/* Start giving — the app runs right here on the web */}
+        {/* Start giving  -  the app runs right here on the web */}
         <div style={card}>
           <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827', margin: '0 0 0.4rem' }}>Start giving in under a minute</h2>
           <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '1rem', lineHeight: 1.55 }}>
-            Round up your everyday purchases — spare change goes straight to {org.name}.
+            Round up your everyday purchases  -  spare change goes straight to {org.name}.
             Nothing to download: sign in, link a card, and you&apos;re giving, right from your browser.
           </p>
           <a
@@ -195,7 +195,7 @@ export default function OrgLandingPage({ code }) {
       <div style={{ background: '#f3f4f6', borderTop: '1px solid #e5e7eb', padding: '1.5rem', textAlign: 'center' }}>
         <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: '#6b7280', fontSize: 13 }}>
           <CoinMark size={16} />
-          Powered by PocketCache — round-up giving software
+          Powered by PocketCache  -  round-up giving software
         </a>
       </div>
     </div>

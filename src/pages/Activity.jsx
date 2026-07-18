@@ -36,7 +36,7 @@ export default function Activity() {
   // Raw sum of round-ups before any multiplier
   const rawRoundUps = parseFloat(TRANSACTIONS.reduce((s, t) => s + t.roundUp, 0).toFixed(2));
 
-  // Current month label derived from MONTHLY_DATA — never hardcoded
+  // Current month label derived from MONTHLY_DATA  -  never hardcoded
   const currentEntry = MONTHLY_DATA[MONTHLY_DATA.length - 1];
   const currentMonthLabel = `${currentEntry.month} ${currentEntry.year}`;
 
@@ -63,7 +63,7 @@ export default function Activity() {
       </motion.div>
 
       <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
-        {/* Monthly Charges info banner — dynamic nonprofit name + tax receipt line */}
+        {/* Monthly Charges info banner  -  dynamic nonprofit name + tax receipt line */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -72,9 +72,9 @@ export default function Activity() {
         >
           <p className="font-bold text-sm mb-1">Monthly Charges</p>
           <p className="text-white/80 text-xs leading-relaxed">
-            Once a month, your round-ups roll up into one charge on {selectedNonprofit.shortName}&apos;s Stripe — plus a flat $1 app fee (always included).
+            Once a month, your round-ups roll up into one charge on {selectedNonprofit.shortName}&apos;s Stripe  -  plus a flat $1 app fee (always included).
             Your toggle controls whether you also cover {selectedNonprofit.shortName}&apos;s card-processing costs; most donors keep it on. Months under ${selectedNonprofit.monthlyMinimum ?? 5} carry forward; we settle every 3 months at most.{' '}
-            {selectedNonprofit.shortName} sends your tax receipt — your round-ups are deductible, the app fee is not.
+            {selectedNonprofit.shortName} sends your tax receipt  -  your round-ups are deductible, the app fee is not.
           </p>
         </motion.div>
 
@@ -120,7 +120,7 @@ export default function Activity() {
           </div>
         </div>
 
-        {/* Month summary pill — current month name from data, not hardcoded.
+        {/* Month summary pill  -  current month name from data, not hardcoded.
             When multiplier > 1 both the raw and boosted amounts are shown clearly. */}
         <div className="rounded-2xl px-4 py-3 flex items-center justify-between"
           style={{ background: brand.accentLight }}>

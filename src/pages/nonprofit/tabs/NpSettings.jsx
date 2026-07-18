@@ -156,7 +156,7 @@ export default function NpSettings() {
 
         <div>
           <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">
-            Monthly Minimum — ${minAmt}
+            Monthly Minimum  -  ${minAmt}
           </label>
           <input
             type="range" min={5} max={50} step={5}
@@ -204,7 +204,7 @@ export default function NpSettings() {
               if (!url) return;
               const img = new Image();
               img.onload = () => { setLogoPreview(url); setLogoUrlError(null); };
-              img.onerror = () => { setLogoUrlError("We couldn't load that image — check the link or upload a file instead"); };
+              img.onerror = () => { setLogoUrlError("We couldn't load that image  -  check the link or upload a file instead"); };
               img.src = url;
             }}
             className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400" />
@@ -217,14 +217,14 @@ export default function NpSettings() {
             Your Landing Page
           </label>
           <p className="text-gray-400 text-xs mb-2">
-            This appears on your public page at pocketcache.app/{npOrg.joinCode?.toLowerCase() ?? 'your-code'} — room for the full story, way beyond the app&apos;s short mission.
+            This appears on your public page at pocketcache.app/{npOrg.joinCode?.toLowerCase() ?? 'your-code'}  -  room for the full story, way beyond the app&apos;s short mission.
           </p>
           <textarea
             value={longDesc}
             onChange={e => setLongDesc(e.target.value.slice(0, 5000))}
             rows={6}
             maxLength={5000}
-            placeholder="Tell your full story here — your history, impact, programs, why you exist…"
+            placeholder="Tell your full story here  -  your history, impact, programs, why you exist…"
             className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 resize-none"
           />
           <p className="text-gray-400 text-xs text-right mt-0.5">{longDesc.length}/5,000</p>

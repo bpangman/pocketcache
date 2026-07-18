@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 // ─── Admin change verification ───────────────────────────────────────────────
 // Any persistent change on the Grow / Settings admin pages must be confirmed
-// with a one-time code sent to the org's admin email — the same passwordless
+// with a one-time code sent to the org's admin email  -  the same passwordless
 // protocol as sign-in, so a walk-by on an unlocked screen can't quietly
 // rewire the org. Demo: the code auto-fills (labeled); production emails it.
 
@@ -26,7 +26,7 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
 
   function confirm(e) {
     e?.preventDefault?.();
-    if (codeInput.trim() !== code) { setError("That code doesn't match — check the email and try again."); return; }
+    if (codeInput.trim() !== code) { setError("That code doesn't match  -  check the email and try again."); return; }
     onConfirm();
   }
 
@@ -38,7 +38,7 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
       <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl">
         <p className="font-bold text-gray-900 text-base mb-1">Confirm your changes</p>
         <p className="text-gray-500 text-sm mb-3">
-          We sent a 6-digit code to <strong className="text-gray-900">{adminEmail}</strong> —
+          We sent a 6-digit code to <strong className="text-gray-900">{adminEmail}</strong>  - 
           enter it to lock in these changes.
         </p>
         {warning && (
@@ -47,7 +47,7 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
           </div>
         )}
         <div className="rounded-xl px-3 py-2 bg-amber-50 border border-amber-200 mb-3">
-          <p className="text-xs text-amber-700">Demo: we filled the code in for you — the live version emails it.</p>
+          <p className="text-xs text-amber-700">Demo: we filled the code in for you  -  the live version emails it.</p>
         </div>
         <form onSubmit={confirm} className="space-y-3">
           <input
@@ -74,7 +74,7 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
   );
 }
 
-// Floating "Save changes" bar — pinned at the top of the scroll area, hovers
+// Floating "Save changes" bar  -  pinned at the top of the scroll area, hovers
 // over the page, and stays pinned while scrolling until changes are saved.
 export function SaveBar({ show, onSave, label = 'You have unsaved changes' }) {
   if (!show) return null;

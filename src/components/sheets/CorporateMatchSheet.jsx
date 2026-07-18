@@ -1,4 +1,4 @@
-// "Suggest a Match Sponsor" sheet — reachable from MyCause.
+// "Suggest a Match Sponsor" sheet  -  reachable from MyCause.
 // Closure bug fix: company name is captured at submit time in a separate state
 // variable (submittedCompany) so the success message can't show a stale value.
 import { useState } from 'react';
@@ -19,7 +19,7 @@ export default function CorporateMatchSheet({ show, onClose, nonprofit, brand })
 
   function handleSubmit(e) {
     e.preventDefault();
-    // Capture company at submit time — avoids stale-closure bug in the timeout
+    // Capture company at submit time  -  avoids stale-closure bug in the timeout
     const captured = company;
     setTimeout(() => {
       setSubmittedCompany(captured);
@@ -44,7 +44,7 @@ export default function CorporateMatchSheet({ show, onClose, nonprofit, brand })
         ) : (
           <>
             <p className="text-gray-500 text-sm mb-5">
-              Know a company that should be matching round-ups for {orgName}? Let us know —{' '}
+              Know a company that should be matching round-ups for {orgName}? Let us know  - {' '}
               {orgName}&apos;s corporate partnerships team will reach out to them.
             </p>
             <form onSubmit={handleSubmit} className="space-y-3">

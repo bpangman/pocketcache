@@ -11,7 +11,7 @@ import ChargeReviewAlert from '../components/ChargeReviewAlert';
 
 // ─── The browser-native donor portal ─────────────────────────────────────────
 // This is PocketCache as if it had been built as a web product: top nav, wide
-// dashboard, real tables. Same data store and account as the mobile app — a
+// dashboard, real tables. Same data store and account as the mobile app  -  a
 // different portal onto the same giving.
 
 const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
@@ -29,7 +29,7 @@ function fmtMoney(n) {
 }
 
 // Billing schedule: the month's round-ups LOCK on the 1st (exact amount
-// emailed to the donor) and the charge runs on the 11th — 10 full days'
+// emailed to the donor) and the charge runs on the 11th  -  10 full days'
 // review notice (classic Reg E timing; Nathan asked whether range-based
 // consent lets us move back to the 5th).
 function nextChargeLabel() {
@@ -264,20 +264,20 @@ function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra,
       <SectionTitle>Next charge · {skipped ? 'skipped this month' : nextChargeLabel()}</SectionTitle>
       {skipped && (
         <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
-          You&apos;re skipping this month — these round-ups are simply never charged.
+          You&apos;re skipping this month  -  these round-ups are simply never charged.
           Only the $1 app fee rolls into next month&apos;s charge (it will show
-          &ldquo;App fee — $1 × 2 months&rdquo;). Un-skip anytime in Settings.
+          &ldquo;App fee  -  $1 × 2 months&rdquo;). Un-skip anytime in Settings.
         </p>
       )}
       <div style={{ marginTop: 8 }}>
         <div style={row}><span style={{ color: INK.secondary }}>Round-ups so far</span><span style={{ color: INK.primary, fontWeight: 600 }}>${fmtMoney(pending)}</span></div>
-        <div style={row}><span style={{ color: INK.secondary }}>App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span style={{ color: INK.secondary }}>+${fmtMoney(fee)}</span></div>
+        <div style={row}><span style={{ color: INK.secondary }}>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span style={{ color: INK.secondary }}>+${fmtMoney(fee)}</span></div>
         <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
         <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }}>≈ ${fmtMoney(total)}</span></div>
       </div>
       <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }}>
         Round-ups accrue through the last day of the month; the exact amount is emailed to you
-        on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 11th. Demo data — no real charge is made.
+        on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 11th. Demo data  -  no real charge is made.
       </p>
       <button
         onClick={onGiveExtra}
@@ -414,7 +414,7 @@ export default function WebDashboard() {
                 label="Next charge"
                 value={skipNextCharge ? 'Skipped' : nextChargeLabel()}
                 sub={skipNextCharge
-                  ? "Skipped — round-ups won't be charged; only the $1 fee rolls to next month ($1 × 2)"
+                  ? "Skipped  -  round-ups won't be charged; only the $1 fee rolls to next month ($1 × 2)"
                   : `≈ $${fmtMoney(pendingRoundUps + feeMonths)} incl. $1 fee · exact amount locks ${lockLabel()}`}
               />
             </div>

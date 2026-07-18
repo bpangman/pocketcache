@@ -12,10 +12,10 @@ import MatchBadge from '../components/MatchBadge';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 
 // ─── Web-native My Cause / Share / Settings + shared modals ──────────────────
-// True webpage versions of the app's tabs — same store, same account, web
+// True webpage versions of the app's tabs  -  same store, same account, web
 // presentation. Anything the app can do, these can do (see PRELAUNCH parity
 // rule). App-only items (Face ID, app icon, text size) are intentionally
-// absent — they are device features, noted in the parity audit.
+// absent  -  they are device features, noted in the parity audit.
 
 const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
 const NAVY = '#003865';
@@ -126,7 +126,7 @@ function ActionButton({ children, onClick, disabled, tone = 'primary' }) {
   );
 }
 
-// ─── Admin sign-in (web page) — passwordless work-email code ────────────────
+// ─── Admin sign-in (web page)  -  passwordless work-email code ────────────────
 // The webpage version of the new admin login protocol: username = the
 // org-domain email verified at signup; a one-time code per sign-in, never a
 // password. Demo: any email works and the code auto-fills (labeled).
@@ -153,7 +153,7 @@ export function WebAdminSignIn() {
 
   function verify(e) {
     e?.preventDefault?.();
-    if (codeInput.trim() !== code) { setCodeError("That code doesn't match — check the email and try again."); return; }
+    if (codeInput.trim() !== code) { setCodeError("That code doesn't match  -  check the email and try again."); return; }
     const custom = resolveAdminOrgByEmail(email);
     if (custom) setAdminRole({ orgId: custom.id, joinCode: custom.shortName });
     else if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
@@ -178,7 +178,7 @@ export function WebAdminSignIn() {
         <div style={{ width: 440, maxWidth: '100%', ...CARD, borderRadius: 20, boxShadow: '0 16px 48px rgba(11,42,74,0.10)', padding: 28 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Admin sign-in</h1>
           <p style={{ margin: '6px 0 18px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
-            Sign in with your organization&apos;s work email. No password — we email you a fresh 6-digit code each time.
+            Sign in with your organization&apos;s work email. No password  -  we email you a fresh 6-digit code each time.
           </p>
           {!sent ? (
             <form onSubmit={send} style={{ display: 'grid', gap: 10 }}>
@@ -199,7 +199,7 @@ export function WebAdminSignIn() {
               </p>
               <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#92400e' }}>
-                  Demo: we filled the code in for you — the live version emails it.
+                  Demo: we filled the code in for you  -  the live version emails it.
                 </p>
               </div>
               <input type="text" inputMode="numeric" maxLength={6} value={codeInput}
@@ -227,7 +227,7 @@ export function WebAdminSignIn() {
   );
 }
 
-// ─── Give Extra — multi-step: amount → review → done ────────────────────────
+// ─── Give Extra  -  multi-step: amount → review → done ────────────────────────
 const BOOST_PRESETS = [1, 5, 10, 25];
 
 export function GiveExtraModal({ show, onClose }) {
@@ -293,7 +293,7 @@ export function GiveExtraModal({ show, onClose }) {
               <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0 2px', cursor: 'pointer', color: INK.muted, fontSize: 12.5 }}
                 onClick={() => setCoverProcessing(v => !v)}>
                 <input type="checkbox" readOnly checked={coverProcessing} style={{ marginTop: 2, accentColor: '#059669' }} />
-                <span>Cover {npShort}&apos;s card processing (~${fmt2(processingFee)}) — goes to them, counts as part of your gift</span>
+                <span>Cover {npShort}&apos;s card processing (~${fmt2(processingFee)})  -  goes to them, counts as part of your gift</span>
               </label>
               <div style={{ height: 1, background: '#e5e7eb', margin: '8px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -316,11 +316,11 @@ export function GiveExtraModal({ show, onClose }) {
             </p>
           </div>
           <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 12.5, color: INK.secondary, lineHeight: 1.6 }}>
-            Total charge today: <strong style={{ color: INK.primary }}>${fmt2(total)}</strong> — your ${fmt2(amount)} gift, the $1 app fee{coverProcessing ? `, and ~$${fmt2(processingFee)} processing cover (goes to ${npShort})` : ''}.
-            Charged to your saved payment method. {npShort} sends your receipt. <em>Demo — no real charge is made.</em>
+            Total charge today: <strong style={{ color: INK.primary }}>${fmt2(total)}</strong>  -  your ${fmt2(amount)} gift, the $1 app fee{coverProcessing ? `, and ~$${fmt2(processingFee)} processing cover (goes to ${npShort})` : ''}.
+            Charged to your saved payment method. {npShort} sends your receipt. <em>Demo  -  no real charge is made.</em>
           </div>
           <div style={{ display: 'grid', gap: 8 }}>
-            <ActionButton onClick={confirm}>Confirm — give ${fmt2(amount)}</ActionButton>
+            <ActionButton onClick={confirm}>Confirm  -  give ${fmt2(amount)}</ActionButton>
             <ActionButton tone="quiet" onClick={() => setStep('amount')}>← Go back</ActionButton>
           </div>
         </>
@@ -351,7 +351,7 @@ export function CapControl({ value, onChange, subtle = false }) {
             {subtle ? 'Set a monthly maximum (optional)' : 'Monthly Cap'}
           </span>
           <span style={{ display: 'block', fontSize: 12, color: INK.muted, marginTop: 1 }}>
-            {enabled ? `Capped at $${value}/month — round-ups above this are simply never charged` : subtle ? 'Cap what a month can ever charge you' : 'No cap set'}
+            {enabled ? `Capped at $${value}/month  -  round-ups above this are simply never charged` : subtle ? 'Cap what a month can ever charge you' : 'No cap set'}
           </span>
         </span>
         <WebToggle value={enabled} onChange={v => onChange(v ? 20 : null)} />
@@ -376,9 +376,9 @@ export function CapControl({ value, onChange, subtle = false }) {
 
 // ─── My Cause (web) ──────────────────────────────────────────────────────────
 function impactTier(total) {
-  if (total >= 100) return 'About $100 could support roughly a month of after-school programming for one Club member — an example equivalency provided by the nonprofit.';
-  if (total >= 60) return 'About $60 might cover approximately 2 weeks of after-school snacks for a Club member — example equivalency.';
-  if (total >= 25) return 'About $25 could fund art and sports supplies for a Club session — example equivalency.';
+  if (total >= 100) return 'About $100 could support roughly a month of after-school programming for one Club member  -  an example equivalency provided by the nonprofit.';
+  if (total >= 60) return 'About $60 might cover approximately 2 weeks of after-school snacks for a Club member  -  example equivalency.';
+  if (total >= 25) return 'About $25 could fund art and sports supplies for a Club session  -  example equivalency.';
   return 'Every dollar helps fund safe, staffed after-school spaces for young people in their community.';
 }
 
@@ -401,20 +401,20 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
     },
     suggest: {
       title: 'Suggest a Match Sponsor',
-      intro: `Know a company that should be matching round-ups for ${npShort}? Let us know — ${npShort}'s corporate partnerships team will reach out to them.`,
+      intro: `Know a company that should be matching round-ups for ${npShort}? Let us know  -  ${npShort}'s corporate partnerships team will reach out to them.`,
       done: { emoji: '🏢', head: 'Inquiry Sent!', body: `${npShort}'s corporate partnerships team will follow up about sponsoring the monthly match.` },
       inputs: [{ key: 'company', placeholder: "Company you'd like to suggest", required: true }],
       cta: 'Send Suggestion',
     },
     sponsor: {
       title: 'Become a Match Sponsor',
-      intro: `Partner with ${npShort} this month. Your company sponsors the monthly round-up match — donors see your logo, you get a community impact report. Flat campaign fee; 100% of your match goes to ${npShort}.`,
+      intro: `Partner with ${npShort} this month. Your company sponsors the monthly round-up match  -  donors see your logo, you get a community impact report. Flat campaign fee; 100% of your match goes to ${npShort}.`,
       done: { emoji: '🤝', head: 'Application Sent!', body: `${npShort}'s corporate partnerships team will be in touch within 2 business days.` },
       inputs: [
         { key: 'company', placeholder: 'Company name', required: true },
         { key: 'contact', placeholder: 'Contact name', required: true },
         { key: 'email', placeholder: 'Email', required: true, type: 'email' },
-        { key: 'budget', placeholder: 'Budget (e.g. $10,000–$50,000)' },
+        { key: 'budget', placeholder: 'Budget (e.g. $10,000-$50,000)' },
       ],
       cta: `Submit to ${npShort} Partnerships`,
     },
@@ -525,7 +525,7 @@ export function WebMyCause() {
             <div>
               {match.sample && (
                 <p style={{ margin: '0 0 6px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>Example partnership — demo</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>Example partnership  -  demo</span>
                 </p>
               )}
               <MatchBadge match={match} />
@@ -558,7 +558,7 @@ export function WebShare() {
   const referralCode = DEMO_USER.referralCode;
   const shareUrl = `https://pocketcache.app/demo/?org=${orgCode}&ref=${referralCode}`;
   const displayUrl = `pocketcache.app/demo/?org=${orgCode.toLowerCase()}&ref=${referralCode.toLowerCase()}`;
-  const shareText = `I give to ${np.name} with every purchase I make — spare change that actually adds up. You should try it too. 💙`;
+  const shareText = `I give to ${np.name} with every purchase I make  -  spare change that actually adds up. You should try it too. 💙`;
 
   function copy(text, setter) {
     navigator.clipboard?.writeText(text);
@@ -570,7 +570,7 @@ export function WebShare() {
     <>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Share</h1>
-        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>Spread the word — every share grows {np.shortName ?? np.name}&apos;s quiet-giving crowd.</p>
+        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>Spread the word  -  every share grows {np.shortName ?? np.name}&apos;s quiet-giving crowd.</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr]" style={{ display: 'grid', gap: 20, alignItems: 'start' }}>
         <div style={{ ...CARD, border: 'none', overflow: 'hidden' }}>
@@ -590,7 +590,7 @@ export function WebShare() {
             )}
           </div>
           <div style={{ padding: '12px 20px', background: '#fff', fontSize: 12.5, color: INK.secondary }}>
-            Spare change from every purchase — it adds up. 💙
+            Spare change from every purchase  -  it adds up. 💙
           </div>
         </div>
 
@@ -607,7 +607,7 @@ export function WebShare() {
           <div style={{ ...CARD, border: 'none', padding: 20, background: `linear-gradient(135deg, ${NAVY}, #0B2A4A)`, color: '#fff' }}>
             <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 15 }}>Invite a Friend</p>
             <p style={{ margin: '0 0 14px', fontSize: 13, lineHeight: 1.6, opacity: 0.85 }}>
-              When someone joins with your link, we waive their first month&apos;s $1 app fee —
+              When someone joins with your link, we waive their first month&apos;s $1 app fee  - 
               so their very first charge is pure giving to {np.name}.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.16)', borderRadius: 12, padding: '10px 14px' }}>
@@ -689,8 +689,8 @@ export function WebSettings() {
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Skip a month"
               sub={skipNextCharge
-                ? "Skipping — this month's round-ups are simply never charged; only the $1 fee rolls to next month ($1 × 2)"
-                : "Need a breather? That month's round-ups are simply never charged — only the $1 fee rolls over"}
+                ? "Skipping  -  this month's round-ups are simply never charged; only the $1 fee rolls to next month ($1 × 2)"
+                : "Need a breather? That month's round-ups are simply never charged  -  only the $1 fee rolls over"}
               right={<WebToggle value={skipNextCharge} onChange={setSkipNextCharge} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <div style={{ paddingTop: 10 }}>
@@ -716,7 +716,7 @@ export function WebSettings() {
           </SectionCard>
 
           <SectionCard label="Your cause">
-            <Row label={np?.name ?? '—'} sub="Where your round-ups go" />
+            <Row label={np?.name ?? ' - '} sub="Where your round-ups go" />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Switch nonprofit" sub="Enter a different org's code" onPress={() => setModal('switch')}
               right={<span style={{ color: INK.muted }}>›</span>} />
@@ -728,7 +728,7 @@ export function WebSettings() {
             <Row label="Push notifications" sub="Weekly impact summaries"
               right={<WebToggle value={prefs.notifications} onChange={v => updatePref('notifications', v)} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
-            <Row label="Charge reminder" sub="Your exact amount on the 1st — charge runs the 11th"
+            <Row label="Charge reminder" sub="Your exact amount on the 1st  -  charge runs the 11th"
               right={<WebToggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label={`Account emails & ${npShort} updates`} sub="Giving updates from PocketCache and your cause"
@@ -749,7 +749,7 @@ export function WebSettings() {
 
           <SectionCard label="Subscription">
             <p style={{ margin: '0 0 12px', fontSize: 12.5, color: INK.muted, lineHeight: 1.6 }}>
-              Cancelling never costs anything — you choose whether this month&apos;s round-ups become a final donation or are simply never charged.
+              Cancelling never costs anything  -  you choose whether this month&apos;s round-ups become a final donation or are simply never charged.
             </p>
             <ActionButton tone="danger" onClick={() => setModal('cancel')}>Cancel my giving subscription</ActionButton>
           </SectionCard>
@@ -801,7 +801,7 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
       ) : (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
-            Currently watching <strong>{current?.name ?? 'Chase Sapphire'} ····{current?.last4 ?? '4242'}</strong>. Pick a new card issuer — read-only via Plaid.
+            Currently watching <strong>{current?.name ?? 'Chase Sapphire'} ····{current?.last4 ?? '4242'}</strong>. Pick a new card issuer  -  read-only via Plaid.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             {TRACKED_CARD_BANKS.map(b => (
@@ -852,7 +852,7 @@ function ChangePaymentModal({ show, onClose, onChanged }) {
         </div>
       ) : (
         <>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>Payments are processed by Stripe — PocketCache never sees your details.</p>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>Payments are processed by Stripe  -  PocketCache never sees your details.</p>
           <div style={{ display: 'grid', gap: 8 }}>
             {PAYMENT_METHOD_OPTIONS.map(opt => (
               <button key={opt.id} onClick={() => pick(opt)}
@@ -892,7 +892,7 @@ function SwitchOrgModal({ show, onClose, onBind }) {
   return (
     <Modal show={show} onClose={onClose} title="Switch Nonprofit">
       <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
-        Your history stays with you — future round-ups go to the new cause.
+        Your history stays with you  -  future round-ups go to the new cause.
       </p>
       <form onSubmit={submit}>
         <input
@@ -909,7 +909,7 @@ function SwitchOrgModal({ show, onClose, onBind }) {
 
 function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDeleteAccount }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // Face ID / Touch ID unlock — real WebAuthn enrollment, shared with the app
+  // Face ID / Touch ID unlock  -  real WebAuthn enrollment, shared with the app
   const [bioEnrolled, setBioEnrolled] = useState(biometricEnrolled);
   async function toggleBio(v) {
     if (v) {
@@ -959,7 +959,7 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
       {confirmDelete ? (
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: 14 }}>
           <p style={{ margin: '0 0 10px', fontSize: 13, color: '#991b1b', lineHeight: 1.55 }}>
-            This permanently removes your giving account and data{adminOrgName ? ` — your admin account for ${adminOrgName} is untouched` : ''}. This can&apos;t be undone.
+            This permanently removes your giving account and data{adminOrgName ? `  -  your admin account for ${adminOrgName} is untouched` : ''}. This can&apos;t be undone.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             <ActionButton tone="danger" onClick={onDeleteAccount}>Yes, delete my account</ActionButton>
@@ -1004,7 +1004,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
           <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
             {result === 'donated'
               ? `Thank you for your final donation to ${npShort}.`
-              : "This month's round-ups won't be charged — as if the month never happened."}
+              : "This month's round-ups won't be charged  -  as if the month never happened."}
           </p>
           <ActionButton tone="quiet" onClick={() => { onClose(); onCancelled(); }}>Done</ActionButton>
         </div>
@@ -1019,7 +1019,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
               <span style={{ color: INK.secondary }}>Round-ups</span><span style={{ fontWeight: 700, color: INK.primary }}>${raw.toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
-              <span>App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span>+${feeMonths.toFixed(2)}</span>
+              <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span>+${feeMonths.toFixed(2)}</span>
             </div>
             {coverProcessing && (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
@@ -1033,7 +1033,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
           </div>
           {belowMin && (
             <p style={{ margin: '0 0 10px', fontSize: 12, color: '#92400e', background: '#fffbeb', borderRadius: 10, padding: '8px 12px', lineHeight: 1.55 }}>
-              Note: ${raw.toFixed(2)} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum — in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
+              Note: ${raw.toFixed(2)} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum  -  in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
             </p>
           )}
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: INK.secondary, marginBottom: 14, cursor: 'pointer' }}
@@ -1044,7 +1044,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
           <div style={{ display: 'grid', gap: 8 }}>
             <ActionButton onClick={donateAndCancel}>Donate ${total} &amp; cancel</ActionButton>
             <ActionButton tone="danger" onClick={() => setResult('cancelled')}>Cancel without donating</ActionButton>
-            <ActionButton tone="quiet" onClick={onClose}>Never mind — keep giving</ActionButton>
+            <ActionButton tone="quiet" onClick={onClose}>Never mind  -  keep giving</ActionButton>
           </div>
         </>
       )}

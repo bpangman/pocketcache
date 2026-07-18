@@ -38,7 +38,7 @@ export default function Charges() {
           </p>
         </div>
         <p className="text-green-700 text-xs pl-6 leading-relaxed">
-          Donors cover the flat $1 app fee — you pay $0 for app costs, ever. Most also cover your card-processing costs (pre-selected). When they do, that amount goes directly to you — PocketCache never keeps it. Never a percentage of donations.
+          Donors cover the flat $1 app fee  -  you pay $0 for app costs, ever. Most also cover your card-processing costs (pre-selected). When they do, that amount goes directly to you  -  PocketCache never keeps it. Never a percentage of donations.
         </p>
         <a
           href="https://dashboard.stripe.com"
@@ -106,7 +106,7 @@ export default function Charges() {
             >
               <RefreshCw size={13} className="text-orange-500 shrink-0 animate-spin" style={{ animationDuration: '3s' }} />
               <p className="text-orange-700 font-semibold">
-                {run.failures} payment{run.failures > 1 ? 's' : ''} failed — Stripe retrying
+                {run.failures} payment{run.failures > 1 ? 's' : ''} failed  -  Stripe retrying
               </p>
             </div>
           )}

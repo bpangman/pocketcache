@@ -14,7 +14,7 @@ import { CapControl } from './WebPortalPages';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
 // The signup journey as a real webpage: the donor arrived from THIS nonprofit's
-// micro-site, so the org is implied — no gate, no QR, no code entry. Left rail
+// micro-site, so the org is implied  -  no gate, no QR, no code entry. Left rail
 // carries the pitch + step progress; the right panel is the current step.
 // On completion it hands off to WebDashboard (page → 'home').
 
@@ -45,12 +45,12 @@ function StepRail({ current, org }) {
         {org && <OrgLogo nonprofit={org} size={12} rounded="xl" />}
         <div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary, lineHeight: 1.25 }}>{org?.name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>has its own giving program — and you&apos;re in.</p>
+          <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>has its own giving program  -  and you&apos;re in.</p>
         </div>
       </div>
       <p style={{ margin: '0 0 20px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
         Round up your everyday purchases and your spare change quietly adds up
-        for {org?.shortName ?? 'your cause'} — one small monthly charge, straight to them.
+        for {org?.shortName ?? 'your cause'}  -  one small monthly charge, straight to them.
       </p>
       <ol style={{ listStyle: 'none', padding: 0, margin: '0 0 22px', display: 'grid', gap: 2 }}>
         {STEPS.map((s, i) => {
@@ -75,7 +75,7 @@ function StepRail({ current, org }) {
       </ol>
       <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
         🔒 Bank connection is read-only via Plaid. Payments are processed by
-        Stripe — {org?.shortName ?? 'your nonprofit'} is who charges you, never us. No passwords, ever.
+        Stripe  -  {org?.shortName ?? 'your nonprofit'} is who charges you, never us. No passwords, ever.
       </p>
     </aside>
   );
@@ -206,7 +206,7 @@ export default function WebOnboarding({ entryOrg }) {
 
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
-      {/* Top nav — same webpage chrome as the dashboard */}
+      {/* Top nav  -  same webpage chrome as the dashboard */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -246,7 +246,7 @@ export default function WebOnboarding({ entryOrg }) {
                       onClick={() => { setLastMode('giving'); setPage('home'); }}
                       style={{ width: '100%', textAlign: 'left', marginBottom: 16, padding: '11px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: '#92400e' }}
                     >
-                      👋 Welcome back — continue as {hasAccount.name} →
+                      👋 Welcome back  -  continue as {hasAccount.name} →
                     </button>
                   )}
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
@@ -263,7 +263,7 @@ export default function WebOnboarding({ entryOrg }) {
 
                   {isCA && (
                     <div style={{ background: '#FEF3C7', border: '1px solid #FBBF24', borderRadius: 12, padding: '10px 14px', fontSize: 13, color: '#92400e', marginBottom: 14 }}>
-                      PocketCache isn&apos;t available in California yet — we&apos;re working on it. Ask {npShort} for updates.
+                      PocketCache isn&apos;t available in California yet  -  we&apos;re working on it. Ask {npShort} for updates.
                     </div>
                   )}
 
@@ -274,7 +274,7 @@ export default function WebOnboarding({ entryOrg }) {
                       <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Privacy Policy</a>.
                     </Checkbox>
                     <Checkbox checked={commsOptin} onChange={setCommsOptin}>
-                      PocketCache and {npShort} may contact me with account and giving updates — details in our{' '}
+                      PocketCache and {npShort} may contact me with account and giving updates  -  details in our{' '}
                       <a href="/legal/terms/#communications" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Terms</a>.
                     </Checkbox>
                   </div>
@@ -283,20 +283,20 @@ export default function WebOnboarding({ entryOrg }) {
                     <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue && !hasAccount} />
                   </div>
                   <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }}>
-                    No passwords here — your Apple or Google account is your key. Tax receipts from {npShort} go to your sign-in email.
+                    No passwords here  -  your Apple or Google account is your key. Tax receipts from {npShort} go to your sign-in email.
                   </p>
                 </>
               )}
 
               {step === 'card' && (
                 <>
-                  <PanelTitle title="Which card should we track?" sub={`Every purchase on this card rounds up — the change goes straight to ${npShort}.`} />
+                  <PanelTitle title="Which card should we track?" sub={`Every purchase on this card rounds up  -  the change goes straight to ${npShort}.`} />
                   {connected ? (
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 14, padding: 16, marginBottom: 16 }}>
                       <CheckCircle size={22} color="#0D9488" />
                       <div>
                         <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#134e4a' }}>{connected.name} connected</p>
-                        <p style={{ margin: 0, fontSize: 12.5, color: '#0f766e' }}>Card ending ····{connected.last4} — we&apos;ll track purchases and tally round-ups as they happen.</p>
+                        <p style={{ margin: 0, fontSize: 12.5, color: '#0f766e' }}>Card ending ····{connected.last4}  -  we&apos;ll track purchases and tally round-ups as they happen.</p>
                       </div>
                     </div>
                   ) : (
@@ -335,7 +335,7 @@ export default function WebOnboarding({ entryOrg }) {
 
               {step === 'payment' && (
                 <>
-                  <PanelTitle title="How should we collect your round-ups?" sub="Once a month, your round-ups total into one clean charge — to the method you pick here." />
+                  <PanelTitle title="How should we collect your round-ups?" sub="Once a month, your round-ups total into one clean charge  -  to the method you pick here." />
                   <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
                     {PAYMENT_OPTIONS.map(opt => (
                       <button key={opt.id} onClick={() => setPaymentSel(opt.id)}
@@ -359,9 +359,9 @@ export default function WebOnboarding({ entryOrg }) {
                     ))}
                   </div>
                   <p style={{ fontSize: 12, color: INK.muted, margin: '0 0 14px', textAlign: 'center' }}>
-                    Change this anytime in Settings. Payments are processed by Stripe — not us.
+                    Change this anytime in Settings. Payments are processed by Stripe  -  not us.
                   </p>
-                  {/* Quiet monthly-max opt-in — deliberately understated */}
+                  {/* Quiet monthly-max opt-in  -  deliberately understated */}
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 14, marginBottom: 16 }}>
                     <CapControl subtle value={monthlyCap} onChange={setMonthlyCap} />
                   </div>
@@ -381,7 +381,7 @@ export default function WebOnboarding({ entryOrg }) {
                       <span style={{ fontWeight: 700, color: INK.primary }}>${roundUps.toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
-                      <span>App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+                      <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
                       <span>+${feeMonths.toFixed(2)}</span>
                     </div>
                     {coverProcessing && (
@@ -395,7 +395,7 @@ export default function WebOnboarding({ entryOrg }) {
                       <span style={{ fontWeight: 700, fontSize: 13.5, color: INK.primary }}>One charge from {npShort}</span>
                       <span style={{ fontWeight: 800, fontSize: 18, color: NAVY }}>${total.toFixed(2)}</span>
                     </div>
-                    <p style={{ margin: '8px 0 0', fontSize: 11.5, fontStyle: 'italic', color: INK.muted }}>This is an example — no real charge is made in this demo.</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 11.5, fontStyle: 'italic', color: INK.muted }}>This is an example  -  no real charge is made in this demo.</p>
                   </div>
 
                   <div
@@ -413,17 +413,17 @@ export default function WebOnboarding({ entryOrg }) {
                       </span>
                       <span style={{ display: 'block', fontSize: 12, color: INK.secondary, marginTop: 2 }}>
                         {coverProcessing
-                          ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort} — PocketCache never touches it. It counts as part of your donation.`
+                          ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
                           : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
                       </span>
                     </span>
                   </div>
 
                   <p style={{ fontSize: 12, lineHeight: 1.6, color: INK.muted, margin: '0 0 16px' }}>
-                    Once a month, {org?.name ?? 'your nonprofit'} bundles your round-ups into one charge — you&apos;ll see
+                    Once a month, {org?.name ?? 'your nonprofit'} bundles your round-ups into one charge  -  you&apos;ll see
                     &ldquo;{npShort}&rdquo; on your statement, not PocketCache, and they send your tax receipt. Months under
                     ${org?.monthlyMinimum ?? 5} roll forward (we settle up within 3 months). Tracking starts now; your{' '}
-                    round-ups total through the last day of the month, we email your <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong> — a full 10 days to review it, and nothing before today ever counts.
+                    round-ups total through the last day of the month, we email your <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
                   </p>
 
                   <PrimaryButton onClick={handleConfirm}>Start Giving to {npShort}</PrimaryButton>

@@ -16,7 +16,7 @@ export default function MatchDetailsSheet({ show, onClose, match }) {
         {match.sample && (
           <div className="mb-4">
             <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 text-xs font-semibold text-amber-700">
-              Example partnership — demo only
+              Example partnership - demo only
             </span>
           </div>
         )}

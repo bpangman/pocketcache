@@ -14,13 +14,13 @@ export const NONPROFITS = [
     categoryColor: '#003865',
     logo: '🏀',
     logoUrl: bgcaLogoUrl,
-    // sampleStats: demo figures for the pitch — production reads real totals from
+    // sampleStats: demo figures for the pitch  -  production reads real totals from
     // the backend (charge history) once live
     sampleStats: true,
     raised: 3841209,
     donors: 112340,
     impact: '4.3M youth served at 5,000+ club locations',
-    description: "Boys & Girls Clubs of America provides after-school programs, mentoring, and safe spaces for young people ages 6–18, helping them build the skills and confidence to succeed.",
+    description: "Boys & Girls Clubs of America provides after-school programs, mentoring, and safe spaces for young people ages 6-18, helping them build the skills and confidence to succeed.",
     ein: '13-5562976',
     featured: true,
     monthlyMinimum: 5,
@@ -30,15 +30,15 @@ export const NONPROFITS = [
       maxAmount: 50000,
       matched: 23400,
       active: true,
-      // sample: true — this is a demo partnership used to illustrate the corporate
+      // sample: true  -  this is a demo partnership used to illustrate the corporate
       // match feature. In production, match terms come from signed partner agreements.
       sample: true,
-      description: 'GM is matching every donor round-up dollar-for-dollar, up to $50,000 total — an example of a corporate match partnership.',
+      description: 'GM is matching every donor round-up dollar-for-dollar, up to $50,000 total  -  an example of a corporate match partnership.',
       logoUrl: gmLogoUrl,
       impactUrl: 'https://www.gm.com/commitments',
-      // impactReport is illustrative — specific club counts and city names are
+      // impactReport is illustrative  -  specific club counts and city names are
       // example equivalencies for demo purposes, not verified program figures.
-      impactReport: "This sample match illustrates how a corporate partner can amplify donor impact. In this example, $23,400 of the $50,000 match pool has been claimed — representing thousands of additional after-school hours that could be funded across BGCA Club locations. Match partners receive a quarterly impact report directly from BGCA.",
+      impactReport: "This sample match illustrates how a corporate partner can amplify donor impact. In this example, $23,400 of the $50,000 match pool has been claimed  -  representing thousands of additional after-school hours that could be funded across BGCA Club locations. Match partners receive a quarterly impact report directly from BGCA.",
     },
     brand: {
       appName: 'BGCA Round-Up',

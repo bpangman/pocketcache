@@ -54,12 +54,12 @@ export default function Grow() {
   function handleCodeDraft(raw) {
     const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
     setCodeDraft(v);
-    if (!JOIN_CODE_RE.test(v)) setCodeError('Letters, numbers, dashes — 2 to 8 characters.');
-    else if (v !== joinCode && !isJoinCodeAvailable(v, npOrg._orgId)) setCodeError('That code is taken — try another.');
+    if (!JOIN_CODE_RE.test(v)) setCodeError('Letters, numbers, dashes  -  2 to 8 characters.');
+    else if (v !== joinCode && !isJoinCodeAvailable(v, npOrg._orgId)) setCodeError('That code is taken  -  try another.');
     else setCodeError(null);
   }
 
-  // Saving a code change requires email verification (AdminVerifyModal) — and
+  // Saving a code change requires email verification (AdminVerifyModal)  -  and
   // the modal repeats the printed-QR warning, so it's impossible to miss.
   const [verifyingCode, setVerifyingCode] = useState(false);
   const codeDirty = editingCode && codeDraft !== joinCode && !codeError && JOIN_CODE_RE.test(codeDraft);
@@ -96,7 +96,7 @@ export default function Grow() {
       <AdminVerifyModal
         show={verifyingCode}
         adminEmail={npOrg.adminEmail || 'your admin email'}
-        warning={`Changing your code to ${codeDraft} changes your link, QR, AND website widget — anything printed with ${joinCode} stops working, and any widget embedded on your website must be re-pasted with the new code.`}
+        warning={`Changing your code to ${codeDraft} changes your link, QR, AND website widget  -  anything printed with ${joinCode} stops working, and any widget embedded on your website must be re-pasted with the new code.`}
         onConfirm={commitCode}
         onCancel={() => setVerifyingCode(false)}
       />
@@ -196,7 +196,7 @@ export default function Grow() {
         </div>
         <p className="text-gray-400 text-xs mt-3">
           Drop this on your website to show a &quot;Round Up for us&quot; widget that links directly to your program.
-          The snippet updates as you customize below — copy it whenever it looks right.
+          The snippet updates as you customize below  -  copy it whenever it looks right.
         </p>
 
         {/* Customize */}
@@ -220,8 +220,8 @@ export default function Grow() {
           </div>
         </div>
 
-        {/* Live preview — visually identical to what widget.js renders on the org's site */}
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Preview — what visitors see</p>
+        {/* Live preview  -  visually identical to what widget.js renders on the org's site */}
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Preview  -  what visitors see</p>
         <div className="rounded-2xl p-4 overflow-x-auto" style={{ background: '#f1f5f9' }}>
           <div style={{ maxWidth: widgetWidth, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(11,42,74,0.08)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>

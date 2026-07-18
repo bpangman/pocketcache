@@ -1,7 +1,7 @@
 {
   "name": "PocketCache",
   "short_name": "PocketCache",
-  "description": "PocketCache — round-up giving software for nonprofits. BGCA donor app demo.",
+  "description": "PocketCache  -  round-up giving software for nonprofits. BGCA donor app demo.",
   "start_url": "/demo/",
   "display": "standalone",
   "orientation": "portrait",

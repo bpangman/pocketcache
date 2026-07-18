@@ -31,8 +31,8 @@ function NpHeader({ npOrg }) {
 
   function handleSignOut() { setMenuOpen(false); resetNpContent(); signOut(); }
 
-  // One tap to giving mode — dashboard if they're a donor, else STRAIGHT to
-  // donor account creation pre-bound to their org (they run the org — skip
+  // One tap to giving mode  -  dashboard if they're a donor, else STRAIGHT to
+  // donor account creation pre-bound to their org (they run the org  -  skip
   // the gate AND the intro pitch). Their personal donor identity is still a
   // separate SSO sign-in by design: the admin login belongs to the org and
   // may be shared/rotated among staff; personal giving stays personal.
@@ -83,7 +83,7 @@ function NpHeader({ npOrg }) {
               <button onClick={goGiving} className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-gray-50">
                 <span className="text-base">🪙</span>
                 <span className="flex-1 text-gray-800 font-medium text-sm leading-snug">
-                  {hasAccount ? 'Switch to Giving' : `Start giving — join ${npOrg.shortName ?? 'your org'} as a donor`}
+                  {hasAccount ? 'Switch to Giving' : `Start giving  -  join ${npOrg.shortName ?? 'your org'} as a donor`}
                 </span>
               </button>
               <div className="h-px bg-gray-100 mx-3" />

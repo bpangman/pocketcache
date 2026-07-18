@@ -240,7 +240,7 @@ function PrivacySheet({
                 right={<Toggle value={biometric} onChange={onBiometricChange} color={brand.primary} />}
               />
               <div className="h-px bg-gray-100 mx-4" />
-              {/* 2FA is managed by the sign-in provider (Apple / Google) — no in-app toggle */}
+              {/* 2FA is managed by the sign-in provider (Apple / Google)  -  no in-app toggle */}
               <SettingRow
                 icon={<Shield size={18} />}
                 label="Two-Factor Authentication"
@@ -335,7 +335,7 @@ function PrivacySheet({
                     >
                       Cancel
                     </button>
-                    {/* "Yes, Delete" is now wired — clears all state and returns to onboarding */}
+                    {/* "Yes, Delete" is now wired  -  clears all state and returns to onboarding */}
                     <button
                       onClick={handleDelete}
                       className="flex-1 py-3 rounded-2xl bg-red-500 text-white font-semibold text-sm"
@@ -517,7 +517,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
             <div className="text-5xl mb-4">👋</div>
             <p className="font-bold text-gray-900 text-lg">Subscription Cancelled</p>
             <p className="text-gray-500 text-sm mt-2">
-              This month&apos;s round-ups won&apos;t be charged — as if the month never happened.
+              This month&apos;s round-ups won&apos;t be charged  -  as if the month never happened.
             </p>
           </div>
         ) : (
@@ -534,7 +534,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
                 <span className="font-bold text-gray-900">${amountStr}</span>
               </div>
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-sm text-gray-500">App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+                <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
                 <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
               </div>
               {coverProcessing && (
@@ -551,7 +551,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
             </div>
             {belowMin && (
               <p className="text-amber-600 text-xs mb-4 leading-relaxed bg-amber-50 rounded-xl px-3 py-2">
-                Note: ${amountStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum — in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
+                Note: ${amountStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum  -  in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
               </p>
             )}
             <label
@@ -566,7 +566,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
                 {coverProcessing && <CheckCircle size={12} className="text-white" />}
               </div>
               <span className="text-xs text-gray-600 leading-relaxed">
-                Cover {nonprofit?.shortName ?? 'your cause'}&apos;s card-processing costs too (pre-selected) — ~${processingCover.toFixed(2)} goes directly to them.
+                Cover {nonprofit?.shortName ?? 'your cause'}&apos;s card-processing costs too (pre-selected)  -  ~${processingCover.toFixed(2)} goes directly to them.
                 {!coverProcessing && ` Unchecked: ${nonprofit?.shortName ?? 'your cause'} nets your round-ups minus standard card costs.`}
               </span>
             </label>
@@ -588,7 +588,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               Cancel without donating
             </button>
             <p className="text-gray-400 text-xs text-center">
-              Skip it and your round-ups and all fees this month are simply waived — like the month never happened. Never a fee for leaving.
+              Skip it and your round-ups and all fees this month are simply waived  -  like the month never happened. Never a fee for leaving.
             </p>
           </>
         )}
@@ -625,7 +625,7 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">
             Currently tracking: {currentCard?.name ?? 'Chase Sapphire'} ···· {currentCard?.last4 ?? '4242'}
           </p>
-          <p className="text-gray-500 text-xs px-1 pb-1">Select the card you want us to watch. Read-only access — we never touch your money, just count round-ups.</p>
+          <p className="text-gray-500 text-xs px-1 pb-1">Select the card you want us to watch. Read-only access  -  we never touch your money, just count round-ups.</p>
 
           {connected ? (
             <motion.div
@@ -769,7 +769,7 @@ function ChangePaymentSheet({ show, onClose, brand, onMethodChanged }) {
           )}
 
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
-            Payments are processed by Stripe — not us. Change this anytime.
+            Payments are processed by Stripe  -  not us. Change this anytime.
           </p>
         </div>
       </Sheet>
@@ -810,7 +810,7 @@ export default function Settings() {
     saveKey('pc_comms_optin', v);
   }
 
-  // Face ID / Touch ID unlock — REAL WebAuthn enrollment, not a cosmetic pref.
+  // Face ID / Touch ID unlock  -  REAL WebAuthn enrollment, not a cosmetic pref.
   // Enabling triggers the OS biometric prompt; disabling removes the credential.
   const [bioEnrolled, setBioEnrolled] = useState(biometricEnrolled);
   async function handleBiometricChange(v) {
@@ -907,7 +907,7 @@ export default function Settings() {
 
       <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
 
-        {/* Profile card — name/email from DEMO_USER; joinedAt from MONTHLY_DATA start */}
+        {/* Profile card  -  name/email from DEMO_USER; joinedAt from MONTHLY_DATA start */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -939,7 +939,7 @@ export default function Settings() {
           <SettingRow
             icon={<Zap size={18} />}
             label="Multiplier"
-            sub={`${roundUpMultiplier}× — ${MULTIPLIER_OPTIONS.find(o => o.value === roundUpMultiplier)?.desc}`}
+            sub={`${roundUpMultiplier}×  -  ${MULTIPLIER_OPTIONS.find(o => o.value === roundUpMultiplier)?.desc}`}
             color={brand.primary}
             onPress={() => setShowMultiplier(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
@@ -949,8 +949,8 @@ export default function Settings() {
             icon={<span className="text-base">⏭️</span>}
             label="Skip a month"
             sub={skipNextCharge
-              ? "Skipping — this month's round-ups are simply never charged; only the $1 fee rolls to next month ($1 × 2)"
-              : "Need a breather? That month's round-ups are simply never charged — only the $1 fee rolls over"}
+              ? "Skipping  -  this month's round-ups are simply never charged; only the $1 fee rolls to next month ($1 × 2)"
+              : "Need a breather? That month's round-ups are simply never charged  -  only the $1 fee rolls over"}
             color={brand.secondary}
             right={<Toggle value={skipNextCharge} onChange={setSkipNextCharge} color={brand.primary} />}
           />
@@ -1001,7 +1001,7 @@ export default function Settings() {
               </motion.div>
             )}
             <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-              Cap what you give each month. If your round-ups go over, we only charge up to your cap — the rest is simply never charged.
+              Cap what you give each month. If your round-ups go over, we only charge up to your cap  -  the rest is simply never charged.
             </p>
           </div>
         </motion.div>
@@ -1054,18 +1054,18 @@ export default function Settings() {
           />
         </motion.div>
 
-        {/* Billing policy — dynamic nonprofit name + tax receipt disclosure */}
+        {/* Billing policy  -  dynamic nonprofit name + tax receipt disclosure */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
           className="bg-amber-50 rounded-3xl px-4 py-3.5" style={{ border: '1px solid #fde68a' }}>
           <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
           <p className="text-xs text-amber-800 leading-relaxed">
-            One monthly charge on {selectedNonprofit.shortName}&apos;s Stripe — minimum ${selectedNonprofit.monthlyMinimum}.
-            A flat <strong>$1/month</strong> app fee — only for months you&apos;re actively rounding up. If a month rolls over, the fee rolls with it and collects in the same single charge.
-            Your toggle covers {selectedNonprofit.shortName}&apos;s card-processing costs: on means a small amount (~2.2% + 30¢) is added and passes directly to them — PocketCache never keeps it. Off means {selectedNonprofit.shortName} nets your round-ups minus standard card costs.
-            They never pay PocketCache anything — the platform is always free for them.
+            One monthly charge on {selectedNonprofit.shortName}&apos;s Stripe  -  minimum ${selectedNonprofit.monthlyMinimum}.
+            A flat <strong>$1/month</strong> app fee  -  only for months you&apos;re actively rounding up. If a month rolls over, the fee rolls with it and collects in the same single charge.
+            Your toggle covers {selectedNonprofit.shortName}&apos;s card-processing costs: on means a small amount (~2.2% + 30¢) is added and passes directly to them  -  PocketCache never keeps it. Off means {selectedNonprofit.shortName} nets your round-ups minus standard card costs.
+            They never pay PocketCache anything  -  the platform is always free for them.
             Months under ${selectedNonprofit.monthlyMinimum} roll over; we settle every 3 months at most.{' '}
-            If months roll over, each active month adds $1 — your charge breakdown itemizes it (e.g. &lsquo;App fee — $1 × 2 months&rsquo;).{' '}
-            {selectedNonprofit.shortName} sends your tax receipt — your round-ups are deductible, the $1 fee is not.
+            If months roll over, each active month adds $1  -  your charge breakdown itemizes it (e.g. &lsquo;App fee  -  $1 × 2 months&rsquo;).{' '}
+            {selectedNonprofit.shortName} sends your tax receipt  -  your round-ups are deductible, the $1 fee is not.
           </p>
         </motion.div>
 
@@ -1093,7 +1093,7 @@ export default function Settings() {
           />
         </motion.div>
 
-        {/* Preferences — persisted to localStorage */}
+        {/* Preferences  -  persisted to localStorage */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="bg-white rounded-3xl overflow-hidden card-shadow">
           <div className="px-4 pt-4 pb-2">
@@ -1110,7 +1110,7 @@ export default function Settings() {
           <SettingRow
             icon={<Bell size={18} />}
             label="Charge Reminder"
-            sub="Your exact amount on the 1st — charge runs the 11th"
+            sub="Your exact amount on the 1st  -  charge runs the 11th"
             color={brand.primary}
             right={<Toggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} color={brand.primary} />}
           />
@@ -1135,7 +1135,7 @@ export default function Settings() {
           <SettingRow
             icon={<span className="text-base">🖼️</span>}
             label="App Icon"
-            sub="BGCA is an anchor partner — custom icon available"
+            sub="BGCA is an anchor partner  -  custom icon available"
             color={brand.secondary}
             onPress={() => setShowAppIcon(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}

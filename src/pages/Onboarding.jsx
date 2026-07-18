@@ -33,7 +33,7 @@ const SLIDES = [
       </div>
     ),
     title: '',
-    subtitle: 'Your own branded giving app — live in minutes. Donors give with every purchase. Flat pricing, no percentages, just giving.',
+    subtitle: 'Your own branded giving app  -  live in minutes. Donors give with every purchase. Flat pricing, no percentages, just giving.',
     cta: 'Get Started',
   },
   {
@@ -71,7 +71,7 @@ const SLIDES = [
       </div>
     ),
     title: 'Spare Change\nAdds Up',
-    subtitle: 'Every purchase rounds up to the next dollar. Coffee for $3.40? That 60¢ goes straight to your cause. A flat $1/month keeps the app running — never a percentage of what you give.',
+    subtitle: 'Every purchase rounds up to the next dollar. Coffee for $3.40? That 60¢ goes straight to your cause. A flat $1/month keeps the app running  -  never a percentage of what you give.',
     cta: 'Next',
   },
   {
@@ -118,7 +118,7 @@ const SLIDES = [
             </motion.div>
           ))}
         </div>
-        <p className="text-white/50 text-xs mt-3">Example — your numbers grow from zero.</p>
+        <p className="text-white/50 text-xs mt-3">Example  -  your numbers grow from zero.</p>
       </div>
     ),
     title: 'Watch Your\nImpact Grow',
@@ -205,7 +205,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
       transition={{ duration: 0.4 }}
       className="flex flex-col h-full overflow-hidden"
     >
-      {/* Header — leads with the nonprofit pitch */}
+      {/* Header  -  leads with the nonprofit pitch */}
       <div
         className="flex flex-col items-center justify-end px-8 pb-5 pt-10 shrink-0"
         style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '40%' }}
@@ -226,7 +226,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
           Your own round-up app. Live in minutes!
         </p>
         <p className="text-white/70 text-xs text-center leading-relaxed mb-4 px-2">
-          Checkout round-ups raise hundreds of millions for causes every year — this puts that power in your nonprofit&apos;s pocket.
+          Checkout round-ups raise hundreds of millions for causes every year  -  this puts that power in your nonprofit&apos;s pocket.
         </p>
       </div>
 
@@ -269,7 +269,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
               >
                 <span className="text-amber-500">👋</span>
                 <span className="text-amber-800 text-sm font-semibold flex-1">
-                  Welcome back — continue as {hasAccount.name} →
+                  Welcome back  -  continue as {hasAccount.name} →
                 </span>
               </motion.button>
             )}
@@ -330,7 +330,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
           </form>
         </div>
 
-        {/* "Already have an account?" — full-size, visible even without local identity (fresh device / new phone) */}
+        {/* "Already have an account?"  -  full-size, visible even without local identity (fresh device / new phone) */}
         <div className="px-5 pb-1">
           <motion.button
             whileTap={{ scale: 0.97 }}
@@ -345,7 +345,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
 
         <div className="px-5 pb-8 pt-0">
           <p className="text-center text-gray-400 text-xs">
-            PocketCache — round-up giving software for nonprofits
+            PocketCache  -  round-up giving software for nonprofits
           </p>
         </div>
       </div>
@@ -421,9 +421,9 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
       className="flex flex-col h-full overflow-hidden"
     >
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
-        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#003865' }} />
-        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
+        {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
         <div
           className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
           style={{
@@ -435,7 +435,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Create Your Account</span>
         </div>
-        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
@@ -493,9 +493,9 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
 
           <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} />
 
-          {/* SSO only, by design — PocketCache never stores a password */}
+          {/* SSO only, by design  -  PocketCache never stores a password */}
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
-            No passwords here — your Apple or Google account is your key, including its two-factor protection.
+            No passwords here  -  your Apple or Google account is your key, including its two-factor protection.
           </p>
           <p className="text-gray-400 text-xs text-center px-2">
             Tax receipts from {nonprofit?.shortName ?? 'your nonprofit'} go to your sign-in email.
@@ -541,7 +541,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
         )}
       </AnimatePresence>
 
-      {/* Consent checkbox — pinned below the scroll area */}
+      {/* Consent checkbox  -  pinned below the scroll area */}
       <div className="bg-white px-5 pb-8 pt-3 space-y-3">
           <label
             className="flex items-start gap-3 cursor-pointer"
@@ -572,7 +572,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
               {commsOptin && <CheckCircle size={12} className="text-white" />}
             </div>
             <span className="text-xs text-gray-500 leading-relaxed">
-              PocketCache and {nonprofit?.shortName ?? 'your nonprofit'} may contact me with account and giving updates — details in our{' '}
+              PocketCache and {nonprofit?.shortName ?? 'your nonprofit'} may contact me with account and giving updates  -  details in our{' '}
               <a href="/legal/terms/#communications" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Terms</a>.
             </span>
           </label>
@@ -613,7 +613,7 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
 
 // ─── Admin Sign-In (passwordless: work email + one-time code) ────────────────
 // The admin username is the org-domain email verified at signup. No password
-// exists — a fresh code is emailed per sign-in. Demo: any email works and the
+// exists  -  a fresh code is emailed per sign-in. Demo: any email works and the
 // code auto-fills (labeled); production emails it and enforces the domain.
 
 function AdminSignInScreen({ onBack, onComplete }) {
@@ -638,7 +638,7 @@ function AdminSignInScreen({ onBack, onComplete }) {
 
   function verify(e) {
     e?.preventDefault?.();
-    if (codeInput.trim() !== code) { setCodeError("That code doesn't match — check the email and try again."); return; }
+    if (codeInput.trim() !== code) { setCodeError("That code doesn't match  -  check the email and try again."); return; }
     onComplete(email.trim().toLowerCase());
   }
 
@@ -660,7 +660,7 @@ function AdminSignInScreen({ onBack, onComplete }) {
           Nonprofit{'\n'}Admin
         </h1>
         <p className="text-white/70 text-sm mt-2 leading-relaxed">
-          Sign in with your organization&apos;s work email. No password — we email you a fresh code each time.
+          Sign in with your organization&apos;s work email. No password  -  we email you a fresh code each time.
         </p>
       </div>
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10">
@@ -692,7 +692,7 @@ function AdminSignInScreen({ onBack, onComplete }) {
             </p>
             <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200">
               <p className="text-xs text-amber-700 font-semibold">
-                Demo: we filled the code in for you — the live version emails it.
+                Demo: we filled the code in for you  -  the live version emails it.
               </p>
             </div>
             <input
@@ -736,12 +736,12 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
     setTimeout(() => {
       if (!hasAccount && !adminRole) {
         // Production: backend identity lookup by SSO token finds the account anywhere.
-        // Demo: no account found on this device — show the empty state.
+        // Demo: no account found on this device  -  show the empty state.
         setEmptyState(true);
         setChosen(null);
         return;
       }
-      // One door for everyone: onSignIn routes by the identity's roles —
+      // One door for everyone: onSignIn routes by the identity's roles  - 
       // donor-only → giving, admin-only → dashboard, both → last-used mode.
       // Cancelled donors see the Reactivate overlay on home.
       onSignIn();
@@ -773,7 +773,7 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
         </div>
         <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col justify-center px-6 pb-10">
           <p className="text-gray-500 text-sm text-center leading-relaxed mb-6 px-2">
-            In the real app, signing in with Apple or Google finds your account anywhere — no device lock-in.
+            In the real app, signing in with Apple or Google finds your account anywhere  -  no device lock-in.
           </p>
           <motion.button
             whileTap={{ scale: 0.9, opacity: 0.6 }}
@@ -819,7 +819,7 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10 gap-4">
         <SsoButtons onPress={handleSSO} chosen={chosen} />
         <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
-          No passwords here — your Apple or Google account is your key, including its two-factor protection.
+          No passwords here  -  your Apple or Google account is your key, including its two-factor protection.
         </p>
         {onAdminSignIn && (
           <button onClick={onAdminSignIn} className="text-sm text-gray-400 text-center py-1">
@@ -868,9 +868,9 @@ function ConnectCardScreen({ onNext }) {
       className="flex flex-col h-full overflow-hidden"
     >
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
-        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#0d9488' }} />
-        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
+        {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
         <div
           className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
           style={{
@@ -882,7 +882,7 @@ function ConnectCardScreen({ onNext }) {
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Which card should we track?</span>
         </div>
-        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
@@ -930,7 +930,7 @@ function ConnectCardScreen({ onNext }) {
             Which card should{'\n'}we track?
           </h1>
           <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Every purchase on this card rounds up — the change goes straight to your cause.
+            Every purchase on this card rounds up  -  the change goes straight to your cause.
           </p>
         </div>
       </div>
@@ -1065,9 +1065,9 @@ function PaymentMethodScreen({ onNext }) {
       className="flex flex-col h-full overflow-hidden"
     >
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
-        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#0B2A4A' }} />
-        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
+        {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
         <div
           className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
           style={{
@@ -1079,7 +1079,7 @@ function PaymentMethodScreen({ onNext }) {
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Collecting your round-ups</span>
         </div>
-        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
@@ -1117,7 +1117,7 @@ function PaymentMethodScreen({ onNext }) {
             How should we collect{'\n'}your round-up payments?
           </h1>
           <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Once a month, your round-ups total up into one clean charge — to the payment method you choose below.
+            Once a month, your round-ups total up into one clean charge  -  to the payment method you choose below.
           </p>
         </div>
       </div>
@@ -1166,10 +1166,10 @@ function PaymentMethodScreen({ onNext }) {
           ))}
 
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
-            Change this anytime in Settings. Payments are processed by Stripe — not us.
+            Change this anytime in Settings. Payments are processed by Stripe  -  not us.
           </p>
 
-          {/* Quiet monthly-max opt-in — deliberately understated (adjust later in Settings) */}
+          {/* Quiet monthly-max opt-in  -  deliberately understated (adjust later in Settings) */}
           <div className="rounded-2xl p-4 bg-white" style={{ border: '1.5px solid #e5e7eb' }}>
             <label
               className="flex items-start gap-3 cursor-pointer"
@@ -1182,7 +1182,7 @@ function PaymentMethodScreen({ onNext }) {
                 {monthlyCap !== null && <CheckCircle size={12} className="text-white" />}
               </div>
               <span className="text-xs text-gray-500 leading-relaxed">
-                Set a monthly maximum (optional) — round-ups above it are simply never charged.
+                Set a monthly maximum (optional)  -  round-ups above it are simply never charged.
               </span>
             </label>
             {monthlyCap !== null && (
@@ -1339,7 +1339,7 @@ function CardEntryScreen({ onNext }) {
             Add your card
           </h1>
           <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Stripe handles your card — we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
+            Stripe handles your card  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
           </p>
         </div>
 
@@ -1376,9 +1376,9 @@ function CheckoutConfirmScreen({ onConfirm }) {
       ref={frameRef}
       className="flex flex-col h-full overflow-hidden">
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
-        {/* Overscroll bleed — rubber-banding at the top shows hero color, not white */}
+        {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#003865' }} />
-        {/* Compact bar — docked at the top, fades in as the hero scrolls away */}
+        {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
         <div
           className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
           style={{
@@ -1390,7 +1390,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
         >
           <span className="text-white font-bold text-sm px-6 truncate max-w-full">Review &amp; Confirm</span>
         </div>
-        {/* Hero — scrolls away 1:1 with the sheet, like native */}
+        {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
@@ -1432,7 +1432,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               <span className="font-bold text-gray-900">${roundUps.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-500">App fee — $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+              <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
               <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
             </div>
             {coverProcessing && (
@@ -1447,7 +1447,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
             </div>
             <p className="text-xs text-gray-400 mt-2 italic">
-              This is an example — no real charge is made in this demo.
+              This is an example  -  no real charge is made in this demo.
             </p>
           </div>
 
@@ -1466,7 +1466,7 @@ function CheckoutConfirmScreen({ onConfirm }) {
               </span>
               <p className="text-xs text-gray-500 mt-0.5">
                 {coverProcessing
-                  ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort} — PocketCache never touches it. It counts as part of your donation.`
+                  ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
                   : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
               </p>
             </div>
@@ -1477,16 +1477,16 @@ function CheckoutConfirmScreen({ onConfirm }) {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">How charges work</p>
             <p className="text-sm text-gray-600 leading-relaxed">
               Once a month, {npName} bundles your round-ups into one charge. You&apos;ll see{' '}
-              <strong>&ldquo;{npShort}&rdquo;</strong> on your statement — not PocketCache.
+              <strong>&ldquo;{npShort}&rdquo;</strong> on your statement  -  not PocketCache.
             </p>
             <p className="text-xs text-gray-500 mt-2">
-              {npShort} sends your tax receipt — they&apos;re the ones receiving your donation.
+              {npShort} sends your tax receipt  -  they&apos;re the ones receiving your donation.
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward — we settle up within 3 months at most.
+              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward  -  we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the 11th</strong> — a full 10 days to review it, and nothing before today ever counts.
+              Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
             </p>
           </div>
           </div>
@@ -1576,7 +1576,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
     const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
     setJoinCodeCustom(v);
     if (v.length > 0 && v.length < 2) setJoinCodeError('At least 2 characters.');
-    else if (v && !isJoinCodeAvailable(v)) setJoinCodeError('That code is taken — try another.');
+    else if (v && !isJoinCodeAvailable(v)) setJoinCodeError('That code is taken  -  try another.');
     else setJoinCodeError(null);
   }
 
@@ -1600,7 +1600,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
       setEinDemoMode(false);
       setStep('confirm-org');
     } catch {
-      // Graceful fallback — use simulated BGCA result with demo note
+      // Graceful fallback  -  use simulated BGCA result with demo note
       setVerifying(false);
       setOrgName('Boys & Girls Clubs of America');
       setOrgAddress('Atlanta, GA');
@@ -1678,7 +1678,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
     if (requiredDomain && domain !== requiredDomain) {
       bypassNote = `the live version requires an @${requiredDomain} address for ${orgName}`;
     } else if (FREE_MAIL.includes(domain)) {
-      bypassNote = 'the live version rejects personal email domains — admins must use their work address';
+      bypassNote = 'the live version rejects personal email domains  -  admins must use their work address';
     }
     setDemoBypassNote(bypassNote);
     setEmailError(null);
@@ -1692,7 +1692,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   function handleVerifyCode(e) {
     e?.preventDefault?.();
     if (codeInput.trim() !== sentCode) {
-      setCodeError("That code doesn't match — check the email and try again.");
+      setCodeError("That code doesn't match  -  check the email and try again.");
       return;
     }
     setAdminEmail(workEmail.trim().toLowerCase());
@@ -1779,14 +1779,14 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               </div>
               {einDemoMode && (
                 <p className="text-xs text-amber-600 italic">
-                  Demo data — live verification uses IRS public records.
+                  Demo data  -  live verification uses IRS public records.
                 </p>
               )}
             </div>
             <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('verify-email')}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
-              Confirm — this is us →
+              Confirm  -  this is us →
             </motion.button>
             <button onClick={() => setStep('ein')} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
               No, re-enter EIN
@@ -1822,7 +1822,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 </motion.button>
                 <p className="text-gray-400 text-xs px-1 leading-relaxed">
                   Personal addresses (Gmail, Yahoo, iCloud…) can&apos;t manage a nonprofit.
-                  No password is ever created — admin sign-in works by emailed code, so there&apos;s
+                  No password is ever created  -  admin sign-in works by emailed code, so there&apos;s
                   nothing for anyone to steal.
                 </p>
               </form>
@@ -1833,7 +1833,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 </p>
                 <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200 space-y-1">
                   <p className="text-xs text-amber-700 font-semibold">
-                    Demo: we filled the code in for you — the live version emails it to {workEmail}.
+                    Demo: we filled the code in for you  -  the live version emails it to {workEmail}.
                   </p>
                   {demoBypassNote && (
                     <p className="text-xs text-amber-700">
@@ -1869,7 +1869,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
         {step === 'stripe' && (
           <div className="space-y-4">
             <p className="text-gray-500 text-sm">
-              Connect your Stripe account. Donations charge directly on your Stripe — you&apos;re the merchant of record the whole time.
+              Connect your Stripe account. Donations charge directly on your Stripe  -  you&apos;re the merchant of record the whole time.
             </p>
             {stripeConnected ? (
               <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
@@ -1890,7 +1890,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 Continue →
               </motion.button>
             )}
-            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches the money — it goes straight from donors into your Stripe account.</p>
+            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches the money  -  it goes straight from donors into your Stripe account.</p>
           </div>
         )}
 
@@ -1909,7 +1909,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 style={{ borderColor: joinCodeError ? '#ef4444' : '#e5e7eb' }} />
               {joinCodeError && <p className="text-red-500 text-xs mt-1 px-1">{joinCodeError}</p>}
               <p className="text-gray-400 text-xs mt-1">
-                Letters, numbers, dashes (2–8) — short enough to say out loud. This becomes your link — pocketcache.app/{joinCode || 'CODE'} — plus your QR code and widget. You can change it later in your dashboard.
+                Letters, numbers, dashes (2-8)  -  short enough to say out loud. This becomes your link  -  pocketcache.app/{joinCode || 'CODE'}  -  plus your QR code and widget. You can change it later in your dashboard.
               </p>
             </div>
             <div>
@@ -1919,13 +1919,13 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 <span className="text-gray-900 truncate">{adminEmail}</span>
                 <span className="text-xs text-green-700 font-semibold ml-auto shrink-0">Verified</span>
               </div>
-              <p className="text-gray-400 text-xs mt-1">Verified in the previous step — this is your admin sign-in.</p>
+              <p className="text-gray-400 text-xs mt-1">Verified in the previous step  -  this is your admin sign-in.</p>
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Mission (shown to donors)</label>
               <textarea value={story} onChange={e => setStory(e.target.value)} rows={4} maxLength={600} placeholder="Tell donors what you do…"
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 resize-none" />
-              <p className="text-gray-400 text-xs mt-1">Keep it concise — this shows on your public donor page.</p>
+              <p className="text-gray-400 text-xs mt-1">Keep it concise  -  this shows on your public donor page.</p>
               <p className="text-gray-400 text-xs text-right mt-0.5">{story.length}/600</p>
             </div>
             <div>
@@ -1973,7 +1973,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                   if (!url) return;
                   const img = new Image();
                   img.onload = () => { setLogoPreview(url); setLogoUrlError(null); };
-                  img.onerror = () => { setLogoUrlError("We couldn't load that image — check the link or upload a file instead"); };
+                  img.onerror = () => { setLogoUrlError("We couldn't load that image  -  check the link or upload a file instead"); };
                   img.src = url;
                 }}
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400"
@@ -1983,7 +1983,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">
-                Monthly Minimum — ${monthlyMinimum} <span className="text-gray-400 font-normal normal-case">(default $5)</span>
+                Monthly Minimum  -  ${monthlyMinimum} <span className="text-gray-400 font-normal normal-case">(default $5)</span>
               </label>
               <input
                 type="range"
@@ -2008,7 +2008,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
           <form onSubmit={handleAccept} className="space-y-4">
             <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
             <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
-              <p><strong>Always free for you.</strong> Donors pay the flat $1/month app fee, and most also cover your card-processing costs (pre-selected). You never pay PocketCache anything — never a % of donations.</p>
+              <p><strong>Always free for you.</strong> Donors pay the flat $1/month app fee, and most also cover your card-processing costs (pre-selected). You never pay PocketCache anything  -  never a % of donations.</p>
               <p><strong>You are the merchant of record.</strong> Donations charge directly on your Stripe. PocketCache never holds donation funds.</p>
               <p><strong>You issue tax receipts</strong> directly to donors. PocketCache does not.</p>
               <p><strong>You handle charitable solicitation registration</strong> in applicable states.</p>
@@ -2051,7 +2051,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 pocketcache.app/{joinCode.toLowerCase()}
               </p>
             </div>
-            {/* Join code — primary thing to share */}
+            {/* Join code  -  primary thing to share */}
             <div className="rounded-2xl p-5 text-center" style={{ background: '#f0fdf4', border: '2px solid #86efac' }}>
               <p className="text-xs font-bold text-green-700 uppercase tracking-widest mb-1">Your Donor Join Code</p>
               <p className="text-5xl font-black tracking-wider mb-2" style={{ color: '#065f46' }}>{joinCode}</p>
@@ -2073,7 +2073,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               </div>
               <p className="text-gray-400 text-xs mt-1">See a live preview anytime in your dashboard → Grow tab.</p>
             </div>
-            {/* Launch kit — auto-sent to the verified admin email at go-live;
+            {/* Launch kit  -  auto-sent to the verified admin email at go-live;
                 this button forwards a copy to a colleague (recipient left blank) */}
             <a
               href={(() => {
@@ -2085,11 +2085,11 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                   `Our page: ${site}`,
                   `Donor join code: ${joinCode}`,
                   `Direct giving link (donors sign up here): ${give}`, '',
-                  `Website widget — paste this where the "Round up for us" card should appear:`,
+                  `Website widget  -  paste this where the "Round up for us" card should appear:`,
                   `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`, '',
                   `The QR code (points to the giving link) is on the dashboard → Grow tab, ready for posters, newsletters, and event tables.`, '',
-                  `Admin sign-in: https://pocketcache.app/demo/?npsignin=1 — works for the verified admin email; a fresh code is emailed each time. No password.`, '',
-                  `— Sent from ${orgName}'s PocketCache launch kit`,
+                  `Admin sign-in: https://pocketcache.app/demo/?npsignin=1  -  works for the verified admin email; a fresh code is emailed each time. No password.`, '',
+                  ` -  Sent from ${orgName}'s PocketCache launch kit`,
                 ].join('\n');
                 return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
               })()}
@@ -2101,7 +2101,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
               Your launch kit is emailed to {adminEmail || 'your verified admin address'} automatically
               the moment you go live (demo: shown on this page instead). Use the button above to
-              forward it to a colleague — just add their address.
+              forward it to a colleague  -  just add their address.
             </p>
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -2119,7 +2119,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             href="mailto:support@pocketcache.app"
             className="text-xs text-gray-400 hover:text-gray-600"
           >
-            Stuck? Email us — support@pocketcache.app
+            Stuck? Email us  -  support@pocketcache.app
           </a>
         </div>
 
@@ -2240,16 +2240,16 @@ export default function Onboarding() {
   // Dynamic slide-2 subtitle based on bound nonprofit
   function slide2Subtitle() {
     if (selectedNonprofit) {
-      return `This app is built for ${selectedNonprofit.name}. Your spare change goes straight to them every month — nothing in between.`;
+      return `This app is built for ${selectedNonprofit.name}. Your spare change goes straight to them every month  -  nothing in between.`;
     }
-    return 'This app is built for your cause. Your spare change goes straight to them every month — nothing in between.';
+    return 'This app is built for your cause. Your spare change goes straight to them every month  -  nothing in between.';
   }
 
   // Slide 0 welcomes whoever is actually looking at it: a donor who just joined
   // their nonprofit's app shouldn't see the pitch written for nonprofits.
   function slide0Subtitle() {
     if (selectedNonprofit) {
-      return `${selectedNonprofit.shortName ?? selectedNonprofit.name} has its own giving app — and you're in. Round up your everyday purchases and your spare change quietly adds up for them.`;
+      return `${selectedNonprofit.shortName ?? selectedNonprofit.name} has its own giving app  -  and you're in. Round up your everyday purchases and your spare change quietly adds up for them.`;
     }
     return SLIDES[0].subtitle;
   }
@@ -2394,7 +2394,7 @@ export default function Onboarding() {
             )}
           </div>
 
-          {/* Nonprofit CTA — pinned banner on slide 0 */}
+          {/* Nonprofit CTA  -  pinned banner on slide 0 */}
           {slide === 0 && (
             <motion.button
               initial={{ opacity: 0, y: 8 }}

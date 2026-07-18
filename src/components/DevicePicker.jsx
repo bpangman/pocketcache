@@ -36,7 +36,7 @@ export default function DevicePicker({ selected, onChange }) {
         color: 'rgba(148,163,184,0.85)', fontSize: 11, fontWeight: 500,
         margin: 0, letterSpacing: 0.2, fontFamily: 'Poppins, sans-serif',
       }}>
-        See how the app fits any phone — pick one.
+        See how the app fits any phone  -  pick one.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
         {DEVICES.map(d => {

@@ -39,7 +39,7 @@ export default function BecomeMatchSponsorSheet({ show, onClose, nonprofit, bran
         ) : (
           <>
             <p className="text-gray-500 text-sm mb-2">
-              Partner with {orgName} this month. Your company sponsors the monthly round-up match — donors see your logo, you get a community impact report.
+              Partner with {orgName} this month. Your company sponsors the monthly round-up match  -  donors see your logo, you get a community impact report.
             </p>
             <p className="text-xs text-gray-400 mb-4 font-medium">
               Flat campaign fee. 100% of your match goes to {orgName}.
@@ -54,7 +54,7 @@ export default function BecomeMatchSponsorSheet({ show, onClose, nonprofit, bran
               <input type="email" placeholder="Email" value={email}
                 onChange={e => setEmail(e.target.value)} required
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <input type="text" placeholder="Budget (e.g. $10,000–$50,000)" value={budget}
+              <input type="text" placeholder="Budget (e.g. $10,000-$50,000)" value={budget}
                 onChange={e => setBudget(e.target.value)}
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
               <motion.button whileTap={{ scale: 0.97 }} type="submit"
