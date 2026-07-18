@@ -1,6 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+:root {
+  --pc-safe-top: 0px;
+  --pc-safe-bottom: 0px;
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;

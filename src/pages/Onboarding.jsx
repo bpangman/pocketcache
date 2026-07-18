@@ -207,8 +207,8 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
     >
       {/* Header  -  leads with the nonprofit pitch */}
       <div
-        className="flex flex-col items-center justify-end px-8 pb-5 pt-10 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '40%' }}
+        className="flex flex-col items-center justify-end px-8 pb-5 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '40%', paddingTop: 'calc(var(--pc-safe-top) + 8px)' }}
       >
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
@@ -438,8 +438,8 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
         {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
-          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
-          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%' }}
+          className="flex flex-col items-center justify-end px-8 pb-8"
+          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
         >
         {/* Expanded content */}
         <div
@@ -650,8 +650,8 @@ function AdminSignInScreen({ onBack, onComplete }) {
       className="flex flex-col h-full overflow-hidden"
     >
       <div
-        className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+        className="flex flex-col justify-end px-8 pb-8 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
           <ArrowLeft size={14} /> Back
@@ -757,8 +757,8 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
         className="flex flex-col h-full overflow-hidden"
       >
         <div
-          className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+          className="flex flex-col justify-end px-8 pb-8 shrink-0"
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
         >
           <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
             <ArrowLeft size={14} /> Back
@@ -803,8 +803,8 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
       className="flex flex-col h-full overflow-hidden"
     >
       <div
-        className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%' }}
+        className="flex flex-col justify-end px-8 pb-8 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
           <ArrowLeft size={14} /> Back
@@ -885,8 +885,8 @@ function ConnectCardScreen({ onNext }) {
         {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
-          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
-          style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%' }}
+          className="flex flex-col items-center justify-end px-8 pb-8"
+          style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
         >
         {/* Expanded content */}
         <div
@@ -1082,8 +1082,8 @@ function PaymentMethodScreen({ onNext }) {
         {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
-          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%' }}
+          className="flex flex-col items-center justify-end px-8 pb-8"
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
         >
         {/* Expanded content */}
         <div
@@ -1324,8 +1324,8 @@ function CardEntryScreen({ onNext }) {
         className="flex flex-col h-full overflow-hidden"
       >
         <div
-          className="flex flex-col items-center justify-end px-8 pb-8 pt-14 shrink-0"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '32%' }}
+          className="flex flex-col items-center justify-end px-8 pb-8 shrink-0"
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '32%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
         >
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
@@ -1393,8 +1393,8 @@ function CheckoutConfirmScreen({ onConfirm }) {
         {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
           ref={heroRef}
-          className="flex flex-col items-center justify-end px-8 pb-8 pt-14"
-          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%' }}
+          className="flex flex-col items-center justify-end px-8 pb-8"
+          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
         >
         {/* Expanded content */}
         <div
@@ -1703,8 +1703,8 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
       className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col justify-end px-8 pb-8 pt-14 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '30%' }}>
+      <div className="flex flex-col justify-end px-8 pb-8 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '30%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}>
         <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</motion.button>
         <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
           {step === 'ein'          && 'Verify Your\nNonprofit'}
@@ -2323,8 +2323,8 @@ export default function Onboarding() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -30 }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className={`flex-1 flex flex-col items-center justify-center px-8 pt-8 pb-6`}
-          style={current.bgStyle}
+          className={`flex-1 flex flex-col items-center justify-center px-8 pb-6`}
+          style={{ ...current.bgStyle, paddingTop: 'calc(var(--pc-safe-top) + 32px)' }}
         >
           {/* Illustration */}
           <div className="flex-1 flex items-center justify-center min-h-0">

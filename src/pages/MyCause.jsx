@@ -80,7 +80,8 @@ export default function MyCause() {
       <motion.div
         animate={{ background: brand.headerGradient }}
         transition={{ duration: 0.6 }}
-        className="px-5 pt-14 pb-6"
+        className="px-5 pb-6"
+        style={{ paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <div className="flex items-center gap-4">
           <OrgLogo nonprofit={np} size={16} rounded="2xl" className="shrink-0 shadow-lg" />

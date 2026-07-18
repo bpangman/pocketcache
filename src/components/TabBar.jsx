@@ -16,7 +16,7 @@ export default function TabBar() {
   const brand = useTheme();
 
   return (
-    <div className="tab-bar absolute bottom-0 left-0 right-0 flex items-center px-1 pb-6 pt-2">
+    <div className="tab-bar absolute bottom-0 left-0 right-0 flex items-center px-1 pt-2" style={{ paddingBottom: 'calc(var(--pc-safe-bottom) + 8px)' }}>
       {TABS.map(({ id, label, icon: Icon }) => { // eslint-disable-line no-unused-vars
         const active = tab === id;
         return (

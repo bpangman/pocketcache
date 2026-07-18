@@ -52,7 +52,8 @@ export default function Activity() {
       <motion.div
         animate={{ background: brand.headerGradient }}
         transition={{ duration: 0.6 }}
-        className="px-5 pt-14 pb-4"
+        className="px-5 pb-4"
+        style={{ paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <div className="flex items-center justify-between">
           <div>

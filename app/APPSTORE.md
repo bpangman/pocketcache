@@ -1,5 +1,8 @@
 # PocketCache iOS App - App Store Build Guide
 
+## Pre-Launch Reminder: Remove Testing Mode
+src/main.jsx contains a TESTING MODE block that clears all localStorage/sessionStorage on every native cold launch (so Blake can re-test from the welcome screen). This MUST be removed before TestFlight/App Store submission. Search for "TESTING MODE" in src/main.jsx.
+
 ## What Was Built
 
 A Capacitor 8.4.1 iOS wrapper for PocketCache.

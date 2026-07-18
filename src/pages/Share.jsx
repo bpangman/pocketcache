@@ -64,7 +64,8 @@ export default function Share() {
       <motion.div
         animate={{ background: brand.headerGradient }}
         transition={{ duration: 0.6 }}
-        className="px-5 pt-14 pb-5"
+        className="px-5 pb-5"
+        style={{ paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <h1 className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.3px' }}>Share</h1>
         <p className="text-white/70 text-sm mt-0.5">Spread the word</p>

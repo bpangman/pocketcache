@@ -129,52 +129,43 @@ export default function ScaleFit({ children, viewport }) {
     );
   }
 
-  // Mobile mode: full window with safe-area insets (original behavior).
+  // Mobile mode: full window, safe-area vars passed into the scale container.
   return (
-    /*
-     * Outer wrapper: full screen, brand navy gradient behind everything.
-     * Padding for notch (top) and home indicator (bottom) lives HERE —
-     * outside the transform — so it is not multiplied by scale.
-     */
     <div
+      ref={contentRef}
       style={{
         width: '100vw',
         height: '100dvh',
         background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 50%, #0B2A4A 100%)',
         overflow: 'hidden',
         overscrollBehavior: 'none',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
         boxSizing: 'border-box',
       }}
     >
-      {/* Content area measured by ResizeObserver for exact post-safe-area height */}
+      {/*
+       * Scale container: centred horizontally, scaled from the top-centre.
+       * left: calc(50% - REF_W/2px) places the element's CSS left at vw/2 - REF_W/2.
+       * transform-origin "top center" pivots at (left + REF_W/2, 0) = (vw/2, 0).
+       * After scale(s): visual left = vw/2 - REF_W*s/2.
+       *   s = vw/REF_W => visual left = 0 (edge-to-edge)
+       *   s = SCALE_CAP => navy gradient shows on both sides
+       * Safe-area CSS vars are divided by scale so inner layouts use pre-scaled values.
+       */}
       <div
-        ref={contentRef}
-        style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
+        style={{
+          '--pc-safe-top': `calc(env(safe-area-inset-top) / ${scale})`,
+          '--pc-safe-bottom': `calc(env(safe-area-inset-bottom) / ${scale})`,
+          position: 'absolute',
+          top: 0,
+          left: `calc(50% - ${REF_W / 2}px)`,
+          width: `${REF_W}px`,
+          height: `${appH}px`,
+          transform: `scale(${scale})`,
+          transformOrigin: 'top center',
+          overflow: 'hidden',
+        }}
       >
-        {/*
-         * Scale container: centred horizontally, scaled from the top-centre.
-         * left: calc(50% − REF_W/2px) places the element's CSS left at vw/2 − REF_W/2.
-         * transform-origin "top center" pivots at (left + REF_W/2, 0) = (vw/2, 0).
-         * After scale(s): visual left = vw/2 − REF_W·s/2.
-         *   s = vw/REF_W → visual left = 0 (edge-to-edge)
-         *   s = SCALE_CAP → navy gradient shows on both sides
-         */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: `calc(50% - ${REF_W / 2}px)`,
-            width: `${REF_W}px`,
-            height: `${appH}px`,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top center',
-            overflow: 'hidden',
-          }}
-        >
-          {children}
-        </div>
+        {children}
       </div>
     </div>
   );

@@ -47,7 +47,8 @@ function NpHeader({ npOrg }) {
 
   return (
     <motion.div animate={{ background: `linear-gradient(135deg, ${accent} 0%, #001a33 100%)` }}
-      transition={{ duration: 0.5 }} className="flex items-center gap-3 px-5 pt-12 pb-4 shrink-0">
+      transition={{ duration: 0.5 }} className="flex items-center gap-3 shrink-0"
+      style={{ paddingTop: 'calc(var(--pc-safe-top) + 16px)', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '16px' }}>
       {/* Logo */}
       {logoSrc ? (
         <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-lg">

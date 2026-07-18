@@ -14,7 +14,7 @@ export default function NpTabBar() {
   const accent = npOrg.color || '#0D9488';
 
   return (
-    <div className="tab-bar absolute bottom-0 left-0 right-0 flex items-center px-1 pb-6 pt-2">
+    <div className="tab-bar absolute bottom-0 left-0 right-0 flex items-center px-1 pt-2" style={{ paddingBottom: 'calc(var(--pc-safe-bottom) + 8px)' }}>
       {NP_TABS.map((tabDef) => {
         const { id, label } = tabDef;
         const TabIcon = tabDef.icon;

@@ -35,6 +35,11 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   **not** for this Connect hand-off, and the backend is not deployed.
 - **Action:** build when the live backend + Stripe platform account are in place.
 
+### [TESTING MODE] Native fresh-start wipe on every cold launch
+- **Now (demo):** src/main.jsx clears all localStorage/sessionStorage on every native cold launch so Blake can re-test onboarding from scratch each time.
+- **Production:** This block MUST be removed before the official launch. It is marked with "TESTING MODE - REMOVE BEFORE LAUNCH" in the code.
+- **Action:** Delete the testing-mode block in src/main.jsx before any TestFlight or App Store submission.
+
 ## Launch-blocking legal / ops (see also memory: project_pocketcache_prelaunch_checklist)
 - E&O + cyber insurance in place.
 - Nathan (lawyer) review of the Nonprofit Software License Agreement.

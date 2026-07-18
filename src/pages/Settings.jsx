@@ -895,7 +895,8 @@ export default function Settings() {
       <motion.div
         animate={{ background: brand.headerGradient }}
         transition={{ duration: 0.6 }}
-        className="px-5 pt-14 pb-5"
+        className="px-5 pb-5"
+        style={{ paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <div className="flex items-center justify-between">
           <div>
