@@ -6,7 +6,7 @@ A Capacitor 8.4.1 iOS wrapper for PocketCache.
 
 - Bundle ID: app.pocketcache
 - App Name: PocketCache
-- Remote loading mode: the wrapper points to https://pocketcache.app via `server.url` in capacitor.config.json. Every push to main on the web repo instantly updates what all installed apps see - no new build needed.
+- Remote loading mode: the wrapper points to https://pocketcache.app/demo/ via `server.url` in capacitor.config.json. Every push to main on the web repo instantly updates what all installed apps see - no new build needed.
 - Plugins: @capacitor/app, @capacitor/splash-screen, @capacitor/status-bar
 - Target: iPhone only (TARGETED_DEVICE_FAMILY = 1), portrait only
 - CocoaPods dependency management (NOT Swift Package Manager)

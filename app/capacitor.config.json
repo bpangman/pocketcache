@@ -4,7 +4,7 @@
   "webDir": "www",
   "backgroundColor": "#0B2A4A",
   "server": {
-    "url": "https://pocketcache.app"
+    "url": "https://pocketcache.app/demo/"
   },
   "ios": {
     "contentInset": "never",

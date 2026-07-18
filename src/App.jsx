@@ -458,7 +458,12 @@ function ThemedApp() {
   // must not flip the shell.
   const [appEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return Boolean(params.get('org') || params.get('npsignin') === '1' || params.get('app') === '1');
+    return Boolean(
+      params.get('org') ||
+      params.get('npsignin') === '1' ||
+      params.get('app') === '1' ||
+      window.Capacitor?.isNativePlatform?.()
+    );
   });
 
   // Org-scoped pretty URL: a join-link entry settles at pocketcache.app/CODE/give
