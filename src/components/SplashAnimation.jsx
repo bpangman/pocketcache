@@ -14,16 +14,20 @@ const TRAVEL = 2 * Math.PI * COIN_D; // ~502.65 px
 // Ease that mimics a real coin decelerating under friction
 const ROLL_EASE = [0.22, 1, 0.36, 1]; // easeOutQuint-like
 
+// How high the coin pops above center (px)
+const POP_HEIGHT = 135;
+
 export default function SplashAnimation({ onDone }) {
   const [coinScope, animateCoin] = useAnimate();
   // 'rolling' | 'revealing' | 'done'
   const [phase, setPhase] = useState('rolling');
+  const [showSparkle, setShowSparkle] = useState(false);
 
   useEffect(() => {
     let dead = false;
 
     (async () => {
-      // ── Phase 1: roll in from off-screen left to screen center (~1.1s) ──
+      // -- Phase 1: roll in from off-screen left to screen center (~1.1s) --
       // translateX and rotate share the same ease, so rotation stays exactly
       // proportional to travel at every frame (no-slip rolling physics).
       await animateCoin(coinScope.current,
@@ -32,25 +36,44 @@ export default function SplashAnimation({ onDone }) {
       );
       if (dead) return;
 
-      // ── Phase 2a: micro-overshoot (+4 deg) + squash on "click" ──
+      // -- Phase 2: Mario-style coin pop (~650ms total) --
+
+      // 2a: pop UP fast (ease-out launch) + first half of vertical-axis spin
+      //     Trigger sparkle glint at the same moment (peaks at top of arc)
+      setShowSparkle(true);
       await animateCoin(coinScope.current,
-        { rotate: TOTAL_ROT + 4, scaleX: 1.08, scaleY: 0.90 },
+        { y: -POP_HEIGHT, rotateY: 180 },
+        { duration: 0.25, ease: [0.2, 1, 0.4, 1] }
+      );
+      if (dead) return;
+
+      // 2b: fall back down under gravity (ease-in) + complete vertical spin
+      await animateCoin(coinScope.current,
+        { y: 0, rotateY: 360 },
+        { duration: 0.35, ease: [0.4, 0, 1, 0.6] }
+      );
+      if (dead) return;
+      setShowSparkle(false);
+
+      // 2c: landing squash (coin hits center)
+      await animateCoin(coinScope.current,
+        { scaleX: 1.12, scaleY: 0.82 },
         { duration: 0.07, ease: 'linear' }
       );
       if (dead) return;
 
-      // ── Phase 2b: spring snap-back to exact UP ──
+      // 2d: settle bounce (spring back to normal)
       await animateCoin(coinScope.current,
-        { rotate: TOTAL_ROT, scaleX: 1, scaleY: 1 },
-        { type: 'spring', stiffness: 450, damping: 20 }
+        { scaleX: 1, scaleY: 1 },
+        { type: 'spring', stiffness: 420, damping: 18 }
       );
       if (dead) return;
 
-      // ── Phase 3: hold at center (750ms) ──
+      // -- Phase 3: hold at center (750ms) --
       await new Promise(r => setTimeout(r, 750));
       if (dead) return;
 
-      // ── Phase 4: reveal - coin flies up + fades; background dissolves ──
+      // -- Phase 4: reveal - coin flies up + fades; background dissolves --
       setPhase('revealing');
       await animateCoin(coinScope.current,
         { y: -(COIN_D * 3.0), scale: 0.45, opacity: 0 },
@@ -82,7 +105,8 @@ export default function SplashAnimation({ onDone }) {
         }}
       />
 
-      {/* Coin - on its own z-layer so it animates independently of the bg */}
+      {/* Coin - on its own z-layer so it animates independently of the bg.
+          perspective on the parent div enables 3D rotateY on the coin child. */}
       <div
         style={{
           position: 'absolute',
@@ -92,6 +116,7 @@ export default function SplashAnimation({ onDone }) {
           justifyContent: 'center',
           zIndex: 101,
           pointerEvents: 'none',
+          perspective: 600,
         }}
       >
         {/*
@@ -107,6 +132,9 @@ export default function SplashAnimation({ onDone }) {
          *
          * Since x and rotate share the same ease curve they stay in constant
          * ratio throughout, giving true no-slip rolling at every frame.
+         *
+         * After the pop: rotateY ends at 360 (=0, coin face forward),
+         * rotate stays at 720 (=0, arrow pointing up). Clean reset.
          */}
         <motion.div
           ref={coinScope}
@@ -115,9 +143,31 @@ export default function SplashAnimation({ onDone }) {
             height: COIN_D,
             x: -TRAVEL,
             rotate: 0,
+            position: 'relative',
           }}
         >
           <CoinMark size={COIN_D} />
+
+          {/* Shine glint - child of coin so it travels with it.
+              Visible at top of arc; keyframes fade it in and out naturally. */}
+          {showSparkle && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: [0, 1, 0], scale: [0.4, 2.2, 0.4] }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              style={{
+                position: 'absolute',
+                width: COIN_D * 2.2,
+                height: COIN_D * 2.2,
+                top: -(COIN_D * 0.6),
+                left: -(COIN_D * 0.6),
+                background:
+                  'radial-gradient(circle, rgba(255,255,220,0.9) 0%, rgba(94,234,212,0.45) 45%, transparent 70%)',
+                borderRadius: '50%',
+                pointerEvents: 'none',
+              }}
+            />
+          )}
         </motion.div>
       </div>
     </>
