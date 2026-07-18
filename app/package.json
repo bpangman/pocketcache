@@ -1,0 +1,25 @@
+{
+  "name": "pocketcache-ios-app",
+  "version": "1.0.0",
+  "description": "Capacitor iOS wrapper for PocketCache (remote loading from https://pocketcache.app).",
+  "private": true,
+  "scripts": {
+    "sync": "npx cap sync ios",
+    "assets": "npx capacitor-assets generate --ios",
+    "open": "npx cap open ios"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/app": "8.1.0",
+    "@capacitor/core": "8.4.1",
+    "@capacitor/ios": "8.4.1",
+    "@capacitor/splash-screen": "8.0.1",
+    "@capacitor/status-bar": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.4.1"
+  }
+}

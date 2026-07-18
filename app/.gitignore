@@ -1,0 +1,4 @@
+node_modules/
+ios/DerivedData/
+ios/App/Pods/
+ios/App/App/public/
