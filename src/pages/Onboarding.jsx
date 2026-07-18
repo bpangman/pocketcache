@@ -11,6 +11,7 @@ import bgcaLogoUrl from '../assets/bgca-logo.png';
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
 import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
+import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
@@ -2128,6 +2129,20 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   );
 }
 
+// ─── Splash wrapper - plays the rolling coin entrance on every fresh gate mount ─
+
+function GateWithSplash({ children }) {
+  const [splashDone, setSplashDone] = useState(false);
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {children}
+      {!splashDone && (
+        <SplashAnimation onDone={() => setSplashDone(true)} />
+      )}
+    </div>
+  );
+}
+
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
@@ -2255,14 +2270,16 @@ export default function Onboarding() {
   }
 
   if (step === 'gate') return (
-    <OrgGateScreen
-      onBind={handleBind}
-      onNonprofitSignup={() => setStep('nonprofit-signup')}
-      autoBindOrg={autoBindOrg}
-      hasAccount={hasAccount}
-      onWelcomeBack={resumeSession}
-      onUniversalSignIn={() => setStep('gate-signin')}
-    />
+    <GateWithSplash>
+      <OrgGateScreen
+        onBind={handleBind}
+        onNonprofitSignup={() => setStep('nonprofit-signup')}
+        autoBindOrg={autoBindOrg}
+        hasAccount={hasAccount}
+        onWelcomeBack={resumeSession}
+        onUniversalSignIn={() => setStep('gate-signin')}
+      />
+    </GateWithSplash>
   );
   if (step === 'admin-signin') return (
     <AdminSignInScreen
