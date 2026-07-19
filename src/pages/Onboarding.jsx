@@ -28,15 +28,12 @@ const SLIDES = [
   {
     id: 0,
     bg: '',
-    bgStyle: { background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)' },
-    illustration: (
-      <div className="relative flex items-center justify-center w-full">
-        <PocketCacheLogo size={44} onDark={true} />
-      </div>
-    ),
-    title: '',
-    subtitle: 'Your own branded giving app  -  live in minutes. Donors give with every purchase. Flat pricing, no percentages, just giving.',
-    cta: 'Get Started',
+    bgStyle: { background: '#003865' },
+    illustration: null,
+    title: 'Your App,\nYour Cause',
+    // Dynamic subtitle injected in render
+    subtitle: '',
+    cta: 'Next',
   },
   {
     id: 1,
@@ -78,16 +75,6 @@ const SLIDES = [
   },
   {
     id: 2,
-    bg: '',
-    bgStyle: { background: '#003865' },
-    illustration: null,
-    title: 'Your App,\nYour Cause',
-    // Dynamic subtitle injected in render
-    subtitle: '',
-    cta: 'Next',
-  },
-  {
-    id: 3,
     bg: '',
     bgStyle: { background: 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)' },
     illustration: (
@@ -2265,15 +2252,6 @@ export default function Onboarding() {
     return 'This app is built for your cause. Your spare change goes straight to them every month  -  nothing in between.';
   }
 
-  // Slide 0 welcomes whoever is actually looking at it: a donor who just joined
-  // their nonprofit's app shouldn't see the pitch written for nonprofits.
-  function slide0Subtitle() {
-    if (selectedNonprofit) {
-      return `${selectedNonprofit.shortName ?? selectedNonprofit.name} has its own giving app  -  and you're in. Round up your everyday purchases and your spare change quietly adds up for them.`;
-    }
-    return SLIDES[0].subtitle;
-  }
-
   if (step === 'gate') return (
     <GateWithSplash>
       <OrgGateScreen
@@ -2358,7 +2336,7 @@ export default function Onboarding() {
         >
           {/* Illustration */}
           <div className="flex-1 flex items-center justify-center min-h-0">
-            {slide === 2 ? (
+            {slide === 0 ? (
               <div className="flex flex-col items-center gap-4">
                 <motion.div
                   initial={{ scale: 0 }}
@@ -2387,7 +2365,7 @@ export default function Onboarding() {
               </h1>
             ) : null}
             <p className="text-white/80 text-base mt-4 leading-relaxed">
-              {slide === 2 ? slide2Subtitle() : slide === 0 ? slide0Subtitle() : current.subtitle}
+              {slide === 0 ? slide2Subtitle() : current.subtitle}
             </p>
           </div>
 
@@ -2424,20 +2402,6 @@ export default function Onboarding() {
             )}
           </div>
 
-          {/* Nonprofit CTA  -  pinned banner on slide 0 */}
-          {slide === 0 && (
-            <motion.button
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setStep('nonprofit-signup')}
-              className="w-full mt-3 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-semibold text-sm border-2 border-white/40 bg-white/15"
-              style={{ color: '#fff' }}
-            >
-              Nonprofits: get your own giving app free →
-            </motion.button>
-          )}
         </motion.div>
       </AnimatePresence>
     </div>
