@@ -15,7 +15,7 @@ html, body { width: 1024px; height: 1024px; background: #0B2A4A; display: flex; 
 </style>
 </head>
 <body>
-<svg width="900" height="900" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<svg width="810" height="810" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <circle cx="50" cy="50" r="50" fill="#E5A800" />
   <circle cx="50" cy="50" r="44" fill="#FBBF24" />
   <polygon
