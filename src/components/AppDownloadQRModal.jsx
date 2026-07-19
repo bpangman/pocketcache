@@ -3,6 +3,10 @@ import { X } from 'lucide-react';
 
 const isNative = () => !!(window.Capacitor?.isNativePlatform?.());
 
+// The demo deploys under /demo/ - resolve the QR asset against Vite's base
+// so it loads in production, dev, and the native bundle alike.
+const QR_SRC = `${import.meta.env.BASE_URL ?? '/'}app-qr.svg`;
+
 export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
   if (isNative()) return null;
 
@@ -80,7 +84,7 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
             </button>
             <div style={{ fontSize: 28, marginBottom: 8 }}>&#129689;</div>
             <img
-              src="/app-qr.svg"
+              src={QR_SRC}
               alt="QR code to download PocketCache"
               width={160}
               height={160}
