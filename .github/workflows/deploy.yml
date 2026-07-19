@@ -50,6 +50,10 @@ jobs:
           mkdir -p dist-pages/pitch
           cp public/pitch.html dist-pages/pitch/index.html
 
+          # App download landing page (QR target)
+          mkdir -p dist-pages/app
+          cp app/index.html dist-pages/app/index.html
+
           # Nonprofit license page
           mkdir -p dist-pages/legal/nonprofit-license
           cp legal/nonprofit-license/index.html dist-pages/legal/nonprofit-license/index.html

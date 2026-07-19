@@ -21,6 +21,7 @@ import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
 import { useHeroCollapse } from '../lib/useHeroCollapse';
+import AppDownloadQRModal from '../components/AppDownloadQRModal';
 
 
 const SLIDES = [
@@ -1571,6 +1572,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
   // (it becomes their link, QR, and widget identity). Editable later in Grow.
   const [joinCodeCustom, setJoinCodeCustom] = useState('');
   const [joinCodeError, setJoinCodeError] = useState(null);
+  const [showAppModal, setShowAppModal] = useState(false);
   const joinCode = joinCodeCustom || generateJoinCode(orgName);
 
   function handleJoinCodeChange(raw) {
@@ -1629,6 +1631,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
     e.preventDefault();
     if (!accepted) { setShowLicenseHint(true); return; }
     setStep('live');
+    setShowAppModal(true);
   }
 
   function handleGoLive() {
@@ -2125,6 +2128,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
         </div>
 
       </div>
+      <AppDownloadQRModal show={showAppModal} onDismiss={() => setShowAppModal(false)} />
     </motion.div>
   );
 }
@@ -2152,6 +2156,7 @@ export default function Onboarding() {
   const [signupProvider, setSignupProvider] = useState('demo');
   const [connectedBank, setConnectedBank] = useState(null);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
+  const [showAppModal, setShowAppModal] = useState(false);
   const [step, setStep] = useState(() => {
     const urlP = new URLSearchParams(window.location.search);
     if (urlP.get('npsignin') === '1') return 'admin-signin';
@@ -2302,23 +2307,28 @@ export default function Onboarding() {
     // dashboard); falls back to the gate for cold visitors.
     <NonprofitSignupFlow onBack={() => { if (!returnFromOnboarding()) setStep('gate'); }} onGoLive={handleGoLive} />
   );
-  if (step === 'checkout-confirm') return <CheckoutConfirmScreen onConfirm={() => {
-    setHasAccount({
-      name: DEMO_USER.name,
-      email: DEMO_USER.email,
-      provider: signupProvider || 'demo',
-      joinedAt: new Date().toISOString(),
-    });
-    setAccountStatus('active');
-    setLastMode('giving');
-    if (connectedBank) {
-      setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
-    }
-    if (pendingPaymentMethod) {
-      setPaymentMethod(pendingPaymentMethod);
-    }
-    setPage('home');
-  }} />;
+  if (step === 'checkout-confirm') return (
+    <div style={{position:'relative', width:'100%', height:'100%'}}>
+      <CheckoutConfirmScreen onConfirm={() => {
+        setHasAccount({
+          name: DEMO_USER.name,
+          email: DEMO_USER.email,
+          provider: signupProvider || 'demo',
+          joinedAt: new Date().toISOString(),
+        });
+        setAccountStatus('active');
+        setLastMode('giving');
+        if (connectedBank) {
+          setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
+        }
+        if (pendingPaymentMethod) {
+          setPaymentMethod(pendingPaymentMethod);
+        }
+        setShowAppModal(true);
+      }} />
+      <AppDownloadQRModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} />
+    </div>
+  );
   if (step === 'card-entry') return <CardEntryScreen onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null }); setStep('checkout-confirm'); }} />;
   if (step === 'payment-method') return <PaymentMethodScreen onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
   if (step === 'connect-card') return <ConnectCardScreen onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;

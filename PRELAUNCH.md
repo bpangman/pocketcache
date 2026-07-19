@@ -46,6 +46,7 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
 - Liability caps confirmed in the license.
 - Secure the Plaid access tokens (no plaintext storage).
 - California: confirmed blocked at signup until availability is confirmed.
+- Before launch, point the /app/ page (QR target) at the real App Store listing.
 
 ## Production readiness (demo → real product)
 

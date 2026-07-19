@@ -11,6 +11,7 @@ import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
 import { CapControl } from './WebPortalPages';
+import AppDownloadQRModal from '../components/AppDownloadQRModal';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
 // The signup journey as a real webpage: the donor arrived from THIS nonprofit's
@@ -146,6 +147,7 @@ export default function WebOnboarding({ entryOrg }) {
   const [paymentSel, setPaymentSel] = useState(null);
   // Review step
   const [coverProcessing, setCoverProcessing] = useState(true);
+  const [showAppModal, setShowAppModal] = useState(false);
 
   const isCA = selectedState === 'CA';
   const canContinue = agreedTerms && selectedState !== '' && !isCA;
@@ -197,7 +199,7 @@ export default function WebOnboarding({ entryOrg }) {
     }
     const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
     if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: null });
-    setPage('home'); // → WebDashboard
+    setShowAppModal(true);
   }
 
   const roundUps = pendingRoundUps ?? 4.63;
@@ -205,6 +207,7 @@ export default function WebOnboarding({ entryOrg }) {
   const total = parseFloat((feeMonths + roundUps + (coverProcessing ? processingCover : 0)).toFixed(2));
 
   return (
+    <div style={{position:'relative'}}>
     <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
       {/* Top nav  -  same webpage chrome as the dashboard */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
@@ -445,6 +448,8 @@ export default function WebOnboarding({ entryOrg }) {
           <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Privacy</a>
         </p>
       </footer>
+    </div>
+    <AppDownloadQRModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} fixed />
     </div>
   );
 }
