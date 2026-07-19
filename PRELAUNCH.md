@@ -83,6 +83,14 @@ Each item notes where PocketCache stands today and what "done" looks like.
   provider (Resend/Postmark), server-side code generation with expiry + attempt limits +
   rate limiting, and org-domain cross-check against IRS/Stripe-KYC records. Donor sign-in
   remains Apple/Google/Facebook SSO, unchanged.
+- **Duplicate-account detection (added 2026-07-19, raised by Blake):** the demo has NO
+  "account already exists" checks anywhere except join-code availability. Production must add:
+  (a) donor signup via real SSO detects an existing account for that Apple/Google/Facebook
+  identity and routes to sign-in instead of creating a duplicate; (b) nonprofit signup checks
+  the EIN against registered orgs and blocks or routes duplicates ("this organization already
+  has a PocketCache account - ask your admin to invite you"); (c) admin work-email signup
+  detects an existing admin account for that address and offers sign-in. All three need the
+  real backend account store - impossible client-side.
 - **Billing schedule (DECIDED by Blake 2026-07-06, rev 2 same day): lock on the 1st,
   charge on the 11th.** Round-ups accrue through the last calendar day of the month. On the
   1st the cycle CLOSES: the exact amount is locked and emailed to the donor ("here's your
