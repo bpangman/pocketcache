@@ -127,3 +127,26 @@ export default function WebPortalLinkModal({ show, onDismiss }) {
     </AnimatePresence>
   );
 }
+
+// One-shot flag: set at account-creation completion (native only), consumed by
+// WebPortalPrompt when the user lands on their dashboard.
+const PROMPT_KEY = 'pc_web_portal_prompt';
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function queueWebPortalPrompt() {
+  try { localStorage.setItem(PROMPT_KEY, '1'); } catch { /* storage unavailable - skip */ }
+}
+
+// Self-managing wrapper: shows the modal once when the dashboard mounts with the
+// flag set (native only), clears the flag on dismiss. Render inside a
+// position:relative app container - the modal uses position:absolute.
+export function WebPortalPrompt() {
+  const [show, setShow] = useState(() => {
+    try { return isNative() && localStorage.getItem(PROMPT_KEY) === '1'; } catch { return false; }
+  });
+  function dismiss() {
+    try { localStorage.removeItem(PROMPT_KEY); } catch { /* ignore */ }
+    setShow(false);
+  }
+  return <WebPortalLinkModal show={show} onDismiss={dismiss} />;
+}

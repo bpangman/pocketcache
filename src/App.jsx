@@ -17,6 +17,7 @@ import OrgLogo from './components/OrgLogo';
 import { findOrgByCode } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
 import ChargeReviewAlert from './components/ChargeReviewAlert';
+import { WebPortalPrompt } from './components/WebPortalLinkModal';
 import { WebAdminSignIn } from './pages/WebPortalPages';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
@@ -197,10 +198,16 @@ function AppContent() {
   if (page === 'onboarding') return <Onboarding />;
   // Face ID / Touch ID gate  -  everything past sign-in is behind it once enrolled
   if (bioGate.locked) return <AppLockScreen gate={bioGate} />;
-  if (page === 'np-dashboard') return <NpShell />;
+  if (page === 'np-dashboard') return (
+    <div className="w-full h-full relative">
+      <NpShell />
+      <WebPortalPrompt />
+    </div>
+  );
   return (
     <div className="w-full h-full relative">
       <AppShell />
+      <WebPortalPrompt />
       <BiometricOfferCard offer={bioOffer} surface="app" />
       <ChargeReviewAlert surface="app" />
       <AnimatePresence>

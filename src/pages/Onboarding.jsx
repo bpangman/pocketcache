@@ -22,7 +22,7 @@ import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
 import { useHeroCollapse } from '../lib/useHeroCollapse';
 import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
-import WebPortalLinkModal from '../components/WebPortalLinkModal';
+import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 
 
 const SLIDES = [
@@ -2117,7 +2117,6 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
 
       </div>
       <AppDownloadQRModal show={showAppModal} onDismiss={() => setShowAppModal(false)} />
-      <WebPortalLinkModal show={showAppModal} onDismiss={() => setShowAppModal(false)} />
     </motion.div>
   );
 }
@@ -2198,6 +2197,9 @@ export default function Onboarding() {
     });
     setAdminRole({ orgId: org.id, joinCode: org.shortName });
     setLastMode('admin');
+    // Native: queue the web-portal popup to appear on the admin dashboard
+    // (inverse of the QR popup web admins saw on the You're Live screen).
+    if (isNative()) queueWebPortalPrompt();
     setPage('np-dashboard');
   }
 
@@ -2304,13 +2306,12 @@ export default function Onboarding() {
         if (pendingPaymentMethod) {
           setPaymentMethod(pendingPaymentMethod);
         }
-        // Web shows the QR popup; native shows the WebPortalLinkModal. Both
-        // use showAppModal - the two components are mutually exclusive by their
-        // isNative() guards, so only one ever renders.
+        // Web shows the QR popup here; native goes straight home and the
+        // web-portal popup (inverse of the QR one) appears on the dashboard.
+        if (isNative()) { queueWebPortalPrompt(); setPage('home'); return; }
         setShowAppModal(true);
       }} />
       <AppDownloadQRModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} />
-      <WebPortalLinkModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} />
     </div>
   );
   if (step === 'card-entry') return <CardEntryScreen onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null }); setStep('checkout-confirm'); }} />;
