@@ -1,7 +1,11 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
 
-const isNative = () => !!(window.Capacitor?.isNativePlatform?.());
+// Web only - the native app never shows this popup. Completion handlers also
+// use this to skip straight to the next screen instead of waiting for a
+// dismiss that would never come (the modal renders null on native).
+// eslint-disable-next-line react-refresh/only-export-components
+export const isNative = () => !!(window.Capacitor?.isNativePlatform?.());
 
 // The demo deploys under /demo/ - resolve the QR asset against Vite's base
 // so it loads in production, dev, and the native bundle alike.

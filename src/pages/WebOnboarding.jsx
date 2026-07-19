@@ -11,7 +11,7 @@ import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
 import { CapControl } from './WebPortalPages';
-import AppDownloadQRModal from '../components/AppDownloadQRModal';
+import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
 // The signup journey as a real webpage: the donor arrived from THIS nonprofit's
@@ -199,6 +199,9 @@ export default function WebOnboarding({ entryOrg }) {
     }
     const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
     if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: null });
+    // Native never shows the QR popup - go straight home so the flow
+    // doesn't wait on a dismiss that can't happen.
+    if (isNative()) { setPage('home'); return; }
     setShowAppModal(true);
   }
 

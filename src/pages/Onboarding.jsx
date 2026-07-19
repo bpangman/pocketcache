@@ -21,7 +21,7 @@ import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
 import { useHeroCollapse } from '../lib/useHeroCollapse';
-import AppDownloadQRModal from '../components/AppDownloadQRModal';
+import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
 
 
 const SLIDES = [
@@ -2324,6 +2324,9 @@ export default function Onboarding() {
         if (pendingPaymentMethod) {
           setPaymentMethod(pendingPaymentMethod);
         }
+        // Native never shows the QR popup - go straight home so the flow
+        // doesn't wait on a dismiss that can't happen.
+        if (isNative()) { setPage('home'); return; }
         setShowAppModal(true);
       }} />
       <AppDownloadQRModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} />
