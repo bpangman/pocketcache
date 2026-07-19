@@ -19,7 +19,6 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
         position: 'fixed',
         top: '50%',
         left: '50%',
-        transform: 'translate(-50%, -50%)',
         zIndex: 51,
         background: '#fff',
         borderRadius: 24,
@@ -32,7 +31,6 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
         position: 'absolute',
         top: '50%',
         left: '50%',
-        transform: 'translate(-50%, -50%)',
         zIndex: 51,
         background: '#fff',
         borderRadius: 24,
@@ -54,11 +52,14 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
             style={backdropStyle}
             onClick={onDismiss}
           />
+          {/* Centering translate lives in framer-motion's x/y props, NOT style.transform:
+              framer-motion owns the transform property during the scale animation and
+              would overwrite a hand-written translate(-50%, -50%). */}
           <motion.div
             key="card"
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.92 }}
+            initial={{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }}
+            animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
+            exit={{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }}
             transition={{ type: 'spring', damping: 22, stiffness: 280 }}
             style={cardStyle}
           >
