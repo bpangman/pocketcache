@@ -808,7 +808,7 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
     setManualConnecting(true);
     setTimeout(() => {
       const last4 = digits.slice(-4);
-      const card = { name: manualName.trim() || 'My Card', last4, brand: 'Card', institution: 'Manual' };
+      const card = { name: 'My Card', last4, brand: 'Card', institution: 'Manual' };
       setManualConnecting(false);
       setConnected(card);
       onConnected(card);

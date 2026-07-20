@@ -870,7 +870,7 @@ function ConnectCardScreen({ onNext, onBack }) {
     setTimeout(() => {
       const last4 = digits.slice(-4);
       setManualConnecting(false);
-      setConnected({ id: 'manual', name: manualName.trim() || 'My Card', emoji: '💳', last4 });
+      setConnected({ id: 'manual', name: 'My Card', emoji: '💳', last4 });
       setShowManualEntry(false);
     }, 1000);
   }
@@ -959,7 +959,7 @@ function ConnectCardScreen({ onNext, onBack }) {
             >
               <CheckCircle size={22} className="shrink-0" style={{ color: '#0D9488' }} />
               <div>
-                <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{connected.name} connected</p>
+                <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{connected.name} ····{connected.last4} connected</p>
                 <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll track your purchases and calculate round-ups as they happen</p>
               </div>
             </motion.div>
