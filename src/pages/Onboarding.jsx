@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ArrowRight, Building2, Lock, ArrowLeft } from 'lucide-react';
+import { CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronLeft } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { QRCodeSVG } from 'qrcode.react';
@@ -370,7 +370,7 @@ export const US_STATES = [
   { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
 ];
 
-function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
+function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -429,33 +429,38 @@ function SignUpScreen({ onNext, nonprofit, hasAccount, accountStatus, onGoToDash
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8"
-          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
+          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
+        {onBack && (
+          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
+            <ChevronLeft size={18} color="white" />
+          </button>
+        )}
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
           style={{ opacity: heroExpandedOpacity }}
         >
-          <motion.div className="mb-5 flex flex-col items-center gap-3">
+          <motion.div className="mb-3 flex flex-col items-center gap-2">
             {nonprofit
-              ? <OrgLogo nonprofit={nonprofit} size={16} rounded="2xl" className="bg-white/20 mb-2" />
-              : <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl mb-2">&#127952;</div>
+              ? <OrgLogo nonprofit={nonprofit} size={14} rounded="2xl" className="bg-white/20" />
+              : <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-3xl">&#127952;</div>
             }
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="bg-white/20 rounded-2xl px-4 py-2"
+              className="bg-white/20 rounded-xl px-3 py-1.5"
             >
               <p className="text-white text-xs font-semibold text-center">
                 Supporting {npName}
               </p>
             </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
             Create Your{'\n'}Account
           </h1>
-          <p className="text-white/80 text-sm mt-2 text-center">
+          <p className="text-white/80 text-xs mt-1 text-center">
             Sign up in seconds. No payment required yet.
           </p>
         </div>
@@ -831,13 +836,22 @@ export const BANKS = [
   { id: 'bofa',    name: 'Bank of America', sub: 'Customized Cash, Travel', color: '#e31837', emoji: '🏦' },
 ];
 
-function ConnectCardScreen({ onNext }) {
+function ConnectCardScreen({ onNext, onBack }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualCardNumber, setManualCardNumber] = useState('');
+  const [manualConnecting, setManualConnecting] = useState(false);
+
+  function formatCardNum(raw) {
+    const digits = raw.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(.{4})/g, '$1 ').trim();
+  }
 
   function handleSelect(bank) {
     if (connected) return;
@@ -847,6 +861,18 @@ function ConnectCardScreen({ onNext }) {
       setConnecting(null);
       setConnected({ ...bank, last4 });
     }, 1200);
+  }
+
+  function handleManualConnect() {
+    const digits = manualCardNumber.replace(/\D/g, '');
+    if (digits.length < 13) return;
+    setManualConnecting(true);
+    setTimeout(() => {
+      const last4 = digits.slice(-4);
+      setManualConnecting(false);
+      setConnected({ id: 'manual', name: manualName.trim() || 'My Card', emoji: '💳', last4 });
+      setShowManualEntry(false);
+    }, 1000);
   }
 
   return (
@@ -876,51 +902,45 @@ function ConnectCardScreen({ onNext }) {
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8"
-          style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
+          style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
+        {onBack && (
+          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
+            <ChevronLeft size={18} color="white" />
+          </button>
+        )}
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
           style={{ opacity: heroExpandedOpacity }}
         >
-          <motion.div className="mb-5 flex flex-col items-center gap-3">
+          <motion.div className="mb-3 flex flex-col items-center gap-2">
             <motion.div
               initial={{ rotate: -4, y: 12, opacity: 0 }}
               animate={{ rotate: -4, y: 0, opacity: 1 }}
               transition={{ delay: 0.15, type: 'spring', stiffness: 180 }}
-              className="w-64 h-36 rounded-3xl p-5 shadow-2xl relative overflow-hidden"
-              style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)' }}
+              className="w-44 h-26 rounded-2xl p-4 shadow-xl relative overflow-hidden"
+              style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)', width: 176, height: 104 }}
             >
-              <div className="flex justify-between items-start mb-5">
-                <div className="w-9 h-6 rounded bg-white/50" />
+              <div className="flex justify-between items-start mb-3">
+                <div className="w-7 h-5 rounded bg-white/50" />
                 <div className="flex gap-1">
-                  <div className="w-6 h-6 rounded-full bg-white/40" />
-                  <div className="w-6 h-6 rounded-full bg-white/25 -ml-2" />
+                  <div className="w-5 h-5 rounded-full bg-white/40" />
+                  <div className="w-5 h-5 rounded-full bg-white/25 -ml-1.5" />
                 </div>
               </div>
-              <p className="text-white/80 font-mono text-sm tracking-widest">•••• •••• •••• ••••</p>
+              <p className="text-white/80 font-mono text-xs tracking-widest">•••• •••• •••• ••••</p>
               <div className="flex justify-between mt-2">
                 <p className="text-white/60 text-xs">Your Card</p>
-                <p className="text-xs font-semibold text-white/80">👁 Watching purchases</p>
+                <p className="text-xs font-semibold text-white/80">Watching purchases</p>
               </div>
             </motion.div>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.5, type: 'spring' }}
-              className="flex items-center gap-2 px-4 py-2 rounded-2xl"
-              style={{ background: 'rgba(255,255,255,0.2)' }}
-            >
-              <span className="text-white text-sm">☕ $3.40</span>
-              <span className="text-white/60 text-sm">→</span>
-              <span className="text-white font-bold text-sm">+$0.60 donated 💚</span>
-            </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
             Which card should{'\n'}we track?
           </h1>
-          <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Every purchase on this card rounds up  -  the change goes straight to your cause.
+          <p className="text-white/80 text-xs mt-2 text-center leading-relaxed">
+            Every purchase rounds up  -  the change goes straight to your cause.
           </p>
         </div>
       </div>
@@ -943,45 +963,103 @@ function ConnectCardScreen({ onNext }) {
                 <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll track your purchases and calculate round-ups as they happen</p>
               </div>
             </motion.div>
+          ) : showManualEntry ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl p-4 space-y-3"
+              style={{ background: '#fff', border: '1.5px solid #99f6e4' }}
+            >
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Enter card details</p>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Cardholder name</label>
+                <input
+                  type="text"
+                  placeholder="Name on card"
+                  value={manualName}
+                  onChange={e => setManualName(e.target.value)}
+                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Card number</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="XXXX XXXX XXXX XXXX"
+                  value={manualCardNumber}
+                  onChange={e => setManualCardNumber(formatCardNum(e.target.value))}
+                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono tracking-wider"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Lock size={12} className="text-gray-400 shrink-0" />
+                <p className="text-gray-400 text-xs">Encrypted via Plaid  -  PocketCache never stores your full card number</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowManualEntry(false); setManualName(''); setManualCardNumber(''); }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200"
+                >Cancel</button>
+                <motion.button
+                  whileTap={manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? { scale: 0.97 } : {}}
+                  onClick={handleManualConnect}
+                  disabled={manualCardNumber.replace(/\D/g,'').length < 13 || manualConnecting}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+                  style={{
+                    background: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting
+                      ? 'linear-gradient(135deg, #0d9488, #003865)'
+                      : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+                  }}
+                >
+                  {manualConnecting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                        className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white" />
+                      Connecting…
+                    </span>
+                  ) : 'Connect'}
+                </motion.button>
+              </div>
+            </motion.div>
           ) : (
-            BANKS.map(bank => (
+            <>
+              {BANKS.map(bank => (
+                <motion.button
+                  key={bank.id}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => handleSelect(bank)}
+                  className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
+                  style={{ background: '#fff', border: '1.5px solid #99f6e4', opacity: connecting && connecting !== bank.id ? 0.4 : 1 }}
+                >
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-xl bg-gray-50">
+                    {bank.emoji}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900 text-sm">{bank.name}</p>
+                    <p className="text-gray-400 text-xs">{bank.sub}</p>
+                  </div>
+                  {connecting === bank.id
+                    ? <span className="text-xs text-teal-600 font-semibold">Connecting…</span>
+                    : <ArrowRight size={16} className="text-gray-300 shrink-0" />
+                  }
+                </motion.button>
+              ))}
               <motion.button
-                key={bank.id}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => handleSelect(bank)}
-                className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
-                style={{ background: '#fff', border: '1.5px solid #99f6e4', opacity: connecting && connecting !== bank.id ? 0.4 : 1 }}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl text-left border-2 border-dashed border-gray-200 bg-white"
+                onClick={() => setShowManualEntry(true)}
               >
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-xl bg-gray-50">
-                  {bank.emoji}
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-teal-50">
+                  <Lock size={18} className="text-teal-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-gray-900 text-sm">{bank.name}</p>
-                  <p className="text-gray-400 text-xs">{bank.sub}</p>
+                  <p className="font-semibold text-gray-700 text-sm">Enter your card manually</p>
+                  <p className="text-gray-400 text-xs">Type your card number  -  encrypted via Plaid</p>
                 </div>
-                {connecting === bank.id
-                  ? <span className="text-xs text-teal-600 font-semibold">Connecting…</span>
-                  : <ArrowRight size={16} className="text-gray-300 shrink-0" />
-                }
+                <ArrowRight size={16} className="text-gray-300 shrink-0" />
               </motion.button>
-            ))
-          )}
-
-          {!connected && (
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl text-left border-2 border-dashed border-gray-200 bg-white"
-              onClick={() => handleSelect({ id: 'other', name: 'My Bank', sub: '' })}
-            >
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-gray-100">
-                <Building2 size={20} className="text-gray-400" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-gray-700 text-sm">Search all banks & cards</p>
-                <p className="text-gray-400 text-xs">12,000+ institutions supported via Plaid</p>
-              </div>
-              <ArrowRight size={16} className="text-gray-300 shrink-0" />
-            </motion.button>
+            </>
           )}
 
           <div className="flex items-center gap-2 px-1 pt-1">
@@ -1036,7 +1114,7 @@ export const PAYMENT_OPTIONS = [
   },
 ];
 
-function PaymentMethodScreen({ onNext }) {
+function PaymentMethodScreen({ onNext, onBack }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -1073,22 +1151,27 @@ function PaymentMethodScreen({ onNext }) {
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
+        {onBack && (
+          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
+            <ChevronLeft size={18} color="white" />
+          </button>
+        )}
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
           style={{ opacity: heroExpandedOpacity }}
         >
-          <motion.div className="mb-5 flex flex-col items-center gap-3">
-            <div className="flex gap-3">
+          <motion.div className="mb-2 flex flex-col items-center gap-2">
+            <div className="flex gap-2">
               {['🏦', '🍎', '💳'].map((icon, i) => (
                 <motion.div
                   key={i}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: i * 0.1 + 0.2, type: 'spring', stiffness: 280 }}
-                  className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl"
+                  className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl"
                 >
                   {icon}
                 </motion.div>
@@ -1098,16 +1181,16 @@ function PaymentMethodScreen({ onNext }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="flex items-center gap-2 bg-white/20 rounded-2xl px-4 py-2"
+              className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-1.5"
             >
-              <span className="text-white text-sm font-semibold">Charged once a month · $5 minimum</span>
+              <span className="text-white text-xs font-semibold">Charged once a month · $5 minimum</span>
             </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-            How should we collect{'\n'}your round-up payments?
+          <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+            How should we collect{'\n'}your round-ups?
           </h1>
-          <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Once a month, your round-ups total up into one clean charge  -  to the payment method you choose below.
+          <p className="text-white/80 text-xs mt-1 text-center leading-relaxed">
+            One monthly charge  -  your choice of payment method.
           </p>
         </div>
       </div>
@@ -1301,7 +1384,7 @@ function CardEntryForm({ onSuccess }) {
   );
 }
 
-function CardEntryScreen({ onNext }) {
+function CardEntryScreen({ onNext, onBack }) {
   const { selectedNonprofit } = useApp();
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
 
@@ -1315,8 +1398,13 @@ function CardEntryScreen({ onNext }) {
       >
         <div
           className="flex flex-col items-center justify-end px-8 pb-8 shrink-0"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '32%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
+          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '32%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
+          {onBack && (
+            <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
+              <ChevronLeft size={18} color="white" />
+            </button>
+          )}
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -1346,7 +1434,7 @@ function CardEntryScreen({ onNext }) {
 
 // ─── Checkout confirm screen ─────────────────────────────────────────────────
 
-function CheckoutConfirmScreen({ onConfirm }) {
+function CheckoutConfirmScreen({ onConfirm, onBack }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -1384,8 +1472,13 @@ function CheckoutConfirmScreen({ onConfirm }) {
         <div
           ref={heroRef}
           className="flex flex-col items-center justify-end px-8 pb-8"
-          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
+          style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
+        {onBack && (
+          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
+            <ChevronLeft size={18} color="white" />
+          </button>
+        )}
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
@@ -2291,33 +2384,37 @@ export default function Onboarding() {
   );
   if (step === 'checkout-confirm') return (
     <div style={{position:'relative', width:'100%', height:'100%'}}>
-      <CheckoutConfirmScreen onConfirm={() => {
-        setHasAccount({
-          name: DEMO_USER.name,
-          email: DEMO_USER.email,
-          provider: signupProvider || 'demo',
-          joinedAt: new Date().toISOString(),
-        });
-        setAccountStatus('active');
-        setLastMode('giving');
-        if (connectedBank) {
-          setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
-        }
-        if (pendingPaymentMethod) {
-          setPaymentMethod(pendingPaymentMethod);
-        }
-        // Web shows the QR popup here; native goes straight home and the
-        // web-portal popup (inverse of the QR one) appears on the dashboard.
-        if (isNative()) { queueWebPortalPrompt(); setPage('home'); return; }
-        setShowAppModal(true);
-      }} />
+      <CheckoutConfirmScreen
+        onBack={() => setStep('payment-method')}
+        onConfirm={() => {
+          setHasAccount({
+            name: DEMO_USER.name,
+            email: DEMO_USER.email,
+            provider: signupProvider || 'demo',
+            joinedAt: new Date().toISOString(),
+          });
+          setAccountStatus('active');
+          setLastMode('giving');
+          if (connectedBank) {
+            setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
+          }
+          if (pendingPaymentMethod) {
+            setPaymentMethod(pendingPaymentMethod);
+          }
+          // Web shows the QR popup here; native goes straight home and the
+          // web-portal popup (inverse of the QR one) appears on the dashboard.
+          if (isNative()) { queueWebPortalPrompt(); setPage('home'); return; }
+          setShowAppModal(true);
+        }}
+      />
       <AppDownloadQRModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} />
     </div>
   );
-  if (step === 'card-entry') return <CardEntryScreen onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null }); setStep('checkout-confirm'); }} />;
-  if (step === 'payment-method') return <PaymentMethodScreen onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
-  if (step === 'connect-card') return <ConnectCardScreen onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
+  if (step === 'card-entry') return <CardEntryScreen onBack={() => setStep('payment-method')} onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null }); setStep('checkout-confirm'); }} />;
+  if (step === 'payment-method') return <PaymentMethodScreen onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
+  if (step === 'connect-card') return <ConnectCardScreen onBack={() => setStep('signup')} onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
   if (step === 'signup') return <SignUpScreen
+    onBack={() => { setSlide(2); setStep('slides'); }}
     onNext={() => setStep('connect-card')}
     nonprofit={selectedNonprofit}
     hasAccount={hasAccount}
@@ -2396,14 +2493,7 @@ export default function Onboarding() {
             >
               {current.cta}
             </motion.button>
-            {slide > 0 && (
-              <button
-                onClick={() => setStep('signup')}
-                className="text-white/60 text-sm py-2"
-              >
-                Skip for now
-              </button>
-            )}
+            <div style={{ height: 48 }} />
           </div>
 
         </motion.div>

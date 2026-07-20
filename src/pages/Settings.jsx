@@ -597,9 +597,18 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
   );
 }
 
+function formatManualCardNumber(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 16);
+  return digits.replace(/(.{4})/g, '$1 ').trim();
+}
+
 function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualCardNumber, setManualCardNumber] = useState('');
+  const [manualConnecting, setManualConnecting] = useState(false);
 
   function handleSelect(bank) {
     if (connected) return;
@@ -611,15 +620,30 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
     }, 1200);
   }
 
+  function handleManualConnect() {
+    const digits = manualCardNumber.replace(/\D/g, '');
+    if (digits.length < 13) return;
+    setManualConnecting(true);
+    setTimeout(() => {
+      const last4 = digits.slice(-4);
+      setManualConnecting(false);
+      setConnected({ id: 'manual', name: manualName.trim() || 'My Card', emoji: '💳', last4 });
+      setShowManualForm(false);
+    }, 1000);
+  }
+
   function handleDone() {
     onConnected(connected);
     onClose();
     setConnected(null);
     setConnecting(null);
+    setShowManualForm(false);
+    setManualName('');
+    setManualCardNumber('');
   }
 
   return (
-    <Sheet show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); }} title="Track a Different Card">
+    <Sheet show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); setShowManualForm(false); setManualName(''); setManualCardNumber(''); }} title="Track a Different Card">
       <div className="flex flex-col h-full overflow-hidden" style={{ background: '#f0fdfb' }}>
         <div className="flex-1 px-4 pt-5 pb-2 space-y-2.5 overflow-y-auto">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">
@@ -640,28 +664,106 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
                 <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll watch purchases and calculate round-ups as they happen</p>
               </div>
             </motion.div>
+          ) : showManualForm ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl p-4 space-y-3"
+              style={{ background: '#fff', border: '1.5px solid #99f6e4' }}
+            >
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Enter card details</p>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Cardholder name</label>
+                <input
+                  type="text"
+                  placeholder="Name on card"
+                  value={manualName}
+                  onChange={e => setManualName(e.target.value)}
+                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Card number</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="XXXX XXXX XXXX XXXX"
+                  value={manualCardNumber}
+                  onChange={e => setManualCardNumber(formatManualCardNumber(e.target.value))}
+                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono tracking-wider"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Lock size={12} className="text-gray-400 shrink-0" />
+                <p className="text-gray-400 text-xs">Encrypted via Plaid  -  PocketCache never stores your full card number</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowManualForm(false); setManualName(''); setManualCardNumber(''); }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200"
+                >
+                  Cancel
+                </button>
+                <motion.button
+                  whileTap={manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? { scale: 0.97 } : {}}
+                  onClick={handleManualConnect}
+                  disabled={manualCardNumber.replace(/\D/g,'').length < 13 || manualConnecting}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+                  style={{
+                    background: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting
+                      ? 'linear-gradient(135deg, #0d9488, #003865)'
+                      : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+                  }}
+                >
+                  {manualConnecting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                        className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white" />
+                      Connecting…
+                    </span>
+                  ) : 'Connect'}
+                </motion.button>
+              </div>
+            </motion.div>
           ) : (
-            TRACKED_CARD_BANKS.map(bank => (
+            <>
+              {TRACKED_CARD_BANKS.map(bank => (
+                <motion.button
+                  key={bank.id}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => handleSelect(bank)}
+                  className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
+                  style={{ background: '#fff', border: '1.5px solid #99f6e4', opacity: connecting && connecting !== bank.id ? 0.4 : 1 }}
+                >
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-xl bg-gray-50">
+                    {bank.emoji}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900 text-sm">{bank.name}</p>
+                    <p className="text-gray-400 text-xs">{bank.sub}</p>
+                  </div>
+                  {connecting === bank.id
+                    ? <span className="text-xs text-teal-600 font-semibold">Connecting…</span>
+                    : <ChevronRight size={16} className="text-gray-300 shrink-0" />
+                  }
+                </motion.button>
+              ))}
               <motion.button
-                key={bank.id}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => handleSelect(bank)}
+                onClick={() => setShowManualForm(true)}
                 className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
-                style={{ background: '#fff', border: '1.5px solid #99f6e4', opacity: connecting && connecting !== bank.id ? 0.4 : 1 }}
+                style={{ background: '#fff', border: '1.5px dashed #99f6e4' }}
               >
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-xl bg-gray-50">
-                  {bank.emoji}
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-teal-50">
+                  <Lock size={18} className="text-teal-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-gray-900 text-sm">{bank.name}</p>
-                  <p className="text-gray-400 text-xs">{bank.sub}</p>
+                  <p className="font-semibold text-gray-700 text-sm">Enter your card manually</p>
+                  <p className="text-gray-400 text-xs">Type your card number  -  encrypted via Plaid</p>
                 </div>
-                {connecting === bank.id
-                  ? <span className="text-xs text-teal-600 font-semibold">Connecting…</span>
-                  : <ChevronRight size={16} className="text-gray-300 shrink-0" />
-                }
+                <ChevronRight size={16} className="text-gray-300 shrink-0" />
               </motion.button>
-            ))
+            </>
           )}
 
           <div className="flex items-center gap-2 px-1 pt-1">
@@ -680,7 +782,7 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
               cursor: connected ? 'pointer' : 'default',
             }}
           >
-            {connected ? `Use ${connected.name} →` : 'Select a bank to continue'}
+            {connected ? `Use ${connected.name} →` : 'Select a card to continue'}
           </motion.button>
         </div>
       </div>
@@ -832,24 +934,6 @@ export default function Settings() {
   const [showCancel, setShowCancel] = useState(false);
   const [showTrackCard, setShowTrackCard] = useState(false);
   const [showChangePayment, setShowChangePayment] = useState(false);
-
-  const TEXT_SCALE_OPTIONS = [
-    { value: 0.85, label: 'Smaller' },
-    { value: 1,    label: 'Default' },
-    { value: 1.1,  label: 'Large' },
-    { value: 1.2,  label: 'XL' },
-  ];
-  const [textScale, setTextScaleState] = useState(() => {
-    try {
-      const v = parseFloat(localStorage.getItem('pc_text_scale'));
-      return [0.85, 1, 1.1, 1.2].includes(v) ? v : 1;
-    } catch { return 1; }
-  });
-  function handleTextScale(v) {
-    localStorage.setItem('pc_text_scale', String(v));
-    setTextScaleState(v);
-    window.dispatchEvent(new CustomEvent('pc-text-scale-change', { detail: v }));
-  }
 
   useEffect(() => {
     if (pendingSettingsAction === 'change-payment') {
@@ -1141,25 +1225,6 @@ export default function Settings() {
             onPress={() => setShowAppIcon(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
-          <div className="h-px bg-gray-50 mx-4" />
-          <div className="px-4 pt-3 pb-4">
-            <p className="text-gray-900 text-sm font-semibold mb-2">Text Size</p>
-            <div className="flex gap-1.5">
-              {TEXT_SCALE_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => handleTextScale(opt.value)}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
-                  style={textScale === opt.value
-                    ? { background: brand.primary, color: '#fff' }
-                    : { background: '#f3f4f6', color: '#6b7280' }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-gray-400 text-xs mt-2">You can also use your phone&apos;s system zoom.</p>
-          </div>
         </motion.div>
 
         {/* Help & Support */}

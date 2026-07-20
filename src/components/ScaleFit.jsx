@@ -34,15 +34,6 @@ function useViewportWidth() {
   return vw;
 }
 
-const VALID_TEXT_SCALES = [0.85, 1, 1.1, 1.2];
-
-function loadTextScale() {
-  try {
-    const v = parseFloat(localStorage.getItem('pc_text_scale'));
-    return VALID_TEXT_SCALES.includes(v) ? v : 1;
-  } catch { return 1; }
-}
-
 /**
  * ScaleFit — full-bleed mobile renderer.
  *
@@ -70,16 +61,6 @@ function loadTextScale() {
 export default function ScaleFit({ children, viewport }) {
   const windowVw = useViewportWidth();
   const contentRef = useRef(null);
-  const [textScale, setTextScale] = useState(loadTextScale);
-
-  useEffect(() => {
-    function handleScaleEvent(e) {
-      const v = e.detail;
-      if (VALID_TEXT_SCALES.includes(v)) setTextScale(v);
-    }
-    window.addEventListener('pc-text-scale-change', handleScaleEvent);
-    return () => window.removeEventListener('pc-text-scale-change', handleScaleEvent);
-  }, []);
 
   // Measured height of the inner area (after safe-area padding is removed by
   // the outer wrapper). Used to calculate appH = contentH / scale so the
@@ -101,8 +82,7 @@ export default function ScaleFit({ children, viewport }) {
   const vw = viewport ? viewport.width : windowVw;
   const contentH = viewport ? viewport.height : measuredH;
 
-  const effectiveRef = REF_W / textScale;
-  const scale = Math.min(vw / effectiveRef, SCALE_CAP);
+  const scale = Math.min(vw / REF_W, SCALE_CAP);
   // The app's internal layout sees a logical viewport of REF_W × appH.
   // Existing per-tab scroll areas absorb height differences automatically.
   const appH = contentH / scale;

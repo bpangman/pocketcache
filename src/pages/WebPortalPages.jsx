@@ -770,12 +770,25 @@ export function WebSettings() {
 }
 
 // ─── Settings modals ─────────────────────────────────────────────────────────
+function webFormatCardNumber(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 16);
+  return digits.replace(/(.{4})/g, '$1 ').trim();
+}
+
 function TrackCardModal({ show, onClose, current, onConnected }) {
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualCardNumber, setManualCardNumber] = useState('');
+  const [manualConnecting, setManualConnecting] = useState(false);
+
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setConnecting(null); setConnected(null); }, 0);
+    const id = setTimeout(() => {
+      setConnecting(null); setConnected(null);
+      setShowManualForm(false); setManualName(''); setManualCardNumber(''); setManualConnecting(false);
+    }, 0);
     return () => clearTimeout(id);
   }, [show]);
 
@@ -789,6 +802,19 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
     }, 1100);
   }
 
+  function handleManualConnect() {
+    const digits = manualCardNumber.replace(/\D/g, '');
+    if (digits.length < 13) return;
+    setManualConnecting(true);
+    setTimeout(() => {
+      const last4 = digits.slice(-4);
+      const card = { name: manualName.trim() || 'My Card', last4, brand: 'Card', institution: 'Manual' };
+      setManualConnecting(false);
+      setConnected(card);
+      onConnected(card);
+    }, 1000);
+  }
+
   return (
     <Modal show={show} onClose={onClose} title="Track a Different Card">
       {connected ? (
@@ -797,6 +823,49 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
           <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{connected.name} connected</p>
           <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>Now watching ····{connected.last4} for round-ups.</p>
           <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
+        </div>
+      ) : showManualForm ? (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 13, color: INK.secondary }}>Enter your card details  -  read-only, encrypted via Plaid.</p>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: INK.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Cardholder name</label>
+            <input
+              type="text"
+              placeholder="Name on card"
+              value={manualName}
+              onChange={e => setManualName(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 13, outline: 'none', background: '#f9fafb' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: INK.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Card number</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="XXXX XXXX XXXX XXXX"
+              value={manualCardNumber}
+              onChange={e => setManualCardNumber(webFormatCardNumber(e.target.value))}
+              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', letterSpacing: '0.1em', outline: 'none', background: '#f9fafb' }}
+            />
+          </div>
+          <p style={{ margin: 0, fontSize: 11.5, color: INK.muted, display: 'flex', alignItems: 'center', gap: 6 }}>
+            🔒 Encrypted via Plaid  -  PocketCache never stores your full card number
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => { setShowManualForm(false); setManualName(''); setManualCardNumber(''); }}
+              style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: INK.secondary }}
+            >Cancel</button>
+            <button
+              onClick={handleManualConnect}
+              disabled={manualCardNumber.replace(/\D/g,'').length < 13 || manualConnecting}
+              style={{
+                flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? 'pointer' : 'default',
+                background: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? 'linear-gradient(135deg, #0d9488, #003865)' : '#d1d5db',
+                color: '#fff', fontSize: 13, fontWeight: 700,
+              }}
+            >{manualConnecting ? 'Connecting…' : 'Connect'}</button>
+          </div>
         </div>
       ) : (
         <>
@@ -815,6 +884,16 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
                 {connecting === b.id && <span style={{ fontSize: 11.5, fontWeight: 600, color: '#0D9488' }}>Connecting…</span>}
               </button>
             ))}
+            <button
+              onClick={() => setShowManualForm(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, border: '1.5px dashed #99f6e4', background: '#f0fdfb', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <span style={{ fontSize: 20 }}>🔒</span>
+              <span style={{ flex: 1 }}>
+                <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: INK.primary }}>Enter your card manually</span>
+                <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>Type your card number  -  encrypted via Plaid</span>
+              </span>
+            </button>
           </div>
         </>
       )}
