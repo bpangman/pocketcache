@@ -468,7 +468,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
 
       {/* Bottom sheet */}
         <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-5 pb-2 space-y-3">
+          <div className="px-4 pt-10 pb-2 space-y-3">
 
           {/* State selector */}
           <div>
@@ -916,24 +916,20 @@ function ConnectCardScreen({ onNext, onBack }) {
         >
           <motion.div className="mb-3 flex flex-col items-center gap-2">
             <motion.div
-              initial={{ rotate: -4, y: 12, opacity: 0 }}
-              animate={{ rotate: -4, y: 0, opacity: 1 }}
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.15, type: 'spring', stiffness: 180 }}
-              className="w-44 h-26 rounded-2xl p-4 shadow-xl relative overflow-hidden"
+              className="w-44 h-26 rounded-2xl p-4 shadow-xl relative overflow-hidden flex flex-col justify-center"
               style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)', width: 176, height: 104 }}
             >
-              <div className="flex justify-between items-start mb-3">
+              <div className="flex justify-between items-start mb-2">
                 <div className="w-7 h-5 rounded bg-white/50" />
                 <div className="flex gap-1">
                   <div className="w-5 h-5 rounded-full bg-white/40" />
                   <div className="w-5 h-5 rounded-full bg-white/25 -ml-1.5" />
                 </div>
               </div>
-              <p className="text-white/80 font-mono text-xs tracking-widest">•••• •••• •••• ••••</p>
-              <div className="flex justify-between mt-2">
-                <p className="text-white/60 text-xs">Your Card</p>
-                <p className="text-xs font-semibold text-white/80">Watching purchases</p>
-              </div>
+              <p className="text-white/80 font-mono whitespace-nowrap" style={{ fontSize: 10, letterSpacing: '0.16em' }}>•••• •••• •••• ••••</p>
             </motion.div>
           </motion.div>
           <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
@@ -946,7 +942,7 @@ function ConnectCardScreen({ onNext, onBack }) {
       </div>
 
         <div className="rounded-t-3xl -mt-4" style={{ background: '#f0fdfb', minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-5 pb-2 space-y-2.5">
+          <div className="px-4 pt-10 pb-2 space-y-2.5">
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Select your card issuer</p>
 
@@ -1196,7 +1192,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
       </div>
 
         <div className="bg-gray-50 rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-5 pb-2 space-y-2.5">
+          <div className="px-4 pt-10 pb-2 space-y-2.5">
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
 
@@ -1421,7 +1417,7 @@ function CardEntryScreen({ onNext, onBack }) {
           </p>
         </div>
 
-        <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-6 pb-10">
+        <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-8 pb-10">
           <CardEntryForm onSuccess={(info) => onNext(info)} />
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
             Round-ups collect monthly on {npShort}&apos;s behalf. They issue your tax receipt directly.
@@ -1505,7 +1501,7 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
 
       {/* Sheet */}
         <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
-          <div className="px-5 pt-5 pb-2 space-y-4">
+          <div className="px-5 pt-8 pb-2 space-y-4">
 
           {/* Estimate card */}
           <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>

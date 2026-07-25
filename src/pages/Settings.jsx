@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle, HelpCircle } from 'lucide-react';
+import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle, HelpCircle, SkipForward } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
@@ -85,6 +85,58 @@ function SettingRow({ icon, label, sub, right, onPress, color }) {
     <div className="w-full flex items-center gap-3 px-4 py-3.5">
       {inner}
     </div>
+  );
+}
+
+function SkipConfirmModal({ show, onClose, monthName, nextChargeLabel, brand }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black z-40"
+            onClick={onClose}
+          />
+          {/* Centering translate lives in framer-motion's x/y props, NOT style.transform:
+              framer-motion owns the transform property during the scale animation and
+              would overwrite a hand-written translate(-50%, -50%). */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }}
+            animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
+            exit={{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }}
+            transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+            className="absolute left-1/2 top-1/2 z-50 bg-white rounded-3xl p-6 text-center"
+            style={{ width: 'min(320px, 88%)', boxShadow: '0 24px 64px rgba(0,0,0,0.25)' }}
+          >
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3"
+              style={{ background: brand.primary + '18', color: brand.primary }}
+            >
+              <SkipForward size={22} />
+            </div>
+            <h3 className="font-bold text-gray-900 text-lg mb-2">{monthName} skipped</h3>
+            <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
+              You will skip {monthName}'s charges. Those round-ups are simply never charged - they don't roll over and they don't come out later.
+            </p>
+            <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
+              Only the $1 app fee rolls to next month, so your next charge on {nextChargeLabel} carries a $1 x 2 fee.
+            </p>
+            <p className="text-gray-500 text-left mb-5" style={{ fontSize: 13 }}>
+              Changed your mind? Tap Undo on this screen any time before {nextChargeLabel}.
+            </p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onClose}
+              className="w-full py-3 rounded-2xl font-bold text-white text-sm"
+              style={{ background: brand.primary }}
+            >
+              Got it
+            </motion.button>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -934,6 +986,11 @@ export default function Settings() {
   const [showCancel, setShowCancel] = useState(false);
   const [showTrackCard, setShowTrackCard] = useState(false);
   const [showChangePayment, setShowChangePayment] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+
+  const skipMonthName = new Date().toLocaleDateString('en-US', { month: 'long' });
+  const nextChargeLabel = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 11)
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   useEffect(() => {
     if (pendingSettingsAction === 'change-payment') {
@@ -1031,13 +1088,31 @@ export default function Settings() {
           />
           <div className="h-px bg-gray-50 mx-4" />
           <SettingRow
-            icon={<span className="text-base">⏭️</span>}
+            icon={<SkipForward size={18} />}
             label="Skip a month"
             sub={skipNextCharge
-              ? "Skipping  -  this month's round-ups are simply never charged; only the $1 fee rolls to next month ($1 × 2)"
-              : "Need a breather? That month's round-ups are simply never charged  -  only the $1 fee rolls over"}
+              ? `${skipMonthName} skipped - only the $1 fee rolls over ($1 x 2)`
+              : `Need a breather? Skip ${skipMonthName}'s charge`}
             color={brand.secondary}
-            right={<Toggle value={skipNextCharge} onChange={setSkipNextCharge} color={brand.primary} />}
+            right={skipNextCharge ? (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSkipNextCharge(false)}
+                className="shrink-0 rounded-full px-3.5 py-1.5 font-bold text-xs bg-white text-gray-600"
+                style={{ border: '1.5px solid #d1d5db' }}
+              >
+                Undo
+              </motion.button>
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => { setSkipNextCharge(true); setShowSkipConfirm(true); }}
+                className="shrink-0 rounded-full px-3.5 py-1.5 font-bold text-xs text-white"
+                style={{ background: brand.primary }}
+              >
+                Skip {skipMonthName}
+              </motion.button>
+            )}
           />
         </motion.div>
 
@@ -1371,6 +1446,15 @@ export default function Settings() {
         nonprofit={selectedNonprofit}
         onDonate={(amount) => boostDonation(amount)}
         onCancelled={() => { setShowCancel(false); cancelAccount(); }}
+      />
+
+      {/* Skip a month confirmation */}
+      <SkipConfirmModal
+        show={showSkipConfirm}
+        onClose={() => setShowSkipConfirm(false)}
+        monthName={skipMonthName}
+        nextChargeLabel={nextChargeLabel}
+        brand={brand}
       />
     </div>
   );

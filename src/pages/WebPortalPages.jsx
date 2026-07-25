@@ -643,7 +643,11 @@ export function WebSettings() {
   const [commsOptin, setCommsOptinState] = useState(() => loadKey('pc_comms_optin', true));
   function updateCommsOptin(v) { setCommsOptinState(v); saveKey('pc_comms_optin', v); }
 
-  const [modal, setModal] = useState(null); // 'card' | 'payment' | 'switch' | 'privacy' | 'cancel'
+  const [modal, setModal] = useState(null); // 'card' | 'payment' | 'switch' | 'privacy' | 'cancel' | 'skip'
+
+  const skipMonthName = new Date().toLocaleDateString('en-US', { month: 'long' });
+  const nextChargeLabel = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 11)
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   useEffect(() => {
     if (pendingSettingsAction === 'change-payment') {
@@ -689,9 +693,25 @@ export function WebSettings() {
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Skip a month"
               sub={skipNextCharge
-                ? "Skipping  -  this month's round-ups are simply never charged; only the $1 fee rolls to next month ($1 × 2)"
-                : "Need a breather? That month's round-ups are simply never charged  -  only the $1 fee rolls over"}
-              right={<WebToggle value={skipNextCharge} onChange={setSkipNextCharge} />} />
+                ? `${skipMonthName} skipped - only the $1 fee rolls over ($1 x 2)`
+                : `Need a breather? Skip ${skipMonthName}'s charge`}
+              right={skipNextCharge ? (
+                <button onClick={() => setSkipNextCharge(false)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 10, fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                    border: '1.5px solid #e5e7eb', background: '#fff', color: INK.secondary,
+                  }}>
+                  Undo
+                </button>
+              ) : (
+                <button onClick={() => { setSkipNextCharge(true); setModal('skip'); }}
+                  style={{
+                    padding: '6px 12px', borderRadius: 10, fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                    border: 'none', background: NAVY, color: '#fff',
+                  }}>
+                  Skip {skipMonthName}
+                </button>
+              )} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <div style={{ paddingTop: 10 }}>
               <CapControl value={monthlyCap} onChange={setMonthlyCap} />
@@ -765,6 +785,18 @@ export function WebSettings() {
       <CancelModal show={modal === 'cancel'} onClose={() => setModal(null)}
         pendingRoundUps={pendingRoundUps} feeMonths={feeMonths} nonprofit={np}
         onDonate={boostDonation} onCancelled={cancelAccount} />
+      <Modal show={modal === 'skip'} onClose={() => setModal(null)} title={`${skipMonthName} skipped`}>
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+          You will skip {skipMonthName}'s charges. Those round-ups are simply never charged - they don't roll over and they don't come out later.
+        </p>
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+          Only the $1 app fee rolls to next month, so your next charge on {nextChargeLabel} carries a $1 x 2 fee.
+        </p>
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+          Changed your mind? Tap Undo on this screen any time before {nextChargeLabel}.
+        </p>
+        <ActionButton tone="primary" onClick={() => setModal(null)}>Got it</ActionButton>
+      </Modal>
     </>
   );
 }
