@@ -5,8 +5,9 @@ import { Z } from '../../lib/overlay';
 
 // top-20 (80px) already clears a 47px notch, so the inset only has to win on
 // devices with a bigger one - hence the floor rather than 80 + inset, which
-// would push the toast into the middle of the screen. Z.toast is the shared
-// toast step: above a sheet, below a modal card.
+// would push the toast into the middle of the screen. Z.pageToast is the
+// in-page celebration step: this confirmation belongs to the Dashboard, so it
+// sits BELOW an open bottom sheet rather than painting over its card.
 const TOAST_TOP = safeTopAtLeast(80, 12);
 
 export default function BoostToast({ amount, nonprofit, onClose }) {
@@ -16,7 +17,7 @@ export default function BoostToast({ amount, nonprofit, onClose }) {
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -80, opacity: 0 }}
       className="absolute left-4 right-4 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
-      style={{ top: TOAST_TOP, zIndex: Z.toast }}
+      style={{ top: TOAST_TOP, zIndex: Z.pageToast }}
     >
       <div className="text-3xl">💚</div>
       <div className="flex-1">

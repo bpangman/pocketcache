@@ -7,8 +7,8 @@ import { useApp } from '../store/AppContext';
 import { loadKey, saveKey } from '../store/identityStore';
 import { useTheme } from '../store/ThemeContext';
 import {
-  CHARGE_DAY, MAX_FEE_MONTHS, chargeTotal, daysUntilNextCharge,
-  effectiveCharge, nextChargeDate, nextChargeLabel,
+  MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal, cycleDays, daysUntilNextCharge,
+  effectiveCharge, nextChargeLabel,
 } from '../lib/billing';
 import { Z } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
@@ -22,6 +22,69 @@ import BoostToast from '../components/sheets/BoostToast';
 import VolunteerSheet from '../components/sheets/VolunteerSheet';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
 import MatchDetailsSheet from '../components/sheets/MatchDetailsSheet';
+
+// ─── Skipped-cycle copy  -  SHARED with the web portal ───────────────────────
+// The rule (billing.js, rule 5): a skipped month is never charged at all.
+// Nothing at all comes out on the upcoming charge date - the round-ups do NOT
+// roll over and they are NOT collected later - and only the flat $1 app fee
+// rides forward onto the charge after that.
+//
+// Both donor surfaces render these exact strings: WebDashboard.jsx and
+// WebOnboarding.jsx import them from here rather than re-typing them, so the app
+// and the browser can never word (or number) a skip differently. Importing plain
+// data out of a page module is the same pattern WebOnboarding already uses for
+// Onboarding.jsx's US_STATES / BANKS / PAYMENT_OPTIONS.
+/* eslint-disable react-refresh/only-export-components */
+
+/** Label for the upcoming-charge figure while a skip is in effect. */
+export const SKIP_COLLECT_LABEL = 'To be collected';
+
+/** The upcoming-charge figure itself while a skip is in effect. Not a total to
+ *  be computed - a skipped cycle collects nothing, so it is always zero. */
+export const SKIP_COLLECT_AMOUNT = '$0.00';
+
+/** When the normal lock-on-the-1st / charge-on-the-11th rhythm picks back up.
+ *  Says "next month's round-ups" deliberately: this month's are gone, so the
+ *  resumed schedule is about money the donor has not rounded up yet. */
+export const SKIP_RESUME_LINE = "Normal timing resumes with next month's round-ups  -  exact amount emailed on the 1st, charged on the 11th.";
+
+/** How a donor gets out of the skip. */
+export const SKIP_UNDO_LINE = 'Un-skip anytime in Settings.';
+
+/** Sub-label for an accrued round-ups tile while a skip is in effect, so the
+ *  accrual figure can never read as money that is about to be collected. */
+export const SKIP_TILE_SUB = 'Never charged';
+
+/**
+ * Sentence naming the upcoming charge date and saying nothing lands on it.
+ * @param {Date} [now] - injectable clock, same convention as lib/billing.
+ * @returns {string} e.g. 'Nothing is collected on Aug 11.'
+ */
+export function skipStatusLine(now = new Date()) {
+  return `Nothing is collected on ${nextChargeLabel(now)}.`;
+}
+
+/**
+ * Sentence stating the accrued round-ups are gone, not deferred.
+ * @param {number} pendingRoundUps - round-ups accrued this cycle.
+ * @returns {string}
+ */
+export function skipAccruedLine(pendingRoundUps) {
+  return `Your $${pendingRoundUps.toFixed(2)} of round-ups this month is never charged  -  it does not roll over and it will not be collected later.`;
+}
+
+/**
+ * Sentence naming where the rolled-forward $1 fee actually lands, with the
+ * multiplier derived from real state and clamped by MAX_FEE_MONTHS.
+ * @param {number} feeMonths - months of $1 fee pending today.
+ * @param {Date} [now] - injectable clock.
+ * @returns {string}
+ */
+export function skipFeeLine(feeMonths, now = new Date()) {
+  const rolled = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
+  return `Only the $1 app fee rolls forward, joining your ${chargeAfterNextLabel(now)} charge as $1 × ${rolled}.`;
+}
+/* eslint-enable react-refresh/only-export-components */
 
 const MILESTONE_EMOJIS = ['🌱', '⭐', '🏆', '💎', '🦸', '🚀', '🌟', '👑', '🎯', '🔮'];
 
@@ -64,7 +127,10 @@ function MilestoneToast({ milestone, onClose }) {
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -80, opacity: 0 }}
       className="absolute top-20 left-4 right-4 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
-      style={{ zIndex: Z.toast }}
+      // Z.pageToast, not Z.toast: this is a celebration on the Dashboard, so if
+      // the donor has a bottom sheet open it belongs BEHIND the sheet with the
+      // rest of the page instead of painting over the sheet's card.
+      style={{ zIndex: Z.pageToast }}
     >
       <div className="text-3xl">{milestone.emoji}</div>
       <div className="flex-1">
@@ -131,7 +197,9 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
 
   return (
     <Sheet show={show} onClose={onClose} title="Adjust This Month's Charge">
-      <div className="px-6 py-5 space-y-5" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      {/* pt-5 not py-5: Sheet owns the bottom safe-area inset now, and a pb of
+          any kind here stacks on top of it. */}
+      <div className="px-6 pt-5 space-y-5">
         <p className="text-gray-600 text-sm leading-relaxed">
           One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
         </p>
@@ -207,15 +275,17 @@ export default function Dashboard() {
   // review alert can never disagree (during days 1-10 the upcoming charge is
   // THIS month's 11th, not next month's).
   const nextChargeDateLabel = nextChargeLabel();
-  const belowMinimum = pendingRoundUps < monthlyMinimum;
+  // A skipped cycle collects nothing, so the below-minimum rollover story (and
+  // the cap / adjustment notes, and the "adjust this charge" affordance) must
+  // never show alongside it - there is no charge left to roll over or adjust.
+  // The web portal gates the same three things on `!skipped`.
+  const belowMinimum = pendingRoundUps < monthlyMinimum && !skipNextCharge;
 
   // Progress through the billing cycle: charge day to charge day, not a
-  // hardcoded 30. Cycle start is the previous CHARGE_DAY, derived from the
-  // module's own nextChargeDate() so the two ends always match.
-  const upcomingCharge = nextChargeDate();
-  const cycleStart = new Date(upcomingCharge.getFullYear(), upcomingCharge.getMonth() - 1, CHARGE_DAY);
-  const cycleDays = Math.max(1, Math.round((upcomingCharge - cycleStart) / 86400000));
-  const cyclePct = Math.max(0, Math.min(100, ((cycleDays - daysLeft) / cycleDays) * 100));
+  // hardcoded 30. Both ends come from lib/billing (previous charge day to next
+  // charge day) rather than being re-derived here.
+  const cycleLength = cycleDays();
+  const cyclePct = Math.max(0, Math.min(100, ((cycleLength - daysLeft) / cycleLength) * 100));
 
   // Cap + per-charge adjustment precedence lives in lib/billing so the app and
   // the web portal cannot drift.
@@ -223,9 +293,6 @@ export default function Dashboard() {
   const chargeAmount = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
   const chargeDue = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths });
   const feeLabel = feeMonths === 1 ? '$1 app fee' : `$1 × ${feeMonths} app fee`;
-  // Skipping this cycle rolls its $1 fee forward, so the charge AFTER the
-  // skipped one carries one more month of fee than is pending today.
-  const rolledFeeMonths = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
 
   // MoM display: "↑ 14% vs last" or "↓ 5% vs last" or "First month"
   const momDisplay = momChange === null
@@ -388,7 +455,10 @@ export default function Dashboard() {
               icon: <Zap size={18} />,
               label: 'Pending',
               value: `$${pendingRoundUps.toFixed(2)}`,
-              sub: 'This month',
+              // Accrual figure, so the raw round-ups are the honest number here -
+              // but on a skipped cycle "This month" would read as "coming out this
+              // month", which is exactly what is NOT happening.
+              sub: skipNextCharge ? SKIP_TILE_SUB : 'This month',
               iconColor: brand.primary,
               textColor: '#059669',
             },
@@ -435,15 +505,16 @@ export default function Dashboard() {
               <p className="font-bold text-gray-900 text-sm">
                 Monthly Charge to {selectedNonprofit.shortName}
               </p>
-              <p className="text-gray-400 text-xs mt-0.5">
-                Next charge: {skipNextCharge
-                  ? `${nextChargeDateLabel} skipped  -  only the $1 fee rolls forward ($1 × ${rolledFeeMonths} next time)`
-                  : nextChargeDateLabel}
+              <p className="text-gray-400 text-xs mt-0.5" data-testid="skip-status-line">
+                Next charge: {skipNextCharge ? skipStatusLine() : nextChargeDateLabel}
               </p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl" style={{ color: '#0B2A4A' }}>{daysLeft}</p>
-              <p className="text-gray-400 text-xs">days left</p>
+              {/* The countdown measures the CYCLE, and on a skipped cycle its end
+                  is not a charge - saying "days left" next to "nothing is
+                  collected" would read as a countdown to money leaving. */}
+              <p className="text-gray-400 text-xs">{skipNextCharge ? 'days left in cycle' : 'days left'}</p>
             </div>
           </div>
           <div className="h-2 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
@@ -457,7 +528,14 @@ export default function Dashboard() {
           </div>
           <div className="flex justify-between mt-1.5">
             <p className="text-gray-400 text-xs">Cycle start</p>
-            {belowMinimum ? (
+            {skipNextCharge ? (
+              /* The figure a skipped donor sees for the upcoming charge: zero.
+                 It used to print the full "$13.89 + $1 app fee · $14.89 pending"
+                 immediately under copy saying the charge was skipped. */
+              <p className="text-xs font-semibold text-amber-600" data-testid="skip-collect-line">
+                {SKIP_COLLECT_LABEL}: {SKIP_COLLECT_AMOUNT}
+              </p>
+            ) : belowMinimum ? (
               <p className="text-xs font-semibold text-amber-600">
                 ${pendingRoundUps.toFixed(2)} so far  -  rolls over at month-end
               </p>
@@ -466,25 +544,33 @@ export default function Dashboard() {
                 ${chargeAmount.toFixed(2)} + {feeLabel} · ${chargeDue.toFixed(2)} pending
               </p>
             )}
-            <p className="text-gray-400 text-xs">Charge day</p>
+            {/* On a skipped cycle the right-hand end of the bar is not a charge day. */}
+            <p className="text-gray-400 text-xs">{skipNextCharge ? 'Skipped' : 'Charge day'}</p>
           </div>
+          {skipNextCharge && (
+            <p className="text-amber-600 text-xs mt-2 leading-relaxed" data-testid="skip-detail">
+              {skipAccruedLine(pendingRoundUps)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}
+            </p>
+          )}
           {belowMinimum && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
               Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
               {' '}&middot; $1/month fee rolls too  -  {feeMonths} month{feeMonths !== 1 ? 's' : ''} so far (${feeMonths})  -  itemized on your charge.
             </p>
           )}
-          {!belowMinimum && capActive && chargeAdjustment === null && (
+          {!skipNextCharge && !belowMinimum && capActive && chargeAdjustment === null && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
               Capped at ${monthlyCap.toFixed(2)}  -  the rest won&apos;t be charged.
             </p>
           )}
-          {!belowMinimum && chargeAdjustment !== null && (
+          {!skipNextCharge && !belowMinimum && chargeAdjustment !== null && (
             <p className="text-xs mt-2 font-medium" style={{ color: '#059669' }}>
               Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
             </p>
           )}
-          {!belowMinimum && (
+          {/* Nothing to adjust on a skipped cycle - the web portal hides this
+              button on `!skipped` too, and the app used to offer it. */}
+          {!skipNextCharge && !belowMinimum && (
             <button
               onClick={() => setShowAdjustCharge(true)}
               className="text-xs mt-2 font-semibold underline-offset-2 underline block"

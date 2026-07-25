@@ -108,6 +108,56 @@ export function currentMonthName(d = new Date()) {
 }
 
 /**
+ * The charge day BEFORE the upcoming one - i.e. the start of the cycle the
+ * donor is currently inside. Needed so progress bars can measure charge-day to
+ * charge-day instead of assuming a 30 day month.
+ * @param {Date} [d] - the moment to read; defaults to now.
+ * @returns {Date} midnight local time on the previous charge day.
+ */
+export function previousChargeDate(d = new Date()) {
+  const next = nextChargeDate(d);
+  return new Date(next.getFullYear(), next.getMonth() - 1, CHARGE_DAY);
+}
+
+/**
+ * Length in whole days of the cycle the donor is currently inside. Varies with
+ * month length (28 to 31), which is why the old `daysLeft / 30` bars drifted.
+ * @param {Date} [d] - the moment to read; defaults to now.
+ * @returns {number} integer count of days.
+ */
+export function cycleDays(d = new Date()) {
+  return Math.round((nextChargeDate(d) - previousChargeDate(d)) / 86400000);
+}
+
+/**
+ * The charge AFTER the upcoming one. When a donor skips the current month,
+ * nothing is collected on the upcoming charge date, and the rolled-over app fee
+ * lands on this one instead - so skip copy needs to be able to name it.
+ * @param {Date} [d] - the moment to read; defaults to now.
+ * @returns {Date} midnight local time on the charge day after next.
+ */
+export function chargeAfterNextDate(d = new Date()) {
+  const next = nextChargeDate(d);
+  return new Date(next.getFullYear(), next.getMonth() + 1, CHARGE_DAY);
+}
+
+/**
+ * Short human label for the charge after the upcoming one.
+ * @param {Date} [d] - the moment to read; defaults to now.
+ * @returns {string} e.g. 'Sep 11'
+ */
+export function chargeAfterNextLabel(d = new Date()) {
+  return chargeAfterNextDate(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * A one-off "give extra" gift at or above this many dollars gets an extra
+ * "was that intentional?" confirmation step before it is charged. Lives here so
+ * the app sheet and the web portal modal cannot drift apart.
+ */
+export const LARGE_DONATION_THRESHOLD = 1000;
+
+/**
  * The round-up dollars that will actually be charged, applying the app's
  * precedence: an explicit one-time `chargeAdjustment` wins outright; otherwise
  * an active `monthlyCap` trims the total; otherwise the raw round-ups stand.

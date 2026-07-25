@@ -13,7 +13,14 @@ import SsoButtons from '../components/SsoButtons';
 import StripeCardForm from '../components/StripeCardForm';
 import { CapControl } from './WebPortalPages';
 import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
-import { effectiveCharge, chargeTotal } from '../lib/billing';
+import { chargeTotal, effectiveCharge, nextChargeLabel } from '../lib/billing';
+// A donor can reach this wizard with the current month already skipped (Settings
+// deep-links land here, and the skip survives), so the review step needs the same
+// skipped-cycle copy the two dashboards use - imported, never re-typed.
+import {
+  SKIP_COLLECT_AMOUNT, SKIP_COLLECT_LABEL, SKIP_RESUME_LINE, SKIP_UNDO_LINE,
+  skipAccruedLine, skipFeeLine, skipStatusLine,
+} from './Dashboard';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
 // The signup journey as a real webpage: the donor arrived from THIS nonprofit's
@@ -128,8 +135,8 @@ export default function WebOnboarding({ entryOrg }) {
   const {
     selectedNonprofit, setSelectedNonprofit, hasAccount, accountStatus,
     setHasAccount, setAccountStatus, setLastMode, setTrackedCard, setPaymentMethod,
-    setPage, pendingRoundUps, feeMonths, monthlyCap, setMonthlyCap,
-    initialOnboardingStep, clearInitialOnboardingStep,
+    setPage, pendingRoundUps, feeMonths, monthlyCap, setMonthlyCap, chargeAdjustment,
+    initialOnboardingStep, clearInitialOnboardingStep, skipNextCharge, goToOnboardingStep,
   } = useApp();
   const brand = useTheme();
   const org = selectedNonprofit ?? entryOrg;
@@ -216,15 +223,24 @@ export default function WebOnboarding({ entryOrg }) {
   // the previous step, so it goes through lib/billing like every other charge
   // figure. (It used to add raw round-ups, so a $10 cap and $22 of round-ups
   // showed $22 here and $10 in the app.)
+  //
+  // `chargeAdjustment` is in the precedence too: a returning donor who set a
+  // one-time adjustment and then walked back through the wizard (Settings
+  // deep-links land here) saw the capped figure on web and the adjusted figure in
+  // the app. Mirrors the app's confirm step (Onboarding.jsx ~1499-1516).
   const accrued = pendingRoundUps ?? 4.63;
-  const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap });
+  const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap, chargeAdjustment });
   const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
   const total = chargeTotal({
     pendingRoundUps: accrued,
     monthlyCap,
+    chargeAdjustment,
     feeMonths,
     processingCover: coverProcessing ? processingCover : 0,
   });
+  const capActive = monthlyCap !== null && monthlyCap !== undefined && accrued > monthlyCap;
+  const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
+  const chargeOn = nextChargeLabel();
   const cardReady = paymentSel !== 'card' || !!cardInfo;
 
   return (
@@ -264,6 +280,41 @@ export default function WebOnboarding({ entryOrg }) {
             >
               {step === 'account' && (
                 <>
+                  {/* ── FOR NONPROFITS (first, same as the phone gate) ──
+                      A nonprofit admin who follows an org join link on a laptop
+                      lands in THIS donor wizard (App.jsx routes ?org=CODE by
+                      viewport width alone), and the desktop wizard had no way out:
+                      the phone gate's OrgGateScreen leads with "For Nonprofits /
+                      Create your nonprofit page" above the donor path, and this
+                      had nothing. Same order, same words, web chrome.
+                      goToOnboardingStep('nonprofit-signup') is what App.jsx's
+                      WebExperience latches on to route to the desktop nonprofit
+                      signup frame instead of this wizard. */}
+                  <div style={{ marginBottom: 18 }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                      For Nonprofits
+                    </p>
+                    <button
+                      onClick={() => goToOnboardingStep('nonprofit-signup')}
+                      data-testid="web-nonprofit-cta"
+                      style={{
+                        width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer',
+                        background: `linear-gradient(135deg, ${NAVY}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 15,
+                      }}
+                    >
+                      Create your nonprofit page
+                    </button>
+                    <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: INK.muted }}>
+                      Run a nonprofit? List it on PocketCache and get your own round-up program  -  live in minutes.
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+                      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                      <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>
+                        Looking to support a nonprofit?
+                      </span>
+                      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                    </div>
+                  </div>
                   <PanelTitle title="Create your account" sub="Sign up in seconds. No payment required yet." />
                   {hasAccount && accountStatus === 'active' && (
                     <button
@@ -435,24 +486,51 @@ export default function WebOnboarding({ entryOrg }) {
                   <PanelTitle title="Review & confirm" sub={`Your round-ups are collected monthly by ${org?.name ?? 'your nonprofit'}.`} />
                   <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 14, padding: 16, marginBottom: 14 }}>
                     <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b' }}>Monthly estimate</p>
+                    {/* Reachable with the current month already skipped: the box
+                        used to itemize round-ups + fee + processing cover and quote
+                        a real total for a cycle that collects nothing at all. */}
+                    {skipNextCharge && (
+                      <p style={{ margin: '0 0 10px', fontSize: 12.5, lineHeight: 1.55, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }} data-testid="web-confirm-skipped">
+                        {skipStatusLine()}{' '}{skipAccruedLine(accrued)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}
+                      </p>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0' }}>
                       <span style={{ color: INK.secondary }}>Round-ups this month</span>
-                      <span style={{ fontWeight: 700, color: INK.primary }}>
-                        {roundUps !== accrued
+                      <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-confirm-roundups">
+                        {!skipNextCharge && roundUps !== accrued
                           ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${accrued.toFixed(2)}</s> ${roundUps.toFixed(2)}</>
-                          : `$${roundUps.toFixed(2)}`}
+                          : `$${accrued.toFixed(2)}`}
                       </span>
                     </div>
-                    {roundUps !== accrued && (
-                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#b45309' }}>
+                    {/* Same notes, same wording and same precedence as the app's
+                        confirm step (Onboarding.jsx ~1589-1607). A cap or an
+                        adjustment is moot on a skipped cycle - nothing is capped
+                        out of a charge that never happens. */}
+                    {!skipNextCharge && capActive && !adjusted && (
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#b45309' }} data-testid="web-confirm-cap-note">
                         Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
                       </p>
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
-                      <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
-                      <span>+${feeMonths.toFixed(2)}</span>
-                    </div>
-                    {coverProcessing && (
+                    {!skipNextCharge && adjusted && (
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, fontWeight: 600, color: '#059669' }} data-testid="web-confirm-adjust-note">
+                        Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
+                      </p>
+                    )}
+                    {/* The $1 fee and the processing cover are not on a skipped
+                        charge either - the fee rolls forward (the banner names
+                        where it lands) and there is no card charge to cover. */}
+                    {!skipNextCharge && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
+                        <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+                        <span>+${feeMonths.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {!skipNextCharge && feeMonths > 1 && (
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: INK.secondary }}>
+                        {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
+                      </p>
+                    )}
+                    {!skipNextCharge && coverProcessing && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
                         <span>Processing cover (goes to {npShort})</span>
                         <span>+${processingCover.toFixed(2)}</span>
@@ -460,8 +538,12 @@ export default function WebOnboarding({ entryOrg }) {
                     )}
                     <div style={{ height: 1, background: '#cbd5e1', margin: '8px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 13.5, color: INK.primary }}>One charge from {npShort}</span>
-                      <span style={{ fontWeight: 800, fontSize: 18, color: NAVY }}>${total.toFixed(2)}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13.5, color: INK.primary }}>
+                        {skipNextCharge ? SKIP_COLLECT_LABEL : `One charge from ${npShort}`}
+                      </span>
+                      <span style={{ fontWeight: 800, fontSize: 18, color: skipNextCharge ? '#b45309' : NAVY }} data-testid="web-confirm-total">
+                        {skipNextCharge ? SKIP_COLLECT_AMOUNT : `$${total.toFixed(2)}`}
+                      </span>
                     </div>
                     <p style={{ margin: '8px 0 0', fontSize: 11.5, fontStyle: 'italic', color: INK.muted }}>This is an example  -  no real charge is made in this demo.</p>
                   </div>
@@ -480,9 +562,15 @@ export default function WebOnboarding({ entryOrg }) {
                         Cover {npShort}&apos;s card-processing costs too, so 100% of my round-ups reach them.
                       </span>
                       <span style={{ display: 'block', fontSize: 12, color: INK.secondary, marginTop: 2 }}>
-                        {coverProcessing
-                          ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
-                          : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
+                        {/* On a skipped cycle there is no charge to add the cover
+                            to, so quoting "~$0.61 goes directly to BGCA" here
+                            would be money that never moves. The preference still
+                            applies to the charges that do run. */}
+                        {skipNextCharge
+                          ? `Applies from your next charge  -  nothing is collected this month.`
+                          : coverProcessing
+                            ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
+                            : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
                       </span>
                     </span>
                   </div>
@@ -490,8 +578,17 @@ export default function WebOnboarding({ entryOrg }) {
                   <p style={{ fontSize: 12, lineHeight: 1.6, color: INK.muted, margin: '0 0 16px' }}>
                     Once a month, {org?.name ?? 'your nonprofit'} bundles your round-ups into one charge  -  you&apos;ll see
                     &ldquo;{npShort}&rdquo; on your statement, not PocketCache, and they send your tax receipt. Months under
-                    ${org?.monthlyMinimum ?? 5} roll forward (we settle up within 3 months). Tracking starts now; your{' '}
-                    round-ups total through the last day of the month, we email your <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
+                    ${org?.monthlyMinimum ?? 5} roll forward (we settle up within 3 months).{' '}
+                    {/* The 1st / 11th promise is exactly what a skipped cycle does
+                        not do, so a skipped donor gets the shared resume sentence
+                        instead of a charge date that will pass with no charge. */}
+                    {skipNextCharge ? SKIP_RESUME_LINE : (
+                      <>
+                        Tracking starts now; your round-ups total through the last day of the month, we email your{' '}
+                        <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the{' '}
+                        <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
+                      </>
+                    )}
                   </p>
 
                   <PrimaryButton onClick={handleConfirm}>Start Giving to {npShort}</PrimaryButton>

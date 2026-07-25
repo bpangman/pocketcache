@@ -14,7 +14,10 @@ import OrgLogo from '../components/OrgLogo';
 import { findOrgByCode } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import { fmtMoney } from '../lib/format';
-import { MAX_FEE_MONTHS, currentMonthName, nextChargeLabel } from '../lib/billing';
+import {
+  MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal, currentMonthName, effectiveCharge,
+  nextChargeLabel,
+} from '../lib/billing';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { MONTHLY_DATA } from '../data/transactions';
@@ -92,7 +95,7 @@ function SettingRow({ icon, label, sub, right, onPress, color }) {
   );
 }
 
-function SkipConfirmModal({ show, onClose, monthName, chargeLabel, feeMultiplier, brand }) {
+function SkipConfirmModal({ show, onClose, monthName, chargeLabel, afterChargeLabel, feeMultiplier, brand }) {
   return (
     <AnimatePresence>
       {show && (
@@ -123,11 +126,13 @@ function SkipConfirmModal({ show, onClose, monthName, chargeLabel, feeMultiplier
             <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
               You will skip {monthName}'s charges. Those round-ups are simply never charged - they don't roll over and they don't come out later.
             </p>
-            {/* feeMultiplier is derived from the REAL pending feeMonths, not a
-                hardcoded 2: skip two months running and the third charge
-                honestly carries $1 × 3. */}
+            {/* Both dates come from lib/billing (nextChargeLabel and
+                chargeAfterNextLabel) - the fee lands on a real date, so name it
+                rather than saying "the charge after that". feeMultiplier is
+                derived from the REAL pending feeMonths, not a hardcoded 2: skip
+                two months running and the third charge honestly carries $1 × 3. */}
             <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
-              Nothing is charged on {chargeLabel}. Only the $1 app fee rolls forward, so it joins the charge after that as $1 × {feeMultiplier}.
+              Nothing is charged on {chargeLabel}. Only the $1 app fee rolls forward, so it joins your {afterChargeLabel} charge as $1 × {feeMultiplier}.
             </p>
             <p className="text-gray-500 text-left mb-5" style={{ fontSize: 13 }}>
               Changed your mind? Tap Undo on this screen any time before {chargeLabel}.
@@ -236,7 +241,8 @@ function AddCardForm({ onAdd, onClose, brand }) {
 function AddCardSheet({ show, onClose, onAdd, brand }) {
   return (
     <Sheet show={show} onClose={onClose} title="Add a Card">
-      <div className="px-6 pt-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-4">
         <Elements stripe={stripePromise}>
           <AddCardForm onAdd={onAdd} onClose={onClose} brand={brand} />
         </Elements>
@@ -268,7 +274,8 @@ function PrivacySheet({
 
   return (
     <Sheet show={show} onClose={onClose} title="Privacy & Security">
-      <div className="px-5 pt-4 space-y-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-5 pt-4 space-y-4">
 
         {deleting && (
           <motion.div
@@ -431,7 +438,8 @@ function SwitchOrgSheet({ show, onClose, brand, onBind }) {
 
   return (
     <Sheet show={show} onClose={onClose} title="Switch Nonprofit">
-      <div className="px-6 pt-5" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-5">
         <p className="text-gray-500 text-sm mb-5">Enter a new nonprofit code to re-bind to a different organization.</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
@@ -468,7 +476,8 @@ function AppIconSheet({ show, onClose, brand }) {
 
   return (
     <Sheet show={show} onClose={onClose} title="App Icon">
-      <div className="px-6 pt-5 space-y-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-5 space-y-4">
         <div className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background: brand.accentLight }}>
           <span className="text-2xl">⚓</span>
           <div>
@@ -530,7 +539,7 @@ function AppIconSheet({ show, onClose, brand }) {
 }
 
 function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonate, onCancelled }) {
-  const { feeMonths } = useApp();
+  const { feeMonths, monthlyCap, chargeAdjustment } = useApp();
   const [result, setResult] = useState(null); // 'donated' | 'cancelled'
   const [coverProcessing, setCoverProcessing] = useState(true);
 
@@ -541,10 +550,28 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
     }
   }, [result, onCancelled]);
 
+  // The final settle-up is a CHARGE, so it obeys the same precedence every other
+  // charge does - via lib/billing, not local math, so the app and the web portal
+  // cannot drift. It used to bill the raw round-ups, which broke the cap's whole
+  // promise ("we only charge up to your cap") on the way out the door.
+  const rawAmount = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
+  const chargeable = effectiveCharge({ pendingRoundUps: rawAmount, monthlyCap, chargeAdjustment });
+  const amountStr = rawAmount.toFixed(2);
+  const chargeableStr = chargeable.toFixed(2);
+  const trimmed = chargeable < rawAmount;
+  const appFee = feeMonths;
+  const processingCover = parseFloat((chargeable * 0.022 + 0.30).toFixed(2));
+  const finalTotal = chargeTotal({
+    pendingRoundUps: rawAmount, monthlyCap, chargeAdjustment, feeMonths,
+    processingCover: coverProcessing ? processingCover : 0,
+  }).toFixed(2);
+  // Measured against what is actually charged, not what accrued: a $4 cap on
+  // $13.89 of round-ups really is under a $5 minimum.
+  const belowMin = chargeable < (nonprofit?.monthlyMinimum ?? 5);
+
   function handleDonate() {
-    const amount = pendingRoundUps;
     setTimeout(() => {
-      onDonate?.(amount);
+      onDonate?.(chargeable);
       setResult('donated');
     }, 600);
   }
@@ -553,16 +580,10 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
     setTimeout(() => { setResult('cancelled'); }, 600);
   }
 
-  const rawAmount = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
-  const amountStr = rawAmount.toFixed(2);
-  const appFee = feeMonths;
-  const processingCover = parseFloat((rawAmount * 0.022 + 0.30).toFixed(2));
-  const finalTotal = (appFee + rawAmount + (coverProcessing ? processingCover : 0)).toFixed(2);
-  const belowMin = rawAmount < (nonprofit?.monthlyMinimum ?? 5);
-
   return (
     <Sheet show={show} onClose={() => { onClose(); setResult(null); }} title="Before you go…">
-      <div className="px-6 pt-5" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-5">
         {result === 'donated' ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">💚</div>
@@ -590,8 +611,19 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Final Settle-Up</p>
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-sm text-gray-700">Round-ups</span>
-                <span className="font-bold text-gray-900">${amountStr}</span>
+                <span className="font-bold text-gray-900">
+                  {trimmed
+                    ? <><s className="text-gray-400 font-normal">${amountStr}</s> ${chargeableStr}</>
+                    : `$${amountStr}`}
+                </span>
               </div>
+              {trimmed && (
+                <p className="text-xs text-amber-600 mb-1.5">
+                  {chargeAdjustment !== null && chargeAdjustment !== undefined
+                    ? `Adjusted to $${chargeableStr} for this month  -  the rest is never charged.`
+                    : `Capped at $${monthlyCap.toFixed(2)}/month  -  the rest is never charged.`}
+                </p>
+              )}
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
                 <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
@@ -610,7 +642,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
             </div>
             {belowMin && (
               <p className="text-amber-600 text-xs mb-4 leading-relaxed bg-amber-50 rounded-xl px-3 py-2">
-                Note: ${amountStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum  -  in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
+                Note: ${chargeableStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum  -  in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
               </p>
             )}
             <label
@@ -679,8 +711,12 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
     setShowManualForm(false);
   }
 
+  // padBottom={false}: this sheet PINS its CTA footer to the bottom edge, so it
+  // owns the home-indicator inset itself (on the footer, in the footer's tint).
+  // Left to Sheet, the inset padding would land below the footer and render as
+  // the sheet card's white, putting a white band under a #f0fdfb footer.
   return (
-    <Sheet show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); setShowManualForm(false); }} title="Track a Different Card">
+    <Sheet padBottom={false} show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); setShowManualForm(false); }} title="Track a Different Card">
       <div className="flex flex-col h-full overflow-hidden" style={{ background: '#f0fdfb' }}>
         <div className="flex-1 px-4 pt-5 pb-2 space-y-2.5 overflow-y-auto">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">
@@ -759,10 +795,14 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
         </div>
 
         {/* Pinned footer: the CTA has to clear the home indicator, so the old
-            static pb-10 becomes the inset plus breathing room (see lib/safeArea). */}
+            static pb-10 becomes the inset plus breathing room (see lib/safeArea).
+            Because Sheet is called with padBottom={false}, this padding IS the
+            sheet's whole bottom inset - and it carries background #f0fdfb, so the
+            tint runs through the safe-area strip instead of leaving white under
+            the footer. Matches Sheet's own floor of 32 + 12 above the inset. */}
         <div
           className="px-4 pt-3 border-t border-teal-100"
-          style={{ background: '#f0fdfb', paddingBottom: safeBottomAtLeast(24, 12) }}
+          style={{ background: '#f0fdfb', paddingBottom: safeBottomAtLeast(32, 12) }}
         >
           <motion.button
             whileTap={connected ? { scale: 0.97 } : {}}
@@ -821,7 +861,8 @@ function ChangePaymentSheet({ show, onClose, brand, onMethodChanged }) {
   return (
     <>
       <Sheet show={show} onClose={() => { onClose(); setSelected(null); setDone(false); setSetting(false); }} title="Change Payment Method">
-        <div className="px-4 pt-5 space-y-3" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+        {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+        <div className="px-4 pt-5 space-y-3">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
           <p className="text-gray-500 text-sm px-1 pb-1">Charged once a month for your round-ups total.</p>
 
@@ -932,6 +973,9 @@ export default function Settings() {
   // `month + 1` made Settings contradict the review alert for ten days a month.
   const skipMonthName = currentMonthName();
   const chargeLabel = nextChargeLabel();
+  // The charge AFTER the upcoming one - where a skipped cycle's $1 fee actually
+  // lands. Named, not described, so the donor can put it in a calendar.
+  const afterChargeLabel = chargeAfterNextLabel();
   // What the fee actually becomes once a skipped cycle rolls over: today's
   // pending feeMonths plus this one. Two skips in a row honestly reads $1 × 3.
   const rolledFeeMonths = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
@@ -1066,7 +1110,7 @@ export default function Settings() {
             icon={<SkipForward size={18} />}
             label="Skip a month"
             sub={skipNextCharge
-              ? `${skipMonthName} skipped - nothing on ${chargeLabel}; only the $1 fee rolls forward ($1 × ${rolledFeeMonths})`
+              ? `${skipMonthName} skipped - nothing on ${chargeLabel}; the $1 fee rolls to ${afterChargeLabel} ($1 × ${rolledFeeMonths})`
               : `Need a breather? Skip ${skipMonthName}'s charge`}
             color={brand.secondary}
             right={skipNextCharge ? (
@@ -1327,7 +1371,8 @@ export default function Settings() {
 
       {/* Multiplier sheet */}
       <Sheet show={showMultiplier} onClose={() => setShowMultiplier(false)} title="Round-Up Multiplier">
-        <div className="px-6 pt-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+        {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+        <div className="px-6 pt-4">
           <p className="text-gray-500 text-sm mb-5">Multiply your round-ups to give more with every purchase.</p>
           <div className="space-y-3">
             {MULTIPLIER_OPTIONS.map((opt) => (
@@ -1429,6 +1474,7 @@ export default function Settings() {
         onClose={() => setShowSkipConfirm(false)}
         monthName={skipMonthName}
         chargeLabel={chargeLabel}
+        afterChargeLabel={afterChargeLabel}
         feeMultiplier={rolledFeeMonths}
         brand={brand}
       />

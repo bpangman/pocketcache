@@ -8,12 +8,25 @@ import CoinMark from '../components/CoinMark';
 import { WebMyCause, WebShare, WebSettings, GiveExtraModal, AdjustChargeModal } from './WebPortalPages';
 import { useBiometricOffer, BiometricOfferCard } from '../components/BiometricLock';
 import ChargeReviewAlert from '../components/ChargeReviewAlert';
-import { effectiveCharge, chargeTotal, nextChargeDate, nextChargeLabel } from '../lib/billing';
+import {
+  chargeTotal, effectiveCharge, nextChargeDate, nextChargeLabel,
+} from '../lib/billing';
+// Skipped-cycle copy comes from the app Dashboard so the two donor surfaces
+// render byte-identical sentences and figures for a skip. See the block at the
+// top of Dashboard.jsx for the rule these strings encode.
+import {
+  SKIP_COLLECT_AMOUNT, SKIP_COLLECT_LABEL, SKIP_RESUME_LINE, SKIP_TILE_SUB,
+  SKIP_UNDO_LINE, skipAccruedLine, skipFeeLine, skipStatusLine,
+} from './Dashboard';
 
 // ─── The browser-native donor portal ─────────────────────────────────────────
 // This is PocketCache as if it had been built as a web product: top nav, wide
 // dashboard, real tables. Same data store and account as the mobile app  -  a
 // different portal onto the same giving.
+//
+// The `data-testid` hooks in this file follow the web-<feature>-<element>
+// convention documented in WebPortalPages.jsx (see the "data-testid convention"
+// block there). Do not invent a second naming scheme here.
 
 const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
 const SERIES = '#0D9488';       // validated vs light surface (3:1+, chroma/lightness pass)
@@ -144,9 +157,9 @@ function GivingChart() {
 }
 
 // ─── KPI tile ────────────────────────────────────────────────────────────────
-function Kpi({ label, value, sub, hero = false, pill = null }) {
+function Kpi({ label, value, sub, hero = false, pill = null, testId }) {
   return (
-    <div style={hero
+    <div data-testid={testId} style={hero
       ? { ...CARD, border: 'none', background: 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)', padding: '18px 20px' }
       : { ...CARD, padding: '18px 20px' }}>
       <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hero ? 'rgba(255,255,255,0.65)' : INK.muted }}>
@@ -271,55 +284,95 @@ function EstimateCard({
   const total = chargeTotal({ pendingRoundUps: pending, monthlyCap, chargeAdjustment, feeMonths });
   const capActive = monthlyCap !== null && monthlyCap !== undefined && pending > monthlyCap;
   const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
-  // Same gate as the app Dashboard (~478): under the nonprofit's monthly minimum
-  // the month rolls forward instead of charging, so there is nothing to adjust.
+  // Same gate as the app Dashboard: under the nonprofit's monthly minimum the
+  // month rolls FORWARD instead of charging, so there is nothing to adjust - and
+  // nothing to bill. The web portal used to apply this gate to the "Adjust this
+  // charge" button only and still print "One charge from BGCA ≈ $5.63" above it,
+  // while the app said "$4.63 so far  -  rolls over at month-end" from the same
+  // stored state. That is the demo's DEFAULT state ($4.63 pending vs BGCA's $5
+  // minimum), so the two surfaces contradicted each other on first load.
   const belowMinimum = pending < monthlyMinimum;
+  const rollingOver = belowMinimum && !skipped;
   const row = { display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '5px 0' };
   return (
     <div style={{ ...CARD, padding: 20 }}>
       <SectionTitle>Next charge · {skipped ? 'skipped this month' : nextChargeLabel()}</SectionTitle>
       {skipped && (
-        <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
-          You&apos;re skipping this month  -  these round-ups are simply never charged.
-          Only the $1 app fee rolls into next month&apos;s charge (it will show
-          &ldquo;App fee  -  $1 × 2 months&rdquo;). Un-skip anytime in Settings.
+        <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }} data-testid="web-estimate-skipped">
+          {skipStatusLine()}{' '}{skipAccruedLine(pending)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}
         </p>
       )}
       <div style={{ marginTop: 8 }}>
         <div style={row}>
+          {/* Accrual line: on a skipped cycle this is the honest "you did round up
+              this much", and the skip banner above says it is never charged. */}
           <span style={{ color: INK.secondary }}>Round-ups so far</span>
-          <span style={{ color: INK.primary, fontWeight: 600 }} data-testid="estimate-roundups">
-            {roundUps !== pending
+          <span style={{ color: INK.primary, fontWeight: 600 }} data-testid="web-estimate-roundups">
+            {!skipped && roundUps !== pending
               ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${fmtMoney(pending)}</s> ${fmtMoney(roundUps)}</>
               : `$${fmtMoney(pending)}`}
           </span>
         </div>
-        <div style={row}><span style={{ color: INK.secondary }}>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span style={{ color: INK.secondary }}>+${fmtMoney(fee)}</span></div>
+        {/* The $1 fee is NOT on a skipped charge - it rolls onto the next one, and
+            the banner names which. Printing "+$1.00" here would contradict that. */}
+        {!skipped && (
+          <div style={row}><span style={{ color: INK.secondary }}>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span style={{ color: INK.secondary }}>+${fmtMoney(fee)}</span></div>
+        )}
         <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
-        <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }} data-testid="estimate-total">≈ ${fmtMoney(total)}</span></div>
+        {skipped ? (
+          /* Zero, not a total. This row used to read "One charge from BGCA
+             ≈ $14.89" directly under copy saying the charge was skipped. */
+          <div style={row}>
+            <span style={{ color: INK.primary, fontWeight: 700 }}>{SKIP_COLLECT_LABEL}</span>
+            <span style={{ color: '#b45309', fontWeight: 800, fontSize: 16 }} data-testid="web-estimate-total">{SKIP_COLLECT_AMOUNT}</span>
+          </div>
+        ) : rollingOver ? (
+          <div style={row}>
+            <span style={{ color: INK.primary, fontWeight: 700 }}>Nothing charged yet</span>
+            <span style={{ color: '#b45309', fontWeight: 800, fontSize: 13.5 }} data-testid="web-estimate-rollover">
+              ${fmtMoney(pending)} so far  -  rolls over at month-end
+            </span>
+          </div>
+        ) : (
+          <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }} data-testid="web-estimate-total">≈ ${fmtMoney(total)}</span></div>
+        )}
       </div>
-      {/* Cap / adjustment notes  -  same precedence and wording as the app Dashboard */}
-      {!skipped && capActive && !adjusted && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#b45309' }}>
+      {/* Rollover explainer  -  the app Dashboard's below-minimum copy verbatim. */}
+      {rollingOver && (
+        <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: '#b45309' }}>
+          Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
+          {' '}&middot; $1/month fee rolls too  -  {feeMonths} month{feeMonths !== 1 ? 's' : ''} so far (${feeMonths})  -  itemized on your charge.
+        </p>
+      )}
+      {/* Cap / adjustment notes  -  same precedence and wording as the app Dashboard.
+          Suppressed while rolling over, exactly as the app suppresses them. */}
+      {!skipped && !belowMinimum && capActive && !adjusted && (
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#b45309' }} data-testid="web-estimate-capped">
           Capped at ${fmtMoney(monthlyCap)}  -  the rest won&apos;t be charged.
         </p>
       )}
-      {!skipped && adjusted && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 600, color: '#059669' }} data-testid="estimate-adjusted">
+      {!skipped && !belowMinimum && adjusted && (
+        <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 600, color: '#059669' }} data-testid="web-estimate-adjusted">
           Adjusted to ${fmtMoney(chargeAdjustment)} for this month.
         </p>
       )}
-      <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }}>
-        Round-ups accrue through the last day of the month; the exact amount is emailed to you
-        on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 11th. Demo data  -  no real charge is made.
-      </p>
+      {/* The schedule explainer promises a charge on the 11th, which is exactly
+          what a skipped cycle does NOT do. On a skip the resumed-timing sentence
+          in the banner above (SKIP_RESUME_LINE, shared with the app) replaces it,
+          so neither surface ever pairs a skip with "charged on the 11th". */}
+      {!skipped && (
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }} data-testid="web-estimate-schedule">
+          Round-ups accrue through the last day of the month; the exact amount is emailed to you
+          on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 11th. Demo data  -  no real charge is made.
+        </p>
+      )}
       {/* Always available, exactly like the app's Dashboard button. The shared
           ChargeReviewAlert only offers this on days 1 to 10 and only until it is
           acknowledged, which left web donors with no way to adjust at all. */}
       {!skipped && !belowMinimum && (
         <button
           onClick={onAdjust}
-          data-testid="adjust-charge-button"
+          data-testid="web-adjust-charge-button"
           style={{ width: '100%', marginTop: 12, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
         >
           Adjust this charge →
@@ -359,6 +412,10 @@ export default function WebDashboard() {
 
   // One number for "what will actually be charged", from lib/billing.
   const upcomingCharge = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths });
+  // Below the nonprofit's minimum nothing is collected, so this tile must not
+  // quote a charge - the app's card says "rolls over at month-end" here.
+  const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
+  const rollingOver = pendingRoundUps < monthlyMinimum && !skipNextCharge;
 
   const org = selectedNonprofit;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
@@ -466,18 +523,31 @@ export default function WebDashboard() {
             {/* KPI row */}
             <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 16, display: 'grid', marginBottom: 20 }}>
               <Kpi hero label="Total donated" value={`$${fmtMoney(totalDonated)}`} sub={`${sinceLabel} · all time`} pill={`🔥 ${monthsGiving}-month giving streak`} />
-              <Kpi label="Pending this month" value={`$${fmtMoney(pendingRoundUps)}`} sub={`${TRANSACTIONS.length} round-ups so far`} />
+              {/* Accrual tile: raw round-ups are the honest figure, but on a
+                  skipped cycle the sub-label has to say they are never collected
+                  (same string the app's Pending tile uses). */}
+              <Kpi
+                testId="web-kpi-pending"
+                label="Pending this month"
+                value={`$${fmtMoney(pendingRoundUps)}`}
+                sub={skipNextCharge ? SKIP_TILE_SUB : `${TRANSACTIONS.length} round-ups so far`}
+              />
               <Kpi
                 label="Average month"
                 value={`$${fmtMoney(avgPerMonth)}`}
                 sub={momChange != null ? `${momChange >= 0 ? '▲' : '▼'} ${Math.abs(momChange)}% vs. prior month` : 'across completed months'}
               />
               <Kpi
+                testId="web-kpi-next-charge"
                 label="Next charge"
-                value={skipNextCharge ? 'Skipped' : nextChargeLabel()}
+                // The tile's headline figure on a skipped cycle is the amount, not
+                // the word "Skipped": $0.00 is what leaves the account.
+                value={skipNextCharge ? SKIP_COLLECT_AMOUNT : nextChargeLabel()}
                 sub={skipNextCharge
-                  ? "Skipped  -  round-ups won't be charged; only the $1 fee rolls to next month ($1 × 2)"
-                  : `≈ $${fmtMoney(upcomingCharge)} incl. $1 fee · exact amount locks ${lockLabel()}`}
+                  ? `${skipStatusLine()} ${skipFeeLine(feeMonths)}`
+                  : rollingOver
+                    ? `$${fmtMoney(pendingRoundUps)} so far  -  rolls over at month-end (under ${npShort}'s $${monthlyMinimum} minimum)`
+                    : `≈ $${fmtMoney(upcomingCharge)} incl. $1 fee · exact amount locks ${lockLabel()}`}
               />
             </div>
 

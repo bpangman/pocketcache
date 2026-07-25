@@ -1,28 +1,190 @@
-import { useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useState } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { NpProvider } from './store/NpContext';
 import { ThemeProvider, useTheme } from './store/ThemeContext';
-import Onboarding from './pages/Onboarding';
-import AppShell from './components/AppShell';
-import NpShell from './pages/nonprofit/NpShell';
-import NpWebShell from './pages/nonprofit/NpWebShell';
-import NpWebSignupFrame from './pages/nonprofit/NpWebSignupFrame';
 import CoinMark from './components/CoinMark';
 import ScaleFit from './components/ScaleFit';
 import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/DevicePicker';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import OrgLandingPage from './pages/OrgLandingPage';
-import WebDashboard from './pages/WebDashboard';
-import WebOnboarding from './pages/WebOnboarding';
 import OrgLogo from './components/OrgLogo';
 import { findOrgByCode } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
 import ChargeReviewAlert from './components/ChargeReviewAlert';
 import { WebPortalPrompt } from './components/WebPortalLinkModal';
-import { WebAdminSignIn } from './pages/WebPortalPages';
 import { Z, scrim, centered } from './lib/overlay';
 import { safeBottom } from './lib/safeArea';
+
+// ─── Route-level code splitting ───────────────────────────────────────────────
+//
+// Four audiences arrive at this one bundle: the native app (which remote-loads
+// the site), mobile web, the desktop donor portal, and the desktop nonprofit
+// admin. Shipping all four in one file made every donor download the admin
+// dashboard and every admin download the donor app. Each top-level surface is
+// therefore a lazy chunk, fetched only on the path that renders it.
+//
+// THE GATE IS LAZY TOO - CAREFULLY
+// Onboarding is the first paint on the native app and on mobile web, so making
+// it lazy is the one split that could cost a launch. It is worth it (it is the
+// biggest file in the app, and on the phone it is the only importer of the
+// Stripe SDK) and it is safe because the shell that paints while it arrives is
+// the SAME navy as the splash it hands over to: ScaleFit's gradient, then
+// ChunkLoading's, then SplashAnimation's overlay. The pre-JS paint is navy too
+// (body background, and the native shell's backgroundColor), so a cold launch
+// goes navy -> navy -> navy with no white frame anywhere. The entry chunk is
+// now a third of its old size, so that first navy paint also arrives sooner
+// than the gate used to.
+//
+// WHAT STAYS EAGER
+// Everything the fallbacks and the shells need: ScaleFit, PhoneFrame, the three
+// stores, CoinMark, the biometric gate, the toast/overlay chrome. None of it is
+// big, and all of it is on every path.
+//
+// FAILED FETCHES
+// These chunks travel over the network at runtime (the native app loads this
+// site remotely), so an import() can genuinely fail on a flaky connection.
+// lazyChunk() retries twice with backoff, and ChunkBoundary catches whatever
+// still fails so a dropped chunk degrades to a branded "try again" card instead
+// of a white screen.
+
+/** import() with two retries - a transient network blip must not white-screen. */
+function lazyChunk(load) {
+  return lazy(() => load().catch(() => (
+    new Promise(r => setTimeout(r, 400)).then(load).catch(() => (
+      new Promise(r => setTimeout(r, 1500)).then(load)
+    ))
+  )));
+}
+
+const Onboarding = lazyChunk(() => import('./pages/Onboarding'));
+const AppShell = lazyChunk(() => import('./components/AppShell'));
+const NpShell = lazyChunk(() => import('./pages/nonprofit/NpShell'));
+const NpWebShell = lazyChunk(() => import('./pages/nonprofit/NpWebShell'));
+const NpWebSignup = lazyChunk(() => import('./pages/nonprofit/NpWebSignup'));
+const WebDashboard = lazyChunk(() => import('./pages/WebDashboard'));
+const WebOnboarding = lazyChunk(() => import('./pages/WebOnboarding'));
+const OrgLandingPage = lazyChunk(() => import('./pages/OrgLandingPage'));
+const WebAdminSignIn = lazyChunk(() => import('./pages/WebPortalPages').then(m => ({ default: m.WebAdminSignIn })));
+
+// Warm a chunk the user is about to need, so the hop into it never waits on the
+// network. Fire-and-forget: a failed warm-up is retried for real by lazyChunk.
+function warm(load) {
+  load().catch(() => { /* the real render retries */ });
+}
+
+// Exactly SplashAnimation's navy overlay, so the handoff from "chunk arriving"
+// to "splash playing" is invisible - no white flash on a cold native launch.
+const SPLASH_BG = 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)';
+
+// One entry per surface: the background the arriving screen paints, so the
+// fallback is the same colour the user is about to see. `page` surfaces are
+// full webpages (100dvh); the rest fill the phone-sized box they live in.
+const SURFACES = {
+  // Onboarding / the join gate - splash plays on top of this the moment it lands
+  splash: { bg: SPLASH_BG, dark: true },
+  // AppShell - donor tabs (bg-gray-50)
+  app: { bg: '#f9fafb' },
+  // NpShell - phone admin shell
+  npApp: { bg: '#f8fafc' },
+  // WebDashboard / WebOnboarding / NpWebShell / NpWebSignup / WebAdminSignIn
+  web: { bg: '#f6f8fb', page: true },
+};
+
+function surfaceStyle(surface) {
+  const { bg, page } = SURFACES[surface];
+  return page
+    ? { minHeight: '100dvh', background: bg }
+    : { width: '100%', height: '100%', background: bg };
+}
+
+// Suspense fallback: the destination's own background, plus a coin that only
+// appears if the wait is long enough to notice. A chunk that arrives in one
+// frame therefore shows a stable colour and nothing else (no logo flicker); a
+// slow network gets a branded loader instead of a blank page.
+function ChunkLoading({ surface }) {
+  return (
+    <div style={{ ...surfaceStyle(surface), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.35, duration: 0.25 }}
+      >
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.75, 1, 0.75] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <CoinMark size={34} />
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
+
+// Shown when a chunk still will not load after lazyChunk's retries - offline
+// mid-session, or a stale index pointing at a deployed-away filename. Reload is
+// the only real cure (React.lazy caches the rejection), so that is the button.
+function ChunkFailed({ surface }) {
+  const dark = SURFACES[surface].dark;
+  return (
+    <div style={{ ...surfaceStyle(surface), display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box' }}>
+      <div
+        style={{
+          width: '100%', maxWidth: 340, background: '#fff', borderRadius: 20, padding: 24,
+          textAlign: 'center', boxShadow: dark ? '0 20px 50px rgba(0,0,0,0.35)' : '0 16px 48px rgba(11,42,74,0.10)',
+          border: dark ? 'none' : '1px solid #e5e7eb',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><CoinMark size={34} /></div>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: '#0f172a' }}>We could not load this screen</p>
+        <p style={{ margin: '8px 0 18px', fontSize: 13.5, lineHeight: 1.6, color: '#64748b' }}>
+          Looks like the connection dropped. Nothing was lost  -  give it another go.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            width: '100%', padding: '13px 16px', borderRadius: 16, border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(135deg, #0B2A4A, #003865)', color: '#fff', fontWeight: 700, fontSize: 15,
+          }}
+        >
+          Try again
+        </button>
+      </div>
+    </div>
+  );
+}
+
+class ChunkBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error) {
+    // Not console.error: a dropped chunk is a network condition we handle, not
+    // a bug to page on. Still recorded so it is visible when debugging.
+    console.warn('[PocketCache] screen failed to load', error);
+  }
+
+  render() {
+    if (this.state.failed) return <ChunkFailed surface={this.props.surface} />;
+    return this.props.children;
+  }
+}
+
+/** Lazy surface with a matched loading state and a no-white-screen guarantee. */
+function LazySurface({ surface, children }) {
+  return (
+    <ChunkBoundary surface={surface}>
+      <Suspense fallback={<ChunkLoading surface={surface} />}>
+        {children}
+      </Suspense>
+    </ChunkBoundary>
+  );
+}
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
 // (full-bleed, proportionally scaled to viewport width).
@@ -200,18 +362,18 @@ function AppContent() {
     setPendingSettingsAction('change-payment');
   }
 
-  if (page === 'onboarding') return <Onboarding />;
+  if (page === 'onboarding') return <LazySurface surface="splash"><Onboarding /></LazySurface>;
   // Face ID / Touch ID gate  -  everything past sign-in is behind it once enrolled
   if (bioGate.locked) return <AppLockScreen gate={bioGate} />;
   if (page === 'np-dashboard') return (
     <div className="w-full h-full relative">
-      <NpShell />
+      <LazySurface surface="npApp"><NpShell /></LazySurface>
       <WebPortalPrompt />
     </div>
   );
   return (
     <div className="w-full h-full relative">
-      <AppShell />
+      <LazySurface surface="app"><AppShell /></LazySurface>
       <WebPortalPrompt />
       <BiometricOfferCard offer={bioOffer} surface="app" />
       <ChargeReviewAlert surface="app" />
@@ -490,6 +652,22 @@ function ThemedApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Warm the chunk this visitor is most likely to open NEXT, once the current
+  // screen is on-screen and idle. Purely additive - nothing renders differently,
+  // and a path that will never need a chunk never fetches it (an admin arriving
+  // at ?npsignin=1 does not pull the donor dashboard). This is what keeps the
+  // hop from the gate into the dashboard from ever waiting on the network.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const adminEntry = params.get('npsignin') === '1' || params.get('npsignup') === '1';
+    const t = setTimeout(() => {
+      if (adminEntry) warm(() => import('./pages/nonprofit/NpWebShell'));
+      else if (appEntry && !isMobile) warm(() => import('./pages/WebDashboard'));
+      else warm(() => import('./components/AppShell'));
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [appEntry, isMobile]);
+
   // Org-scoped pretty URL: a join-link entry settles at pocketcache.app/CODE/give
   // (the 404 forwarder routes that path back to ?org=CODE, so refresh/bookmark
   // work). Delayed so the gate's auto-bind consumes ?org= first.
@@ -525,12 +703,12 @@ function ThemedApp() {
 // Desktop browser entry from a micro-site: a signed-in donor gets the real
 // web-native dashboard (WebDashboard); a signed-in nonprofit admin gets the
 // web-native admin portal (NpWebShell); a new donor gets the web-native signup
-// wizard (WebOnboarding  -  org implied, no gate/QR/code); the nonprofit signup
-// wizard gets a real webpage around it (NpWebSignupFrame); everything else
+// wizard (WebOnboarding  -  org implied, no gate/QR/code); a nonprofit listing
+// itself gets the web-native admin signup wizard (NpWebSignup); everything else
 // (admin sign-in, cancelled-account reactivation, unknown org) runs in the
 // centered WebPortal column.
 function WebExperience() {
-  const { page, accountStatus, selectedNonprofit, initialOnboardingStep } = useApp();
+  const { page, accountStatus, selectedNonprofit, initialOnboardingStep, returnFromOnboarding } = useApp();
   const bioGate = useBiometricGate();
   // Capture the entry context ONCE  -  the pretty-URL rewrite strips the params.
   const [entry] = useState(() => {
@@ -541,45 +719,55 @@ function WebExperience() {
       npsignup: params.get('npsignup') === '1',
     };
   });
-  // The nonprofit signup wizard is Onboarding-internal state, so latch every
-  // signal we CAN see from out here: the ?npsignup=1 deep link and the
-  // goToOnboardingStep('nonprofit-signup') jump used by the donor dashboard's
-  // "list your nonprofit" action. See NpWebSignupFrame for what is still
-  // missing (a cold visitor pressing the button on the join gate).
+  // Desktop nonprofit signup is its OWN page (NpWebSignup), not Onboarding's
+  // internal step, so this is where the route is decided. Latch every signal:
+  // the ?npsignup=1 deep link, and goToOnboardingStep('nonprofit-signup') from
+  // anywhere else  -  the donor dashboard's "list your nonprofit" action, the
+  // desktop donor wizard's nonprofit CTA, and the join gate's "Create your
+  // nonprofit page" button (a cold visitor in the WebPortal column).
   // Latched with the derived-state-during-render pattern: Onboarding clears
   // initialOnboardingStep as soon as it consumes it, so the signal is gone by
   // the next render and we must not let the route flip back out of the wizard.
   const [npSignup, setNpSignup] = useState(entry.npsignup);
   if (initialOnboardingStep === 'nonprofit-signup' && !npSignup) setNpSignup(true);
+  // ...and released the moment the org is live, so an admin who later crosses
+  // over to giving mode (goGiving → page 'onboarding') is not dropped back into
+  // the signup wizard by a latch that outlived it.
+  if (page === 'np-dashboard' && npSignup) setNpSignup(false);
 
   const signedInDonor =
     page !== 'onboarding' && page !== 'np-dashboard' &&
     accountStatus !== 'cancelled' && selectedNonprofit;
   if (signedInDonor && bioGate.locked) return <WebLockScreen gate={bioGate} />;
-  if (signedInDonor) return <WebDashboard />;
+  if (signedInDonor) return <LazySurface surface="web"><WebDashboard /></LazySurface>;
   // Nonprofit admin dashboard  -  the web-native admin portal, not the phone
   // shell in a column. Face ID / Touch ID still gates it, same as the donor's.
   if (page === 'np-dashboard') {
     if (bioGate.locked) return <WebLockScreen gate={bioGate} />;
-    return <NpWebShell />;
+    return <LazySurface surface="web"><NpWebShell /></LazySurface>;
   }
   // Donor signup wizard  -  including an admin crossing over via "Start giving"
   // (selectedNonprofit gets bound before the jump, so this wins over npsignin).
   if (page === 'onboarding' && accountStatus !== 'cancelled' && !npSignup && (selectedNonprofit || (entry.org && !entry.npsignin))) {
-    return <WebOnboarding entryOrg={entry.org} />;
+    return <LazySurface surface="web"><WebOnboarding entryOrg={entry.org} /></LazySurface>;
   }
   // Micro-site "Nonprofit admin? Sign in"  -  webpage version of the
   // passwordless work-email protocol (never the app-style column).
   if (page === 'onboarding' && entry.npsignin && !npSignup) {
-    return <WebAdminSignIn />;
+    return <LazySurface surface="web"><WebAdminSignIn /></LazySurface>;
   }
-  // Nonprofit org onboarding  -  a full webpage with the wizard as its form
-  // panel, instead of the donor-sized phone column.
+  // Nonprofit org onboarding  -  the web-native admin signup wizard. Not the
+  // phone flow in a box: its own multi-column page, no ScaleFit, no 449px cap.
+  // Completion routes to page 'np-dashboard', which lands on NpWebShell above.
   if (page === 'onboarding' && npSignup) {
+    // A cold ?npsignup=1 visitor has nowhere to go "back" to, so the wizard
+    // hides its exit control rather than offering a dead one.
     return (
-      <NpWebSignupFrame>
-        <AppContent />
-      </NpWebSignupFrame>
+      <LazySurface surface="web">
+        <NpWebSignup
+          onExit={entry.npsignup ? undefined : () => { setNpSignup(false); returnFromOnboarding(); }}
+        />
+      </LazySurface>
     );
   }
   return (
@@ -592,7 +780,7 @@ function WebExperience() {
 export default function App() {
   const orgPageCode = new URLSearchParams(window.location.search).get('orgpage');
   if (orgPageCode) {
-    return <OrgLandingPage code={orgPageCode} />;
+    return <LazySurface surface="web"><OrgLandingPage code={orgPageCode} /></LazySurface>;
   }
   return (
     <AppProvider>

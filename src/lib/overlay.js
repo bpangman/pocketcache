@@ -45,9 +45,12 @@
  *
  * Intended stacking order, lowest to highest:
  *
+ *   pageToast   (5)   in-page celebration toast that BELONGS to the page under
+ *                     an open sheet - see "TWO KINDS OF TOAST" below
  *   sheetScrim (10)   dim behind a bottom sheet
  *   sheet      (20)   the bottom sheet itself
- *   toast      (30)   inline transient toast - above a sheet, under a modal
+ *   toast      (30)   transient toast raised BY an open sheet, so it has to
+ *                     clear that sheet's own card - above a sheet, under a modal
  *   modalScrim (40)   dim behind a centred modal card
  *   modal      (50)   the centred modal card
  *   globalToast(50)   app-level toast that must not be buried by a modal card
@@ -75,8 +78,34 @@
  * is exactly what App.jsx:167 does today (toast z-50 vs Settings modal card
  * z-50), so DOM order keeps deciding and nothing changes. Do not raise it to 51
  * without checking AppDownloadQRModal, which currently paints above the toast.
+ *
+ * TWO KINDS OF TOAST
+ * The single `toast` step used to serve both, and at 30 it sat above the sheet
+ * (20), so a milestone-unlocked or boost-confirmation toast on the Dashboard
+ * visibly painted over the card of whatever bottom sheet the donor had open.
+ * They are not the same thing:
+ *
+ *   pageToast (5)  An in-page CELEBRATION toast: "Milestone Unlocked!",
+ *                  "Extra $25 sent!". It is a decoration on the page the donor
+ *                  was looking at, not a response to the sheet in front of
+ *                  them. Below sheetScrim (10) on purpose: open a sheet and the
+ *                  toast dims out behind it with the rest of the page, exactly
+ *                  as if it were one of the page's own cards. Nothing is lost -
+ *                  these toasts are self-dismissing and purely informational.
+ *
+ *   toast (30)     A transient message RAISED BY an open sheet, which therefore
+ *                  has to clear that sheet's card to be seen at all. Kept at 30
+ *                  (above sheet, below modalScrim) for that case.
+ *
+ *   globalToast(50) An app-level confirmation fired from App.jsx's showToast()
+ *                  ("Payment method updated.") that must survive a modal. See
+ *                  the tie with `modal` above.
+ *
+ * So the rule when adding a toast is: does it belong to the page, to a sheet,
+ * or to the app? Pick the matching step rather than reaching for the highest.
  */
 export const Z = {
+  pageToast: 5,
   sheetScrim: 10,
   sheet: 20,
   toast: 30,

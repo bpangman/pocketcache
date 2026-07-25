@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import Sheet from '../Sheet';
 import { safeBottomAtLeast } from '../../lib/safeArea';
+import { LARGE_DONATION_THRESHOLD } from '../../lib/billing';
 import { CheckCircle } from 'lucide-react';
 
 const BOOST_PRESETS = [1, 5, 10, 25];
-const LARGE_DONATION_THRESHOLD = 1000;
 
 export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, brand }) {
   const [selected, setSelected] = useState(5);

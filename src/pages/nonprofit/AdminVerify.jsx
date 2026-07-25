@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Z, scrim, centered } from '../../lib/overlay';
 import { useNpLayout } from './NpLayout';
+import { generateOneTimeCode } from '../../lib/npSignup';
 
 // ─── Admin change verification ───────────────────────────────────────────────
 // Any persistent change on the Grow / Settings admin pages must be confirmed
@@ -17,7 +18,7 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
   useEffect(() => {
     if (!show) return;
     const id = setTimeout(() => {
-      const c = String(Math.floor(100000 + Math.random() * 900000));
+      const c = generateOneTimeCode();
       setCode(c);
       setCodeInput(c); // DEMO: auto-filled; live version emails it
       setError(null);

@@ -4,8 +4,9 @@ import { safeBottomAtLeast } from '../lib/safeArea';
 import { Z, scrim } from '../lib/overlay';
 
 /**
- * Shared bottom sheet. Public API is exactly { show, onClose, title, children }
- * and must stay that way - it is consumed all over the app.
+ * Shared bottom sheet. Public API is { show, onClose, title, children } plus the
+ * optional `padBottom` escape hatch documented below - it is consumed all over
+ * the app, so keep it that small.
  *
  * BOTTOM SAFE AREA - owned HERE, once.
  * The sheet is position:absolute; bottom:0, so its bottom edge sits under the
@@ -19,10 +20,23 @@ import { Z, scrim } from '../lib/overlay';
  * an extra pb-8 in a child now stacks on top of this and double-pads. A child
  * that pins something absolutely inside the sheet (GiveExtraSheet's confirm
  * card) should call safeBottomAtLeast(32, 12) itself to line up with this.
+ *
+ * padBottom (default true) - OPT OUT, for pinned footers only.
+ * Padding on the scroll container is transparent, so it renders as the sheet
+ * card's own white. That is right for ordinary scrolling content and wrong for a
+ * sheet that pins a footer to its bottom edge (Settings' TrackCardSheet, whose
+ * body is tinted #f0fdfb): the inset strip lands BELOW that footer and paints
+ * white there, so on a notched iPhone the tinted footer appears to float above a
+ * white band. Pass padBottom={false} and the sheet hands the whole
+ * responsibility over: the consumer must then apply safeBottomAtLeast(...)
+ * itself, on the pinned footer, in the footer's own background colour, so the
+ * colour runs all the way to the physical bottom edge. Only use it when
+ * something is genuinely pinned - a plain scrolling body that opts out loses its
+ * home-indicator clearance entirely.
  */
 const SHEET_PAD = safeBottomAtLeast(32, 12);
 
-export default function Sheet({ show, onClose, title, children }) {
+export default function Sheet({ show, onClose, title, children, padBottom = true }) {
   return (
     <AnimatePresence>
       {show && (
@@ -42,7 +56,7 @@ export default function Sheet({ show, onClose, title, children }) {
               <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
               <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onClose}><X size={20} className="text-gray-400" /></motion.button>
             </div>
-            <div className="flex-1 scrollable pc-scrollbar" style={{ paddingBottom: SHEET_PAD }}>{children}</div>
+            <div className="flex-1 scrollable pc-scrollbar" style={padBottom ? { paddingBottom: SHEET_PAD } : undefined}>{children}</div>
           </motion.div>
         </>
       )}

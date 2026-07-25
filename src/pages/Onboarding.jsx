@@ -14,8 +14,11 @@ import CoinMark from '../components/CoinMark';
 import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
-import { useNp } from '../store/NpContext';
-import { findOrgByCode, buildOrgFromSignup, saveCustomOrg, generateJoinCode, resolveAdminOrgByEmail, isJoinCodeAvailable } from '../store/orgStore';
+import { findOrgByCode, resolveAdminOrgByEmail } from '../store/orgStore';
+import {
+  useNpSignup, useNpGoLive, generateOneTimeCode,
+  NP_BRAND_COLORS, NP_LICENSE_POINTS, widgetSnippet, joinQrValue, launchKitMailto,
+} from '../lib/npSignup';
 import { loadKey, saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
@@ -25,7 +28,7 @@ import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import HeroBackButton from '../components/HeroBackButton';
 import ManualCardForm from '../components/ManualCardForm';
-import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeTotal, nextChargeLabel } from '../lib/billing';
+import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, effectiveCharge, nextChargeLabel } from '../lib/billing';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottom, safeBottomAtLeast } from '../lib/safeArea';
 
@@ -723,7 +726,7 @@ function AdminSignInScreen({ onBack, onComplete }) {
     const domain = email.trim().toLowerCase().split('@')[1];
     if (!domain || domain.indexOf('.') < 1) { setError('Enter a valid email address.'); return; }
     setError(null);
-    const c = String(Math.floor(100000 + Math.random() * 900000));
+    const c = generateOneTimeCode();
     setCode(c);
     setCodeInput(c); // DEMO: auto-filled; live version emails it
     setCodeError(null);
@@ -1490,19 +1493,31 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
   const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
-  const { selectedNonprofit, pendingRoundUps, feeMonths } = useApp();
+  const { selectedNonprofit, pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment } = useApp();
   const [coverProcessing, setCoverProcessing] = useState(true);
-  const roundUps = pendingRoundUps ?? 4.63;
+  // The cap the donor just ticked on PaymentMethodScreen is live state, so this
+  // screen has to honour it: without monthlyCap in the math, the same stored
+  // state produced an uncapped total here and a capped one in the web review
+  // step (WebOnboarding.jsx:219-227). Precedence lives in lib/billing.
+  const accrued = pendingRoundUps ?? 4.63;
+  const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap, chargeAdjustment });
   const appFee = feeMonths;
+  // Processing cover follows what is actually charged, not the raw accrual  -
+  // same as WebOnboarding, so the two review screens agree to the cent.
   const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
   // Amounts and dates both come from lib/billing  -  this screen must never do
   // its own charge math or assume "next month's 11th".
   const total = chargeTotal({
-    pendingRoundUps: roundUps,
+    pendingRoundUps: accrued,
+    monthlyCap,
+    chargeAdjustment,
     feeMonths,
     processingCover: coverProcessing ? processingCover : 0,
   });
+  const capActive = monthlyCap !== null && monthlyCap !== undefined && accrued > monthlyCap;
+  const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
   const chargeOn = nextChargeLabel();
+  const rolloverCharge = chargeAfterNextLabel();
 
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -1566,12 +1581,33 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Monthly Estimate</p>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-gray-700">Round-ups this month</span>
-              <span className="font-bold text-gray-900">${roundUps.toFixed(2)}</span>
+              <span className="font-bold text-gray-900" data-testid="confirm-roundups">
+                {roundUps !== accrued
+                  ? <><s className="text-gray-400 font-normal">${accrued.toFixed(2)}</s> ${roundUps.toFixed(2)}</>
+                  : `$${roundUps.toFixed(2)}`}
+              </span>
             </div>
+            {/* Same note, same wording as the web review step
+                (WebOnboarding.jsx:446-450) so the two surfaces read identically. */}
+            {capActive && !adjusted && (
+              <p className="text-xs mb-2" style={{ color: '#b45309' }} data-testid="confirm-cap-note">
+                Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
+              </p>
+            )}
+            {adjusted && (
+              <p className="text-xs mb-2 font-semibold" style={{ color: '#059669' }}>
+                Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
+              </p>
+            )}
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
               <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
             </div>
+            {feeMonths > 1 && (
+              <p className="text-xs text-gray-500 mb-2">
+                {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
+              </p>
+            )}
             {coverProcessing && (
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm text-gray-500">Processing cover (goes to {npShort})</span>
@@ -1620,7 +1656,7 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
               {npShort} sends your tax receipt  -  they&apos;re the ones receiving your donation.
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward  -  we settle up within 3 months at most.
+              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward to the {rolloverCharge} charge instead  -  we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
               Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the {CHARGE_DAY}th</strong>  -  next one {chargeOn}, a full {REVIEW_WINDOW_LAST_DAY} days to review it, and nothing before today ever counts.
@@ -1648,195 +1684,53 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
   );
 }
 
-// ─── EIN lookup helpers ───────────────────────────────────────────────────────
-
-function formatEIN(raw) {
-  const digits = raw.replace(/\D/g, '').slice(0, 9);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-}
-
-async function lookupEIN(digits9) {
-  const res = await fetch(
-    `https://projects.propublica.org/nonprofits/api/v2/organizations/${digits9}.json`
-  );
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const org = data.organization;
-  if (!org) throw new Error('No org found');
-  return {
-    name:     org.name ?? '',
-    city:     org.city ?? '',
-    state:    org.state ?? '',
-    is501c3:  org.subsection_code === 3 || org.subsection_code === '3',
-  };
-}
-
 // ─── Nonprofit self-serve signup flow ─────────────────────────────────────────
+//
+// PHONE surface only. Every non-visual part of this wizard  -  step sequence, the
+// real ProPublica EIN lookup and its fallback, the demo one-time-code flow, the
+// simulated Stripe connect, join-code rules, and the org record written at
+// go-live  -  lives in src/lib/npSignup.js and is shared with the desktop wizard
+// (pages/nonprofit/NpWebSignup.jsx). Nothing below this line is business logic.
 
-function NonprofitSignupFlow({ onBack, onGoLive }) {
-  const [step, setStep] = useState('ein');
-  const [ein, setEin] = useState('');
-  const [einError, setEinError] = useState(null);
-  const [verifying, setVerifying] = useState(false);
-  const [einDemoMode, setEinDemoMode] = useState(false);
-  const [stripeConnecting, setStripeConnecting] = useState(false);
-  const [stripeConnected, setStripeConnected] = useState(false);
-  const [orgName, setOrgName] = useState('');
-  const [orgAddress, setOrgAddress] = useState('');
-  const [org501c3, setOrg501c3] = useState(true);
-  const [adminEmail, setAdminEmail] = useState('');
-  // Work-email verification (proves the admin actually works at the org)
-  const [workEmail, setWorkEmail] = useState('');
-  const [emailError, setEmailError] = useState(null);
-  const [codeSent, setCodeSent] = useState(false);
-  const [sentCode, setSentCode] = useState('');
-  const [codeInput, setCodeInput] = useState('');
-  const [codeError, setCodeError] = useState(null);
-  const [demoBypassNote, setDemoBypassNote] = useState(null);
-  const [story, setStory] = useState('');
-  const [color, setColor] = useState('#003865');
-  const [accepted, setAccepted] = useState(false);
-  const [showLicenseHint, setShowLicenseHint] = useState(false);
-  const [monthlyMinimum, setMonthlyMinimum] = useState(5);
-  const [logoPreview, setLogoPreview] = useState(bgcaLogoUrl);
-  const [logoUrlInput, setLogoUrlInput] = useState('');
-  const [logoUrlError, setLogoUrlError] = useState(null);
+// Header copy for the nonprofit wizard. The hero is 38% tall like its sibling
+// heroes (SignUpScreen, CheckoutConfirmScreen), and like them it now carries the
+// three things that fill that space: brand mark, title, and a one-line subtitle
+// that says what this step actually does.
+const NP_SIGNUP_HEADER = {
+  ein:            { title: 'Verify Your\nNonprofit',   sub: 'We check your 501(c)(3) status against public IRS records. Takes a few seconds.' },
+  'confirm-org':  { title: 'Confirm\nYour Org',        sub: 'Make sure this is the right organization before we set anything up.' },
+  'verify-email': { title: 'Verify Your\nWork Email',  sub: 'An email on your own domain proves you can act for the organization. It becomes your admin sign-in.' },
+  stripe:         { title: 'Connect\nStripe',          sub: 'Donations charge on your Stripe account. You stay the merchant of record.' },
+  branding:       { title: 'Customize\nYour Page',     sub: 'This is what donors see when they scan your code or open your link.' },
+  license:        { title: 'License\nAgreement',       sub: 'Always free for your nonprofit. Never a percentage of donations.' },
+  live:           { title: "You're\nLive! 🎉",         sub: 'Share your join code and donors can start rounding up today.' },
+};
+
+function NonprofitSignupFlow({ onBack }) {
+  const {
+    step,
+    ein, setEin, einError, verifying, einDemoMode,
+    orgName, setOrgName, orgAddress, org501c3,
+    adminEmail, workEmail, setWorkEmail, emailError,
+    codeSent, codeInput, setCodeInput, codeError, demoBypassNote, requiredDomain,
+    stripeConnecting, stripeConnected,
+    story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
+    logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
+    joinCode, joinCodeError,
+    accepted, setAccepted, showLicenseHint,
+    verifyEIN, confirmOrg, reenterEIN,
+    sendCode, changeEmail, verifyCode,
+    connectStripe, stripeNext,
+    changeJoinCode, setLogoFile, applyLogoUrl, submitBranding,
+    acceptLicense, back,
+    config,
+  } = useNpSignup({ onExit: onBack, defaultLogo: bgcaLogoUrl });
+  const goLive = useNpGoLive();
   const fileInputRef = useRef(null);
-
-  // Join code: auto-suggested from the org name, but the org can set their own
-  // (it becomes their link, QR, and widget identity). Editable later in Grow.
-  const [joinCodeCustom, setJoinCodeCustom] = useState('');
-  const [joinCodeError, setJoinCodeError] = useState(null);
   const [showAppModal, setShowAppModal] = useState(false);
-  const joinCode = joinCodeCustom || generateJoinCode(orgName);
-
-  function handleJoinCodeChange(raw) {
-    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
-    setJoinCodeCustom(v);
-    if (v.length > 0 && v.length < 2) setJoinCodeError('At least 2 characters.');
-    else if (v && !isJoinCodeAvailable(v)) setJoinCodeError('That code is taken  -  try another.');
-    else setJoinCodeError(null);
-  }
-
-  async function handleVerifyEIN(e) {
-    e.preventDefault();
-    const digits = ein.replace(/\D/g, '');
-    if (digits.length !== 9) {
-      setEinError('EIN must be exactly 9 digits (format: XX-XXXXXXX).');
-      return;
-    }
-    setEinError(null);
-    setVerifying(true);
-    setEinDemoMode(false);
-
-    try {
-      const result = await lookupEIN(digits);
-      setVerifying(false);
-      setOrgName(result.name || 'Boys & Girls Clubs of America');
-      setOrgAddress(result.city && result.state ? `${result.city}, ${result.state}` : 'Atlanta, GA');
-      setOrg501c3(result.is501c3);
-      setEinDemoMode(false);
-      setStep('confirm-org');
-    } catch {
-      // Graceful fallback  -  use simulated BGCA result with demo note
-      setVerifying(false);
-      setOrgName('Boys & Girls Clubs of America');
-      setOrgAddress('Atlanta, GA');
-      setOrg501c3(true);
-      setEinDemoMode(true);
-      setStep('confirm-org');
-    }
-  }
-
-  function handleStripeConnect() {
-    setStripeConnecting(true);
-    setTimeout(() => {
-      setStripeConnecting(false);
-      setStripeConnected(true);
-    }, 1500);
-  }
-
-  function handleBrandingNext(e) {
-    e.preventDefault();
-    if (joinCodeError) return;
-    setStep('license');
-  }
 
   function handleAccept(e) {
-    e.preventDefault();
-    if (!accepted) { setShowLicenseHint(true); return; }
-    setStep('live');
-    setShowAppModal(true);
-  }
-
-  function handleGoLive() {
-    onGoLive({
-      name:           orgName,
-      shortName:      joinCode,
-      color,
-      logoPreview,
-      mission:        story,
-      monthlyMinimum,
-      adminEmail,
-      joinCode,
-      ein,
-      orgAddress,
-    });
-  }
-
-  const stepBack = {
-    ein:          onBack,
-    'confirm-org':  () => setStep('ein'),
-    'verify-email': () => setStep('confirm-org'),
-    stripe:         () => setStep('verify-email'),
-    branding:       () => setStep('stripe'),
-    license:        () => setStep('branding'),
-    live:           () => setStep('license'),
-  };
-
-  // ── Work-email verification helpers ──
-  // Personal-mail domains can never administer a nonprofit. For orgs whose
-  // domain we know (BGCA in the demo), the email must be ON that domain.
-  // Production: domain cross-checked against org records + Stripe KYC, and
-  // the code is actually emailed (see PRELAUNCH.md).
-  const FREE_MAIL = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com', 'live.com', 'msn.com', 'me.com'];
-  const KNOWN_ORG_DOMAINS = { 'boys & girls clubs of america': 'bgca.org' };
-  const requiredDomain = KNOWN_ORG_DOMAINS[orgName?.toLowerCase?.()] ?? null;
-
-  function handleSendCode(e) {
-    e?.preventDefault?.();
-    const email = workEmail.trim().toLowerCase();
-    const domain = email.split('@')[1];
-    if (!domain || !email.includes('@') || domain.indexOf('.') < 1) {
-      setEmailError('Enter a valid email address.');
-      return;
-    }
-    // DEMO: any email passes so Blake can walk the flow; we show what the
-    // LIVE rules would have said. Production enforces these for real.
-    let bypassNote = null;
-    if (requiredDomain && domain !== requiredDomain) {
-      bypassNote = `the live version requires an @${requiredDomain} address for ${orgName}`;
-    } else if (FREE_MAIL.includes(domain)) {
-      bypassNote = 'the live version rejects personal email domains  -  admins must use their work address';
-    }
-    setDemoBypassNote(bypassNote);
-    setEmailError(null);
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    setSentCode(code);
-    setCodeInput(code); // DEMO: auto-filled; live version emails it
-    setCodeError(null);
-    setCodeSent(true);
-  }
-
-  function handleVerifyCode(e) {
-    e?.preventDefault?.();
-    if (codeInput.trim() !== sentCode) {
-      setCodeError("That code doesn't match  -  check the email and try again.");
-      return;
-    }
-    setAdminEmail(workEmail.trim().toLowerCase());
-    setStep('stripe');
+    if (acceptLicense(e)) setShowAppModal(true);
   }
 
   return (
@@ -1845,23 +1739,28 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
       {/* Header */}
       <div className="flex flex-col justify-end px-8 pb-8 shrink-0"
         style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}>
-        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</motion.button>
+        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={back} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</motion.button>
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.15, type: 'spring', stiffness: 280 }}
+          className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center mb-3 self-start"
+        >
+          <CoinMark size={40} />
+        </motion.div>
         <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
-          {step === 'ein'          && 'Verify Your\nNonprofit'}
-          {step === 'confirm-org'  && 'Confirm\nYour Org'}
-          {step === 'verify-email' && 'Verify Your\nWork Email'}
-          {step === 'stripe'       && 'Connect\nStripe'}
-          {step === 'branding'     && 'Customize\nYour Page'}
-          {step === 'license'      && 'License\nAgreement'}
-          {step === 'live'         && "You're\nLive! 🎉"}
+          {NP_SIGNUP_HEADER[step]?.title}
         </h1>
+        <p className="text-white/80 text-xs mt-2 leading-relaxed">
+          {NP_SIGNUP_HEADER[step]?.sub}
+        </p>
       </div>
 
       {/* Sheet */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-5 pt-6 pb-10 space-y-4">
 
         {step === 'ein' && (
-          <form onSubmit={handleVerifyEIN} className="space-y-4">
+          <form onSubmit={verifyEIN} className="space-y-4">
             <p className="text-gray-500 text-sm">
               Enter your organization&apos;s EIN. We&apos;ll verify your 501(c)(3) status with IRS data from ProPublica.
             </p>
@@ -1870,7 +1769,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 type="text"
                 placeholder="XX-XXXXXXX"
                 value={ein}
-                onChange={e => { setEin(formatEIN(e.target.value)); setEinError(null); }}
+                onChange={e => setEin(e.target.value)}
                 required
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono"
                 style={{ borderColor: einError ? '#ef4444' : '#e5e7eb' }}
@@ -1923,12 +1822,12 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 </p>
               )}
             </div>
-            <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('verify-email')}
+            <motion.button whileTap={{ scale: 0.97 }} onClick={confirmOrg}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
               Confirm  -  this is us →
             </motion.button>
-            <button onClick={() => setStep('ein')} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
+            <button onClick={reenterEIN} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
               No, re-enter EIN
             </button>
           </div>
@@ -1937,7 +1836,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
         {step === 'verify-email' && (
           <div className="space-y-4">
             {!codeSent ? (
-              <form onSubmit={handleSendCode} className="space-y-4">
+              <form onSubmit={sendCode} className="space-y-4">
                 <p className="text-gray-500 text-sm">
                   Prove you work at {orgName}: enter your work email on your organization&apos;s
                   own domain and we&apos;ll send a 6-digit code. This address becomes your admin sign-in.
@@ -1948,7 +1847,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                     type="email"
                     required
                     value={workEmail}
-                    onChange={e => { setWorkEmail(e.target.value); setEmailError(null); }}
+                    onChange={e => setWorkEmail(e.target.value)}
                     placeholder={requiredDomain ? `you@${requiredDomain}` : 'you@yourorg.org'}
                     className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
                     style={{ borderColor: emailError ? '#ef4444' : '#e5e7eb' }}
@@ -1967,7 +1866,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 </p>
               </form>
             ) : (
-              <form onSubmit={handleVerifyCode} className="space-y-4">
+              <form onSubmit={verifyCode} className="space-y-4">
                 <p className="text-gray-500 text-sm">
                   We sent a 6-digit code to <strong className="text-gray-900">{workEmail}</strong>. Enter it to continue.
                 </p>
@@ -1986,7 +1885,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                   inputMode="numeric"
                   maxLength={6}
                   value={codeInput}
-                  onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
+                  onChange={e => setCodeInput(e.target.value)}
                   placeholder="······"
                   className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-teal-400 font-mono text-center text-xl tracking-[0.5em]"
                   style={{ borderColor: codeError ? '#ef4444' : '#e5e7eb' }}
@@ -1998,8 +1897,8 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                   Verify &amp; continue →
                 </motion.button>
                 <div className="flex justify-center gap-4">
-                  <button type="button" onClick={handleSendCode} className="text-sm text-gray-400 font-medium">Resend code</button>
-                  <button type="button" onClick={() => { setCodeSent(false); setCodeInput(''); }} className="text-sm text-gray-400 font-medium">Change email</button>
+                  <button type="button" onClick={sendCode} className="text-sm text-gray-400 font-medium">Resend code</button>
+                  <button type="button" onClick={changeEmail} className="text-sm text-gray-400 font-medium">Change email</button>
                 </div>
               </form>
             )}
@@ -2017,14 +1916,14 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 <p className="text-green-700 text-xs mt-1">You are the merchant of record for all donations</p>
               </div>
             ) : (
-              <motion.button whileTap={{ scale: 0.97 }} onClick={handleStripeConnect}
+              <motion.button whileTap={{ scale: 0.97 }} onClick={connectStripe}
                 className="w-full py-4 rounded-2xl text-white font-bold text-base"
                 style={{ background: 'linear-gradient(135deg, #635bff, #4b45c6)' }}>
                 {stripeConnecting ? 'Connecting…' : 'Connect with Stripe'}
               </motion.button>
             )}
             {stripeConnected && (
-              <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('branding')}
+              <motion.button whileTap={{ scale: 0.97 }} onClick={stripeNext}
                 className="w-full py-4 rounded-2xl text-white font-bold text-base"
                 style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
                 Continue →
@@ -2035,7 +1934,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
         )}
 
         {step === 'branding' && (
-          <form onSubmit={handleBrandingNext} className="space-y-4">
+          <form onSubmit={submitBranding} className="space-y-4">
             <p className="text-gray-500 text-sm">Customize how your page looks to donors.</p>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Organization Name</label>
@@ -2044,7 +1943,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Donor Join Code</label>
-              <input type="text" value={joinCode} onChange={e => handleJoinCodeChange(e.target.value)}
+              <input type="text" value={joinCode} onChange={e => changeJoinCode(e.target.value)}
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono uppercase tracking-widest"
                 style={{ borderColor: joinCodeError ? '#ef4444' : '#e5e7eb' }} />
               {joinCodeError && <p className="text-red-500 text-xs mt-1 px-1">{joinCodeError}</p>}
@@ -2071,13 +1970,13 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Brand Color</label>
               <div className="flex flex-wrap gap-3">
-                {['#003865', '#0D9488', '#059669', '#2563EB', '#4F46E5', '#7C3AED', '#DB2777', '#DC2626', '#EA580C', '#F59E0B'].map(c => (
+                {NP_BRAND_COLORS.map(c => (
                   <button key={c} type="button" onClick={() => setColor(c)}
                     className="w-10 h-10 rounded-xl border-2 transition-all"
                     style={{ background: c, borderColor: color === c ? '#111' : 'transparent' }} />
                 ))}
                 <label className="flex flex-col items-center justify-center w-10 h-10 rounded-xl border-2 cursor-pointer transition-all overflow-hidden"
-                  style={{ borderColor: !['#003865','#0D9488','#059669','#2563EB','#4F46E5','#7C3AED','#DB2777','#DC2626','#EA580C','#F59E0B'].includes(color) ? '#111' : 'transparent', background: color }}>
+                  style={{ borderColor: !NP_BRAND_COLORS.includes(color) ? '#111' : 'transparent', background: color }}>
                   <input type="color" value={color} onChange={e => setColor(e.target.value)} className="opacity-0 w-0 h-0 absolute" />
                   <span className="text-white text-xs font-bold leading-none" style={{ textShadow: '0 0 3px rgba(0,0,0,0.5)' }}>+</span>
                 </label>
@@ -2094,10 +1993,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 accept="image/*"
                 ref={fileInputRef}
                 className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) setLogoPreview(URL.createObjectURL(file));
-                }}
+                onChange={e => setLogoFile(e.target.files?.[0])}
               />
               <button type="button" onClick={() => fileInputRef.current?.click()}
                 className="w-full py-3 rounded-2xl border-2 border-dashed border-teal-300 text-teal-600 text-sm font-semibold mb-2">
@@ -2108,14 +2004,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
                 placeholder="or paste a logo URL"
                 value={logoUrlInput}
                 onChange={e => setLogoUrlInput(e.target.value)}
-                onBlur={e => {
-                  const url = e.target.value.trim();
-                  if (!url) return;
-                  const img = new Image();
-                  img.onload = () => { setLogoPreview(url); setLogoUrlError(null); };
-                  img.onerror = () => { setLogoUrlError("We couldn't load that image  -  check the link or upload a file instead"); };
-                  img.src = url;
-                }}
+                onBlur={e => applyLogoUrl(e.target.value)}
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400"
               />
               {logoUrlError && <p className="text-red-500 text-xs mt-1">{logoUrlError}</p>}
@@ -2148,11 +2037,9 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
           <form onSubmit={handleAccept} className="space-y-4">
             <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
             <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
-              <p><strong>Always free for you.</strong> Donors pay the flat $1/month app fee, and most also cover your card-processing costs (pre-selected). You never pay PocketCache anything  -  never a % of donations.</p>
-              <p><strong>You are the merchant of record.</strong> Donations charge directly on your Stripe. PocketCache never holds donation funds.</p>
-              <p><strong>You issue tax receipts</strong> directly to donors. PocketCache does not.</p>
-              <p><strong>You handle charitable solicitation registration</strong> in applicable states.</p>
-              <p><strong>California:</strong> Not available at launch. Do not promote to CA residents until PocketCache confirms availability.</p>
+              {NP_LICENSE_POINTS.map(([heading, body]) => (
+                <p key={heading}><strong>{heading}</strong> {body}</p>
+              ))}
             </div>
             <a href="/legal/nonprofit-license/" target="_blank" rel="noopener"
               className="block text-center text-sm font-semibold underline" style={{ color: '#003865' }}>
@@ -2200,7 +2087,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">QR Code</p>
               <div className="bg-white rounded-xl p-3 inline-block border border-gray-100">
-                <QRCodeSVG value={`https://pocketcache.app/demo/?org=${joinCode}`} size={96} level="M" includeMargin />
+                <QRCodeSVG value={joinQrValue(joinCode)} size={96} level="M" includeMargin />
               </div>
               <p className="text-gray-400 text-xs mt-1">Donors scan this to join <strong>{orgName || 'your program'}</strong></p>
             </div>
@@ -2208,7 +2095,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Embed Widget</p>
               <div className="bg-gray-900 rounded-xl p-3 max-w-full overflow-x-auto">
                 <code className="text-green-400 text-xs whitespace-pre-wrap break-all">
-                  {`<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`}
+                  {widgetSnippet(orgName, joinCode)}
                 </code>
               </div>
               <p className="text-gray-400 text-xs mt-1">See a live preview anytime in your dashboard → Grow tab.</p>
@@ -2216,23 +2103,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             {/* Launch kit  -  auto-sent to the verified admin email at go-live;
                 this button forwards a copy to a colleague (recipient left blank) */}
             <a
-              href={(() => {
-                const site = `https://pocketcache.app/${joinCode}`;
-                const give = `https://pocketcache.app/${joinCode}/give`;
-                const subject = `${orgName} is LIVE on PocketCache!`;
-                const body = [
-                  `${orgName} is live on PocketCache! 🎉`, '',
-                  `Our page: ${site}`,
-                  `Donor join code: ${joinCode}`,
-                  `Direct giving link (donors sign up here): ${give}`, '',
-                  `Website widget  -  paste this where the "Round up for us" card should appear:`,
-                  `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`, '',
-                  `The QR code (points to the giving link) is on the dashboard → Grow tab, ready for posters, newsletters, and event tables.`, '',
-                  `Admin sign-in: https://pocketcache.app/demo/?npsignin=1  -  works for the verified admin email; a fresh code is emailed each time. No password.`, '',
-                  ` -  Sent from ${orgName}'s PocketCache launch kit`,
-                ].join('\n');
-                return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-              })()}
+              href={launchKitMailto(orgName, joinCode)}
               className="block w-full py-4 rounded-2xl font-bold text-base text-center"
               style={{ background: '#f0fdf4', border: '2px solid #86efac', color: '#065f46', textDecoration: 'none' }}
             >
@@ -2245,7 +2116,7 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
             </p>
             <motion.button
               whileTap={{ scale: 0.97 }}
-              onClick={handleGoLive}
+              onClick={() => goLive(config)}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
             >
@@ -2286,13 +2157,16 @@ function GateWithSplash({ children }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, returnFromOnboarding, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
-  const { setNpOrg } = useNp();
+  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, goToOnboardingStep, returnFromOnboarding, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
   const [slide, setSlide] = useState(0);
   const [signupProvider, setSignupProvider] = useState('demo');
   const [connectedBank, setConnectedBank] = useState(null);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
   const [showAppModal, setShowAppModal] = useState(false);
+  // True when the nonprofit wizard was entered from the gate, which is the one
+  // entry point whose "back" target is the gate itself rather than a page the
+  // user came from. See enterNonprofitSignup below.
+  const [npFromGate, setNpFromGate] = useState(false);
   const [step, setStep] = useState(() => {
     const urlP = new URLSearchParams(window.location.search);
     if (urlP.get('npsignin') === '1') return 'admin-signin';
@@ -2312,43 +2186,35 @@ export default function Onboarding() {
     }
   }, [initialOnboardingStep, clearInitialOnboardingStep]);
 
+  // The gate's "Create your nonprofit page" button. The local step transition is
+  // what moves the phone/native flow; goToOnboardingStep publishes the same jump
+  // to AppContext so App.jsx's desktop router (WebExperience) can see it and
+  // route to the web-native wizard (NpWebSignup) instead of the phone column.
+  // Onboarding's initialOnboardingStep effect would set the step too, but doing
+  // it locally as well keeps native instant and independent of that round trip.
+  function enterNonprofitSignup() {
+    setNpFromGate(true);
+    goToOnboardingStep('nonprofit-signup');
+    setStep('nonprofit-signup');
+  }
+
+  // Back out of the nonprofit wizard. Order matters: goToOnboardingStep records
+  // a nav-return of the CURRENT page (onboarding), so for the gate entry point
+  // that return has to be consumed and discarded, or "back" would resolve to the
+  // page we are already on and appear to do nothing.
+  function exitNonprofitSignup() {
+    if (npFromGate) {
+      setNpFromGate(false);
+      returnFromOnboarding();
+      setStep('gate');
+      return;
+    }
+    if (!returnFromOnboarding()) setStep('gate');
+  }
+
   function handleBind(np) {
     setSelectedNonprofit(np);
     setStep('slides');
-  }
-
-  function handleGoLive(config) {
-    // Build and persist the real org object
-    const org = buildOrgFromSignup({
-      name:           config.name,
-      adminEmail:     config.adminEmail,
-      story:          config.mission,
-      color:          config.color,
-      logoPreview:    config.logoPreview !== bgcaLogoUrl ? config.logoPreview : null,
-      monthlyMinimum: config.monthlyMinimum,
-      ein:            config.ein,
-      orgAddress:     config.orgAddress,
-      joinCode:       config.joinCode,
-    });
-    saveCustomOrg(org);
-
-    setNpOrg({
-      name:           org.name,
-      shortName:      org.shortName,
-      color:          config.color,
-      logoPreview:    org.logoUrl,
-      mission:        org.description,
-      monthlyMinimum: org.monthlyMinimum,
-      adminEmail:     org.adminEmail,
-      joinCode:       org.shortName,
-      _orgId:         org.id,
-    });
-    setAdminRole({ orgId: org.id, joinCode: org.shortName });
-    setLastMode('admin');
-    // Native: queue the web-portal popup to appear on the admin dashboard
-    // (inverse of the QR popup web admins saw on the You're Live screen).
-    if (isNative()) queueWebPortalPrompt();
-    setPage('np-dashboard');
   }
 
   function handleNpSignIn() {
@@ -2408,7 +2274,7 @@ export default function Onboarding() {
     <GateWithSplash>
       <OrgGateScreen
         onBind={handleBind}
-        onNonprofitSignup={() => setStep('nonprofit-signup')}
+        onNonprofitSignup={enterNonprofitSignup}
         autoBindOrg={autoBindOrg}
         hasAccount={hasAccount}
         onWelcomeBack={resumeSession}
@@ -2435,7 +2301,7 @@ export default function Onboarding() {
   if (step === 'nonprofit-signup') return (
     // Exit-back returns to wherever the user jumped in from (e.g. their donor
     // dashboard); falls back to the gate for cold visitors.
-    <NonprofitSignupFlow onBack={() => { if (!returnFromOnboarding()) setStep('gate'); }} onGoLive={handleGoLive} />
+    <NonprofitSignupFlow onBack={exitNonprofitSignup} />
   );
   if (step === 'checkout-confirm') return (
     <div style={{position:'relative', width:'100%', height:'100%'}}>

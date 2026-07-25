@@ -7,15 +7,15 @@ import App from './App.jsx'
 // so Blake can test from the fresh welcome screen each time.
 // REMOVE THIS BLOCK BEFORE OFFICIAL LAUNCH - see PRELAUNCH.md and app/APPSTORE.md.
 if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
-  try { localStorage.clear(); } catch (_) { /* ignore */ }
-  try { sessionStorage.clear(); } catch (_) { /* ignore */ }
+  try { localStorage.clear(); } catch { /* ignore */ }
+  try { sessionStorage.clear(); } catch { /* ignore */ }
   try {
     if (indexedDB && typeof indexedDB.databases === 'function') {
       indexedDB.databases().then(dbs => {
-        dbs.forEach(db => { try { if (db.name) indexedDB.deleteDatabase(db.name); } catch (_) { /* ignore */ } });
+        dbs.forEach(db => { try { if (db.name) indexedDB.deleteDatabase(db.name); } catch { /* ignore */ } });
       }).catch(() => { /* ignore */ });
     }
-  } catch (_) { /* ignore */ }
+  } catch { /* ignore */ }
 }
 
 createRoot(document.getElementById('root')).render(

@@ -7,8 +7,12 @@ import { DEMO_USER, monthsGiving } from '../data/derived';
 import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
 import { fmtMoneyCompact } from '../lib/format';
-import { chargeTotal, nextChargeLabel, currentMonthName } from '../lib/billing';
+import {
+  LARGE_DONATION_THRESHOLD, MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal,
+  currentMonthName, effectiveCharge, nextChargeLabel,
+} from '../lib/billing';
 import { Z, scrim } from '../lib/overlay';
+import { generateOneTimeCode } from '../lib/npSignup';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import MatchBadge from '../components/MatchBadge';
@@ -145,6 +149,34 @@ function ActionButton({ children, onClick, disabled, tone = 'primary' }) {
   );
 }
 
+// ─── data-testid convention (web portal surface) ─────────────────────────────
+// These hooks exist so the app/web parity checks are re-runnable instead of
+// eyeballed. One convention, applied to every hook in WebPortalPages.jsx and
+// WebDashboard.jsx:
+//
+//     web-<feature>-<element>
+//
+//   web-      marks a hook on the WEB PORTAL surface. The app surface has its own
+//             unprefixed hooks (Onboarding.jsx `confirm-roundups`,
+//             `confirm-cap-note`) and shared components have theirs
+//             (StripeCardForm `stripe-card-form`), so the prefix is what stops a
+//             parity selector from silently matching the wrong surface.
+//   <feature> the donor-facing thing under test, matching the component it lives
+//             in: estimate, adjust-charge, give-extra, skip, cancel, track-card,
+//             change-payment, kpi, toast.
+//   <element> what the node IS, from a fixed vocabulary: -total, -roundups,
+//             -rollover, -value, -button, -modal, -confirm, -note, -capped,
+//             -adjusted, -skipped.
+//
+// All lower-kebab, no camelCase, no ids. Hooks go on the node holding the NUMBER
+// or the node a test would click - never on a decorative wrapper - so a test can
+// read textContent directly. `web-toast` is the one bare feature-only name: the
+// toast is a singleton with no sub-elements.
+//
+// Mutually exclusive states may share one hook (web-cancel-note carries either
+// the cap note or the adjustment note) because only one is ever mounted; states
+// that can coexist get their own (web-estimate-capped vs web-estimate-adjusted).
+//
 // ─── Web toast ───────────────────────────────────────────────────────────────
 // The app confirms card / payment / biometric changes with a toast (App.jsx
 // renders AppContext's `toast` inside the phone frame). WebDashboard is NOT a
@@ -196,7 +228,7 @@ export function WebAdminSignIn() {
     const domain = email.trim().toLowerCase().split('@')[1];
     if (!domain || domain.indexOf('.') < 1) { setError('Enter a valid email address.'); return; }
     setError(null);
-    const c = String(Math.floor(100000 + Math.random() * 900000));
+    const c = generateOneTimeCode();
     setCode(c);
     setCodeInput(c); // DEMO: auto-filled; live version emails it
     setCodeError(null);
@@ -281,18 +313,6 @@ export function WebAdminSignIn() {
 
 // ─── Give Extra  -  multi-step: amount → review → (confirm) → done ────────────
 const BOOST_PRESETS = [1, 5, 10, 25];
-
-// Fat-finger guard. Gifts at or above this get an extra "was that intentional?"
-// step before anything is committed.
-//
-// SHOULD BE CENTRALISED: this is the SECOND copy of the number. The first lives
-// in src/components/sheets/GiveExtraSheet.jsx:7, where it is a module-private
-// const and therefore not importable. That file belongs to another surface's
-// owner, so the value is duplicated here rather than edited there. Next time one
-// person owns both, move it to src/lib/billing.js (or a small giving-limits
-// module) and have both sheets import it - two copies of a safety threshold is
-// exactly the kind of thing that silently drifts.
-const LARGE_DONATION_THRESHOLD = 1000;
 
 export function GiveExtraModal({ show, onClose }) {
   const { selectedNonprofit, boostDonation } = useApp();
@@ -400,7 +420,7 @@ export function GiveExtraModal({ show, onClose }) {
       )}
 
       {step === 'confirm' && (
-        <div data-testid="give-extra-large-confirm" style={{ background: '#fffbeb', border: '2px solid #fde68a', borderRadius: 16, padding: 18 }}>
+        <div data-testid="web-give-extra-large-confirm" style={{ background: '#fffbeb', border: '2px solid #fde68a', borderRadius: 16, padding: 18 }}>
           <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 16, color: '#78350f' }}>Just to confirm…</p>
           <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: '#92400e' }}>
             You&apos;re about to donate <strong>${fmt2(amount)}</strong> to {npShort}. Was that intentional?
@@ -433,8 +453,8 @@ export function GiveExtraModal({ show, onClose }) {
  * cap only exists once on web.
  *
  * THE APP HAND-ROLLS ITS OWN COPY AND ITS COPY MUST STAY IN SYNC WITH THIS FILE:
- *   src/pages/Settings.jsx   ~1119-1167  (the "Monthly Giving Cap" card)
- *   src/pages/Onboarding.jsx ~1241-1270  (the quiet wizard opt-in, `subtle`)
+ *   src/pages/Settings.jsx   ~1138-1186  (the "Monthly Giving Cap" card)
+ *   src/pages/Onboarding.jsx ~1265-1295  (the quiet wizard opt-in, `subtle`)
  * Neither app copy can import this (they are Tailwind/motion, this is inline
  * styles), so the strings below are the reconciliation point. If you change a
  * string here, change it in both app files too - and vice versa.
@@ -445,6 +465,21 @@ export function GiveExtraModal({ show, onClose }) {
  * app says "Capped at $20/month" and carries the explainer underneath. The app's
  * split reads better (short status, one explanation) so web adopted it.
  * Range, step and $5/$200 end labels were already identical on all three.
+ *
+ * RE-VERIFIED 2026-07-24 after the app files were edited again. The default
+ * variant is still word for word:
+ *   label     "Monthly Cap"
+ *   status    "No cap set" / `Capped at $${cap}/month`
+ *   explainer "Cap what you give each month. If your round-ups go over, we only
+ *              charge up to your cap  -  the rest is simply never charged."
+ * The `subtle` variant has one REMAINING, PRESENTATIONAL delta: Onboarding.jsx
+ * renders a single checkbox sentence, "Set a monthly maximum (optional)  -
+ * round-ups above it are simply never charged.", whereas this control's
+ * label/sub structure splits it into "Set a monthly maximum (optional)" plus
+ * "Round-ups above it are simply never charged." Same words in the same order;
+ * only the joining " - " and the leading capital differ, because a sub-line that
+ * begins lowercase with no lead-in reads as broken on web. Left as is
+ * deliberately; Onboarding.jsx is not this file's to edit.
  */
 export function CapControl({ value, onChange, subtle = false }) {
   const enabled = value !== null && value !== undefined;
@@ -522,7 +557,7 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
         One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
       </p>
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
-        <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: INK.primary }} data-testid="adjust-value">${fmt2(value)}</p>
+        <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: INK.primary }} data-testid="web-adjust-charge-value">${fmt2(value)}</p>
         <p style={{ margin: '2px 0 0', fontSize: 12, color: INK.muted }}>of ${fmt2(accrued)} accrued this month</p>
       </div>
       <input
@@ -825,6 +860,7 @@ export function WebSettings() {
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod, linkedCards,
     pendingSettingsAction, clearPendingSettingsAction,
     monthlyCap, setMonthlyCap, skipNextCharge, setSkipNextCharge, hasAccount, feeMonths,
+    chargeAdjustment,
   } = useApp();
   const { message: toast, showToast, clearToast } = useWebToast();
 
@@ -843,6 +879,12 @@ export function WebSettings() {
   // wrong for days 1 to 10, when the upcoming charge is THIS month's 11th.
   const skipMonthName = currentMonthName();
   const chargeLabel = nextChargeLabel();
+  // A skipped cycle collects NOTHING on `chargeLabel`; the $1 fee rolls forward
+  // and lands on the charge after that, which billing can now name outright.
+  // Skip copy used to say "next month's charge" and hardcode "$1 × 2", so a
+  // donor who skipped twice was told $1 × 2 while the charge carried $1 × 3.
+  const afterChargeLabel = chargeAfterNextLabel();
+  const rolledFeeMonths = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
 
   // ── CANONICAL EXPORT SHAPE (mirror of Settings.jsx handleDownloadData) ──────
   // Settings.jsx marks that object as canonical for BOTH surfaces; this is the
@@ -940,7 +982,7 @@ export function WebSettings() {
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Skip a month"
               sub={skipNextCharge
-                ? `${skipMonthName} skipped  -  only the $1 fee rolls over ($1 × 2)`
+                ? `${skipMonthName} skipped - nothing on ${chargeLabel}; the $1 fee rolls to ${afterChargeLabel} ($1 × ${rolledFeeMonths})`
                 : `Need a breather? Skip ${skipMonthName}'s charge`}
               right={skipNextCharge ? (
                 <button onClick={() => setSkipNextCharge(false)}
@@ -1042,17 +1084,25 @@ export function WebSettings() {
         buildExportData={buildExportData} onToast={showToast} />
       <CancelModal show={modal === 'cancel'} onClose={() => setModal(null)}
         pendingRoundUps={pendingRoundUps} feeMonths={feeMonths} nonprofit={np}
+        monthlyCap={monthlyCap} chargeAdjustment={chargeAdjustment}
         onDonate={boostDonation} onCancelled={cancelAccount} />
+      {/* Mirror of the app's SkipConfirmModal (Settings.jsx ~95-148), sentence for
+          sentence. Both name the charge the fee actually lands on rather than
+          saying "the charge after that", and both derive the multiplier from the
+          real pending feeMonths (clamped at MAX_FEE_MONTHS) - skip two cycles
+          running and the third charge honestly reads $1 × 3. */}
       <Modal show={modal === 'skip'} onClose={() => setModal(null)} title={`${skipMonthName} skipped`}>
-        <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-          You will skip {skipMonthName}&apos;s charges. Those round-ups are simply never charged  -  they don&apos;t roll over and they don&apos;t come out later.
-        </p>
-        <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-          Only the $1 app fee rolls to next month, so your next charge on {chargeLabel} carries a $1 × 2 fee.
-        </p>
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-          Changed your mind? Tap Undo on this screen any time before {chargeLabel}.
-        </p>
+        <div data-testid="web-skip-modal">
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+            You will skip {skipMonthName}&apos;s charges. Those round-ups are simply never charged - they don&apos;t roll over and they don&apos;t come out later.
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+            Nothing is charged on {chargeLabel}. Only the $1 app fee rolls forward, so it joins your {afterChargeLabel} charge as $1 × {rolledFeeMonths}.
+          </p>
+          <p style={{ margin: '0 0 16px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+            Changed your mind? Tap Undo on this screen any time before {chargeLabel}.
+          </p>
+        </div>
         <ActionButton tone="primary" onClick={() => setModal(null)}>Got it</ActionButton>
       </Modal>
 
@@ -1104,7 +1154,7 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
   return (
     <Modal show={show} onClose={onClose} title="Track a Different Card">
       {connected ? (
-        <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="track-card-confirm">
+        <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="web-track-card-confirm">
           <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{connected.name} ····{connected.last4} connected</p>
           <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
@@ -1204,7 +1254,7 @@ function ChangePaymentModal({ show, onClose, onChanged }) {
   return (
     <Modal show={show} onClose={onClose} title={title}>
       {staged ? (
-        <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="change-payment-confirm">
+        <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="web-change-payment-confirm">
           <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>
             {staged.label} ready{staged.last4 ? ` ····${staged.last4}` : ''}
@@ -1373,7 +1423,7 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
   );
 }
 
-function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onDonate, onCancelled }) {
+function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, monthlyCap, chargeAdjustment, onDonate, onCancelled }) {
   const [coverProcessing, setCoverProcessing] = useState(true);
   const [result, setResult] = useState(null);
   useEffect(() => {
@@ -1383,22 +1433,35 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
   }, [show]);
 
   const raw = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
-  const processingCover = parseFloat((raw * 0.022 + 0.30).toFixed(2));
-  // Totalled by lib/billing. Note the cap and the one-time adjustment are
-  // deliberately NOT applied to this final settle-up, because the app's cancel
-  // sheet (Settings.jsx ~549-553) does not apply them either and the two
-  // surfaces must show the same number. FLAGGED FOR RECONCILIATION: arguably
-  // both should honour the cap on the way out - that is an app-side decision.
+  // The final settle-up is a CHARGE, so it obeys the same precedence every other
+  // charge does - via lib/billing, not local math. Both surfaces used to bill the
+  // RAW round-ups here, so a donor with a $10 cap and $22 accrued was promised
+  // "we only charge up to your cap" in Settings and then shown a $23 final figure
+  // on the way out the door, the one screen where the number is least
+  // recoverable. Line-for-line mirror of the app's CancelSheet (Settings.jsx
+  // ~553-577): same precedence, same trimmed-row treatment, same amber note, same
+  // below-minimum test, and onDonate receives the CHARGEABLE amount, not the
+  // accrual.
+  const chargeable = effectiveCharge({ pendingRoundUps: raw, monthlyCap, chargeAdjustment });
+  const chargeableStr = chargeable.toFixed(2);
+  const trimmed = chargeable < raw;
+  // Processing cover is a percentage OF THE CHARGE, so it follows the chargeable
+  // amount, not the raw accrual.
+  const processingCover = parseFloat((chargeable * 0.022 + 0.30).toFixed(2));
   const total = chargeTotal({
     pendingRoundUps: raw,
+    monthlyCap,
+    chargeAdjustment,
     feeMonths,
     processingCover: coverProcessing ? processingCover : 0,
   }).toFixed(2);
-  const belowMin = raw < (nonprofit?.monthlyMinimum ?? 5);
+  // Measured against what is actually charged, not what accrued: a $4 cap on
+  // $13.89 of round-ups really is under a $5 minimum.
+  const belowMin = chargeable < (nonprofit?.monthlyMinimum ?? 5);
   const npShort = nonprofit?.shortName ?? 'your cause';
 
   function donateAndCancel() {
-    onDonate(raw);
+    onDonate(chargeable);
     setResult('donated');
   }
 
@@ -1425,10 +1488,24 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
           </p>
           <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 12, padding: 14, marginBottom: 10, fontSize: 13 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-              <span style={{ color: INK.secondary }}>Round-ups</span><span style={{ fontWeight: 700, color: INK.primary }}>${raw.toFixed(2)}</span>
+              <span style={{ color: INK.secondary }}>Round-ups</span>
+              <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-cancel-roundups">
+                {trimmed
+                  ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${raw.toFixed(2)}</s> ${chargeableStr}</>
+                  : `$${raw.toFixed(2)}`}
+              </span>
             </div>
+            {trimmed && (
+              <p style={{ margin: '0 0 2px', fontSize: 12, color: '#b45309' }} data-testid="web-cancel-note">
+                {chargeAdjustment !== null && chargeAdjustment !== undefined
+                  ? `Adjusted to $${chargeableStr} for this month  -  the rest is never charged.`
+                  : `Capped at $${monthlyCap.toFixed(2)}/month  -  the rest is never charged.`}
+              </p>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
-              <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span>+${feeMonths.toFixed(2)}</span>
+              {/* "(not tax-deductible)" is on the app's settle-up row and on the
+                  web wizard's review row; it was missing here alone. */}
+              <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span><span>+${feeMonths.toFixed(2)}</span>
             </div>
             {coverProcessing && (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
@@ -1437,12 +1514,12 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
             )}
             <div style={{ height: 1, background: '#cbd5e1', margin: '6px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, color: INK.primary }}>Total</span><span style={{ fontWeight: 800, color: NAVY }}>${total}</span>
+              <span style={{ fontWeight: 700, color: INK.primary }}>Total</span><span style={{ fontWeight: 800, color: NAVY }} data-testid="web-cancel-total">${total}</span>
             </div>
           </div>
           {belowMin && (
             <p style={{ margin: '0 0 10px', fontSize: 12, color: '#92400e', background: '#fffbeb', borderRadius: 10, padding: '8px 12px', lineHeight: 1.55 }}>
-              Note: ${raw.toFixed(2)} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum  -  in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
+              Note: ${chargeableStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum  -  in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
             </p>
           )}
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: INK.secondary, marginBottom: 14, cursor: 'pointer' }}
@@ -1451,7 +1528,9 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
             <span>Cover {npShort}&apos;s card-processing costs (~${processingCover.toFixed(2)}) so 100% of my round-ups reach them</span>
           </label>
           <div style={{ display: 'grid', gap: 8 }}>
-            <ActionButton onClick={donateAndCancel}>Donate ${total} &amp; cancel</ActionButton>
+            {/* "Send", matching the app's CancelSheet CTA - the two settle-up
+                buttons carried different verbs for the same action. */}
+            <ActionButton onClick={donateAndCancel}>Send ${total} &amp; cancel</ActionButton>
             <ActionButton tone="danger" onClick={() => setResult('cancelled')}>Cancel without donating</ActionButton>
             <ActionButton tone="quiet" onClick={onClose}>Never mind  -  keep giving</ActionButton>
           </div>

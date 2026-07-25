@@ -26,7 +26,7 @@ const ACK_KEY = 'pc_review_ack';
 export default function ChargeReviewAlert({ surface = 'app' }) {
   const {
     hasAccount, accountStatus, skipNextCharge, selectedNonprofit,
-    pendingRoundUps, feeMonths, chargeAdjustment, setChargeAdjustment,
+    pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment, setChargeAdjustment,
   } = useApp();
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(ACK_KEY) === monthKey(); } catch { return false; }
@@ -40,7 +40,12 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const [adjusting, setAdjusting] = useState(false);
   const [closedNow, setClosedNow] = useState(false); // this-render dismissal (covers review=force)
   const roundUps = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
-  const [value, setValue] = useState(chargeAdjustment ?? roundUps);
+  // The slider opens on the amount that would ACTUALLY be charged (an existing
+  // adjustment, else the cap, else the raw round-ups) - never on a figure the
+  // donor would not be billed. Same rule as Dashboard's AdjustChargeSheet.
+  const [value, setValue] = useState(
+    () => effectiveCharge({ pendingRoundUps: roundUps, monthlyCap, chargeAdjustment }),
+  );
 
   const acknowledged = closedNow || (dismissed && preview !== 'force');
   const show = !acknowledged && hasAccount && accountStatus === 'active'
@@ -48,10 +53,17 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   if (!show) return null;
 
   const npShort = selectedNonprofit.shortName ?? selectedNonprofit.name;
-  const effective = effectiveCharge({ pendingRoundUps: roundUps, chargeAdjustment });
-  const total = chargeTotal({ pendingRoundUps: roundUps, chargeAdjustment, feeMonths }).toFixed(2);
+  // monthlyCap goes through BOTH calls. Leaving it out here was how this alert
+  // came to offer "charge $14.89" while both dashboards said $11.00 for the same
+  // $13.89 pending against a $10 cap: one number, computed two ways.
+  const effective = effectiveCharge({ pendingRoundUps: roundUps, monthlyCap, chargeAdjustment });
+  const total = chargeTotal({ pendingRoundUps: roundUps, monthlyCap, chargeAdjustment, feeMonths }).toFixed(2);
   const monthName = currentMonthName();
   const chargeDay = nextChargeLabel();
+  // The cap is doing the trimming (rather than a donor adjustment) - worth
+  // saying out loud, so the struck-through figure is not read as a mistake.
+  const capTrimmed = (chargeAdjustment === null || chargeAdjustment === undefined)
+    && monthlyCap !== null && monthlyCap !== undefined && roundUps > monthlyCap;
 
   function dismiss() {
     try { localStorage.setItem(ACK_KEY, monthKey()); } catch { /* noop */ }
@@ -79,11 +91,18 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
           <span style={{ color: '#475569' }}>Round-ups for {npShort}</span>
           <span style={{ fontWeight: 700, color: '#0f172a' }}>
-            {chargeAdjustment !== null && chargeAdjustment !== undefined
+            {/* Strike through the raw figure whenever ANYTHING trimmed it - a
+                cap does that just as much as a donor adjustment does. */}
+            {effective !== roundUps
               ? <><s style={{ color: '#94a3b8', fontWeight: 400 }}>${roundUps.toFixed(2)}</s> ${effective.toFixed(2)}</>
               : `$${roundUps.toFixed(2)}`}
           </span>
         </div>
+        {capTrimmed && (
+          <div style={{ padding: '2px 0', fontSize: 11.5, color: '#b45309' }}>
+            Capped at ${monthlyCap.toFixed(2)}/month  -  the rest is never charged.
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#64748b' }}>
           <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span>
           <span>+${feeMonths.toFixed(2)}</span>
@@ -108,6 +127,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
           />
           <p style={{ margin: '4px 0 10px', fontSize: 11.5, color: '#94a3b8', textAlign: 'center' }}>
             One-time change for this month only  -  the $1 × {feeMonths} app fee still applies.
+            {capTrimmed && ` Setting this above your $${monthlyCap.toFixed(2)} cap overrides the cap for this month only.`}
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             <button onClick={confirmAdjust}
@@ -126,7 +146,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
             style={{ padding: '12px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #003865, #001a33)', color: '#fff', fontWeight: 700, fontSize: 14 }}>
             Looks good  -  charge ${total} on {chargeDay}
           </button>
-          <button onClick={() => { setValue(chargeAdjustment ?? roundUps); setAdjusting(true); }}
+          <button onClick={() => { setValue(effective); setAdjusting(true); }}
             style={{ padding: '10px 16px', borderRadius: 12, border: '1px solid #cbd5e1', cursor: 'pointer', background: '#fff', color: '#003865', fontWeight: 700, fontSize: 13 }}>
             Adjust this charge
           </button>

@@ -1,0 +1,453 @@
+// src/lib/npSignup.js
+//
+// ─── The nonprofit signup wizard, minus the pixels ────────────────────────────
+//
+// WHY THIS EXISTS
+// There are two nonprofit signup surfaces: the phone wizard
+// (Onboarding.jsx → NonprofitSignupFlow) and the desktop wizard
+// (pages/nonprofit/NpWebSignup.jsx). They look nothing alike, and they must not
+// share a line of layout. But they are the SAME PRODUCT FLOW: the same step
+// sequence, the same real ProPublica EIN lookup with the same fallback, the same
+// demo one-time-code theatre, the same simulated Stripe connect, the same
+// join-code rules, the same license gate, and the same org record written at
+// go-live. All of that lives here, exactly once. If you are about to copy any of
+// it into a component, don't - extend this module instead.
+//
+// WHAT IS REAL AND WHAT IS THEATRE (do not blur this line)
+//   REAL:   the EIN lookup is a live GET against ProPublica's nonprofit API.
+//   DEMO:   an unreachable API / unknown EIN falls back to the BGCA sample org
+//           and sets `einDemoMode`, which both wizards must surface.
+//   DEMO:   the "we emailed you a 6-digit code" step generates the code in the
+//           browser and fills it in for you. There is no mail server. Every
+//           surface must keep saying "Demo" here - PRELAUNCH.md tracks the real
+//           backend as a launch blocker.
+//   DEMO:   Stripe Connect is a 1.5s timer, not an OAuth handshake.
+//
+// Presentation lives in the components. Copy, when it is IDENTICAL on both
+// surfaces and legally load-bearing (the license summary, the launch-kit email,
+// the widget snippet), lives here too so the two surfaces cannot drift apart.
+
+import { useCallback, useMemo, useState } from 'react';
+import { useApp } from '../store/AppContext';
+import { useNp } from '../store/NpContext';
+import { buildOrgFromSignup, saveCustomOrg, generateJoinCode, isJoinCodeAvailable } from '../store/orgStore';
+import { isNative } from '../components/AppDownloadQRModal';
+import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
+
+// ─── Step sequence ────────────────────────────────────────────────────────────
+
+/** Ordered wizard steps. Both surfaces walk this exact sequence. */
+export const NP_SIGNUP_STEPS = ['ein', 'confirm-org', 'verify-email', 'stripe', 'branding', 'license', 'live'];
+
+/** Previous step for each step; `ein` has no previous (the surface exits). */
+const NP_SIGNUP_PREV = {
+  ein: null,
+  'confirm-org': 'ein',
+  'verify-email': 'confirm-org',
+  stripe: 'verify-email',
+  branding: 'stripe',
+  license: 'branding',
+  live: 'license',
+};
+
+// ─── EIN lookup ───────────────────────────────────────────────────────────────
+
+/** XX-XXXXXXX as the admin types. */
+export function formatEIN(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+}
+
+/** REAL network call: ProPublica's public IRS exempt-organization mirror. */
+export async function lookupEIN(digits9) {
+  const res = await fetch(
+    `https://projects.propublica.org/nonprofits/api/v2/organizations/${digits9}.json`
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const org = data.organization;
+  if (!org) throw new Error('No org found');
+  return {
+    name:     org.name ?? '',
+    city:     org.city ?? '',
+    state:    org.state ?? '',
+    is501c3:  org.subsection_code === 3 || org.subsection_code === '3',
+  };
+}
+
+/** Fallback used when the lookup fails (offline, rate limit, unknown EIN).
+ *  Surfaces MUST show the demo note when this is what they got. */
+export const EIN_DEMO_FALLBACK = {
+  name:    'Boys & Girls Clubs of America',
+  address: 'Atlanta, GA',
+  is501c3: true,
+};
+
+// ─── Work-email verification (DEMO one-time code) ─────────────────────────────
+
+// Personal-mail domains can never administer a nonprofit. For orgs whose domain
+// we know (BGCA in the demo), the email must be ON that domain. Production
+// cross-checks the domain against org records + Stripe KYC and actually emails
+// the code (see PRELAUNCH.md).
+const FREE_MAIL = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com', 'live.com', 'msn.com', 'me.com'];
+const KNOWN_ORG_DOMAINS = { 'boys & girls clubs of america': 'bgca.org' };
+
+/** The domain this org's admins must use, when we know it. */
+export function requiredDomainFor(orgName) {
+  return KNOWN_ORG_DOMAINS[orgName?.toLowerCase?.()] ?? null;
+}
+
+/** DEMO: any email passes so the flow can be walked end to end. This returns
+ *  what the LIVE rules would have said, so the surface can say it out loud. */
+export function demoBypassNoteFor(orgName, email) {
+  const domain = (email ?? '').split('@')[1];
+  if (!domain) return null;
+  const required = requiredDomainFor(orgName);
+  if (required && domain !== required) {
+    return `the live version requires an @${required} address for ${orgName}`;
+  }
+  if (FREE_MAIL.includes(domain)) {
+    return 'the live version rejects personal email domains  -  admins must use their work address';
+  }
+  return null;
+}
+
+/** DEMO: the code is generated here, in the browser, and auto-filled. */
+export function generateOneTimeCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+// ─── Shared content (identical on both surfaces) ──────────────────────────────
+
+/** Brand-color palette offered at the branding step. */
+export const NP_BRAND_COLORS = ['#003865', '#0D9488', '#059669', '#2563EB', '#4F46E5', '#7C3AED', '#DB2777', '#DC2626', '#EA580C', '#F59E0B'];
+
+/** License summary shown before the accept control. Legally load-bearing, so
+ *  the two surfaces read from one array rather than two hand-typed copies. */
+export const NP_LICENSE_POINTS = [
+  ['Always free for you.', 'Donors pay the flat $1/month app fee, and most also cover your card-processing costs (pre-selected). You never pay PocketCache anything  -  never a % of donations.'],
+  ['You are the merchant of record.', 'Donations charge directly on your Stripe. PocketCache never holds donation funds.'],
+  ['You issue tax receipts', 'directly to donors. PocketCache does not.'],
+  ['You handle charitable solicitation registration', 'in applicable states.'],
+  ['California:', 'Not available at launch. Do not promote to CA residents until PocketCache confirms availability.'],
+];
+
+/** The one-line embed an org pastes into their own website. */
+export function widgetSnippet(orgName, joinCode) {
+  return `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`;
+}
+
+/** QR target for the donor join link. */
+export function joinQrValue(joinCode) {
+  return `https://pocketcache.app/demo/?org=${joinCode}`;
+}
+
+/** "Forward the launch kit to a colleague" mailto (recipient left blank). */
+export function launchKitMailto(orgName, joinCode) {
+  const site = `https://pocketcache.app/${joinCode}`;
+  const give = `https://pocketcache.app/${joinCode}/give`;
+  const subject = `${orgName} is LIVE on PocketCache!`;
+  const body = [
+    `${orgName} is live on PocketCache! 🎉`, '',
+    `Our page: ${site}`,
+    `Donor join code: ${joinCode}`,
+    `Direct giving link (donors sign up here): ${give}`, '',
+    `Website widget  -  paste this where the "Round up for us" card should appear:`,
+    widgetSnippet(orgName, joinCode), '',
+    `The QR code (points to the giving link) is on the dashboard → Grow tab, ready for posters, newsletters, and event tables.`, '',
+    `Admin sign-in: https://pocketcache.app/demo/?npsignin=1  -  works for the verified admin email; a fresh code is emailed each time. No password.`, '',
+    ` -  Sent from ${orgName}'s PocketCache launch kit`,
+  ].join('\n');
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+// ─── Go-live: the single org write ────────────────────────────────────────────
+
+/**
+ * The org record. ONE writer for both surfaces: builds the org (which is where
+ * the duplicate-org guard lives - buildOrgFromSignup regenerates the join code
+ * if the requested one is taken), persists it, adopts it as the admin's org,
+ * grants the admin role, and routes to the admin dashboard. App.jsx decides
+ * whether 'np-dashboard' renders the phone shell or NpWebShell.
+ */
+export function useNpGoLive() {
+  const { setPage, setAdminRole, setLastMode } = useApp();
+  const { setNpOrg } = useNp();
+
+  return useCallback(function goLive(config) {
+    const org = buildOrgFromSignup({
+      name:           config.name,
+      adminEmail:     config.adminEmail,
+      story:          config.mission,
+      color:          config.color,
+      logoPreview:    config.logoPreview ?? null,
+      monthlyMinimum: config.monthlyMinimum,
+      ein:            config.ein,
+      orgAddress:     config.orgAddress,
+      joinCode:       config.joinCode,
+    });
+    saveCustomOrg(org);
+
+    setNpOrg({
+      name:           org.name,
+      shortName:      org.shortName,
+      color:          config.color,
+      logoPreview:    org.logoUrl,
+      mission:        org.description,
+      monthlyMinimum: org.monthlyMinimum,
+      adminEmail:     org.adminEmail,
+      joinCode:       org.shortName,
+      _orgId:         org.id,
+    });
+    setAdminRole({ orgId: org.id, joinCode: org.shortName });
+    setLastMode('admin');
+    // Native: queue the web-portal popup to appear on the admin dashboard
+    // (inverse of the QR popup web admins saw on the You're Live screen).
+    if (isNative()) queueWebPortalPrompt();
+    setPage('np-dashboard');
+    return org;
+  }, [setPage, setAdminRole, setLastMode, setNpOrg]);
+}
+
+// ─── The wizard itself ────────────────────────────────────────────────────────
+
+/**
+ * Headless nonprofit signup wizard.
+ *
+ * @param {object}   opts
+ * @param {function} opts.onExit      called when "back" is pressed on the first
+ *                                    step (the surface owns where that goes).
+ * @param {string}   opts.defaultLogo logo shown before the admin uploads one.
+ *
+ * Returns `{ step, ...state, actions }`. Action handlers accept an optional
+ * event and call preventDefault, so they can be dropped straight onto a form.
+ */
+export function useNpSignup({ onExit, defaultLogo = null } = {}) {
+  const [step, setStep] = useState('ein');
+
+  // EIN / org identity
+  const [ein, setEinRaw] = useState('');
+  const [einError, setEinError] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const [einDemoMode, setEinDemoMode] = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [orgAddress, setOrgAddress] = useState('');
+  const [org501c3, setOrg501c3] = useState(true);
+
+  // Work-email verification (DEMO code)
+  const [adminEmail, setAdminEmail] = useState('');
+  const [workEmail, setWorkEmailRaw] = useState('');
+  const [emailError, setEmailError] = useState(null);
+  const [codeSent, setCodeSent] = useState(false);
+  const [sentCode, setSentCode] = useState('');
+  const [codeInput, setCodeInputRaw] = useState('');
+  const [codeError, setCodeError] = useState(null);
+  const [demoBypassNote, setDemoBypassNote] = useState(null);
+
+  // Stripe (DEMO connect)
+  const [stripeConnecting, setStripeConnecting] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(false);
+
+  // Branding
+  const [story, setStory] = useState('');
+  const [color, setColor] = useState('#003865');
+  const [monthlyMinimum, setMonthlyMinimum] = useState(5);
+  const [logoPreview, setLogoPreview] = useState(defaultLogo);
+  const [logoUrlInput, setLogoUrlInput] = useState('');
+  const [logoUrlError, setLogoUrlError] = useState(null);
+
+  // Join code: auto-suggested from the org name, but the org can set their own
+  // (it becomes their link, QR, and widget identity). Editable later in Grow.
+  const [joinCodeCustom, setJoinCodeCustom] = useState('');
+  const [joinCodeError, setJoinCodeError] = useState(null);
+  const joinCode = joinCodeCustom || generateJoinCode(orgName);
+
+  // License
+  const [accepted, setAccepted] = useState(false);
+  const [showLicenseHint, setShowLicenseHint] = useState(false);
+
+  const requiredDomain = requiredDomainFor(orgName);
+
+  function setEin(raw) {
+    setEinRaw(formatEIN(raw));
+    setEinError(null);
+  }
+
+  function setWorkEmail(raw) {
+    setWorkEmailRaw(raw);
+    setEmailError(null);
+  }
+
+  function setCodeInput(raw) {
+    setCodeInputRaw(String(raw).replace(/\D/g, ''));
+    setCodeError(null);
+  }
+
+  function changeJoinCode(raw) {
+    const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
+    setJoinCodeCustom(v);
+    if (v.length > 0 && v.length < 2) setJoinCodeError('At least 2 characters.');
+    else if (v && !isJoinCodeAvailable(v)) setJoinCodeError('That code is taken  -  try another.');
+    else setJoinCodeError(null);
+  }
+
+  async function verifyEIN(e) {
+    e?.preventDefault?.();
+    const digits = ein.replace(/\D/g, '');
+    if (digits.length !== 9) {
+      setEinError('EIN must be exactly 9 digits (format: XX-XXXXXXX).');
+      return;
+    }
+    setEinError(null);
+    setVerifying(true);
+    setEinDemoMode(false);
+
+    try {
+      const result = await lookupEIN(digits);
+      setVerifying(false);
+      setOrgName(result.name || EIN_DEMO_FALLBACK.name);
+      setOrgAddress(result.city && result.state ? `${result.city}, ${result.state}` : EIN_DEMO_FALLBACK.address);
+      setOrg501c3(result.is501c3);
+      setEinDemoMode(false);
+      setStep('confirm-org');
+    } catch {
+      // Graceful fallback  -  use simulated BGCA result with demo note
+      setVerifying(false);
+      setOrgName(EIN_DEMO_FALLBACK.name);
+      setOrgAddress(EIN_DEMO_FALLBACK.address);
+      setOrg501c3(EIN_DEMO_FALLBACK.is501c3);
+      setEinDemoMode(true);
+      setStep('confirm-org');
+    }
+  }
+
+  function confirmOrg() {
+    setStep('verify-email');
+  }
+
+  function reenterEIN() {
+    setStep('ein');
+  }
+
+  function sendCode(e) {
+    e?.preventDefault?.();
+    const email = workEmail.trim().toLowerCase();
+    const domain = email.split('@')[1];
+    if (!domain || !email.includes('@') || domain.indexOf('.') < 1) {
+      setEmailError('Enter a valid email address.');
+      return;
+    }
+    setDemoBypassNote(demoBypassNoteFor(orgName, email));
+    setEmailError(null);
+    const code = generateOneTimeCode();
+    setSentCode(code);
+    setCodeInputRaw(code); // DEMO: auto-filled; live version emails it
+    setCodeError(null);
+    setCodeSent(true);
+  }
+
+  function changeEmail() {
+    setCodeSent(false);
+    setCodeInputRaw('');
+  }
+
+  function verifyCode(e) {
+    e?.preventDefault?.();
+    if (codeInput.trim() !== sentCode) {
+      setCodeError("That code doesn't match  -  check the email and try again.");
+      return;
+    }
+    setAdminEmail(workEmail.trim().toLowerCase());
+    setStep('stripe');
+  }
+
+  function connectStripe() {
+    setStripeConnecting(true);
+    // DEMO: no OAuth handshake, just the shape of one.
+    setTimeout(() => {
+      setStripeConnecting(false);
+      setStripeConnected(true);
+    }, 1500);
+  }
+
+  function stripeNext() {
+    setStep('branding');
+  }
+
+  function setLogoFile(file) {
+    if (file) setLogoPreview(URL.createObjectURL(file));
+  }
+
+  /** Paste-a-URL logo: only adopted once the browser can actually load it. */
+  function applyLogoUrl(raw) {
+    const url = (raw ?? '').trim();
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => { setLogoPreview(url); setLogoUrlError(null); };
+    img.onerror = () => { setLogoUrlError("We couldn't load that image  -  check the link or upload a file instead"); };
+    img.src = url;
+  }
+
+  function submitBranding(e) {
+    e?.preventDefault?.();
+    if (joinCodeError) return false;
+    setStep('license');
+    return true;
+  }
+
+  /** Returns true when the license was accepted and the wizard advanced, so the
+   *  surface can fire its own completion chrome (QR popup, confetti, ...). */
+  function acceptLicense(e) {
+    e?.preventDefault?.();
+    if (!accepted) { setShowLicenseHint(true); return false; }
+    setStep('live');
+    return true;
+  }
+
+  function back() {
+    const prev = NP_SIGNUP_PREV[step];
+    if (prev) setStep(prev);
+    else onExit?.();
+  }
+
+  /** Everything useNpGoLive needs. A logo the admin never changed stays null so
+   *  the org falls back to its default mark rather than storing the demo asset. */
+  const config = useMemo(() => ({
+    name:           orgName,
+    shortName:      joinCode,
+    color,
+    logoPreview:    logoPreview !== defaultLogo ? logoPreview : null,
+    mission:        story,
+    monthlyMinimum,
+    adminEmail,
+    joinCode,
+    ein,
+    orgAddress,
+  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress]);
+
+  return {
+    step, setStep,
+    // EIN
+    ein, setEin, einError, verifying, einDemoMode,
+    orgName, setOrgName, orgAddress, org501c3,
+    // email
+    adminEmail, workEmail, setWorkEmail, emailError,
+    codeSent, codeInput, setCodeInput, codeError, demoBypassNote, requiredDomain,
+    // stripe
+    stripeConnecting, stripeConnected,
+    // branding
+    story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
+    logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
+    joinCode, joinCodeError,
+    // license
+    accepted, setAccepted, showLicenseHint,
+    // actions
+    verifyEIN, confirmOrg, reenterEIN,
+    sendCode, changeEmail, verifyCode,
+    connectStripe, stripeNext,
+    changeJoinCode, setLogoFile, applyLogoUrl, submitBranding,
+    acceptLicense, back,
+    config,
+  };
+}
