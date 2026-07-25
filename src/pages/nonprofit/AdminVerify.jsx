@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { Z, scrim, centered } from '../../lib/overlay';
+import { useNpLayout } from './NpLayout';
 
 // ─── Admin change verification ───────────────────────────────────────────────
 // Any persistent change on the Grow / Settings admin pages must be confirmed
@@ -7,6 +9,7 @@ import { useState, useEffect } from 'react';
 // rewire the org. Demo: the code auto-fills (labeled); production emails it.
 
 export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCancel }) {
+  const { web } = useNpLayout();
   const [code, setCode] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [error, setError] = useState(null);
@@ -31,11 +34,11 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
   }
 
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-center justify-center px-5"
-      style={{ background: 'rgba(11,42,74,0.55)', backdropFilter: 'blur(6px)' }}
-    >
-      <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl">
+    // A blocking gate, not a dismissible sheet: nothing else on the page may be
+    // touched until the code is confirmed or cancelled. Shared tokens, and
+    // position:fixed on the web shell (which is not inside a scaled container).
+    <div style={{ ...scrim('blocking', { fixed: web }), ...centered(20), zIndex: Z.blockingScrim }}>
+      <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl" style={{ zIndex: Z.blocking }}>
         <p className="font-bold text-gray-900 text-base mb-1">Confirm your changes</p>
         <p className="text-gray-500 text-sm mb-3">
           We sent a 6-digit code to <strong className="text-gray-900">{adminEmail}</strong>  - 

@@ -46,7 +46,58 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
 - Liability caps confirmed in the license.
 - Secure the Plaid access tokens (no plaintext storage).
 - California: confirmed blocked at signup until availability is confirmed.
-- Before launch, point the /app/ page (QR target) at the real App Store listing.
+- Before launch, point the /app/ page (QR target) at the real App Store listing. `app/index.html`
+  still ships the placeholder badge and carries two `TODO: Replace ... with the real App Store
+  badge + link when the listing goes live` comments (one on the `.store-placeholder` CSS rule,
+  one on the `<span class="store-placeholder">Coming to the App Store</span>` block). Swap in the
+  real badge image and App Store URL, drop the "coming soon" copy, then delete both TODOs.
+
+### Nathan (lawyer) review queue - specific clauses in the live legal pages
+Every item below was tracked as a `PENDING NATHAN REVIEW` HTML comment inside the published legal
+pages. Those comments were removed from the shipped HTML on 2026-07-23 (invisible on the rendered
+page, but plainly visible to anyone who views source on a live legal document, which advertises
+that the legal copy is not final). The tracking lives here instead. Nothing on this list has been
+reviewed or approved by counsel.
+
+- [ ] `legal/terms/index.html`, Section 4a "Communications" - communications consent and data
+  sharing with the Nonprofit: the pre-checked marketing + data-sharing election, and the rule that
+  donors cannot opt out of transactional service messages while their account is active.
+  Original note: added 2026-07-03.
+- [ ] `legal/terms/index.html`, Sections 7 and 8 - fee mechanics: mandatory $1/mo donor fee; the
+  processing-cover toggle is a separate election that goes to the Nonprofit as a donation and is
+  tax-deductible; nonprofits are never billed. Original note: updated 2026-07-03.
+- [ ] `legal/terms/index.html`, Section 12a "Refunds" - refund handling (Nonprofit decides as
+  merchant of record; PocketCache may refund its own fee at its discretion).
+  Original note: 2026-07-03.
+- [ ] `legal/nonprofit-license/index.html`, Section 2 "Fee Schedule" - fee mechanics: mandatory
+  $1/mo donor fee; the processing-cover toggle is a separate election that goes to the Nonprofit
+  as a donation and is tax-deductible; nonprofits are never billed under any circumstances.
+  Original note: updated 2026-07-03.
+- [ ] `legal/nonprofit-license/index.html`, Section 3 - the refund-handling paragraph at the end
+  of Nonprofit Responsibilities. Original note: 2026-07-03.
+- [ ] `legal/nonprofit-license/index.html`, Section 7a "Changes to This Agreement and to Fees" -
+  the amendment clause (60 days' written notice, fee/tier/feature changes, the Nonprofit's
+  penalty-free termination right, no retroactive application). Original note: added 2026-07-03.
+- [ ] **NEW, drafted 2026-07-23, not reviewed:** `legal/terms/index.html`, Section 7 - the
+  billing-mechanics language. Covers monthly accrual, the amount locking on the 1st, the 1st-10th
+  review window with one adjustment, the charge running on the 11th, the $5 monthly minimum,
+  the monthly cap (overflow never charged, never owed), skip-a-month (that month's round-ups are
+  never charged and never roll over, but the $1 fee still accrues and rolls), and that the
+  Nonprofit is merchant of record and issues receipts. Drafted to match what the app already
+  promises donors; it is a draft for counsel, not approved language. This is the ONLY
+  `PENDING NATHAN REVIEW` marker deliberately left in the shipped HTML (as a `BEGIN`/`END`
+  comment pair around the new paragraphs) because the text is brand new and unreviewed; remove
+  the marker when Nathan signs off. **If Nathan clears question #11 and the charge day moves from
+  the 11th to the 5th, this Terms text, the app and web copy, the backend charge job, and the
+  reminder email templates all have to change together.**
+- [ ] **Fee terminology, changed 2026-07-23:** the legal docs called the flat $1/month charge a
+  "service fee" while every product surface (app, web portal, landing page, BGCA pitch) calls it
+  the "app fee", so a donor reading the Terms met a term that appears nowhere in the product.
+  Both docs now bridge the names: Terms Section 8 is retitled `Service Fee (shown in the app as
+  the "app fee")` and states that the two names are one and the same $1.00/month charge, the
+  plain-English summary carries the same parenthetical, and the license's Section 2 Fee Schedule
+  says the donor app shows it as the "app fee". Substance unchanged. Confirm Nathan is comfortable
+  with the dual naming, or pick a single term and use it everywhere.
 
 ## Production readiness (demo → real product)
 
@@ -252,3 +303,18 @@ _2026-07-01 — full-app stress test + overhaul (branch `overhaul/stress-test-20
 - _Public site: internal strategy doc removed from deployment, waitlist email leak plugged,
   dead tunnel URL removed, "bank-grade security" claim fixed, $10-minimum rollover added to
   Terms §7, CA note in footer._
+
+---
+_2026-07-23 - public-page copy + legal-doc traceability pass:_
+- _Em/en dashes purged from `landing/index.html` (21) and `public/pitch.html` (27). The earlier
+  purge only caught literal characters; these were all HTML entities (`&mdash;`, one `&ndash;`).
+  Replacements were chosen per sentence (period, comma, colon, semicolon, or parentheses), not
+  swapped blindly for hyphens._
+- _Fee naming bridged: the legal docs' "service fee" is now explicitly tied to the product's
+  "app fee" in both Terms §8 (and the plain-English summary) and the license's §2 Fee Schedule.
+  See the Nathan review queue above._
+- _Terms §7 now documents the real billing schedule (lock on the 1st, 1st-10th review window,
+  charge on the 11th, $5 minimum, monthly cap, skip-a-month, merchant of record). DRAFT, pending
+  Nathan. See the Nathan review queue above._
+- _Six `PENDING NATHAN REVIEW` HTML comments removed from the two shipped legal pages and
+  converted into the checklist above, so nothing is lost and nothing leaks via view-source._

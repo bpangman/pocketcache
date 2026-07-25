@@ -1,13 +1,5 @@
-import { LayoutDashboard, Users, CreditCard, Megaphone, Settings } from 'lucide-react';
 import { useNp } from '../../store/NpContext';
-
-const NP_TABS = [
-  { id: 'overview',  label: 'Overview', icon: LayoutDashboard },
-  { id: 'donors',    label: 'Donors',   icon: Users },
-  { id: 'charges',   label: 'Charges',  icon: CreditCard },
-  { id: 'grow',      label: 'Grow',     icon: Megaphone },
-  { id: 'settings',  label: 'Settings', icon: Settings },
-];
+import { NP_TABS } from './npTabs';
 
 export default function NpTabBar() {
   const { npTab, setNpTab, npOrg } = useNp();

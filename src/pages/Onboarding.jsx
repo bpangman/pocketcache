@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronLeft } from 'lucide-react';
+import { CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronDown } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { QRCodeSVG } from 'qrcode.react';
@@ -23,6 +23,11 @@ import SsoButtons from '../components/SsoButtons';
 import { useHeroCollapse } from '../lib/useHeroCollapse';
 import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
+import HeroBackButton from '../components/HeroBackButton';
+import ManualCardForm from '../components/ManualCardForm';
+import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeTotal, nextChargeLabel } from '../lib/billing';
+import { Z, scrim } from '../lib/overlay';
+import { safeBottom, safeBottomAtLeast } from '../lib/safeArea';
 
 
 const SLIDES = [
@@ -117,6 +122,99 @@ const SLIDES = [
   },
 ];
 
+// ─── Pinned-footer clearance + scroll affordance ─────────────────────────────
+// Four screens below (sign-up, connect card, payment method, checkout confirm)
+// scroll a sheet above a CTA footer that lives OUTSIDE the scroll area. At rest
+// the tail of each sheet - the consent copy, the Plaid disclaimer, the whole
+// "How charges work" block - sat below the fold with nothing on screen to say it
+// was there.
+//
+// Two fixes, applied identically on all four:
+//   1. the sheet pads itself past the footer, using the footer's MEASURED height
+//      rather than a guessed number, so its last child can scroll fully clear;
+//   2. a quiet fade at the bottom edge appears whenever there is more to scroll
+//      and disappears at the end.
+
+const FADE_HEIGHT = 28;
+
+function useFooterClearance(scrollRef, barHeight) {
+  const footerRef = useRef(null);
+  const [footerHeight, setFooterHeight] = useState(0);
+  const [atEnd, setAtEnd] = useState(true);
+
+  // Footers here are 100-170px tall depending on their own copy, and grow again
+  // by the device's bottom inset, so measure instead of hardcoding.
+  useLayoutEffect(() => {
+    const el = footerRef.current;
+    if (!el) return;
+    const measure = () => setFooterHeight(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const syncFade = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAtEnd(el.scrollHeight - el.scrollTop - el.clientHeight <= 4);
+  }, [scrollRef]);
+
+  // Re-check after every render: these sheets grow and shrink without any scroll
+  // event (manual card form, monthly-cap slider, processing-cover copy). Setting
+  // the same value is a no-op in React, so this cannot loop.
+  useEffect(syncFade);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(syncFade);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scrollRef, syncFade]);
+
+  return {
+    footerRef,
+    // Room for the whole sheet to clear the footer: the measured footer plus a
+    // little air, never less than the compact bar plus the device bottom inset.
+    sheetPadBottom: `max(${footerHeight + 12}px, ${safeBottom(barHeight + 12)})`,
+    showFade: !atEnd,
+    syncFade,
+  };
+}
+
+/**
+ * Quiet "there is more below" hint for the bottom edge of a scroll area.
+ * Render it as the LAST child of the scrolling div: it sticks to the bottom of
+ * the scrollport, is pulled back up by its own height so it costs no layout, and
+ * fades out once the user reaches the end. `rgb` is the sheet colour underneath
+ * it, as an "r,g,b" triple, so the gradient dissolves into that sheet.
+ *
+ * The gradient alone was not enough: on the payment-method and connect-card
+ * sheets the fold lands in the gap BETWEEN two cards, and a gradient over
+ * uniform sheet colour is by definition invisible. Hence the small chevron,
+ * which carries the signal wherever the fold happens to land. It is deliberately
+ * faint (38% brand navy, 16px) and never interactive.
+ */
+function ScrollFadeEdge({ show, rgb }) {
+  return (
+    <div
+      aria-hidden
+      className="sticky bottom-0 pointer-events-none flex items-end justify-center"
+      style={{
+        height: FADE_HEIGHT,
+        marginTop: -FADE_HEIGHT,
+        zIndex: 5,
+        opacity: show ? 1 : 0,
+        transition: 'opacity 180ms ease',
+        background: `linear-gradient(to bottom, rgba(${rgb},0) 0%, rgba(${rgb},0.72) 55%, rgb(${rgb}) 100%)`,
+      }}
+    >
+      <ChevronDown size={16} color="#0B2A4A" style={{ opacity: 0.38, marginBottom: 1 }} />
+    </div>
+  );
+}
+
 // ─── Org Gate Screen ─────────────────────────────────────────────────────────
 // Layout (per founder direction): nonprofit entry first, donor entry below.
 
@@ -198,7 +296,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
       {/* Header  -  leads with the nonprofit pitch */}
       <div
         className="flex flex-col items-center justify-end px-8 pb-5 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '40%', paddingTop: 'calc(var(--pc-safe-top) + 8px)' }}
+        style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 8px)' }}
       >
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
@@ -333,7 +431,9 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
           </motion.button>
         </div>
 
-        <div className="px-5 pb-8 pt-0">
+        {/* Bottom-most block on the gate, so this is the one that owes the home
+            indicator its clearance. */}
+        <div className="px-5 pt-0" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
           <p className="text-center text-gray-400 text-xs">
             PocketCache  -  round-up giving software for nonprofits
           </p>
@@ -375,6 +475,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
+  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
   const [chosen, setChosen] = useState(null);
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [commsOptin, setCommsOptin] = useState(true);
@@ -410,7 +511,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
       ref={frameRef}
       className="flex flex-col h-full overflow-hidden"
     >
-      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+      <div ref={scrollRef} onScroll={e => { onScroll(e); syncFade(); }} className="flex-1 overflow-y-auto relative">
         {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#003865' }} />
         {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
@@ -431,11 +532,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
           className="flex flex-col items-center justify-end px-8 pb-8"
           style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
-        {onBack && (
-          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
-            <ChevronLeft size={18} color="white" />
-          </button>
-        )}
+        <HeroBackButton onClick={onBack} />
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
@@ -457,7 +554,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
               </p>
             </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
             Create Your{'\n'}Account
           </h1>
           <p className="text-white/80 text-xs mt-1 text-center">
@@ -468,7 +565,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
 
       {/* Bottom sheet */}
         <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-10 pb-2 space-y-3">
+          <div className="px-4 pt-10 space-y-3" style={{ paddingBottom: sheetPadBottom }}>
 
           {/* State selector */}
           <div>
@@ -506,17 +603,19 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
           </button>
           </div>
         </div>
+        <ScrollFadeEdge show={showFade} rgb="255,255,255" />
       </div>
 
-      {/* CA Block overlay */}
+      {/* CA Block overlay  -  a compliance gate, so it stays near-opaque: the
+          signup form must not be legible through it (see lib/overlay.js). */}
       <AnimatePresence>
         {isCA && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-20 flex items-center justify-center px-8"
-            style={{ background: 'rgba(0,56,101,0.96)' }}
+            className="flex items-center justify-center px-8"
+            style={{ ...scrim('opaque'), zIndex: Z.blockingScrim }}
           >
             <div className="text-center">
               <div className="text-5xl mb-4">&#127968;</div>
@@ -537,7 +636,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
       </AnimatePresence>
 
       {/* Consent checkbox  -  pinned below the scroll area */}
-      <div className="bg-white px-5 pb-8 pt-3 space-y-3">
+      <div ref={footerRef} className="bg-white px-5 pt-3 space-y-3" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
           <label
             className="flex items-start gap-3 cursor-pointer"
             onClick={e => { if (e.target.tagName !== 'A') { setAgreedTerms(v => !v); setShowTermsHint(false); } }}
@@ -593,8 +692,8 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 px-8"
-            style={{ background: 'rgba(0, 56, 101, 0.97)' }}
+            className="flex flex-col items-center justify-center gap-4 px-8"
+            style={{ ...scrim('opaque'), zIndex: Z.blocking }}
           >
             <div className="text-5xl">👋</div>
             <p className="text-white font-bold text-2xl text-center">Welcome back, {hasAccount?.name}!</p>
@@ -651,10 +750,10 @@ function AdminSignInScreen({ onBack, onComplete }) {
         <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
           <ArrowLeft size={14} /> Back
         </motion.button>
-        <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+        <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
           Nonprofit{'\n'}Admin
         </h1>
-        <p className="text-white/70 text-sm mt-2 leading-relaxed">
+        <p className="text-white/70 text-xs mt-2 leading-relaxed">
           Sign in with your organization&apos;s work email. No password  -  we email you a fresh code each time.
         </p>
       </div>
@@ -759,10 +858,10 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
             <ArrowLeft size={14} /> Back
           </motion.button>
           <div className="text-4xl mb-4">🔍</div>
-          <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
             No Account{'\n'}Found
           </h1>
-          <p className="text-white/70 text-sm mt-2 leading-relaxed">
+          <p className="text-white/70 text-xs mt-2 leading-relaxed">
             We couldn&apos;t find an account on this device.
           </p>
         </div>
@@ -804,10 +903,10 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
         <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
           <ArrowLeft size={14} /> Back
         </motion.button>
-        <h1 className="text-white font-bold text-4xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+        <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
           Welcome{'\n'}Back
         </h1>
-        <p className="text-white/70 text-sm mt-2 leading-relaxed">
+        <p className="text-white/70 text-xs mt-2 leading-relaxed">
           Sign in with the account you used before.
         </p>
       </div>
@@ -841,17 +940,10 @@ function ConnectCardScreen({ onNext, onBack }) {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
+  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
-  const [manualName, setManualName] = useState('');
-  const [manualCardNumber, setManualCardNumber] = useState('');
-  const [manualConnecting, setManualConnecting] = useState(false);
-
-  function formatCardNum(raw) {
-    const digits = raw.replace(/\D/g, '').slice(0, 16);
-    return digits.replace(/(.{4})/g, '$1 ').trim();
-  }
 
   function handleSelect(bank) {
     if (connected) return;
@@ -863,18 +955,6 @@ function ConnectCardScreen({ onNext, onBack }) {
     }, 1200);
   }
 
-  function handleManualConnect() {
-    const digits = manualCardNumber.replace(/\D/g, '');
-    if (digits.length < 13) return;
-    setManualConnecting(true);
-    setTimeout(() => {
-      const last4 = digits.slice(-4);
-      setManualConnecting(false);
-      setConnected({ id: 'manual', name: 'My Card', emoji: '💳', last4 });
-      setShowManualEntry(false);
-    }, 1000);
-  }
-
   return (
     <motion.div
       initial={{ opacity: 0, x: 30 }}
@@ -883,7 +963,7 @@ function ConnectCardScreen({ onNext, onBack }) {
       ref={frameRef}
       className="flex flex-col h-full overflow-hidden"
     >
-      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+      <div ref={scrollRef} onScroll={e => { onScroll(e); syncFade(); }} className="flex-1 overflow-y-auto relative">
         {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#0d9488' }} />
         {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
@@ -904,11 +984,7 @@ function ConnectCardScreen({ onNext, onBack }) {
           className="flex flex-col items-center justify-end px-8 pb-8"
           style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
-        {onBack && (
-          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
-            <ChevronLeft size={18} color="white" />
-          </button>
-        )}
+        <HeroBackButton onClick={onBack} />
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
@@ -932,7 +1008,7 @@ function ConnectCardScreen({ onNext, onBack }) {
               <p className="text-white/80 font-mono whitespace-nowrap" style={{ fontSize: 10, letterSpacing: '0.16em' }}>•••• •••• •••• ••••</p>
             </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
             Which card should{'\n'}we track?
           </h1>
           <p className="text-white/80 text-xs mt-2 text-center leading-relaxed">
@@ -942,7 +1018,7 @@ function ConnectCardScreen({ onNext, onBack }) {
       </div>
 
         <div className="rounded-t-3xl -mt-4" style={{ background: '#f0fdfb', minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-10 pb-2 space-y-2.5">
+          <div className="px-4 pt-10 space-y-2.5" style={{ paddingBottom: sheetPadBottom }}>
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Select your card issuer</p>
 
@@ -960,64 +1036,11 @@ function ConnectCardScreen({ onNext, onBack }) {
               </div>
             </motion.div>
           ) : showManualEntry ? (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 space-y-3"
-              style={{ background: '#fff', border: '1.5px solid #99f6e4' }}
-            >
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Enter card details</p>
-              <div>
-                <label className="text-xs text-gray-400 font-semibold mb-1 block">Cardholder name</label>
-                <input
-                  type="text"
-                  placeholder="Name on card"
-                  value={manualName}
-                  onChange={e => setManualName(e.target.value)}
-                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 font-semibold mb-1 block">Card number</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="XXXX XXXX XXXX XXXX"
-                  value={manualCardNumber}
-                  onChange={e => setManualCardNumber(formatCardNum(e.target.value))}
-                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono tracking-wider"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Lock size={12} className="text-gray-400 shrink-0" />
-                <p className="text-gray-400 text-xs">Encrypted via Plaid  -  PocketCache never stores your full card number</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setShowManualEntry(false); setManualName(''); setManualCardNumber(''); }}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200"
-                >Cancel</button>
-                <motion.button
-                  whileTap={manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? { scale: 0.97 } : {}}
-                  onClick={handleManualConnect}
-                  disabled={manualCardNumber.replace(/\D/g,'').length < 13 || manualConnecting}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
-                  style={{
-                    background: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting
-                      ? 'linear-gradient(135deg, #0d9488, #003865)'
-                      : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-                  }}
-                >
-                  {manualConnecting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                        className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white" />
-                      Connecting…
-                    </span>
-                  ) : 'Connect'}
-                </motion.button>
-              </div>
-            </motion.div>
+            <ManualCardForm
+              variant="app"
+              onCancel={() => setShowManualEntry(false)}
+              onConnect={card => { setConnected(card); setShowManualEntry(false); }}
+            />
           ) : (
             <>
               {BANKS.map(bank => (
@@ -1064,9 +1087,10 @@ function ConnectCardScreen({ onNext, onBack }) {
           </div>
           </div>
         </div>
+        <ScrollFadeEdge show={showFade} rgb="240,253,251" />
       </div>
 
-      <div className="px-4 pb-10 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb' }}>
+      <div ref={footerRef} className="px-4 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb', paddingBottom: safeBottomAtLeast(40, 12) }}>
           <motion.button
             whileTap={connected ? { scale: 0.97 } : {}}
             onClick={() => connected && onNext(connected)}
@@ -1115,6 +1139,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
+  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
   const { selectedNonprofit, monthlyCap, setMonthlyCap } = useApp();
   const [selected, setSelected] = useState(null);
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -1128,7 +1153,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
       ref={frameRef}
       className="flex flex-col h-full overflow-hidden"
     >
-      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+      <div ref={scrollRef} onScroll={e => { onScroll(e); syncFade(); }} className="flex-1 overflow-y-auto relative">
         {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#0B2A4A' }} />
         {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
@@ -1149,11 +1174,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
           className="flex flex-col items-center justify-end px-8 pb-8"
           style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
-        {onBack && (
-          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
-            <ChevronLeft size={18} color="white" />
-          </button>
-        )}
+        <HeroBackButton onClick={onBack} />
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
@@ -1182,8 +1203,11 @@ function PaymentMethodScreen({ onNext, onBack }) {
               <span className="text-white text-xs font-semibold">Charged once a month · $5 minimum</span>
             </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-            How should we collect{'\n'}your round-ups?
+          {/* Hard break, and both halves must fit 329px at text-3xl: "How should
+              we collect" measures 329.34px, which is why this used to wrap into
+              three lines and split "round-ups" across two of them. */}
+          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
+            How do we collect{'\n'}your round-ups?
           </h1>
           <p className="text-white/80 text-xs mt-1 text-center leading-relaxed">
             One monthly charge  -  your choice of payment method.
@@ -1192,7 +1216,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
       </div>
 
         <div className="bg-gray-50 rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-10 pb-2 space-y-2.5">
+          <div className="px-4 pt-10 space-y-2.5" style={{ paddingBottom: sheetPadBottom }}>
 
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
 
@@ -1271,9 +1295,10 @@ function PaymentMethodScreen({ onNext, onBack }) {
           </div>
           </div>
         </div>
+        <ScrollFadeEdge show={showFade} rgb="249,250,251" />
       </div>
 
-      <div className="px-4 pb-10 pt-3 bg-gray-50 border-t border-gray-100">
+      <div ref={footerRef} className="px-4 pt-3 bg-gray-50 border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
           <motion.button
             whileTap={selected ? { scale: 0.97 } : {}}
             onClick={() => {
@@ -1381,6 +1406,12 @@ function CardEntryForm({ onSuccess }) {
 }
 
 function CardEntryScreen({ onNext, onBack }) {
+  // Same collapsing hero as its siblings in this flow - it was the only
+  // card-flow screen still using a static shrink-0 header at a one-off 32%.
+  const {
+    frameRef, scrollRef, heroRef, onScroll,
+    heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
+  } = useHeroCollapse();
   const { selectedNonprofit } = useApp();
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
 
@@ -1390,38 +1421,61 @@ function CardEntryScreen({ onNext, onBack }) {
         initial={{ opacity: 0, x: 30 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
+        ref={frameRef}
         className="flex flex-col h-full overflow-hidden"
       >
-        <div
-          className="flex flex-col items-center justify-end px-8 pb-8 shrink-0"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '32%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
-        >
-          {onBack && (
-            <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
-              <ChevronLeft size={18} color="white" />
-            </button>
-          )}
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.15, type: 'spring', stiffness: 280 }}
-            className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl mb-5"
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+          {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
+          <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#0B2A4A' }} />
+          {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
+          <div
+            className="sticky top-0 z-10 flex items-center justify-center pointer-events-none"
+            style={{
+              height: barHeight,
+              marginBottom: -barHeight,
+              opacity: heroCompactOpacity,
+              background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
+            }}
           >
-            💳
-          </motion.div>
-          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-            Add your card
-          </h1>
-          <p className="text-white/80 text-sm mt-2 text-center leading-relaxed">
-            Stripe handles your card  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
-          </p>
-        </div>
+            <span className="text-white font-bold text-sm px-6 truncate max-w-full">Add your card</span>
+          </div>
+          {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
+          <div
+            ref={heroRef}
+            className="flex flex-col items-center justify-end px-8 pb-8"
+            style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
+          >
+            <HeroBackButton onClick={onBack} />
+            {/* Expanded content */}
+            <div
+              className="w-full flex flex-col items-center"
+              style={{ opacity: heroExpandedOpacity }}
+            >
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.15, type: 'spring', stiffness: 280 }}
+                className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl mb-5"
+              >
+                💳
+              </motion.div>
+              <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+                Add your card
+              </h1>
+              <p className="text-white/80 text-xs mt-2 text-center leading-relaxed">
+                Stripe handles your card  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
+              </p>
+            </div>
+          </div>
 
-        <div className="flex-1 bg-gray-50 rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-4 pt-8 pb-10">
-          <CardEntryForm onSuccess={(info) => onNext(info)} />
-          <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
-            Round-ups collect monthly on {npShort}&apos;s behalf. They issue your tax receipt directly.
-          </p>
+          <div className="bg-gray-50 rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
+            <div className="px-4 pt-8" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
+              <CardEntryForm onSuccess={(info) => onNext(info)} />
+              <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
+                Round-ups collect monthly on {npShort}&apos;s behalf. They issue your tax receipt directly.
+              </p>
+            </div>
+          </div>
         </div>
       </motion.div>
     </Elements>
@@ -1435,12 +1489,20 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
+  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
   const { selectedNonprofit, pendingRoundUps, feeMonths } = useApp();
   const [coverProcessing, setCoverProcessing] = useState(true);
   const roundUps = pendingRoundUps ?? 4.63;
   const appFee = feeMonths;
   const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
-  const total = parseFloat((appFee + roundUps + (coverProcessing ? processingCover : 0)).toFixed(2));
+  // Amounts and dates both come from lib/billing  -  this screen must never do
+  // its own charge math or assume "next month's 11th".
+  const total = chargeTotal({
+    pendingRoundUps: roundUps,
+    feeMonths,
+    processingCover: coverProcessing ? processingCover : 0,
+  });
+  const chargeOn = nextChargeLabel();
 
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -1449,7 +1511,7 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
       ref={frameRef}
       className="flex flex-col h-full overflow-hidden">
-      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto relative">
+      <div ref={scrollRef} onScroll={e => { onScroll(e); syncFade(); }} className="flex-1 overflow-y-auto relative">
         {/* Overscroll bleed  -  rubber-banding at the top shows hero color, not white */}
         <div className="absolute inset-x-0 pointer-events-none" style={{ top: -500, height: 500, background: '#003865' }} />
         {/* Compact bar  -  docked at the top, fades in as the hero scrolls away */}
@@ -1470,11 +1532,7 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
           className="flex flex-col items-center justify-end px-8 pb-8"
           style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
-        {onBack && (
-          <button onClick={onBack} style={{ position: 'absolute', top: 'calc(var(--pc-safe-top) + 8px)', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
-            <ChevronLeft size={18} color="white" />
-          </button>
-        )}
+        <HeroBackButton onClick={onBack} />
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
@@ -1490,10 +1548,10 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
               </p>
             </div>
           </motion.div>
-          <h1 className="text-white font-bold text-4xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
             Review &amp;{'\n'}Confirm
           </h1>
-          <p className="text-white/80 text-sm mt-2 text-center">
+          <p className="text-white/80 text-xs mt-2 text-center">
             Your round-ups are collected monthly by {npName}.
           </p>
         </div>
@@ -1501,7 +1559,7 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
 
       {/* Sheet */}
         <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
-          <div className="px-5 pt-8 pb-2 space-y-4">
+          <div className="px-5 pt-8 space-y-4" style={{ paddingBottom: sheetPadBottom }}>
 
           {/* Estimate card */}
           <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
@@ -1565,14 +1623,15 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
               The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward  -  we settle up within 3 months at most.
             </p>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
+              Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the {CHARGE_DAY}th</strong>  -  next one {chargeOn}, a full {REVIEW_WINDOW_LAST_DAY} days to review it, and nothing before today ever counts.
             </p>
           </div>
           </div>
         </div>
+        <ScrollFadeEdge show={showFade} rgb="255,255,255" />
       </div>
 
-      <div className="px-4 pb-10 pt-3 bg-white border-t border-gray-100">
+      <div ref={footerRef} className="px-4 pt-3 bg-white border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
           <motion.button whileTap={{ scale: 0.97 }} onClick={onConfirm}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{ background: 'linear-gradient(135deg, #003865, #001a33)' }}>
@@ -1785,9 +1844,9 @@ function NonprofitSignupFlow({ onBack, onGoLive }) {
       className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex flex-col justify-end px-8 pb-8 shrink-0"
-        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '30%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}>
+        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}>
         <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={stepBack[step]} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</motion.button>
-        <h1 className="text-white font-bold text-3xl leading-tight" style={{ letterSpacing: '-0.5px' }}>
+        <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
           {step === 'ein'          && 'Verify Your\nNonprofit'}
           {step === 'confirm-org'  && 'Confirm\nYour Org'}
           {step === 'verify-email' && 'Verify Your\nWork Email'}

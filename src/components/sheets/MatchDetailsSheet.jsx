@@ -12,7 +12,8 @@ export default function MatchDetailsSheet({ show, onClose, match }) {
 
   return (
     <Sheet show={show} onClose={onClose} title={`${match.companyShort} Match`}>
-      <div className="px-6 py-5 pb-8">
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-5">
         {match.sample && (
           <div className="mb-4">
             <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 text-xs font-semibold text-amber-700">

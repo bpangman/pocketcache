@@ -10,8 +10,10 @@ import { US_STATES, BANKS, PAYMENT_OPTIONS } from './Onboarding';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
+import StripeCardForm from '../components/StripeCardForm';
 import { CapControl } from './WebPortalPages';
 import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
+import { effectiveCharge, chargeTotal } from '../lib/billing';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
 // The signup journey as a real webpage: the donor arrived from THIS nonprofit's
@@ -145,6 +147,10 @@ export default function WebOnboarding({ entryOrg }) {
   const [connected, setConnected] = useState(null);
   // Payment step
   const [paymentSel, setPaymentSel] = useState(null);
+  // Real card details, captured through Stripe Elements when the donor picks
+  // "Credit or Debit Card" - the wizard used to store last4: null no matter what.
+  const [cardEntry, setCardEntry] = useState(false);
+  const [cardInfo, setCardInfo] = useState(null);
   // Review step
   const [coverProcessing, setCoverProcessing] = useState(true);
   const [showAppModal, setShowAppModal] = useState(false);
@@ -198,16 +204,28 @@ export default function WebOnboarding({ entryOrg }) {
       setTrackedCard({ name: connected.name, last4: connected.last4, brand: connected.name, institution: connected.name });
     }
     const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
-    if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: null });
+    // A card's last4 comes from the Stripe result; bank/Apple Pay have none.
+    if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: opt.id === 'card' ? (cardInfo?.last4 ?? null) : null });
     // Native never shows the QR popup - go straight home so the flow
     // doesn't wait on a dismiss that can't happen.
     if (isNative()) { setPage('home'); return; }
     setShowAppModal(true);
   }
 
-  const roundUps = pendingRoundUps ?? 4.63;
+  // The review estimate has to respect the cap the donor may have just set on
+  // the previous step, so it goes through lib/billing like every other charge
+  // figure. (It used to add raw round-ups, so a $10 cap and $22 of round-ups
+  // showed $22 here and $10 in the app.)
+  const accrued = pendingRoundUps ?? 4.63;
+  const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap });
   const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
-  const total = parseFloat((feeMonths + roundUps + (coverProcessing ? processingCover : 0)).toFixed(2));
+  const total = chargeTotal({
+    pendingRoundUps: accrued,
+    monthlyCap,
+    feeMonths,
+    processingCover: coverProcessing ? processingCover : 0,
+  });
+  const cardReady = paymentSel !== 'card' || !!cardInfo;
 
   return (
     <div style={{position:'relative'}}>
@@ -289,7 +307,9 @@ export default function WebOnboarding({ entryOrg }) {
                     <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue && !hasAccount} />
                   </div>
                   <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }}>
-                    No passwords here  -  your Apple or Google account is your key. Tax receipts from {npShort} go to your sign-in email.
+                    {/* Full sentence, including the two-factor clause the app
+                        carries  -  web used to drop it. */}
+                    No passwords here  -  your Apple or Google account is your key, including its two-factor protection. Tax receipts from {npShort} go to your sign-in email.
                   </p>
                 </>
               )}
@@ -344,7 +364,12 @@ export default function WebOnboarding({ entryOrg }) {
                   <PanelTitle title="How should we collect your round-ups?" sub="Once a month, your round-ups total into one clean charge  -  to the method you pick here." />
                   <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
                     {PAYMENT_OPTIONS.map(opt => (
-                      <button key={opt.id} onClick={() => setPaymentSel(opt.id)}
+                      <button key={opt.id} onClick={() => {
+                        setPaymentSel(opt.id);
+                        // Picking the card option opens the real Stripe form.
+                        if (opt.id === 'card') { if (!cardInfo) setCardEntry(true); }
+                        else { setCardEntry(false); }
+                      }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, cursor: 'pointer', textAlign: 'left',
                           border: paymentSel === opt.id ? '2px solid #FBBF24' : '1.5px solid #e5e7eb',
@@ -364,6 +389,34 @@ export default function WebOnboarding({ entryOrg }) {
                       </button>
                     ))}
                   </div>
+                  {/* Real card capture  -  the same Stripe Elements form the app
+                      uses (Onboarding.jsx CardEntryScreen). Web used to collect
+                      nothing at all here and store last4: null. */}
+                  {paymentSel === 'card' && (cardEntry || !cardInfo) && (
+                    <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+                      <p style={{ margin: '0 0 10px', fontSize: 12.5, color: INK.secondary, lineHeight: 1.55 }}>
+                        Stripe handles your card  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
+                      </p>
+                      <StripeCardForm
+                        variant="web"
+                        submitLabel="Save card →"
+                        onSuccess={card => { setCardInfo(card); setCardEntry(false); }}
+                      />
+                    </div>
+                  )}
+                  {paymentSel === 'card' && cardInfo && !cardEntry && (
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 14, padding: 14, marginBottom: 14 }}>
+                      <CheckCircle size={20} color="#0D9488" />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 13.5, color: '#134e4a' }}>{cardInfo.brand} ····{cardInfo.last4} saved</p>
+                        <p style={{ margin: 0, fontSize: 12, color: '#0f766e' }}>Your monthly round-up charge comes from this card.</p>
+                      </div>
+                      <button
+                        onClick={() => { setCardInfo(null); setCardEntry(true); }}
+                        style={{ border: '1px solid #99f6e4', background: '#fff', borderRadius: 10, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#0f766e', cursor: 'pointer' }}
+                      >Change</button>
+                    </div>
+                  )}
                   <p style={{ fontSize: 12, color: INK.muted, margin: '0 0 14px', textAlign: 'center' }}>
                     Change this anytime in Settings. Payments are processed by Stripe  -  not us.
                   </p>
@@ -371,8 +424,8 @@ export default function WebOnboarding({ entryOrg }) {
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 14, marginBottom: 16 }}>
                     <CapControl subtle value={monthlyCap} onChange={setMonthlyCap} />
                   </div>
-                  <PrimaryButton disabled={!paymentSel} onClick={() => setStep('review')}>
-                    {paymentSel ? 'Continue →' : 'Choose a payment method'}
+                  <PrimaryButton disabled={!paymentSel || !cardReady} onClick={() => setStep('review')}>
+                    {!paymentSel ? 'Choose a payment method' : !cardReady ? 'Add your card to continue' : 'Continue →'}
                   </PrimaryButton>
                 </>
               )}
@@ -384,8 +437,17 @@ export default function WebOnboarding({ entryOrg }) {
                     <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b' }}>Monthly estimate</p>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0' }}>
                       <span style={{ color: INK.secondary }}>Round-ups this month</span>
-                      <span style={{ fontWeight: 700, color: INK.primary }}>${roundUps.toFixed(2)}</span>
+                      <span style={{ fontWeight: 700, color: INK.primary }}>
+                        {roundUps !== accrued
+                          ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${accrued.toFixed(2)}</s> ${roundUps.toFixed(2)}</>
+                          : `$${roundUps.toFixed(2)}`}
+                      </span>
                     </div>
+                    {roundUps !== accrued && (
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#b45309' }}>
+                        Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
+                      </p>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
                       <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
                       <span>+${feeMonths.toFixed(2)}</span>

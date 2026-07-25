@@ -5,6 +5,8 @@ import { ThemeProvider, useTheme } from './store/ThemeContext';
 import Onboarding from './pages/Onboarding';
 import AppShell from './components/AppShell';
 import NpShell from './pages/nonprofit/NpShell';
+import NpWebShell from './pages/nonprofit/NpWebShell';
+import NpWebSignupFrame from './pages/nonprofit/NpWebSignupFrame';
 import CoinMark from './components/CoinMark';
 import ScaleFit from './components/ScaleFit';
 import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/DevicePicker';
@@ -19,6 +21,8 @@ import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, Biom
 import ChargeReviewAlert from './components/ChargeReviewAlert';
 import { WebPortalPrompt } from './components/WebPortalLinkModal';
 import { WebAdminSignIn } from './pages/WebPortalPages';
+import { Z, scrim, centered } from './lib/overlay';
+import { safeBottom } from './lib/safeArea';
 
 // Breakpoint below which the decorative PhoneFrame is replaced by ScaleFit
 // (full-bleed, proportionally scaled to viewport width).
@@ -32,8 +36,8 @@ function CancelledOverlay({ onReactivate, onBack }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 z-50 flex items-center justify-center px-6"
-      style={{ background: 'rgba(11, 42, 74, 0.55)', backdropFilter: 'blur(8px)' }}
+      // Blocking gate: the closed-account screen must obscure the app behind it.
+      style={{ ...scrim('blocking'), ...centered(24), zIndex: Z.blockingScrim }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 16 }}
@@ -80,8 +84,8 @@ function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 z-50 flex items-center justify-center px-6"
-      style={{ background: 'rgba(11, 42, 74, 0.55)', backdropFilter: 'blur(8px)' }}
+      // Blocking gate, same family as CancelledOverlay.
+      style={{ ...scrim('blocking'), ...centered(24), zIndex: Z.blockingScrim }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 16 }}
@@ -164,8 +168,9 @@ function Toast({ message }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="absolute left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm font-semibold shadow-lg whitespace-nowrap"
-      style={{ bottom: 'calc(var(--pc-safe-bottom) + 80px)' }}
+      className="absolute left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm font-semibold shadow-lg whitespace-nowrap"
+      // globalToast === modal (50) on purpose: DOM order keeps deciding. See lib/overlay.
+      style={{ bottom: safeBottom(80), zIndex: Z.globalToast }}
     >
       {message}
     </motion.div>
@@ -458,21 +463,32 @@ function WebPortal({ children }) {
 
 function ThemedApp() {
   const isMobile = useIsMobile();
+  const { goToOnboardingStep } = useApp();
   // Donors arriving through an org's join link (?org=CODE)  -  or admins signing
-  // in from their micro-site (?npsignin=1)  -  get the real app experience:
-  // full-bleed on phones, the WebPortal column in a desktop browser. ?app=1
-  // forces it too. Everyone else gets the phone-mockup demo shell. Captured
-  // ONCE  -  the pretty-URL rewrite below strips the params, and re-renders
-  // must not flip the shell.
+  // in from their micro-site (?npsignin=1) or listing their org (?npsignup=1)  -
+  // get the real app experience: full-bleed on phones, a real webpage in a
+  // desktop browser. ?app=1 forces it too. Everyone else gets the phone-mockup
+  // demo shell. Captured ONCE  -  the pretty-URL rewrite below strips the
+  // params, and re-renders must not flip the shell.
   const [appEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return Boolean(
       params.get('org') ||
       params.get('npsignin') === '1' ||
+      params.get('npsignup') === '1' ||
       params.get('app') === '1' ||
       window.Capacitor?.isNativePlatform?.()
     );
   });
+
+  // ?npsignup=1  -  a direct link into the nonprofit signup wizard, for the
+  // marketing site's "list your nonprofit" CTA. Drives Onboarding to its
+  // nonprofit-signup step; WebExperience pairs it with the desktop container.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('npsignup') !== '1') return;
+    goToOnboardingStep('nonprofit-signup');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Org-scoped pretty URL: a join-link entry settles at pocketcache.app/CODE/give
   // (the 404 forwarder routes that path back to ?org=CODE, so refresh/bookmark
@@ -507,12 +523,14 @@ function ThemedApp() {
 }
 
 // Desktop browser entry from a micro-site: a signed-in donor gets the real
-// web-native dashboard (WebDashboard); a new donor gets the web-native signup
-// wizard (WebOnboarding  -  org implied, no gate/QR/code); everything else
-// (admin dashboard, admin sign-in, cancelled-account reactivation, unknown
-// org) runs in the centered WebPortal column.
+// web-native dashboard (WebDashboard); a signed-in nonprofit admin gets the
+// web-native admin portal (NpWebShell); a new donor gets the web-native signup
+// wizard (WebOnboarding  -  org implied, no gate/QR/code); the nonprofit signup
+// wizard gets a real webpage around it (NpWebSignupFrame); everything else
+// (admin sign-in, cancelled-account reactivation, unknown org) runs in the
+// centered WebPortal column.
 function WebExperience() {
-  const { page, accountStatus, selectedNonprofit } = useApp();
+  const { page, accountStatus, selectedNonprofit, initialOnboardingStep } = useApp();
   const bioGate = useBiometricGate();
   // Capture the entry context ONCE  -  the pretty-URL rewrite strips the params.
   const [entry] = useState(() => {
@@ -520,22 +538,49 @@ function WebExperience() {
     return {
       org: findOrgByCode(params.get('org')),
       npsignin: params.get('npsignin') === '1',
+      npsignup: params.get('npsignup') === '1',
     };
   });
+  // The nonprofit signup wizard is Onboarding-internal state, so latch every
+  // signal we CAN see from out here: the ?npsignup=1 deep link and the
+  // goToOnboardingStep('nonprofit-signup') jump used by the donor dashboard's
+  // "list your nonprofit" action. See NpWebSignupFrame for what is still
+  // missing (a cold visitor pressing the button on the join gate).
+  // Latched with the derived-state-during-render pattern: Onboarding clears
+  // initialOnboardingStep as soon as it consumes it, so the signal is gone by
+  // the next render and we must not let the route flip back out of the wizard.
+  const [npSignup, setNpSignup] = useState(entry.npsignup);
+  if (initialOnboardingStep === 'nonprofit-signup' && !npSignup) setNpSignup(true);
+
   const signedInDonor =
     page !== 'onboarding' && page !== 'np-dashboard' &&
     accountStatus !== 'cancelled' && selectedNonprofit;
   if (signedInDonor && bioGate.locked) return <WebLockScreen gate={bioGate} />;
   if (signedInDonor) return <WebDashboard />;
+  // Nonprofit admin dashboard  -  the web-native admin portal, not the phone
+  // shell in a column. Face ID / Touch ID still gates it, same as the donor's.
+  if (page === 'np-dashboard') {
+    if (bioGate.locked) return <WebLockScreen gate={bioGate} />;
+    return <NpWebShell />;
+  }
   // Donor signup wizard  -  including an admin crossing over via "Start giving"
   // (selectedNonprofit gets bound before the jump, so this wins over npsignin).
-  if (page === 'onboarding' && accountStatus !== 'cancelled' && (selectedNonprofit || (entry.org && !entry.npsignin))) {
+  if (page === 'onboarding' && accountStatus !== 'cancelled' && !npSignup && (selectedNonprofit || (entry.org && !entry.npsignin))) {
     return <WebOnboarding entryOrg={entry.org} />;
   }
   // Micro-site "Nonprofit admin? Sign in"  -  webpage version of the
   // passwordless work-email protocol (never the app-style column).
-  if (page === 'onboarding' && entry.npsignin) {
+  if (page === 'onboarding' && entry.npsignin && !npSignup) {
     return <WebAdminSignIn />;
+  }
+  // Nonprofit org onboarding  -  a full webpage with the wizard as its form
+  // panel, instead of the donor-sized phone column.
+  if (page === 'onboarding' && npSignup) {
+    return (
+      <NpWebSignupFrame>
+        <AppContent />
+      </NpWebSignupFrame>
+    );
   }
   return (
     <WebPortal>

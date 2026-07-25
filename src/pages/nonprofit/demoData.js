@@ -155,8 +155,10 @@ export const GROWTH_CHART = Array.from({ length: 6 }, (_, idx) => {
 });
 
 // ── Summary figures ───────────────────────────────────────────────────────────
-const nextChargeDate = new Date(thisYear, thisMonth + 1, 1);
-export const NEXT_CHARGE_DATE    = nextChargeDate.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+// No next-charge date here on purpose. It used to be computed as "the 1st of
+// next month", which is the LOCK date, not the charge date, so the admin
+// Overview promised money a full 10 days before donors are actually charged.
+// Charge dates come from src/lib/billing.js and nowhere else.
 export const LAST_MONTH_GROSS    = CHARGE_HISTORY[0]?.gross ?? 0;
 export const AVG_PER_DONOR       = parseFloat((LAST_MONTH_GROSS / Math.max(1, CHARGE_HISTORY[0]?.donorsCharged ?? 1)).toFixed(2));
 export const FAILED_COUNT        = CHARGE_HISTORY[0]?.failures ?? 0;

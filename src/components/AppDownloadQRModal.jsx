@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
+import { Z, scrim } from '../lib/overlay';
 
 // Web only - the native app never shows this popup. Completion handlers also
 // use this to skip straight to the next screen instead of waiting for a
@@ -14,16 +15,16 @@ const QR_SRC = `${import.meta.env.BASE_URL ?? '/'}app-qr.svg`;
 export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
   if (isNative()) return null;
 
-  const backdropStyle = fixed
-    ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }
-    : { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 };
+  // Shared overlay tokens: same dim + same step on both surfaces, `fixed` is
+  // the only real difference between the web window and the phone frame.
+  const backdropStyle = { ...scrim('dim', { fixed }), zIndex: Z.modalScrim };
 
   const cardStyle = fixed
     ? {
         position: 'fixed',
         top: '50%',
         left: '50%',
-        zIndex: 51,
+        zIndex: Z.modal,
         background: '#fff',
         borderRadius: 24,
         padding: '28px 24px 24px',
@@ -35,7 +36,7 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
         position: 'absolute',
         top: '50%',
         left: '50%',
-        zIndex: 51,
+        zIndex: Z.modal,
         background: '#fff',
         borderRadius: 24,
         padding: '28px 24px 24px',

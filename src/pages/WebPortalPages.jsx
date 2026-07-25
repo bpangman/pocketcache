@@ -4,18 +4,29 @@ import { useTheme } from '../store/ThemeContext';
 import { loadKey, saveKey } from '../store/identityStore';
 import { findOrgByCode, resolveAdminOrgByEmail } from '../store/orgStore';
 import { DEMO_USER, monthsGiving } from '../data/derived';
+import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
 import { fmtMoneyCompact } from '../lib/format';
+import { chargeTotal, nextChargeLabel, currentMonthName } from '../lib/billing';
+import { Z, scrim } from '../lib/overlay';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import MatchBadge from '../components/MatchBadge';
+import ManualCardForm from '../components/ManualCardForm';
+import StripeCardForm from '../components/StripeCardForm';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 
 // ─── Web-native My Cause / Share / Settings + shared modals ──────────────────
 // True webpage versions of the app's tabs  -  same store, same account, web
 // presentation. Anything the app can do, these can do (see PRELAUNCH parity
-// rule). App-only items (Face ID, app icon, text size) are intentionally
-// absent  -  they are device features, noted in the parity audit.
+// rule).
+//
+// PARITY NOTE - what is genuinely app-only is a SHORT list: the app icon and
+// the text-size control, both of which are iOS device settings with no web
+// equivalent. Face ID / Touch ID is NOT on that list: PrivacyModal below
+// enrols real WebAuthn through lib/biometric, the same call the app makes, so
+// the web portal has working biometric unlock too. (This comment used to claim
+// Face ID was "intentionally absent" while the code right here implemented it.)
 
 const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
 const NAVY = '#003865';
@@ -32,6 +43,14 @@ const TRACKED_CARD_BANKS = [
   { id: 'amex',    name: 'American Express',  sub: 'Gold, Platinum, Blue Cash', emoji: '💳' },
   { id: 'bofa',    name: 'Bank of America',   sub: 'Customized Cash, Travel',   emoji: '🏦' },
 ];
+// Mirrors Settings.jsx MULTIPLIER_OPTIONS (~143-147) - the app explains each
+// multiplier, so web has to as well. Keep the descriptions identical.
+const MULTIPLIER_OPTIONS = [
+  { value: 1, label: '1×', desc: 'Standard round-up' },
+  { value: 2, label: '2×', desc: 'Double your impact' },
+  { value: 3, label: '3×', desc: 'Triple your impact' },
+];
+
 const PAYMENT_METHOD_OPTIONS = [
   { id: 'ach',       icon: '🏦', label: 'Bank Account',        sub: 'Direct bank transfer · Includes flat $1/month app fee' },
   { id: 'apple_pay', icon: '🍎', label: 'Apple Pay',            sub: 'Set up once, fully automatic · Includes flat $1/month app fee' },
@@ -55,11 +74,11 @@ export function Modal({ show, onClose, title, children, width = 460 }) {
   return (
     <div
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(11,42,74,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      style={{ ...scrim('dim', { fixed: true }), zIndex: Z.modalScrim, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 24 }}
+        style={{ position: 'relative', zIndex: Z.modal, width, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 24 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: INK.primary }}>{title}</h3>
@@ -123,6 +142,39 @@ function ActionButton({ children, onClick, disabled, tone = 'primary' }) {
     >
       {children}
     </button>
+  );
+}
+
+// ─── Web toast ───────────────────────────────────────────────────────────────
+// The app confirms card / payment / biometric changes with a toast (App.jsx
+// renders AppContext's `toast` inside the phone frame). WebDashboard is NOT a
+// child of AppContent, so that toast can never appear on the web surface - which
+// is why WebSettings used to change a payment method with zero feedback. This is
+// the same idea in the web portal's own language: one dark pill, bottom centre.
+function useWebToast(ms = 3600) {
+  const [message, setMessage] = useState(null);
+  useEffect(() => {
+    if (!message) return;
+    const id = setTimeout(() => setMessage(null), ms);
+    return () => clearTimeout(id);
+  }, [message, ms]);
+  return { message, showToast: setMessage, clearToast: () => setMessage(null) };
+}
+
+function WebToast({ message, onClose }) {
+  if (!message) return null;
+  return (
+    <div
+      role="status" data-testid="web-toast"
+      onClick={onClose}
+      style={{
+        position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', zIndex: Z.globalToast,
+        maxWidth: 520, background: '#0f172a', color: '#fff', borderRadius: 14, padding: '12px 18px',
+        fontSize: 13.5, fontWeight: 600, lineHeight: 1.5, boxShadow: '0 18px 40px rgba(11,42,74,0.28)', cursor: 'pointer',
+      }}
+    >
+      {message}
+    </div>
   );
 }
 
@@ -227,12 +279,24 @@ export function WebAdminSignIn() {
   );
 }
 
-// ─── Give Extra  -  multi-step: amount → review → done ────────────────────────
+// ─── Give Extra  -  multi-step: amount → review → (confirm) → done ────────────
 const BOOST_PRESETS = [1, 5, 10, 25];
+
+// Fat-finger guard. Gifts at or above this get an extra "was that intentional?"
+// step before anything is committed.
+//
+// SHOULD BE CENTRALISED: this is the SECOND copy of the number. The first lives
+// in src/components/sheets/GiveExtraSheet.jsx:7, where it is a module-private
+// const and therefore not importable. That file belongs to another surface's
+// owner, so the value is duplicated here rather than edited there. Next time one
+// person owns both, move it to src/lib/billing.js (or a small giving-limits
+// module) and have both sheets import it - two copies of a safety threshold is
+// exactly the kind of thing that silently drifts.
+const LARGE_DONATION_THRESHOLD = 1000;
 
 export function GiveExtraModal({ show, onClose }) {
   const { selectedNonprofit, boostDonation } = useApp();
-  const [step, setStep] = useState('amount'); // amount | review | done
+  const [step, setStep] = useState('amount'); // amount | review | confirm | done
   const [selected, setSelected] = useState(5);
   const [custom, setCustom] = useState('');
   const [coverProcessing, setCoverProcessing] = useState(true);
@@ -240,6 +304,7 @@ export function GiveExtraModal({ show, onClose }) {
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
   const amount = custom ? parseFloat(custom) : selected;
   const valid = amount > 0 && !isNaN(amount);
+  const isLarge = valid && amount >= LARGE_DONATION_THRESHOLD;
   const processingFee = valid ? parseFloat((amount * 0.022 + 0.30).toFixed(2)) : 0;
   const total = valid ? parseFloat((amount + 1.00 + (coverProcessing ? processingFee : 0)).toFixed(2)) : 0;
 
@@ -249,7 +314,15 @@ export function GiveExtraModal({ show, onClose }) {
     return () => clearTimeout(id);
   }, [show]);
 
+  // The app's GiveExtraSheet interposes a "Just to confirm…" step for large
+  // gifts before onConfirm fires; web now does the same.
   function confirm() {
+    if (isLarge) { setStep('confirm'); return; }
+    boostDonation(amount);
+    setStep('done');
+  }
+
+  function confirmLarge() {
     boostDonation(amount);
     setStep('done');
   }
@@ -326,6 +399,19 @@ export function GiveExtraModal({ show, onClose }) {
         </>
       )}
 
+      {step === 'confirm' && (
+        <div data-testid="give-extra-large-confirm" style={{ background: '#fffbeb', border: '2px solid #fde68a', borderRadius: 16, padding: 18 }}>
+          <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 16, color: '#78350f' }}>Just to confirm…</p>
+          <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: '#92400e' }}>
+            You&apos;re about to donate <strong>${fmt2(amount)}</strong> to {npShort}. Was that intentional?
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <ActionButton onClick={confirmLarge}>Yes, give ${fmt2(amount)}</ActionButton>
+            <ActionButton tone="quiet" onClick={() => setStep('amount')}>Go back</ActionButton>
+          </div>
+        </div>
+      )}
+
       {step === 'done' && (
         <div style={{ textAlign: 'center', padding: '18px 0 8px' }}>
           <div style={{ fontSize: 44, marginBottom: 8 }}>💚</div>
@@ -341,6 +427,25 @@ export function GiveExtraModal({ show, onClose }) {
 }
 
 // ─── Monthly cap control (shared: settings + wizard) ────────────────────────
+/**
+ * CapControl - THE SHARED monthly-cap control. Both web surfaces use this one
+ * component (WebSettings and WebOnboarding's payment step), which is why the
+ * cap only exists once on web.
+ *
+ * THE APP HAND-ROLLS ITS OWN COPY AND ITS COPY MUST STAY IN SYNC WITH THIS FILE:
+ *   src/pages/Settings.jsx   ~1119-1167  (the "Monthly Giving Cap" card)
+ *   src/pages/Onboarding.jsx ~1241-1270  (the quiet wizard opt-in, `subtle`)
+ * Neither app copy can import this (they are Tailwind/motion, this is inline
+ * styles), so the strings below are the reconciliation point. If you change a
+ * string here, change it in both app files too - and vice versa.
+ *
+ * The wording here was aligned TO the app on 2026-07-24; the divergence found
+ * was: web said "Capped at $20/month  -  round-ups above this are simply never
+ * charged" as the row subtitle and had no explainer paragraph at all, while the
+ * app says "Capped at $20/month" and carries the explainer underneath. The app's
+ * split reads better (short status, one explanation) so web adopted it.
+ * Range, step and $5/$200 end labels were already identical on all three.
+ */
 export function CapControl({ value, onChange, subtle = false }) {
   const enabled = value !== null && value !== undefined;
   return (
@@ -348,10 +453,13 @@ export function CapControl({ value, onChange, subtle = false }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ flex: 1 }}>
           <span style={{ display: 'block', fontWeight: 600, fontSize: subtle ? 13 : 13.5, color: subtle ? INK.secondary : INK.primary }}>
+            {/* subtle = Onboarding.jsx's wizard opt-in copy; default = Settings.jsx's row */}
             {subtle ? 'Set a monthly maximum (optional)' : 'Monthly Cap'}
           </span>
           <span style={{ display: 'block', fontSize: 12, color: INK.muted, marginTop: 1 }}>
-            {enabled ? `Capped at $${value}/month  -  round-ups above this are simply never charged` : subtle ? 'Cap what a month can ever charge you' : 'No cap set'}
+            {subtle
+              ? 'Round-ups above it are simply never charged.'
+              : enabled ? `Capped at $${value}/month` : 'No cap set'}
           </span>
         </span>
         <WebToggle value={enabled} onChange={v => onChange(v ? 20 : null)} />
@@ -370,7 +478,74 @@ export function CapControl({ value, onChange, subtle = false }) {
           </div>
         </div>
       )}
+      {!subtle && (
+        <p style={{ margin: '12px 0 0', fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
+          Cap what you give each month. If your round-ups go over, we only charge up to your cap  -  the rest is simply never charged.
+        </p>
+      )}
     </div>
+  );
+}
+
+// ─── Adjust this month's charge (web) ────────────────────────────────────────
+/**
+ * AdjustChargeModal - the web twin of the app's AdjustChargeSheet
+ * (src/pages/Dashboard.jsx:119-172), reachable any time from the web
+ * dashboard's estimate card.
+ *
+ * Rules copied from the app sheet, deliberately including its limits:
+ *   - slider runs $1.00 to this month's accrued round-ups, step $0.01
+ *   - it opens at the existing adjustment, else the full accrued amount
+ *   - the max is the ACCRUED total, not the monthly cap: an explicit
+ *     adjustment outranks the cap (see lib/billing.js effectiveCharge), so a
+ *     capped donor can deliberately give more this one month
+ *   - "Reset to full amount" clears it back to null, and only appears when an
+ *     adjustment is actually set
+ *   - one month only; the $1 app fee is untouched
+ */
+export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjustment, setChargeAdjustment, monthlyCap }) {
+  const accrued = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
+  const [value, setValue] = useState(chargeAdjustment ?? accrued);
+
+  // Re-seed each time the modal opens (the app remounts its sheet via key).
+  useEffect(() => {
+    if (!show) return;
+    const id = setTimeout(() => setValue(chargeAdjustment ?? accrued), 0);
+    return () => clearTimeout(id);
+  }, [show, chargeAdjustment, accrued]);
+
+  const capped = monthlyCap !== null && monthlyCap !== undefined && accrued > monthlyCap;
+
+  return (
+    <Modal show={show} onClose={onClose} title="Adjust This Month's Charge">
+      <p style={{ margin: '0 0 14px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+        One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
+      </p>
+      <div style={{ textAlign: 'center', marginBottom: 14 }}>
+        <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: INK.primary }} data-testid="adjust-value">${fmt2(value)}</p>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: INK.muted }}>of ${fmt2(accrued)} accrued this month</p>
+      </div>
+      <input
+        type="range" min={1} max={accrued} step={0.01} value={value}
+        onChange={e => setValue(parseFloat(e.target.value))}
+        aria-label="This month's charge"
+        style={{ width: '100%', accentColor: '#0D9488' }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: INK.muted, marginBottom: 14 }}>
+        <span>$1.00</span><span>${fmt2(accrued)}</span>
+      </div>
+      {capped && (
+        <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.55, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
+          Your ${monthlyCap}/month cap is on. An amount you set here wins for this month, even above the cap  -  the cap comes back next month.
+        </p>
+      )}
+      <div style={{ display: 'grid', gap: 8 }}>
+        <ActionButton onClick={() => { setChargeAdjustment(value); onClose(); }}>Set Charge to ${fmt2(value)}</ActionButton>
+        {chargeAdjustment !== null && chargeAdjustment !== undefined && (
+          <ActionButton tone="quiet" onClick={() => { setChargeAdjustment(null); onClose(); }}>Reset to full amount</ActionButton>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -385,11 +560,22 @@ function impactTier(total) {
 function InvolvementModal({ kind, show, onClose, npShort }) {
   const [fields, setFields] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  // Captured AT SUBMIT TIME, exactly like the app's CorporateMatchSheet
+  // (src/components/sheets/CorporateMatchSheet.jsx:9-26 and its comment): the
+  // success copy names the company, and reading `fields.company` while
+  // rendering the done state would show whatever the input holds later - blank
+  // once the reset effect runs. A captured value cannot go stale.
+  const [submittedCompany, setSubmittedCompany] = useState('');
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setFields({}); setSubmitted(false); }, 0);
+    const id = setTimeout(() => { setFields({}); setSubmitted(false); setSubmittedCompany(''); }, 0);
     return () => clearTimeout(id);
   }, [show]);
+
+  function submit() {
+    setSubmittedCompany((fields.company ?? '').trim());
+    setSubmitted(true);
+  }
 
   const COPY = {
     volunteer: {
@@ -402,7 +588,14 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
     suggest: {
       title: 'Suggest a Match Sponsor',
       intro: `Know a company that should be matching round-ups for ${npShort}? Let us know  -  ${npShort}'s corporate partnerships team will reach out to them.`,
-      done: { emoji: '🏢', head: 'Inquiry Sent!', body: `${npShort}'s corporate partnerships team will follow up about sponsoring the monthly match.` },
+      done: {
+        emoji: '🏢',
+        head: 'Inquiry Sent!',
+        // Names the company, like the app's CorporateMatchSheet does.
+        body: submittedCompany
+          ? <>{npShort}&apos;s corporate partnerships team will follow up with <strong style={{ color: INK.primary }}>{submittedCompany}</strong> about sponsoring the monthly match.</>
+          : `${npShort}'s corporate partnerships team will follow up about sponsoring the monthly match.`,
+      },
       inputs: [{ key: 'company', placeholder: "Company you'd like to suggest", required: true }],
       cta: 'Send Suggestion',
     },
@@ -446,7 +639,7 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
                 style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 13.5 }} />
             ))}
           </div>
-          <ActionButton disabled={!requiredOk} onClick={() => setSubmitted(true)}>{COPY.cta}</ActionButton>
+          <ActionButton disabled={!requiredOk} onClick={submit}>{COPY.cta}</ActionButton>
         </>
       )}
     </Modal>
@@ -629,10 +822,11 @@ export function WebSettings() {
   const {
     selectedNonprofit, setSelectedNonprofit, roundUpMultiplier, setRoundUpMultiplier,
     totalDonated, pendingRoundUps, boostDonation, cancelAccount, adminRole, deleteAccount,
-    trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
+    trackedCard, setTrackedCard, paymentMethod, setPaymentMethod, linkedCards,
     pendingSettingsAction, clearPendingSettingsAction,
     monthlyCap, setMonthlyCap, skipNextCharge, setSkipNextCharge, hasAccount, feeMonths,
   } = useApp();
+  const { message: toast, showToast, clearToast } = useWebToast();
 
   const [prefs, setPrefsState] = useState(loadPrefs);
   function updatePref(key, value) {
@@ -645,9 +839,55 @@ export function WebSettings() {
 
   const [modal, setModal] = useState(null); // 'card' | 'payment' | 'switch' | 'privacy' | 'cancel' | 'skip'
 
-  const skipMonthName = new Date().toLocaleDateString('en-US', { month: 'long' });
-  const nextChargeLabel = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 11)
-    .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Dates come from lib/billing - the old local `new Date(y, m + 1, 11)` was
+  // wrong for days 1 to 10, when the upcoming charge is THIS month's 11th.
+  const skipMonthName = currentMonthName();
+  const chargeLabel = nextChargeLabel();
+
+  // ── CANONICAL EXPORT SHAPE (mirror of Settings.jsx handleDownloadData) ──────
+  // Settings.jsx marks that object as canonical for BOTH surfaces; this is the
+  // web half, field for field. Donor-meaningful facts only.
+  //
+  // The web portal previously walked every pc_* key in localStorage and dumped
+  // it verbatim, so "Download my data" handed the donor pc_page, pc_admin_role,
+  // pc_tracked_card, pc_review_ack and the rest of our storage schema. Two
+  // different features under one name; this is the correct one.
+  //
+  // Only intentional difference from the app: name/email prefer the signed-in
+  // `hasAccount` (the web portal displays those too) and fall back to DEMO_USER,
+  // which is the same value in the demo.
+  function buildExportData() {
+    return {
+      exportedAt: new Date().toISOString(),
+      user: {
+        name: hasAccount?.name ?? DEMO_USER.name,
+        email: hasAccount?.email ?? DEMO_USER.email,
+        memberSince: DEMO_USER.joinedAt.toISOString().slice(0, 10),
+      },
+      cause: selectedNonprofit
+        ? { id: selectedNonprofit.id, name: selectedNonprofit.name, ein: selectedNonprofit.ein }
+        : null,
+      giving: {
+        totalDonated,
+        pendingThisMonth: pendingRoundUps,
+        roundUpMultiplier,
+        monthlyCap,
+        skippingCurrentMonth: skipNextCharge,
+        skippedMonth: skipNextCharge ? skipMonthName : null,
+        appFeeMonthsPending: feeMonths,
+        nextChargeDate: chargeLabel,
+      },
+      monthlyHistory: MONTHLY_DATA.map(m => ({ month: m.month, year: m.year, donated: m.donated })),
+      trackedCard: trackedCard
+        ? { name: trackedCard.name, brand: trackedCard.brand, last4: trackedCard.last4, institution: trackedCard.institution }
+        : null,
+      paymentMethod: paymentMethod
+        ? { type: paymentMethod.type, label: paymentMethod.label, last4: paymentMethod.last4 ?? null }
+        : null,
+      linkedCards: (linkedCards ?? []).map(c => ({ brand: c.brand, last4: c.last4 })),
+      preferences: { ...prefs, accountEmailsAndNonprofitUpdates: commsOptin },
+    };
+  }
 
   useEffect(() => {
     if (pendingSettingsAction === 'change-payment') {
@@ -674,26 +914,33 @@ export function WebSettings() {
         <div style={{ display: 'grid', gap: 20 }}>
           <SectionCard label="Round-up settings">
             <Row
-              label="Multiplier" sub="Multiply every round-up for more impact"
-              right={
-                <span style={{ display: 'inline-flex', gap: 4 }}>
-                  {[1, 2, 3].map(m => (
-                    <button key={m} onClick={() => setRoundUpMultiplier(m)}
-                      style={{
-                        padding: '6px 12px', borderRadius: 10, fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
-                        border: roundUpMultiplier === m ? `2px solid ${NAVY}` : '1.5px solid #e5e7eb',
-                        background: roundUpMultiplier === m ? '#eef4fa' : '#fff', color: roundUpMultiplier === m ? NAVY : INK.secondary,
-                      }}>
-                      {m}×
-                    </button>
-                  ))}
-                </span>
-              }
+              label="Multiplier"
+              sub={`${roundUpMultiplier}×  -  ${MULTIPLIER_OPTIONS.find(o => o.value === roundUpMultiplier)?.desc ?? ''}`}
             />
+            {/* The app explains each multiplier in its own sheet; web shows all
+                three descriptions inline (it used to be a bare 1/2/3 row). */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '2px 0 4px' }}>
+              {MULTIPLIER_OPTIONS.map(opt => (
+                <button key={opt.value} onClick={() => setRoundUpMultiplier(opt.value)}
+                  aria-pressed={roundUpMultiplier === opt.value}
+                  style={{
+                    padding: '10px 8px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                    border: roundUpMultiplier === opt.value ? `2px solid ${NAVY}` : '1.5px solid #e5e7eb',
+                    background: roundUpMultiplier === opt.value ? '#eef4fa' : '#fff',
+                  }}>
+                  <span style={{ display: 'block', fontWeight: 800, fontSize: 14, color: roundUpMultiplier === opt.value ? NAVY : INK.primary }}>
+                    {opt.label}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: INK.muted, marginTop: 2, lineHeight: 1.35 }}>
+                    {opt.desc}
+                  </span>
+                </button>
+              ))}
+            </div>
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Skip a month"
               sub={skipNextCharge
-                ? `${skipMonthName} skipped - only the $1 fee rolls over ($1 x 2)`
+                ? `${skipMonthName} skipped  -  only the $1 fee rolls over ($1 × 2)`
                 : `Need a breather? Skip ${skipMonthName}'s charge`}
               right={skipNextCharge ? (
                 <button onClick={() => setSkipNextCharge(false)}
@@ -777,49 +1024,64 @@ export function WebSettings() {
       </div>
 
       {/* ── Modals ── */}
-      <TrackCardModal show={modal === 'card'} onClose={() => setModal(null)} current={trackedCard} onConnected={setTrackedCard} />
-      <ChangePaymentModal show={modal === 'payment'} onClose={() => setModal(null)} onChanged={setPaymentMethod} />
-      <SwitchOrgModal show={modal === 'switch'} onClose={() => setModal(null)} onBind={setSelectedNonprofit} />
+      <TrackCardModal
+        show={modal === 'card'} onClose={() => setModal(null)} current={trackedCard}
+        onConnected={card => {
+          setTrackedCard(card);
+          showToast(`Now tracking ${card.name}. Round-ups from your old card stop today; new purchases on this card count from now on.`);
+        }}
+      />
+      <ChangePaymentModal
+        show={modal === 'payment'} onClose={() => setModal(null)}
+        onChanged={method => { setPaymentMethod(method); showToast('Payment method updated.'); }}
+      />
+      <SwitchOrgModal show={modal === 'switch'} onClose={() => setModal(null)}
+        onBind={org => { setSelectedNonprofit(org); showToast(`Your round-ups now go to ${org.shortName ?? org.name}.`); }} />
       <PrivacyModal show={modal === 'privacy'} onClose={() => setModal(null)}
-        prefs={prefs} updatePref={updatePref} adminOrgName={adminRole ? npShort : null} onDeleteAccount={deleteAccount} />
+        prefs={prefs} updatePref={updatePref} adminOrgName={adminRole ? npShort : null} onDeleteAccount={deleteAccount}
+        buildExportData={buildExportData} onToast={showToast} />
       <CancelModal show={modal === 'cancel'} onClose={() => setModal(null)}
         pendingRoundUps={pendingRoundUps} feeMonths={feeMonths} nonprofit={np}
         onDonate={boostDonation} onCancelled={cancelAccount} />
       <Modal show={modal === 'skip'} onClose={() => setModal(null)} title={`${skipMonthName} skipped`}>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-          You will skip {skipMonthName}'s charges. Those round-ups are simply never charged - they don't roll over and they don't come out later.
+          You will skip {skipMonthName}&apos;s charges. Those round-ups are simply never charged  -  they don&apos;t roll over and they don&apos;t come out later.
         </p>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-          Only the $1 app fee rolls to next month, so your next charge on {nextChargeLabel} carries a $1 x 2 fee.
+          Only the $1 app fee rolls to next month, so your next charge on {chargeLabel} carries a $1 × 2 fee.
         </p>
         <p style={{ margin: '0 0 16px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-          Changed your mind? Tap Undo on this screen any time before {nextChargeLabel}.
+          Changed your mind? Tap Undo on this screen any time before {chargeLabel}.
         </p>
         <ActionButton tone="primary" onClick={() => setModal(null)}>Got it</ActionButton>
       </Modal>
+
+      <WebToast message={toast} onClose={clearToast} />
     </>
   );
 }
 
 // ─── Settings modals ─────────────────────────────────────────────────────────
-function webFormatCardNumber(raw) {
-  const digits = raw.replace(/\D/g, '').slice(0, 16);
-  return digits.replace(/(.{4})/g, '$1 ').trim();
-}
-
+/**
+ * TrackCardModal - "track a different card" on web.
+ *
+ * NOTHING IS COMMITTED UNTIL THE DONOR CONFIRMS. This modal used to call
+ * onConnected() from inside the fake-connect setTimeout, so the tracked card in
+ * the store changed before the donor saw any Done button and closing the modal
+ * could not undo it. The app never worked that way: Settings.jsx
+ * TrackCardSheet.handleDone (~687-695) commits only on an explicit tap after the
+ * connect animation. Web now matches: `connected` is LOCAL state, and
+ * onConnected fires from confirm() alone.
+ */
 function TrackCardModal({ show, onClose, current, onConnected }) {
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualName, setManualName] = useState('');
-  const [manualCardNumber, setManualCardNumber] = useState('');
-  const [manualConnecting, setManualConnecting] = useState(false);
 
   useEffect(() => {
     if (!show) return;
     const id = setTimeout(() => {
-      setConnecting(null); setConnected(null);
-      setShowManualForm(false); setManualName(''); setManualCardNumber(''); setManualConnecting(false);
+      setConnecting(null); setConnected(null); setShowManualForm(false);
     }, 0);
     return () => clearTimeout(id);
   }, [show]);
@@ -827,78 +1089,38 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
   function pick(bank) {
     setConnecting(bank.id);
     setTimeout(() => {
-      const card = { name: bank.name, last4: String(Math.floor(1000 + Math.random() * 9000)), brand: bank.name, institution: bank.name };
       setConnecting(null);
-      setConnected(card);
-      onConnected(card);
+      // Staged locally only - see the header note.
+      setConnected({ name: bank.name, last4: String(Math.floor(1000 + Math.random() * 9000)), brand: bank.name, institution: bank.name });
     }, 1100);
   }
 
-  function handleManualConnect() {
-    const digits = manualCardNumber.replace(/\D/g, '');
-    if (digits.length < 13) return;
-    setManualConnecting(true);
-    setTimeout(() => {
-      const last4 = digits.slice(-4);
-      const card = { name: 'My Card', last4, brand: 'Card', institution: 'Manual' };
-      setManualConnecting(false);
-      setConnected(card);
-      onConnected(card);
-    }, 1000);
+  function confirm() {
+    if (!connected) return;
+    onConnected(connected);
+    onClose();
   }
 
   return (
     <Modal show={show} onClose={onClose} title="Track a Different Card">
       {connected ? (
-        <div style={{ textAlign: 'center', padding: '14px 0 6px' }}>
+        <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="track-card-confirm">
           <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{connected.name} connected</p>
-          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>Now watching ····{connected.last4} for round-ups.</p>
-          <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{connected.name} ····{connected.last4} connected</p>
+          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
+            We&apos;ll watch purchases and calculate round-ups as they happen  -  nothing changes until you confirm.
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <ActionButton onClick={confirm}>Use {connected.name} ····{connected.last4} →</ActionButton>
+            <ActionButton tone="quiet" onClick={onClose}>Cancel  -  keep {current?.name ?? 'my current card'}</ActionButton>
+          </div>
         </div>
       ) : showManualForm ? (
-        <div style={{ display: 'grid', gap: 12 }}>
-          <p style={{ margin: 0, fontSize: 13, color: INK.secondary }}>Enter your card details  -  read-only, encrypted via Plaid.</p>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: INK.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Cardholder name</label>
-            <input
-              type="text"
-              placeholder="Name on card"
-              value={manualName}
-              onChange={e => setManualName(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 13, outline: 'none', background: '#f9fafb' }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: INK.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Card number</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="XXXX XXXX XXXX XXXX"
-              value={manualCardNumber}
-              onChange={e => setManualCardNumber(webFormatCardNumber(e.target.value))}
-              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', letterSpacing: '0.1em', outline: 'none', background: '#f9fafb' }}
-            />
-          </div>
-          <p style={{ margin: 0, fontSize: 11.5, color: INK.muted, display: 'flex', alignItems: 'center', gap: 6 }}>
-            🔒 Encrypted via Plaid  -  PocketCache never stores your full card number
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => { setShowManualForm(false); setManualName(''); setManualCardNumber(''); }}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: INK.secondary }}
-            >Cancel</button>
-            <button
-              onClick={handleManualConnect}
-              disabled={manualCardNumber.replace(/\D/g,'').length < 13 || manualConnecting}
-              style={{
-                flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? 'pointer' : 'default',
-                background: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? 'linear-gradient(135deg, #0d9488, #003865)' : '#d1d5db',
-                color: '#fff', fontSize: 13, fontWeight: 700,
-              }}
-            >{manualConnecting ? 'Connecting…' : 'Connect'}</button>
-          </div>
-        </div>
+        <ManualCardForm
+          variant="web"
+          onCancel={() => setShowManualForm(false)}
+          onConnect={card => setConnected(card)}
+        />
       ) : (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
@@ -933,34 +1155,84 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
   );
 }
 
+/**
+ * ChangePaymentModal - "how you pay" on web.
+ *
+ * TWO fixes live here.
+ *
+ * 1. NOTHING IS COMMITTED UNTIL THE DONOR CONFIRMS, matching Settings.jsx
+ *    ChangePaymentSheet: pick a method → "Setting up…" → an explicit Confirm.
+ *    The old code called onChanged() inside the setTimeout, so the stored
+ *    payment method changed before any confirmation was visible and closing the
+ *    modal could not take it back.
+ *
+ * 2. "Credit or Debit Card" COLLECTS A REAL CARD. It used to fabricate a last4
+ *    with Math.random() for every option, card included - the web portal claimed
+ *    a card was on file that had never been typed anywhere. Now the card option
+ *    opens the shared StripeCardForm (the same Stripe Elements setup the app
+ *    uses) and the last4 comes from Stripe's own response, exactly like
+ *    Settings.jsx AddCardSheet → handleCardAdded. ACH and Apple Pay legitimately
+ *    have no last4 - they store null, as the app does.
+ */
 function ChangePaymentModal({ show, onClose, onChanged }) {
   const [saving, setSaving] = useState(null);
-  const [done, setDone] = useState(null);
+  const [staged, setStaged] = useState(null);   // ready to confirm, NOT committed
+  const [cardEntry, setCardEntry] = useState(false);
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setSaving(null); setDone(null); }, 0);
+    const id = setTimeout(() => { setSaving(null); setStaged(null); setCardEntry(false); }, 0);
     return () => clearTimeout(id);
   }, [show]);
 
   function pick(opt) {
+    if (opt.id === 'card') { setCardEntry(true); return; }
     setSaving(opt.id);
     setTimeout(() => {
-      const method = { type: opt.id, label: opt.label, last4: opt.id === 'card' ? String(Math.floor(1000 + Math.random() * 9000)) : null };
-      onChanged(method);
       setSaving(null);
-      setDone(method);
+      setStaged({ type: opt.id, label: opt.label, last4: null });
     }, 900);
   }
 
+  function confirm() {
+    if (!staged) return;
+    onChanged(staged);
+    onClose();
+  }
+
+  const title = cardEntry ? 'Add Your Card' : 'Change Payment Method';
+
   return (
-    <Modal show={show} onClose={onClose} title="Change Payment Method">
-      {done ? (
-        <div style={{ textAlign: 'center', padding: '14px 0 6px' }}>
+    <Modal show={show} onClose={onClose} title={title}>
+      {staged ? (
+        <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="change-payment-confirm">
           <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{done.label} saved</p>
-          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>Your next monthly charge uses this method. Secured by Stripe.</p>
-          <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>
+            {staged.label} ready{staged.last4 ? ` ····${staged.last4}` : ''}
+          </p>
+          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
+            Confirm and your next monthly charge uses this method. Secured by Stripe.
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <ActionButton onClick={confirm}>Confirm →</ActionButton>
+            <ActionButton tone="quiet" onClick={onClose}>Cancel</ActionButton>
+          </div>
         </div>
+      ) : cardEntry ? (
+        <>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
+            Enter the card your monthly round-up charge should come from. Stripe holds the details  -  PocketCache never sees the number.
+          </p>
+          <StripeCardForm
+            variant="web"
+            submitLabel="Save card →"
+            onCancel={() => setCardEntry(false)}
+            onSuccess={card => {
+              // last4 comes from Stripe, never from Math.random().
+              setStaged({ type: 'card', label: 'Credit or Debit Card', last4: card.last4, brand: card.brand });
+              setCardEntry(false);
+            }}
+          />
+        </>
       ) : (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>Payments are processed by Stripe  -  PocketCache never sees your details.</p>
@@ -977,11 +1249,15 @@ function ChangePaymentModal({ show, onClose, onChanged }) {
               </button>
             ))}
           </div>
+          <p style={{ margin: '12px 0 0', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>
+            Nothing changes until you confirm on the next screen.
+          </p>
         </>
       )}
     </Modal>
   );
 }
+
 
 function SwitchOrgModal({ show, onClose, onBind }) {
   const [code, setCode] = useState('');
@@ -1018,17 +1294,20 @@ function SwitchOrgModal({ show, onClose, onBind }) {
   );
 }
 
-function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDeleteAccount }) {
+function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDeleteAccount, buildExportData, onToast }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Face ID / Touch ID unlock  -  real WebAuthn enrollment, shared with the app
   const [bioEnrolled, setBioEnrolled] = useState(biometricEnrolled);
   async function toggleBio(v) {
     if (v) {
       const ok = await biometricEnroll({ name: DEMO_USER.name, email: DEMO_USER.email });
-      if (ok) { markSessionUnlocked(); setBioEnrolled(true); }
+      // Same confirmations the app shows (Settings.jsx ~973-978).
+      if (ok) { markSessionUnlocked(); setBioEnrolled(true); onToast?.('Face ID unlock is on 🙂'); }
+      else onToast?.("Couldn't set up Face ID on this device.");
     } else {
       biometricDisable();
       setBioEnrolled(false);
+      onToast?.('Face ID unlock turned off.');
     }
   }
   useEffect(() => {
@@ -1037,18 +1316,28 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
     return () => clearTimeout(id);
   }, [show]);
 
+  // Curated export, same as the app. This used to walk every pc_* key in
+  // localStorage and dump it verbatim, which handed the donor internal
+  // implementation state (pc_page, pc_admin_role, pc_tracked_card,
+  // pc_review_ack…) under the heading "my data" - wrong content for a privacy
+  // export, and it enumerated localStorage without the try/catch every other
+  // storage touch point in this codebase uses (identityStore.loadKey), so a
+  // browser with storage blocked threw an uncaught exception on click. The
+  // shape now comes from WebSettings.buildExportData; nothing here touches
+  // localStorage at all.
   function downloadData() {
-    const data = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k?.startsWith('pc_')) { try { data[k] = JSON.parse(localStorage.getItem(k)); } catch { data[k] = localStorage.getItem(k); } }
+    try {
+      const data = buildExportData ? buildExportData() : {};
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'pocketcache-data.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      onToast?.('Your data export is downloading.');
+    } catch {
+      onToast?.("We couldn't build your export in this browser. Try again, or email support@pocketcache.app.");
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'pocketcache-my-data.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
   }
 
   return (
@@ -1064,7 +1353,7 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
       <Row label="Marketing emails" sub="Impact stories and updates"
         right={<WebToggle value={prefs.marketingEmails} onChange={v => updatePref('marketingEmails', v)} />} />
       <div style={{ height: 1, background: '#f1f5f9' }} />
-      <Row label="Download my data" sub="JSON export of everything stored for this account" onPress={downloadData}
+      <Row label="Download My Data" sub="Get a copy of everything we have" onPress={downloadData}
         right={<span style={{ color: INK.muted }}>⬇</span>} />
       <div style={{ height: 1, background: '#f1f5f9', marginBottom: 12 }} />
       {confirmDelete ? (
@@ -1095,7 +1384,16 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, onD
 
   const raw = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   const processingCover = parseFloat((raw * 0.022 + 0.30).toFixed(2));
-  const total = (feeMonths + raw + (coverProcessing ? processingCover : 0)).toFixed(2);
+  // Totalled by lib/billing. Note the cap and the one-time adjustment are
+  // deliberately NOT applied to this final settle-up, because the app's cancel
+  // sheet (Settings.jsx ~549-553) does not apply them either and the two
+  // surfaces must show the same number. FLAGGED FOR RECONCILIATION: arguably
+  // both should honour the cap on the way out - that is an app-side decision.
+  const total = chargeTotal({
+    pendingRoundUps: raw,
+    feeMonths,
+    processingCover: coverProcessing ? processingCover : 0,
+  }).toFixed(2);
   const belowMin = raw < (nonprofit?.monthlyMinimum ?? 5);
   const npShort = nonprofit?.shortName ?? 'your cause';
 

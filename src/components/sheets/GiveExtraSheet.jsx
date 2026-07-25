@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import Sheet from '../Sheet';
+import { safeBottomAtLeast } from '../../lib/safeArea';
 import { CheckCircle } from 'lucide-react';
 
 const BOOST_PRESETS = [1, 5, 10, 25];
@@ -51,7 +52,8 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
 
   return (
     <Sheet show={show} onClose={onClose} title="Give Extra Now">
-      <div className="px-6 py-5 pb-8">
+      {/* No bottom padding here - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-5">
         <p className="text-gray-500 text-sm mb-5">
           Make a one-time donation to{' '}
           <span className="font-semibold text-gray-900">{orgShort}</span>{' '}
@@ -136,13 +138,16 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
         </motion.button>
 
         <AnimatePresence>
+          {/* Pinned to the sheet's bottom edge, so it needs the same inset the
+              Sheet applies to its scroll container - `bottom-8` sat on top of
+              the home indicator on notched devices. */}
           {showConfirm && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute inset-x-6 bottom-8 bg-white border-2 border-amber-200 rounded-3xl p-5 shadow-xl"
-              style={{ background: '#fffbeb' }}
+              className="absolute inset-x-6 bg-white border-2 border-amber-200 rounded-3xl p-5 shadow-xl"
+              style={{ background: '#fffbeb', bottom: safeBottomAtLeast(32, 12) }}
             >
               <p className="font-bold text-amber-900 text-base mb-1">Just to confirm…</p>
               <p className="text-amber-700 text-sm mb-4">

@@ -6,6 +6,12 @@ import { Zap, Heart, TrendingUp, X, Share2, Plus, ExternalLink, Building2, Flame
 import { useApp } from '../store/AppContext';
 import { loadKey, saveKey } from '../store/identityStore';
 import { useTheme } from '../store/ThemeContext';
+import {
+  CHARGE_DAY, MAX_FEE_MONTHS, chargeTotal, daysUntilNextCharge,
+  effectiveCharge, nextChargeDate, nextChargeLabel,
+} from '../lib/billing';
+import { Z } from '../lib/overlay';
+import { safeBottomAtLeast } from '../lib/safeArea';
 import { MONTHLY_DATA } from '../data/transactions';
 import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
@@ -44,12 +50,6 @@ function getMilestonesUpTo(total) {
   return result;
 }
 
-function daysUntilMonthEnd() {
-  const now = new Date();
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
-}
-
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -63,7 +63,8 @@ function MilestoneToast({ milestone, onClose }) {
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -80, opacity: 0 }}
-      className="absolute top-20 left-4 right-4 z-30 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
+      className="absolute top-20 left-4 right-4 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
+      style={{ zIndex: Z.toast }}
     >
       <div className="text-3xl">{milestone.emoji}</div>
       <div className="flex-1">
@@ -116,9 +117,12 @@ function MatchBanner({ m, pct }) {
   );
 }
 
-function AdjustChargeSheet({ show, onClose, pendingRoundUps, chargeAdjustment, setChargeAdjustment, brand }) {
-  // Component is remounted via key when opened, so useState always starts fresh
-  const [value, setValue] = useState(chargeAdjustment ?? pendingRoundUps);
+function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, chargeAdjustment, setChargeAdjustment, brand }) {
+  // Component is remounted via key when opened, so useState always starts fresh.
+  // It opens on the amount that would actually be charged (lib/billing's
+  // effectiveCharge - an existing adjustment, else the cap, else the raw
+  // round-ups), never on a number the donor would not be billed.
+  const [value, setValue] = useState(effectiveAmount);
 
   function handleConfirm() {
     setChargeAdjustment(value);
@@ -127,7 +131,7 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, chargeAdjustment, s
 
   return (
     <Sheet show={show} onClose={onClose} title="Adjust This Month's Charge">
-      <div className="px-6 py-5 pb-8 space-y-5">
+      <div className="px-6 py-5 space-y-5" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
         <p className="text-gray-600 text-sm leading-relaxed">
           One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
         </p>
@@ -182,7 +186,10 @@ export default function Dashboard() {
   const [boostToast, setBoostToast] = useState(null);
   const [showAdjustCharge, setShowAdjustCharge] = useState(false);
   const toastTimerRef = useRef(null);
-  const daysLeft = daysUntilMonthEnd();
+  // Days until the charge actually runs, straight from the billing module - NOT
+  // days until the end of the calendar month. Those two differ by 10 days and
+  // the number sitting next to "Next charge: <date>" has to mean that date.
+  const daysLeft = daysUntilNextCharge();
 
   const milestones = getMilestonesUpTo(totalDonated);
   const nextMilestone = milestones.find(m => !m.achieved);
@@ -195,17 +202,30 @@ export default function Dashboard() {
   const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
   // Billing schedule (Blake, 2026-07-06): the month's round-ups LOCK on the
   // 1st (exact amount emailed) and the charge runs on the 11th  -  10 full
-  // days' review notice (classic Reg E timing) and a reconciliation +
-  // reconciliation buffer, so donors are never surprised.
-  const nextMonthEleventh = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 11);
-  const nextChargeDateLabel = nextMonthEleventh.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // days' review notice (classic Reg E timing), so donors are never surprised.
+  // The date itself comes from lib/billing so this card, Settings and the
+  // review alert can never disagree (during days 1-10 the upcoming charge is
+  // THIS month's 11th, not next month's).
+  const nextChargeDateLabel = nextChargeLabel();
   const belowMinimum = pendingRoundUps < monthlyMinimum;
 
-  // Cap + per-charge adjustment logic
+  // Progress through the billing cycle: charge day to charge day, not a
+  // hardcoded 30. Cycle start is the previous CHARGE_DAY, derived from the
+  // module's own nextChargeDate() so the two ends always match.
+  const upcomingCharge = nextChargeDate();
+  const cycleStart = new Date(upcomingCharge.getFullYear(), upcomingCharge.getMonth() - 1, CHARGE_DAY);
+  const cycleDays = Math.max(1, Math.round((upcomingCharge - cycleStart) / 86400000));
+  const cyclePct = Math.max(0, Math.min(100, ((cycleDays - daysLeft) / cycleDays) * 100));
+
+  // Cap + per-charge adjustment precedence lives in lib/billing so the app and
+  // the web portal cannot drift.
   const capActive = monthlyCap !== null && pendingRoundUps > monthlyCap;
-  const effectiveCharge = chargeAdjustment !== null
-    ? chargeAdjustment
-    : capActive ? monthlyCap : pendingRoundUps;
+  const chargeAmount = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
+  const chargeDue = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths });
+  const feeLabel = feeMonths === 1 ? '$1 app fee' : `$1 × ${feeMonths} app fee`;
+  // Skipping this cycle rolls its $1 fee forward, so the charge AFTER the
+  // skipped one carries one more month of fee than is pending today.
+  const rolledFeeMonths = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
 
   // MoM display: "↑ 14% vs last" or "↓ 5% vs last" or "First month"
   const momDisplay = momChange === null
@@ -300,7 +320,13 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
+      {/* pb-28 (112px) cleared the tab bar before it consumed --pc-safe-bottom.
+          The tab bar now grows with the home-indicator inset, so the scroll
+          padding has to grow with it or the last card hides behind it. */}
+      <div
+        className="flex-1 scrollable pc-scrollbar px-4 space-y-4 pt-4"
+        style={{ paddingBottom: safeBottomAtLeast(112, 106) }}
+      >
 
         {/* Hero donation card */}
         <motion.div
@@ -410,7 +436,9 @@ export default function Dashboard() {
                 Monthly Charge to {selectedNonprofit.shortName}
               </p>
               <p className="text-gray-400 text-xs mt-0.5">
-                Next charge: {skipNextCharge ? 'skipped  -  only the $1 fee rolls over ($1 × 2)' : nextChargeDateLabel}
+                Next charge: {skipNextCharge
+                  ? `${nextChargeDateLabel} skipped  -  only the $1 fee rolls forward ($1 × ${rolledFeeMonths} next time)`
+                  : nextChargeDateLabel}
               </p>
             </div>
             <div className="text-right">
@@ -421,24 +449,24 @@ export default function Dashboard() {
           <div className="h-2 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${100 - (daysLeft / 30) * 100}%` }}
+              animate={{ width: `${cyclePct}%` }}
               transition={{ duration: 1, delay: 0.4 }}
               className="h-full rounded-full"
               style={{ background: brand.gradient }}
             />
           </div>
           <div className="flex justify-between mt-1.5">
-            <p className="text-gray-400 text-xs">Month start</p>
+            <p className="text-gray-400 text-xs">Cycle start</p>
             {belowMinimum ? (
               <p className="text-xs font-semibold text-amber-600">
                 ${pendingRoundUps.toFixed(2)} so far  -  rolls over at month-end
               </p>
             ) : (
               <p className="text-xs font-semibold" style={{ color: '#059669' }}>
-                ${effectiveCharge.toFixed(2)} + $1 app fee · pending charge
+                ${chargeAmount.toFixed(2)} + {feeLabel} · ${chargeDue.toFixed(2)} pending
               </p>
             )}
-            <p className="text-gray-400 text-xs">Month end</p>
+            <p className="text-gray-400 text-xs">Charge day</p>
           </div>
           {belowMinimum && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed">
@@ -575,6 +603,7 @@ export default function Dashboard() {
         show={showAdjustCharge}
         onClose={() => setShowAdjustCharge(false)}
         pendingRoundUps={pendingRoundUps}
+        effectiveAmount={chargeAmount}
         chargeAdjustment={chargeAdjustment}
         setChargeAdjustment={setChargeAdjustment}
         brand={brand}

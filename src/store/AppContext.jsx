@@ -1,15 +1,19 @@
-import { createContext, useContext, useState, useMemo } from 'react';
+import { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { CURRENT_MONTH_PENDING, PRIOR_MONTHS_SUM } from '../data/transactions';
 import { findOrgByCode } from './orgStore';
 import { IDENTITY_KEYS, migrate, loadKey, saveKey, removeKeys, clearIdentityKeys } from './identityStore';
+import { monthKey, settleCycle } from '../lib/billing';
 
 // Donor-scoped keys — cleared on donor-account deletion; identity/admin keys survive.
+// 'pc_skip_next' is the retired forever-boolean: kept in the list so the wipe
+// paths still clear it on devices that predate the per-cycle skip record.
 const DONOR_KEYS = [
   'pc_page', 'pc_cause_id', 'pc_multiplier', 'pc_cards', 'pc_total_donated',
   'pc_seen_milestone', 'pc_dismiss_countdown', 'pc_prefs', 'pc_account_status',
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
   'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment', 'pc_fee_months',
   'pc_bio', 'pc_bio_prompt_dismissed', 'pc_skip_next', 'pc_review_ack',
+  'pc_skip_month', 'pc_last_cycle',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];
@@ -39,6 +43,44 @@ if (typeof window !== 'undefined') {
       removeKeys(['pc_cause_id']);
     }
   }
+  migrateSkipKey();
+  // Settle the cycle BEFORE any state initializer reads storage, so first paint
+  // already shows the rolled-over fee and the expired skip.
+  settleStoredCycle();
+}
+
+// Close out the billing cycle that just ended: a skipped month rolls its $1 fee
+// onto the next charge ($1 × 2), a normally charged month puts the fee back to
+// one month, and the one-month skip is always cleared. All the rules live in
+// billing.settleCycle; this only persists the answer. Re-running inside the same
+// cycle is a no-op, which is why it is safe to call again when the tab has been
+// sitting open across midnight on the 1st.
+function settleStoredCycle() {
+  const result = settleCycle({
+    lastCycle: loadKey('pc_last_cycle', null),
+    skipMonth: loadKey('pc_skip_month', null),
+    feeMonths: loadKey('pc_fee_months', 1),
+  });
+  if (result.changed) {
+    saveKey('pc_last_cycle', result.lastCycle);
+    if (result.skipMonth) saveKey('pc_skip_month', result.skipMonth);
+    else removeKeys(['pc_skip_month']);
+    saveKey('pc_fee_months', result.feeMonths);
+  }
+  return result;
+}
+
+// Legacy 'pc_skip_next' was a bare boolean that never cleared itself, so one tap
+// silently skipped every month after it. Translate a live skip into a record for
+// the CURRENT cycle (the donor's intent was "skip my next charge"), then retire
+// the old key. Idempotent — only fires while the legacy key is still present.
+function migrateSkipKey() {
+  const legacy = loadKey('pc_skip_next', null);
+  if (legacy === null) return;
+  if (legacy === true && !loadKey('pc_skip_month', null)) {
+    saveKey('pc_skip_month', monthKey());
+  }
+  removeKeys(['pc_skip_next']);
 }
 
 const AppContext = createContext(null);
@@ -73,10 +115,14 @@ export function AppProvider({ children }) {
 
   const [monthlyCap, setMonthlyCapState] = useState(() => loadKey('pc_monthly_cap', null));
   // Giving is ALWAYS automatic (no manual-deposit mode) — but a donor can skip
-  // their next monthly charge once; giving resumes automatically after.
-  const [skipNextCharge, setSkipNextChargeState] = useState(() => loadKey('pc_skip_next', false));
+  // their next monthly charge ONCE; giving resumes automatically after. The skip
+  // is therefore stored as the month key it applies to ('2026-07'), not as a
+  // boolean, and 'skipNextCharge' is derived from it — so it expires by itself
+  // when the calendar turns instead of skipping every month forever.
+  const [skipMonth, setSkipMonthState] = useState(() => loadKey('pc_skip_month', null));
   const [chargeAdjustment, setChargeAdjustmentState] = useState(() => loadKey('pc_charge_adjustment', null));
   const [feeMonths, setFeeMonthsState] = useState(() => loadKey('pc_fee_months', 1));
+  const skipNextCharge = skipMonth !== null && skipMonth === monthKey();
 
   // Non-persisted: triggers Settings to auto-open a sheet (e.g. from reactivation check-in)
   const [pendingSettingsAction, setPendingSettingsActionState] = useState(null);
@@ -155,9 +201,13 @@ export function AppProvider({ children }) {
     setMonthlyCapState(val);
   }
 
+  // Same name and signature as before: setSkipNextCharge(true|false). True marks
+  // THIS cycle as skipped; false takes the mark off.
   function setSkipNextCharge(val) {
-    saveKey('pc_skip_next', val);
-    setSkipNextChargeState(val);
+    const month = val ? monthKey() : null;
+    if (month) saveKey('pc_skip_month', month);
+    else removeKeys(['pc_skip_month']);
+    setSkipMonthState(month);
   }
 
   function setChargeAdjustment(val) {
@@ -169,6 +219,21 @@ export function AppProvider({ children }) {
     saveKey('pc_fee_months', val);
     setFeeMonthsState(val);
   }
+
+  // The load-time settlement above runs before this provider mounts. This only
+  // covers the leave-it-open case: a phone that sat on the dashboard across
+  // midnight on the 1st settles the moment the donor looks at it again.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.hidden) return;
+      const result = settleStoredCycle();
+      if (!result.changed) return;
+      setSkipMonthState(result.skipMonth);
+      setFeeMonthsState(result.feeMonths);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   function setPendingSettingsAction(action) {
     setPendingSettingsActionState(action);
@@ -213,6 +278,10 @@ export function AppProvider({ children }) {
     setMonthlyCapState(null);
     setChargeAdjustmentState(null);
     setFeeMonthsState(1);
+    // Billing cycle bookkeeping: no skip, no settled cycle — a true first open.
+    // (The keys themselves are in DONOR_KEYS, which every caller wipes.)
+    setSkipMonthState(null);
+    removeKeys(['pc_skip_month', 'pc_last_cycle', 'pc_skip_next']);
   }
 
   // deleteAccount: deletes the donor role only. If an admin role exists the

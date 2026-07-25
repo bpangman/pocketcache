@@ -1,26 +1,27 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
+import {
+  chargeTotal, currentMonthName, effectiveCharge, inReviewWindow, monthKey, nextChargeLabel,
+} from '../lib/billing';
+import { Z, scrim, centered } from '../lib/overlay';
 
-// ─── Charge review alert (the 1st-4th window) ────────────────────────────────
+// ─── Charge review alert (the 1st-10th window) ───────────────────────────────
 // The cycle locks on the 1st; the charge runs on the 11th (10 full days'
 // notice  -  the classic Reg E timing). During that window,
 // every fresh visit pops this alert with the exact amount and the one-time
 // "adjust this charge" control  -  donors always see it before money moves.
 // Production also sends the same thing by email/push on the 1st.
 // Demo: add ?review=1 to the URL to preview the alert on any calendar day.
-
-function inReviewWindow() {
-  const day = new Date().getDate();
-  return day >= 1 && day <= 10;
-}
+//
+// All dates and amounts come from src/lib/billing.js - the window, the charge
+// label, the effective round-ups and the total. This file used to do that math
+// itself; it happened to be the only one that got the "this month's 11th, not
+// next month's" rule right, and lib/billing.js is that rule, extracted.
 
 // Acknowledgment persists for the WHOLE review month: once the donor clicks
 // "Looks good", the alert stays gone on every later visit until next cycle.
+// The month key is billing's canonical cycle id.
 const ACK_KEY = 'pc_review_ack';
-function monthKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 export default function ChargeReviewAlert({ surface = 'app' }) {
   const {
@@ -47,10 +48,10 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   if (!show) return null;
 
   const npShort = selectedNonprofit.shortName ?? selectedNonprofit.name;
-  const effective = chargeAdjustment ?? roundUps;
-  const total = (effective + feeMonths).toFixed(2);
-  const monthName = new Date().toLocaleString('en-US', { month: 'long' });
-  const chargeDay = `${new Date().toLocaleString('en-US', { month: 'short' })} 11`;
+  const effective = effectiveCharge({ pendingRoundUps: roundUps, chargeAdjustment });
+  const total = chargeTotal({ pendingRoundUps: roundUps, chargeAdjustment, feeMonths }).toFixed(2);
+  const monthName = currentMonthName();
+  const chargeDay = nextChargeLabel();
 
   function dismiss() {
     try { localStorage.setItem(ACK_KEY, monthKey()); } catch { /* noop */ }
@@ -106,7 +107,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
             style={{ width: '100%', accentColor: '#0D9488' }}
           />
           <p style={{ margin: '4px 0 10px', fontSize: 11.5, color: '#94a3b8', textAlign: 'center' }}>
-            One-time change for this month only  -  the $1 app fee still applies.
+            One-time change for this month only  -  the $1 × {feeMonths} app fee still applies.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             <button onClick={confirmAdjust}
@@ -134,15 +135,18 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
     </div>
   );
 
+  // One gate, two surfaces: identical scrim on both (the app used to dim to 0.55
+  // + blur and the web to 0.45 with none, which was copy-paste drift, not a
+  // design decision). `fixed` is the only genuine difference.
   if (surface === 'app') {
     return (
-      <div style={{ position: 'absolute', inset: 0, zIndex: 55, background: 'rgba(11,42,74,0.55)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ ...scrim('blocking'), ...centered(20), zIndex: Z.blockingScrim }}>
         {card}
       </div>
     );
   }
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(11,42,74,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div style={{ ...scrim('blocking', { fixed: true }), ...centered(16), zIndex: Z.blockingScrim }}>
       {card}
     </div>
   );

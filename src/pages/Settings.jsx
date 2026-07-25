@@ -4,6 +4,7 @@ import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileT
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
+import ManualCardForm from '../components/ManualCardForm';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
@@ -13,6 +14,9 @@ import OrgLogo from '../components/OrgLogo';
 import { findOrgByCode } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import { fmtMoney } from '../lib/format';
+import { MAX_FEE_MONTHS, currentMonthName, nextChargeLabel } from '../lib/billing';
+import { Z, scrim } from '../lib/overlay';
+import { safeBottomAtLeast } from '../lib/safeArea';
 import { MONTHLY_DATA } from '../data/transactions';
 import { DEMO_USER } from '../data/derived';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
@@ -88,14 +92,14 @@ function SettingRow({ icon, label, sub, right, onPress, color }) {
   );
 }
 
-function SkipConfirmModal({ show, onClose, monthName, nextChargeLabel, brand }) {
+function SkipConfirmModal({ show, onClose, monthName, chargeLabel, feeMultiplier, brand }) {
   return (
     <AnimatePresence>
       {show && (
         <>
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black z-40"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ ...scrim('dim'), zIndex: Z.modalScrim }}
             onClick={onClose}
           />
           {/* Centering translate lives in framer-motion's x/y props, NOT style.transform:
@@ -106,8 +110,8 @@ function SkipConfirmModal({ show, onClose, monthName, nextChargeLabel, brand }) 
             animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
             exit={{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }}
             transition={{ type: 'spring', damping: 22, stiffness: 280 }}
-            className="absolute left-1/2 top-1/2 z-50 bg-white rounded-3xl p-6 text-center"
-            style={{ width: 'min(320px, 88%)', boxShadow: '0 24px 64px rgba(0,0,0,0.25)' }}
+            className="absolute left-1/2 top-1/2 bg-white rounded-3xl p-6 text-center"
+            style={{ width: 'min(320px, 88%)', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', zIndex: Z.modal }}
           >
             <div
               className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3"
@@ -119,11 +123,14 @@ function SkipConfirmModal({ show, onClose, monthName, nextChargeLabel, brand }) 
             <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
               You will skip {monthName}'s charges. Those round-ups are simply never charged - they don't roll over and they don't come out later.
             </p>
+            {/* feeMultiplier is derived from the REAL pending feeMonths, not a
+                hardcoded 2: skip two months running and the third charge
+                honestly carries $1 × 3. */}
             <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
-              Only the $1 app fee rolls to next month, so your next charge on {nextChargeLabel} carries a $1 x 2 fee.
+              Nothing is charged on {chargeLabel}. Only the $1 app fee rolls forward, so it joins the charge after that as $1 × {feeMultiplier}.
             </p>
             <p className="text-gray-500 text-left mb-5" style={{ fontSize: 13 }}>
-              Changed your mind? Tap Undo on this screen any time before {nextChargeLabel}.
+              Changed your mind? Tap Undo on this screen any time before {chargeLabel}.
             </p>
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -229,7 +236,7 @@ function AddCardForm({ onAdd, onClose, brand }) {
 function AddCardSheet({ show, onClose, onAdd, brand }) {
   return (
     <Sheet show={show} onClose={onClose} title="Add a Card">
-      <div className="px-6 py-4 pb-8">
+      <div className="px-6 pt-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
         <Elements stripe={stripePromise}>
           <AddCardForm onAdd={onAdd} onClose={onClose} brand={brand} />
         </Elements>
@@ -261,7 +268,7 @@ function PrivacySheet({
 
   return (
     <Sheet show={show} onClose={onClose} title="Privacy & Security">
-      <div className="px-5 py-4 pb-8 space-y-4">
+      <div className="px-5 pt-4 space-y-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
 
         {deleting && (
           <motion.div
@@ -424,7 +431,7 @@ function SwitchOrgSheet({ show, onClose, brand, onBind }) {
 
   return (
     <Sheet show={show} onClose={onClose} title="Switch Nonprofit">
-      <div className="px-6 py-5 pb-8">
+      <div className="px-6 pt-5" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
         <p className="text-gray-500 text-sm mb-5">Enter a new nonprofit code to re-bind to a different organization.</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
@@ -461,7 +468,7 @@ function AppIconSheet({ show, onClose, brand }) {
 
   return (
     <Sheet show={show} onClose={onClose} title="App Icon">
-      <div className="px-6 py-5 pb-8 space-y-4">
+      <div className="px-6 pt-5 space-y-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
         <div className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background: brand.accentLight }}>
           <span className="text-2xl">⚓</span>
           <div>
@@ -555,7 +562,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
 
   return (
     <Sheet show={show} onClose={() => { onClose(); setResult(null); }} title="Before you go…">
-      <div className="px-6 py-5 pb-8">
+      <div className="px-6 pt-5" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
         {result === 'donated' ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">💚</div>
@@ -649,18 +656,10 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
   );
 }
 
-function formatManualCardNumber(raw) {
-  const digits = raw.replace(/\D/g, '').slice(0, 16);
-  return digits.replace(/(.{4})/g, '$1 ').trim();
-}
-
 function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualName, setManualName] = useState('');
-  const [manualCardNumber, setManualCardNumber] = useState('');
-  const [manualConnecting, setManualConnecting] = useState(false);
 
   function handleSelect(bank) {
     if (connected) return;
@@ -672,30 +671,16 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
     }, 1200);
   }
 
-  function handleManualConnect() {
-    const digits = manualCardNumber.replace(/\D/g, '');
-    if (digits.length < 13) return;
-    setManualConnecting(true);
-    setTimeout(() => {
-      const last4 = digits.slice(-4);
-      setManualConnecting(false);
-      setConnected({ id: 'manual', name: 'My Card', emoji: '💳', last4 });
-      setShowManualForm(false);
-    }, 1000);
-  }
-
   function handleDone() {
     onConnected(connected);
     onClose();
     setConnected(null);
     setConnecting(null);
     setShowManualForm(false);
-    setManualName('');
-    setManualCardNumber('');
   }
 
   return (
-    <Sheet show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); setShowManualForm(false); setManualName(''); setManualCardNumber(''); }} title="Track a Different Card">
+    <Sheet show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); setShowManualForm(false); }} title="Track a Different Card">
       <div className="flex flex-col h-full overflow-hidden" style={{ background: '#f0fdfb' }}>
         <div className="flex-1 px-4 pt-5 pb-2 space-y-2.5 overflow-y-auto">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">
@@ -717,66 +702,15 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
               </div>
             </motion.div>
           ) : showManualForm ? (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 space-y-3"
-              style={{ background: '#fff', border: '1.5px solid #99f6e4' }}
-            >
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Enter card details</p>
-              <div>
-                <label className="text-xs text-gray-400 font-semibold mb-1 block">Cardholder name</label>
-                <input
-                  type="text"
-                  placeholder="Name on card"
-                  value={manualName}
-                  onChange={e => setManualName(e.target.value)}
-                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 font-semibold mb-1 block">Card number</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="XXXX XXXX XXXX XXXX"
-                  value={manualCardNumber}
-                  onChange={e => setManualCardNumber(formatManualCardNumber(e.target.value))}
-                  className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono tracking-wider"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Lock size={12} className="text-gray-400 shrink-0" />
-                <p className="text-gray-400 text-xs">Encrypted via Plaid  -  PocketCache never stores your full card number</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setShowManualForm(false); setManualName(''); setManualCardNumber(''); }}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200"
-                >
-                  Cancel
-                </button>
-                <motion.button
-                  whileTap={manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting ? { scale: 0.97 } : {}}
-                  onClick={handleManualConnect}
-                  disabled={manualCardNumber.replace(/\D/g,'').length < 13 || manualConnecting}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
-                  style={{
-                    background: manualCardNumber.replace(/\D/g,'').length >= 13 && !manualConnecting
-                      ? 'linear-gradient(135deg, #0d9488, #003865)'
-                      : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-                  }}
-                >
-                  {manualConnecting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                        className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white" />
-                      Connecting…
-                    </span>
-                  ) : 'Connect'}
-                </motion.button>
-              </div>
-            </motion.div>
+            /* Shared with Onboarding and the web portal - see ManualCardForm.
+               applyEnteredName stays OFF on purpose: the connected row below
+               shows "My Card ····1234", the last4 rather than the typed
+               cardholder name, and that is deliberate. */
+            <ManualCardForm
+              variant="app"
+              onCancel={() => setShowManualForm(false)}
+              onConnect={card => { setConnected(card); setShowManualForm(false); }}
+            />
           ) : (
             <>
               {TRACKED_CARD_BANKS.map(bank => (
@@ -824,7 +758,12 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
           </div>
         </div>
 
-        <div className="px-4 pb-10 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb' }}>
+        {/* Pinned footer: the CTA has to clear the home indicator, so the old
+            static pb-10 becomes the inset plus breathing room (see lib/safeArea). */}
+        <div
+          className="px-4 pt-3 border-t border-teal-100"
+          style={{ background: '#f0fdfb', paddingBottom: safeBottomAtLeast(24, 12) }}
+        >
           <motion.button
             whileTap={connected ? { scale: 0.97 } : {}}
             onClick={() => connected && handleDone()}
@@ -882,7 +821,7 @@ function ChangePaymentSheet({ show, onClose, brand, onMethodChanged }) {
   return (
     <>
       <Sheet show={show} onClose={() => { onClose(); setSelected(null); setDone(false); setSetting(false); }} title="Change Payment Method">
-        <div className="px-4 pt-5 pb-10 space-y-3">
+        <div className="px-4 pt-5 space-y-3" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
           <p className="text-gray-500 text-sm px-1 pb-1">Charged once a month for your round-ups total.</p>
 
@@ -946,7 +885,7 @@ export default function Settings() {
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
     pendingSettingsAction, clearPendingSettingsAction, showToast,
     monthlyCap, setMonthlyCap,
-    skipNextCharge, setSkipNextCharge,
+    skipNextCharge, setSkipNextCharge, feeMonths,
   } = useApp();
   const brand = useTheme();
 
@@ -988,9 +927,14 @@ export default function Settings() {
   const [showChangePayment, setShowChangePayment] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
 
-  const skipMonthName = new Date().toLocaleDateString('en-US', { month: 'long' });
-  const nextChargeLabel = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 11)
-    .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Dates come from lib/billing, never from local math: during the review
+  // window (days 1-10) the upcoming charge is THIS month's 11th, so a local
+  // `month + 1` made Settings contradict the review alert for ten days a month.
+  const skipMonthName = currentMonthName();
+  const chargeLabel = nextChargeLabel();
+  // What the fee actually becomes once a skipped cycle rolls over: today's
+  // pending feeMonths plus this one. Two skips in a row honestly reads $1 × 3.
+  const rolledFeeMonths = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
 
   useEffect(() => {
     if (pendingSettingsAction === 'change-payment') {
@@ -1003,9 +947,20 @@ export default function Settings() {
   // "Member since" derived from DEMO_USER.joinedAt which is consistent with MONTHLY_DATA start
   const memberSince = DEMO_USER.joinedAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
-  // Download My Data: generates a JSON snapshot of the user's local state
+  // ===== CANONICAL EXPORT SHAPE ==============================================
+  // "Download My Data" is the donor's copy of their own record, and this object
+  // is the canonical shape for BOTH surfaces: the app (here) and the web portal.
+  // Keep them identical - if a field is added on one, add it on the other.
+  //
+  // RULE: donor-meaningful facts only. Never dump raw localStorage keys
+  // (pc_page, pc_last_cycle, pc_seen_milestone, pc_review_ack and friends are
+  // internal plumbing). A privacy feature that hands someone our storage schema
+  // tells them nothing about themselves and everything about our internals.
+  // Card numbers are never in here either - only brand and last4 ever exist
+  // client-side, by design (see lib/manualCard.js).
   function handleDownloadData() {
     const data = {
+      exportedAt: new Date().toISOString(),
       user: {
         name: DEMO_USER.name,
         email: DEMO_USER.email,
@@ -1014,11 +969,25 @@ export default function Settings() {
       cause: selectedNonprofit
         ? { id: selectedNonprofit.id, name: selectedNonprofit.name, ein: selectedNonprofit.ein }
         : null,
-      totalDonated,
+      giving: {
+        totalDonated,
+        pendingThisMonth: pendingRoundUps,
+        roundUpMultiplier,
+        monthlyCap,
+        skippingCurrentMonth: skipNextCharge,
+        skippedMonth: skipNextCharge ? skipMonthName : null,
+        appFeeMonthsPending: feeMonths,
+        nextChargeDate: chargeLabel,
+      },
       monthlyHistory: MONTHLY_DATA.map(m => ({ month: m.month, year: m.year, donated: m.donated })),
+      trackedCard: trackedCard
+        ? { name: trackedCard.name, brand: trackedCard.brand, last4: trackedCard.last4, institution: trackedCard.institution }
+        : null,
+      paymentMethod: paymentMethod
+        ? { type: paymentMethod.type, label: paymentMethod.label, last4: paymentMethod.last4 ?? null }
+        : null,
       linkedCards: linkedCards.map(c => ({ brand: c.brand, last4: c.last4 })),
-      preferences: prefs,
-      exportedAt: new Date().toISOString(),
+      preferences: { ...prefs, accountEmailsAndNonprofitUpdates: commsOptin },
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1047,7 +1016,13 @@ export default function Settings() {
         </div>
       </motion.div>
 
-      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
+      {/* pb-28 (112px) cleared the tab bar before the tab bar consumed
+          --pc-safe-bottom. It now grows with the home-indicator inset, so this
+          padding has to grow with it (see lib/safeArea). */}
+      <div
+        className="flex-1 scrollable pc-scrollbar px-4 space-y-4 pt-4"
+        style={{ paddingBottom: safeBottomAtLeast(112, 106) }}
+      >
 
         {/* Profile card  -  name/email from DEMO_USER; joinedAt from MONTHLY_DATA start */}
         <motion.div
@@ -1091,7 +1066,7 @@ export default function Settings() {
             icon={<SkipForward size={18} />}
             label="Skip a month"
             sub={skipNextCharge
-              ? `${skipMonthName} skipped - only the $1 fee rolls over ($1 x 2)`
+              ? `${skipMonthName} skipped - nothing on ${chargeLabel}; only the $1 fee rolls forward ($1 × ${rolledFeeMonths})`
               : `Need a breather? Skip ${skipMonthName}'s charge`}
             color={brand.secondary}
             right={skipNextCharge ? (
@@ -1352,7 +1327,7 @@ export default function Settings() {
 
       {/* Multiplier sheet */}
       <Sheet show={showMultiplier} onClose={() => setShowMultiplier(false)} title="Round-Up Multiplier">
-        <div className="px-6 py-4 pb-8">
+        <div className="px-6 pt-4" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
           <p className="text-gray-500 text-sm mb-5">Multiply your round-ups to give more with every purchase.</p>
           <div className="space-y-3">
             {MULTIPLIER_OPTIONS.map((opt) => (
@@ -1453,7 +1428,8 @@ export default function Settings() {
         show={showSkipConfirm}
         onClose={() => setShowSkipConfirm(false)}
         monthName={skipMonthName}
-        nextChargeLabel={nextChargeLabel}
+        chargeLabel={chargeLabel}
+        feeMultiplier={rolledFeeMonths}
         brand={brand}
       />
     </div>

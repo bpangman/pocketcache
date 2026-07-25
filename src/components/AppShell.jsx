@@ -59,7 +59,8 @@ export default function AppShell() {
 
       {/* Profile / Account sheet — shared by all donor tabs */}
       <Sheet show={showProfile} onClose={() => setShowProfile(false)} title="Your Account">
-        <div className="px-6 pt-2 pb-8 space-y-1">
+        {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+        <div className="px-6 pt-2 space-y-1">
           {/* Avatar + name block */}
           <div className="flex flex-col items-center py-6 gap-2">
             <div

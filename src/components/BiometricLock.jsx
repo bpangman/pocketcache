@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import CoinMark from './CoinMark';
+import { safeBottomAtLeast } from '../lib/safeArea';
+import { Z, scrim, centered } from '../lib/overlay';
 import {
   biometricSupported, biometricEnrolled, biometricEnroll, biometricVerify,
   sessionUnlocked, markSessionUnlocked, offerDismissed, dismissOffer,
@@ -79,7 +81,10 @@ export function AppLockScreen({ gate }) {
       style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)' }}
     >
       <LockBody gate={gate} name={hasAccount?.name} dark />
-      <p style={{ position: 'absolute', bottom: 28, margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 5 }}>
+      {/* bottom: 28 was a pixel guess that put this tagline under the home
+          indicator on every notched iPhone - and this screen shows on every
+          locked launch. Same floor pattern as App.jsx's toast. */}
+      <p style={{ position: 'absolute', bottom: safeBottomAtLeast(28, 8), margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 5 }}>
         <CoinMark size={13} /> PocketCache
       </p>
     </div>
@@ -159,10 +164,12 @@ export function BiometricOfferCard({ offer, surface = 'web' }) {
     </>
   );
 
+  // Both surfaces are the same gate, so both use scrim('blocking') + the same
+  // z step. `fixed` and the card chrome are the only differences.
   if (surface === 'app') {
     // Overlay card inside the phone frame
     return (
-      <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(11,42,74,0.55)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ ...scrim('blocking'), ...centered(20), zIndex: Z.blockingScrim }}>
         <div style={{ background: '#fff', borderRadius: 24, padding: 24, width: '100%', maxWidth: 340, textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
           {inner}
         </div>
@@ -171,7 +178,7 @@ export function BiometricOfferCard({ offer, surface = 'web' }) {
   }
   // Web modal
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(11,42,74,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div style={{ ...scrim('blocking', { fixed: true }), ...centered(16), zIndex: Z.blockingScrim }}>
       <div style={{ background: '#fff', borderRadius: 20, padding: 24, width: 400, maxWidth: '100%', textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.25)' }}>
         {inner}
       </div>

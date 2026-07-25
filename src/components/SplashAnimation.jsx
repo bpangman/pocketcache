@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { motion, useAnimate } from 'framer-motion';
+import { motion, useAnimate } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import CoinMark from './CoinMark';
+import { Z } from '../lib/overlay';
 
 // Coin diameter for the splash (app-coordinate px, inside the 390px layout)
 const COIN_D = 80;
@@ -100,7 +101,7 @@ export default function SplashAnimation({ onDone }) {
           position: 'absolute',
           inset: 0,
           background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
-          zIndex: 100,
+          zIndex: Z.splash,
           pointerEvents: 'none',
         }}
       />
@@ -114,7 +115,7 @@ export default function SplashAnimation({ onDone }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 101,
+          zIndex: Z.splashMark,
           pointerEvents: 'none',
           perspective: 600,
         }}

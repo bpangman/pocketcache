@@ -19,7 +19,8 @@ export default function VolunteerSheet({ show, onClose, nonprofit, brand }) {
 
   return (
     <Sheet show={show} onClose={handleClose} title="Volunteer Opportunities">
-      <div className="px-6 py-5 pb-8">
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-5">
         {submitted ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">&#128588;</div>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
 import { isNative } from './AppDownloadQRModal';
+import { Z, scrim } from '../lib/overlay';
 
 export default function WebPortalLinkModal({ show, onDismiss }) {
   const [copied, setCopied] = useState(false);
@@ -34,7 +35,7 @@ export default function WebPortalLinkModal({ show, onDismiss }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }}
+            style={{ ...scrim('dim'), zIndex: Z.modalScrim }}
             onClick={onDismiss}
           />
           <motion.div
@@ -47,7 +48,7 @@ export default function WebPortalLinkModal({ show, onDismiss }) {
               position: 'absolute',
               top: '50%',
               left: '50%',
-              zIndex: 51,
+              zIndex: Z.modal,
               background: '#fff',
               borderRadius: 24,
               padding: '28px 24px 24px',

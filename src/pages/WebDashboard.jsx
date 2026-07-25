@@ -5,9 +5,10 @@ import { DEMO_USER, avgPerMonth, momChange, sinceLabel, monthsGiving } from '../
 import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
-import { WebMyCause, WebShare, WebSettings, GiveExtraModal } from './WebPortalPages';
+import { WebMyCause, WebShare, WebSettings, GiveExtraModal, AdjustChargeModal } from './WebPortalPages';
 import { useBiometricOffer, BiometricOfferCard } from '../components/BiometricLock';
 import ChargeReviewAlert from '../components/ChargeReviewAlert';
+import { effectiveCharge, chargeTotal, nextChargeDate, nextChargeLabel } from '../lib/billing';
 
 // ─── The browser-native donor portal ─────────────────────────────────────────
 // This is PocketCache as if it had been built as a web product: top nav, wide
@@ -32,15 +33,16 @@ function fmtMoney(n) {
 // emailed to the donor) and the charge runs on the 11th  -  10 full days'
 // review notice (classic Reg E timing; Nathan asked whether range-based
 // consent lets us move back to the 5th).
-function nextChargeLabel() {
-  const now = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return `${next.toLocaleString('en-US', { month: 'short' })} 11`;
-}
-function lockLabel() {
-  const now = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return `${next.toLocaleString('en-US', { month: 'short' })} 1`;
+//
+// The dates and the amounts both come from lib/billing now. The old local
+// helpers computed `new Date(y, m + 1, 1)` and always named NEXT month's 11th,
+// which is wrong for days 1 to 10 of every month: during the review window the
+// upcoming charge is THIS month's 11th, and the app said so while the web portal
+// pointed a month further out. `lockLabel` is derived from the same charge date
+// so the pair can never disagree again.
+function lockLabel(now = new Date()) {
+  const charge = nextChargeDate(now);
+  return `${charge.toLocaleString('en-US', { month: 'short' })} 1`;
 }
 
 function fmtDay(iso) {
@@ -255,9 +257,23 @@ function MatchCard({ match }) {
   );
 }
 
-function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra, skipped }) {
+// The upcoming-charge card. Every figure here goes through lib/billing so the
+// web portal and the app cannot disagree: before this, the web ignored
+// `monthlyCap` and `chargeAdjustment` entirely, so a donor with a $10 cap and
+// $22 of round-ups saw $10 in the app and $22 in the browser from the same
+// stored state.
+function EstimateCard({
+  pending, feeMonths, paymentMethod, npShort, onGiveExtra, skipped,
+  monthlyCap, chargeAdjustment, onAdjust, monthlyMinimum,
+}) {
   const fee = feeMonths;
-  const total = pending + fee;
+  const roundUps = effectiveCharge({ pendingRoundUps: pending, monthlyCap, chargeAdjustment });
+  const total = chargeTotal({ pendingRoundUps: pending, monthlyCap, chargeAdjustment, feeMonths });
+  const capActive = monthlyCap !== null && monthlyCap !== undefined && pending > monthlyCap;
+  const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
+  // Same gate as the app Dashboard (~478): under the nonprofit's monthly minimum
+  // the month rolls forward instead of charging, so there is nothing to adjust.
+  const belowMinimum = pending < monthlyMinimum;
   const row = { display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '5px 0' };
   return (
     <div style={{ ...CARD, padding: 20 }}>
@@ -270,18 +286,48 @@ function EstimateCard({ pending, feeMonths, paymentMethod, npShort, onGiveExtra,
         </p>
       )}
       <div style={{ marginTop: 8 }}>
-        <div style={row}><span style={{ color: INK.secondary }}>Round-ups so far</span><span style={{ color: INK.primary, fontWeight: 600 }}>${fmtMoney(pending)}</span></div>
+        <div style={row}>
+          <span style={{ color: INK.secondary }}>Round-ups so far</span>
+          <span style={{ color: INK.primary, fontWeight: 600 }} data-testid="estimate-roundups">
+            {roundUps !== pending
+              ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${fmtMoney(pending)}</s> ${fmtMoney(roundUps)}</>
+              : `$${fmtMoney(pending)}`}
+          </span>
+        </div>
         <div style={row}><span style={{ color: INK.secondary }}>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span style={{ color: INK.secondary }}>+${fmtMoney(fee)}</span></div>
         <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
-        <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }}>≈ ${fmtMoney(total)}</span></div>
+        <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }} data-testid="estimate-total">≈ ${fmtMoney(total)}</span></div>
       </div>
+      {/* Cap / adjustment notes  -  same precedence and wording as the app Dashboard */}
+      {!skipped && capActive && !adjusted && (
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#b45309' }}>
+          Capped at ${fmtMoney(monthlyCap)}  -  the rest won&apos;t be charged.
+        </p>
+      )}
+      {!skipped && adjusted && (
+        <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 600, color: '#059669' }} data-testid="estimate-adjusted">
+          Adjusted to ${fmtMoney(chargeAdjustment)} for this month.
+        </p>
+      )}
       <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }}>
         Round-ups accrue through the last day of the month; the exact amount is emailed to you
         on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 11th. Demo data  -  no real charge is made.
       </p>
+      {/* Always available, exactly like the app's Dashboard button. The shared
+          ChargeReviewAlert only offers this on days 1 to 10 and only until it is
+          acknowledged, which left web donors with no way to adjust at all. */}
+      {!skipped && !belowMinimum && (
+        <button
+          onClick={onAdjust}
+          data-testid="adjust-charge-button"
+          style={{ width: '100%', marginTop: 12, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
+        >
+          Adjust this charge →
+        </button>
+      )}
       <button
         onClick={onGiveExtra}
-        style={{ width: '100%', marginTop: 14, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
+        style={{ width: '100%', marginTop: 8, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
       >
         💚 Give a little extra…
       </button>
@@ -302,12 +348,17 @@ export default function WebDashboard() {
   const {
     selectedNonprofit, totalDonated, pendingRoundUps, skipNextCharge,
     feeMonths, paymentMethod, signOut, adminRole, setPage, setLastMode, hasAccount,
+    monthlyCap, chargeAdjustment, setChargeAdjustment,
   } = useApp();
   const brand = useTheme();
   const [navTab, setNavTab] = useState('overview');
   const [menuOpen, setMenuOpen] = useState(false);
   const [giveExtra, setGiveExtra] = useState(false);
+  const [adjustCharge, setAdjustCharge] = useState(false);
   const bioOffer = useBiometricOffer();
+
+  // One number for "what will actually be charged", from lib/billing.
+  const upcomingCharge = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths });
 
   const org = selectedNonprofit;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
@@ -321,9 +372,20 @@ export default function WebDashboard() {
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb' }} onClick={() => menuOpen && setMenuOpen(false)}>
       <GiveExtraModal show={giveExtra} onClose={() => setGiveExtra(false)} />
+      <AdjustChargeModal
+        show={adjustCharge}
+        onClose={() => setAdjustCharge(false)}
+        pendingRoundUps={pendingRoundUps}
+        chargeAdjustment={chargeAdjustment}
+        setChargeAdjustment={setChargeAdjustment}
+        monthlyCap={monthlyCap}
+      />
       <BiometricOfferCard offer={bioOffer} surface="web" />
       <ChargeReviewAlert surface="web" />
-      {/* ── Top nav ── */}
+      {/* ── Top nav ──
+          zIndex 30/40 here are PAGE CHROME (sticky header, account dropdown),
+          not overlays: lib/overlay.js's Z scale starts at the sheet/modal layer
+          and every scrim in this portal sits above both. Nothing to convert. */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -415,7 +477,7 @@ export default function WebDashboard() {
                 value={skipNextCharge ? 'Skipped' : nextChargeLabel()}
                 sub={skipNextCharge
                   ? "Skipped  -  round-ups won't be charged; only the $1 fee rolls to next month ($1 × 2)"
-                  : `≈ $${fmtMoney(pendingRoundUps + feeMonths)} incl. $1 fee · exact amount locks ${lockLabel()}`}
+                  : `≈ $${fmtMoney(upcomingCharge)} incl. $1 fee · exact amount locks ${lockLabel()}`}
               />
             </div>
 
@@ -456,6 +518,10 @@ export default function WebDashboard() {
                   npShort={npShort}
                   onGiveExtra={() => setGiveExtra(true)}
                   skipped={skipNextCharge}
+                  monthlyCap={monthlyCap}
+                  chargeAdjustment={chargeAdjustment}
+                  onAdjust={() => setAdjustCharge(true)}
+                  monthlyMinimum={org?.monthlyMinimum ?? 5}
                 />
               </div>
             </div>
