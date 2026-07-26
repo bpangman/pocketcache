@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import Logo from '../components/Logo';
+import OrgLogo from '../components/OrgLogo';
 import { monthsGiving, DEMO_USER } from '../data/derived';
+import { fmtMoney } from '../lib/format';
 
 export default function Share() {
   const { selectedNonprofit, totalDonated } = useApp();
@@ -93,7 +95,9 @@ export default function Share() {
                 <span className="font-bold text-white">{brand.appName}</span>
               </div>
               <p className="text-white/80 text-sm mb-2">I&apos;ve donated</p>
-              <p className="text-5xl font-bold">${totalDonated.toFixed(2)}</p>
+              {/* fmtMoney, not toFixed(2): this card gets screenshotted, and above
+                  $999 toFixed rendered "1234.56" while Home read "1,234.56". */}
+              <p className="text-5xl font-bold">${fmtMoney(totalDonated)}</p>
               <p className="text-white/80 text-sm mt-2">to {selectedNonprofit.name}</p>
               {/* Streak badge  -  monthsGiving derived from data, not hardcoded */}
               <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
@@ -106,7 +110,8 @@ export default function Share() {
             </div>
           </div>
           <div className="bg-white px-5 py-3 flex items-center gap-2">
-            <span className="text-2xl">{selectedNonprofit.logo}</span>
+            {/* The real org logo, like every other screen  -  not the raw emoji */}
+            <OrgLogo nonprofit={selectedNonprofit} size={7} rounded="lg" />
             <p className="text-gray-500 text-xs flex-1">Spare change from every purchase  -  it adds up. 💙</p>
           </div>
         </motion.div>

@@ -1,8 +1,14 @@
 // Generate a date string N days before today (YYYY-MM-DD)
+// LOCAL date, not UTC. `toISOString()` shifts to UTC, so anywhere west of
+// Greenwich an evening render pushed the date forward a day and daysAgo(0)
+// produced TOMORROW - the Activity ledger showed a future-dated group sitting
+// above "Today".
 function daysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
 // ~12 transactions spread over the last ~10 days so that Activity shows

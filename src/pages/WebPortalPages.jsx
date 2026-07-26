@@ -6,11 +6,16 @@ import { findOrgByCode, resolveAdminOrgByEmail } from '../store/orgStore';
 import { DEMO_USER, monthsGiving } from '../data/derived';
 import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
-import { fmtMoneyCompact } from '../lib/format';
+import { fmtMoney, fmtMoneyCompact } from '../lib/format';
 import {
-  LARGE_DONATION_THRESHOLD, MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal,
-  currentMonthName, effectiveCharge, nextChargeLabel,
+  CHARGE_DAY, LARGE_DONATION_THRESHOLD, MAX_FEE_MONTHS, REVIEW_WINDOW_LAST_DAY,
+  chargeAfterNextLabel, chargeTotal, currentMonthName, effectiveCharge, nextChargeLabel,
 } from '../lib/billing';
+// Shared donor-facing derivations. `impactTier` used to be a verbatim duplicate of
+// MyCause.jsx's copy in this file; `billingExplainer` is now the product's only
+// billing explanation and Settings is its only home; `adjustBounds` is the one set
+// of bounds for the adjust-charge control.
+import { adjustBounds, billingExplainer, impactTier, matchProgress } from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
 import { generateOneTimeCode } from '../lib/npSignup';
 import OrgLogo from '../components/OrgLogo';
@@ -68,8 +73,6 @@ function loadPrefs() {
     ...loadKey('pc_prefs', {}),
   };
 }
-
-function fmt2(n) { return Number(n).toFixed(2); }
 
 // ─── Shared web UI pieces ────────────────────────────────────────────────────
 
@@ -378,7 +381,7 @@ export function GiveExtraModal({ show, onClose }) {
             <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                 <span style={{ color: INK.secondary }}>Gift to {npShort}</span>
-                <span style={{ fontWeight: 700, color: INK.primary }}>${fmt2(amount)}</span>
+                <span style={{ fontWeight: 700, color: INK.primary }}>${fmtMoney(amount)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
                 <span>App fee (required)</span><span>$1.00</span>
@@ -386,12 +389,12 @@ export function GiveExtraModal({ show, onClose }) {
               <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0 2px', cursor: 'pointer', color: INK.muted, fontSize: 12.5 }}
                 onClick={() => setCoverProcessing(v => !v)}>
                 <input type="checkbox" readOnly checked={coverProcessing} style={{ marginTop: 2, accentColor: '#059669' }} />
-                <span>Cover {npShort}&apos;s card processing (~${fmt2(processingFee)})  -  goes to them, counts as part of your gift</span>
+                <span>Cover {npShort}&apos;s card processing (~${fmtMoney(processingFee)})  -  goes to them, counts as part of your gift</span>
               </label>
               <div style={{ height: 1, background: '#e5e7eb', margin: '8px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, color: INK.primary }}>Total today</span>
-                <span style={{ fontWeight: 800, color: NAVY }}>${fmt2(total)}</span>
+                <span style={{ fontWeight: 800, color: NAVY }}>${fmtMoney(total)}</span>
               </div>
             </div>
           )}
@@ -403,17 +406,17 @@ export function GiveExtraModal({ show, onClose }) {
         <>
           <div style={{ textAlign: 'center', padding: '8px 0 14px' }}>
             <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>You&apos;re about to give</p>
-            <p style={{ margin: '6px 0', fontSize: 34, fontWeight: 800, color: NAVY }}>${fmt2(amount)}</p>
+            <p style={{ margin: '6px 0', fontSize: 34, fontWeight: 800, color: NAVY }}>${fmtMoney(amount)}</p>
             <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>
               to <strong style={{ color: INK.primary }}>{selectedNonprofit?.name ?? npShort}</strong>
             </p>
           </div>
           <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 12.5, color: INK.secondary, lineHeight: 1.6 }}>
-            Total charge today: <strong style={{ color: INK.primary }}>${fmt2(total)}</strong>  -  your ${fmt2(amount)} gift, the $1 app fee{coverProcessing ? `, and ~$${fmt2(processingFee)} processing cover (goes to ${npShort})` : ''}.
+            Total charge today: <strong style={{ color: INK.primary }}>${fmtMoney(total)}</strong>  -  your ${fmtMoney(amount)} gift, the $1 app fee{coverProcessing ? `, and ~$${fmtMoney(processingFee)} processing cover (goes to ${npShort})` : ''}.
             Charged to your saved payment method. {npShort} sends your receipt. <em>Demo  -  no real charge is made.</em>
           </div>
           <div style={{ display: 'grid', gap: 8 }}>
-            <ActionButton onClick={confirm}>Confirm  -  give ${fmt2(amount)}</ActionButton>
+            <ActionButton onClick={confirm}>Confirm  -  give ${fmtMoney(amount)}</ActionButton>
             <ActionButton tone="quiet" onClick={() => setStep('amount')}>← Go back</ActionButton>
           </div>
         </>
@@ -423,10 +426,10 @@ export function GiveExtraModal({ show, onClose }) {
         <div data-testid="web-give-extra-large-confirm" style={{ background: '#fffbeb', border: '2px solid #fde68a', borderRadius: 16, padding: 18 }}>
           <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 16, color: '#78350f' }}>Just to confirm…</p>
           <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: '#92400e' }}>
-            You&apos;re about to donate <strong>${fmt2(amount)}</strong> to {npShort}. Was that intentional?
+            You&apos;re about to donate <strong>${fmtMoney(amount)}</strong> to {npShort}. Was that intentional?
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
-            <ActionButton onClick={confirmLarge}>Yes, give ${fmt2(amount)}</ActionButton>
+            <ActionButton onClick={confirmLarge}>Yes, give ${fmtMoney(amount)}</ActionButton>
             <ActionButton tone="quiet" onClick={() => setStep('amount')}>Go back</ActionButton>
           </div>
         </div>
@@ -437,7 +440,7 @@ export function GiveExtraModal({ show, onClose }) {
           <div style={{ fontSize: 44, marginBottom: 8 }}>💚</div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Thank you!</p>
           <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>
-            Your extra ${fmt2(amount)} is on its way to {npShort}.
+            Your extra ${fmtMoney(amount)} is on its way to {npShort}.
           </p>
           <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
         </div>
@@ -528,8 +531,13 @@ export function CapControl({ value, onChange, subtle = false }) {
  * (src/pages/Dashboard.jsx:119-172), reachable any time from the web
  * dashboard's estimate card.
  *
- * Rules copied from the app sheet, deliberately including its limits:
- *   - slider runs $1.00 to this month's accrued round-ups, step $0.01
+ * Rules copied from the app sheet:
+ *   - bounds come from `adjustBounds(accrued)` in lib/donorContent: $0 to this
+ *     month's accrued round-ups, step $0.01. There were TWO sliders driving the
+ *     same `chargeAdjustment` with different rules - this one started at $1.00 in
+ *     $0.01 steps while the review alert started at $0 in $0.25 steps, so a donor
+ *     could set $0.00 from the alert but not from here, and $4.63 from here but
+ *     only $4.50 from the alert. One helper now answers for both.
  *   - it opens at the existing adjustment, else the full accrued amount
  *   - the max is the ACCRUED total, not the monthly cap: an explicit
  *     adjustment outranks the cap (see lib/billing.js effectiveCharge), so a
@@ -550,6 +558,7 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
   }, [show, chargeAdjustment, accrued]);
 
   const capped = monthlyCap !== null && monthlyCap !== undefined && accrued > monthlyCap;
+  const bounds = adjustBounds(accrued);
 
   return (
     <Modal show={show} onClose={onClose} title="Adjust This Month's Charge">
@@ -557,17 +566,17 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
         One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
       </p>
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
-        <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: INK.primary }} data-testid="web-adjust-charge-value">${fmt2(value)}</p>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: INK.muted }}>of ${fmt2(accrued)} accrued this month</p>
+        <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: INK.primary }} data-testid="web-adjust-charge-value">${fmtMoney(value)}</p>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: INK.muted }}>of ${fmtMoney(accrued)} accrued this month</p>
       </div>
       <input
-        type="range" min={1} max={accrued} step={0.01} value={value}
+        type="range" min={bounds.min} max={bounds.max} step={bounds.step} value={value}
         onChange={e => setValue(parseFloat(e.target.value))}
         aria-label="This month's charge"
         style={{ width: '100%', accentColor: '#0D9488' }}
       />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: INK.muted, marginBottom: 14 }}>
-        <span>$1.00</span><span>${fmt2(accrued)}</span>
+        <span>${fmtMoney(bounds.min)}</span><span>${fmtMoney(bounds.max)}</span>
       </div>
       {capped && (
         <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.55, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
@@ -575,7 +584,7 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
         </p>
       )}
       <div style={{ display: 'grid', gap: 8 }}>
-        <ActionButton onClick={() => { setChargeAdjustment(value); onClose(); }}>Set Charge to ${fmt2(value)}</ActionButton>
+        <ActionButton onClick={() => { setChargeAdjustment(value); onClose(); }}>Set Charge to ${fmtMoney(value)}</ActionButton>
         {chargeAdjustment !== null && chargeAdjustment !== undefined && (
           <ActionButton tone="quiet" onClick={() => { setChargeAdjustment(null); onClose(); }}>Reset to full amount</ActionButton>
         )}
@@ -585,12 +594,10 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
 }
 
 // ─── My Cause (web) ──────────────────────────────────────────────────────────
-function impactTier(total) {
-  if (total >= 100) return 'About $100 could support roughly a month of after-school programming for one Club member  -  an example equivalency provided by the nonprofit.';
-  if (total >= 60) return 'About $60 might cover approximately 2 weeks of after-school snacks for a Club member  -  example equivalency.';
-  if (total >= 25) return 'About $25 could fund art and sports supplies for a Club session  -  example equivalency.';
-  return 'Every dollar helps fund safe, staffed after-school spaces for young people in their community.';
-}
+// `impactTier` lived here as a near-duplicate of MyCause.jsx's copy - same four
+// tiers, subtly different sentences, so the same donor read a different
+// equivalency on the phone and in the browser. It is now imported from
+// lib/donorContent and there is exactly one wording.
 
 function InvolvementModal({ kind, show, onClose, npShort }) {
   const [fields, setFields] = useState({});
@@ -681,10 +688,70 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
   );
 }
 
+/**
+ * WebMatchDetailsModal - the web twin of the app's MatchDetailsSheet
+ * (src/components/sheets/MatchDetailsSheet.jsx). The portal had NO drill-in at
+ * all: a web donor could see that a match existed and never read the impact
+ * report or the pool figures the app donor gets one tap away.
+ *
+ * Every number and every sentence about the match comes from `matchProgress()`,
+ * so this modal cannot drift from the app sheet or from Overview's match line.
+ */
+function WebMatchDetailsModal({ show, onClose, match }) {
+  if (!match?.active) return null;
+  const mp = matchProgress(match);
+  const company = match.companyShort ?? match.company;
+  return (
+    <Modal show={show} onClose={onClose} title={`${company} Match`} width={520}>
+      <div data-testid="web-match-details">
+        {match.sample && (
+          <p style={{ margin: '0 0 12px' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>
+              Example partnership  -  demo only
+            </span>
+          </p>
+        )}
+        {match.logoUrl && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <span style={{ width: 48, height: 48, borderRadius: '50%', background: '#fff', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <img src={match.logoUrl} alt={company} style={{ height: 30, objectFit: 'contain' }} />
+            </span>
+            <span>
+              <span style={{ display: 'block', fontWeight: 800, fontSize: 15, color: INK.primary }}>{match.company}</span>
+              <span style={{ display: 'block', fontSize: 12.5, color: INK.muted }}>Corporate Match Partner</span>
+            </span>
+          </div>
+        )}
+        <p style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, lineHeight: 1.6, color: INK.primary }}>{mp.headline}</p>
+        {match.impactReport && (
+          <p style={{ margin: '0 0 14px', fontSize: 13, lineHeight: 1.7, color: INK.secondary }}>{match.impactReport}</p>
+        )}
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 14, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>Match Pool Progress</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#b45309' }}>{mp.matchedLabel} / {mp.poolLabel}</span>
+          </div>
+          <div style={{ background: '#fef3c7', borderRadius: 999, height: 8, overflow: 'hidden' }}>
+            <div style={{ width: `${mp.pct}%`, height: '100%', background: '#D97706', borderRadius: 999 }} />
+          </div>
+          <p style={{ margin: '7px 0 0', fontSize: 12, color: '#b45309' }} data-testid="web-match-progress">{mp.progressLabel}</p>
+        </div>
+        {match.impactUrl && (
+          <a href={match.impactUrl} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 13, fontWeight: 600, color: '#b45309', textDecoration: 'none' }}>
+            {mp.impactLinkLabel} ↗
+          </a>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export function WebMyCause() {
   const { selectedNonprofit, totalDonated } = useApp();
   const [orgStats, setOrgStats] = useState(null);
   const [giveExtra, setGiveExtra] = useState(false);
+  const [matchDetails, setMatchDetails] = useState(false);
   const [involve, setInvolve] = useState(null); // 'volunteer' | 'suggest' | 'sponsor'
   const np = selectedNonprofit;
 
@@ -705,6 +772,7 @@ export function WebMyCause() {
     <>
       <GiveExtraModal show={giveExtra} onClose={() => setGiveExtra(false)} />
       <InvolvementModal kind={involve} show={!!involve} onClose={() => setInvolve(null)} npShort={npShort} />
+      <WebMatchDetailsModal show={matchDetails} onClose={() => setMatchDetails(false)} match={match} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
         <OrgLogo nonprofit={np} size={14} rounded="2xl" />
@@ -727,7 +795,9 @@ export function WebMyCause() {
             </div>
           )}
           <SectionCard label="Your impact">
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.7, color: INK.secondary }}>{impactTier(totalDonated)}</p>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.7, color: INK.secondary }} data-testid="web-impact-tier">
+              {impactTier(totalDonated, npShort)}
+            </p>
           </SectionCard>
           {stats.length > 0 && (
             <div>
@@ -756,7 +826,13 @@ export function WebMyCause() {
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>Example partnership  -  demo</span>
                 </p>
               )}
-              <MatchBadge match={match} />
+              {/* The match display is the SHARED MatchBadge component, the same one
+                  the app's My Cause renders, so every sentence and figure is
+                  literally the same code on both surfaces - including its
+                  `onDetails` drill-in row, which opens the web twin of the app's
+                  MatchDetailsSheet below. Overview's compact line reads the same
+                  `matchProgress()` headline. */}
+              <MatchBadge match={match} onDetails={() => setMatchDetails(true)} />
             </div>
           )}
           <SectionCard label="Get more involved">
@@ -808,7 +884,7 @@ export function WebShare() {
               <span style={{ fontWeight: 800 }}>{brand.appName}</span>
             </div>
             <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>I&apos;ve donated</p>
-            <p style={{ margin: '4px 0', fontSize: 40, fontWeight: 800 }}>${totalDonated.toFixed(2)}</p>
+            <p style={{ margin: '4px 0', fontSize: 40, fontWeight: 800 }} data-testid="web-share-total">${fmtMoney(totalDonated)}</p>
             <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>to {np.name}</p>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, background: 'rgba(255,255,255,0.18)', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600 }}>
               🔥 {monthsGiving}-month giving streak
@@ -942,13 +1018,28 @@ export function WebSettings() {
   const np = selectedNonprofit;
   const npShort = np?.shortName ?? 'your nonprofit';
   const memberSince = DEMO_USER.joinedAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  // THE billing explanation, from lib/donorContent. Settings is its only home in
+  // the product now (the app's Settings renders the same paragraphs). The portal
+  // previously had none at all, so a web donor's only account of how billing works
+  // was a schedule sentence buried in Overview's estimate card. The minimum uses
+  // the same `?? 5` fallback every other caller uses, and the dates come from
+  // lib/billing rather than literals.
+  const billingParagraphs = billingExplainer({
+    orgShort: npShort,
+    minimum: np?.monthlyMinimum ?? 5,
+    chargeDay: CHARGE_DAY,
+    reviewDays: REVIEW_WINDOW_LAST_DAY,
+  });
 
   return (
     <>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Settings</h1>
-        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>
-          {hasAccount?.name ?? DEMO_USER.name} · {hasAccount?.email ?? DEMO_USER.email} · Member since {memberSince} · ${totalDonated.toFixed(2)} donated
+        {/* Identity only. The lifetime "$61.05 donated" used to ride along here;
+            Overview's hero owns that figure and a settings header is not where a
+            donor looks for it. */}
+        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }} data-testid="web-settings-identity">
+          {hasAccount?.name ?? DEMO_USER.name} · {hasAccount?.email ?? DEMO_USER.email} · Member since {memberSince}
         </p>
       </div>
 
@@ -1017,7 +1108,7 @@ export function WebSettings() {
 
           <SectionCard label="How you pay">
             <Row label={paymentMethod?.label ?? 'Credit or Debit Card'}
-              sub={paymentMethod?.last4 ? `····${paymentMethod.last4} · One monthly charge from ${npShort}` : `One monthly charge from ${npShort}`}
+              sub={paymentMethod?.last4 ? `•••• ${paymentMethod.last4} · One monthly charge from ${npShort}` : `One monthly charge from ${npShort}`}
               right={<span style={{ fontSize: 18 }}>{{ ach: '🏦', apple_pay: '🍎', card: '💳' }[paymentMethod?.type] ?? '💳'}</span>} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Change payment method" sub="Bank account, Apple Pay, or card" onPress={() => setModal('payment')}
@@ -1047,13 +1138,29 @@ export function WebSettings() {
               right={<span style={{ color: INK.muted }}>›</span>} />
           </SectionCard>
 
+          {/* THE billing explainer, and the only one in the product. Rendered as a
+              plain card with hairlines between the paragraphs (the app renders the
+              same array the same way) rather than as an amber alert: this is
+              reference material a donor reads once, not a warning. The old copy
+              elsewhere told donors to use "your toggle" for a processing-cover
+              control that exists only inside the Give Extra and Cancel sheets  -
+              this copy does not, so do not reintroduce it. */}
+          <SectionCard label="How billing works">
+            <div data-testid="web-billing-explainer">
+              {billingParagraphs.map((para, i) => (
+                <div key={i}>
+                  {i > 0 && <div style={{ height: 1, background: '#f1f5f9' }} />}
+                  <p style={{ margin: 0, padding: '9px 0', fontSize: 12.5, lineHeight: 1.65, color: INK.secondary }}>{para}</p>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* Terms and Privacy are in the global portal footer on every view, so the
+              duplicate rows that used to sit here are gone: one home per surface. */}
           <SectionCard label="Help & support">
             <Row label="Contact support" sub="support@pocketcache.app · we reply within 2 business days"
               onPress={() => window.open('mailto:support@pocketcache.app')} right={<span style={{ color: INK.muted }}>↗</span>} />
-            <div style={{ height: 1, background: '#f1f5f9' }} />
-            <Row label="Terms of Service" onPress={() => window.open('/legal/terms/', '_blank')} right={<span style={{ color: INK.muted }}>↗</span>} />
-            <div style={{ height: 1, background: '#f1f5f9' }} />
-            <Row label="Privacy Policy" onPress={() => window.open('/legal/privacy/', '_blank')} right={<span style={{ color: INK.muted }}>↗</span>} />
           </SectionCard>
 
           <SectionCard label="Subscription">
@@ -1064,6 +1171,16 @@ export function WebSettings() {
           </SectionCard>
         </div>
       </div>
+
+      {/* Version line. The app prints "PocketCache · v1.0.0" at the bottom of its
+          Settings tab and in the Your Account sheet; the portal printed no version
+          anywhere, so a web donor reporting a bug had nothing to quote. */}
+      <p
+        data-testid="web-settings-version"
+        style={{ margin: '24px 0 0', textAlign: 'center', fontSize: 12, color: INK.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+      >
+        <CoinMark size={14} />PocketCache · v1.0.0
+      </p>
 
       {/* ── Modals ── */}
       <TrackCardModal
@@ -1443,7 +1560,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
   // below-minimum test, and onDonate receives the CHARGEABLE amount, not the
   // accrual.
   const chargeable = effectiveCharge({ pendingRoundUps: raw, monthlyCap, chargeAdjustment });
-  const chargeableStr = chargeable.toFixed(2);
+  const chargeableStr = fmtMoney(chargeable);
   const trimmed = chargeable < raw;
   // Processing cover is a percentage OF THE CHARGE, so it follows the chargeable
   // amount, not the raw accrual.
@@ -1454,7 +1571,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
     chargeAdjustment,
     feeMonths,
     processingCover: coverProcessing ? processingCover : 0,
-  }).toFixed(2);
+  });
   // Measured against what is actually charged, not what accrued: a $4 cap on
   // $13.89 of round-ups really is under a $5 minimum.
   const belowMin = chargeable < (nonprofit?.monthlyMinimum ?? 5);
@@ -1483,7 +1600,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
       ) : (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13.5, color: INK.secondary, lineHeight: 1.6 }}>
-            You&apos;ve rounded up <strong style={{ color: INK.primary }}>${raw.toFixed(2)}</strong> for {npShort} this month.
+            You&apos;ve rounded up <strong style={{ color: INK.primary }}>${fmtMoney(raw)}</strong> for {npShort} this month.
             Would you like to make this month&apos;s donation before cancelling?
           </p>
           <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 12, padding: 14, marginBottom: 10, fontSize: 13 }}>
@@ -1491,30 +1608,30 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
               <span style={{ color: INK.secondary }}>Round-ups</span>
               <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-cancel-roundups">
                 {trimmed
-                  ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${raw.toFixed(2)}</s> ${chargeableStr}</>
-                  : `$${raw.toFixed(2)}`}
+                  ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${fmtMoney(raw)}</s> ${chargeableStr}</>
+                  : `$${fmtMoney(raw)}`}
               </span>
             </div>
             {trimmed && (
               <p style={{ margin: '0 0 2px', fontSize: 12, color: '#b45309' }} data-testid="web-cancel-note">
                 {chargeAdjustment !== null && chargeAdjustment !== undefined
                   ? `Adjusted to $${chargeableStr} for this month  -  the rest is never charged.`
-                  : `Capped at $${monthlyCap.toFixed(2)}/month  -  the rest is never charged.`}
+                  : `Capped at $${fmtMoney(monthlyCap)}/month  -  the rest is never charged.`}
               </p>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
               {/* "(not tax-deductible)" is on the app's settle-up row and on the
                   web wizard's review row; it was missing here alone. */}
-              <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span><span>+${feeMonths.toFixed(2)}</span>
+              <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span><span>+${fmtMoney(feeMonths)}</span>
             </div>
             {coverProcessing && (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
-                <span>Processing cover</span><span>+${processingCover.toFixed(2)}</span>
+                <span>Processing cover</span><span>+${fmtMoney(processingCover)}</span>
               </div>
             )}
             <div style={{ height: 1, background: '#cbd5e1', margin: '6px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, color: INK.primary }}>Total</span><span style={{ fontWeight: 800, color: NAVY }} data-testid="web-cancel-total">${total}</span>
+              <span style={{ fontWeight: 700, color: INK.primary }}>Total</span><span style={{ fontWeight: 800, color: NAVY }} data-testid="web-cancel-total">${fmtMoney(total)}</span>
             </div>
           </div>
           {belowMin && (
@@ -1525,12 +1642,12 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: INK.secondary, marginBottom: 14, cursor: 'pointer' }}
             onClick={() => setCoverProcessing(v => !v)}>
             <input type="checkbox" readOnly checked={coverProcessing} style={{ marginTop: 2, accentColor: '#059669' }} />
-            <span>Cover {npShort}&apos;s card-processing costs (~${processingCover.toFixed(2)}) so 100% of my round-ups reach them</span>
+            <span>Cover {npShort}&apos;s card-processing costs (~${fmtMoney(processingCover)}) so 100% of my round-ups reach them</span>
           </label>
           <div style={{ display: 'grid', gap: 8 }}>
             {/* "Send", matching the app's CancelSheet CTA - the two settle-up
                 buttons carried different verbs for the same action. */}
-            <ActionButton onClick={donateAndCancel}>Send ${total} &amp; cancel</ActionButton>
+            <ActionButton onClick={donateAndCancel}>Send ${fmtMoney(total)} &amp; cancel</ActionButton>
             <ActionButton tone="danger" onClick={() => setResult('cancelled')}>Cancel without donating</ActionButton>
             <ActionButton tone="quiet" onClick={onClose}>Never mind  -  keep giving</ActionButton>
           </div>

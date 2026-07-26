@@ -13,11 +13,11 @@ import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
 import { findOrgByCode } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
-import { fmtMoney } from '../lib/format';
 import {
-  MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal, currentMonthName, effectiveCharge,
-  nextChargeLabel,
+  CHARGE_DAY, MAX_FEE_MONTHS, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal,
+  currentMonthName, effectiveCharge, nextChargeLabel,
 } from '../lib/billing';
+import { billingExplainer } from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { MONTHLY_DATA } from '../data/transactions';
@@ -41,6 +41,11 @@ const CARD_ELEMENT_OPTIONS = {
 };
 
 const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover'];
+
+// The charge day as an ordinal, derived from lib/billing rather than typed as
+// "11th" - Settings now carries the canonical billing explainer, so a literal
+// here would be the one place able to contradict it.
+const CHARGE_DAY_ORDINAL = ['1st', '2nd', '3rd'][CHARGE_DAY - 1] ?? `${CHARGE_DAY}th`;
 
 // Persisted toggle preferences (pc_prefs). In production these live server-side.
 function loadPrefs() {
@@ -926,7 +931,7 @@ export default function Settings() {
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
     pendingSettingsAction, clearPendingSettingsAction, showToast,
     monthlyCap, setMonthlyCap,
-    skipNextCharge, setSkipNextCharge, feeMonths,
+    skipNextCharge, setSkipNextCharge, feeMonths, hasAccount,
   } = useApp();
   const brand = useTheme();
 
@@ -949,7 +954,7 @@ export default function Settings() {
   const [bioEnrolled, setBioEnrolled] = useState(biometricEnrolled);
   async function handleBiometricChange(v) {
     if (v) {
-      const ok = await biometricEnroll({ name: DEMO_USER.name, email: DEMO_USER.email });
+      const ok = await biometricEnroll({ name: hasAccount?.name ?? DEMO_USER.name, email: hasAccount?.email ?? DEMO_USER.email });
       if (ok) { markSessionUnlocked(); setBioEnrolled(true); showToast('Face ID unlock is on 🙂'); }
       else showToast("Couldn't set up Face ID on this device.");
     } else {
@@ -990,6 +995,28 @@ export default function Settings() {
 
   // "Member since" derived from DEMO_USER.joinedAt which is consistent with MONTHLY_DATA start
   const memberSince = DEMO_USER.joinedAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+  // Identity comes from the signed-in account, exactly as the web portal reads
+  // it; DEMO_USER is the fallback only. This screen used to print
+  // "{DEMO_USER.name} Johnson" - a surname typed into the markup, so a real
+  // signed-in donor was renamed Johnson.
+  const userName = hasAccount?.name ?? DEMO_USER.name;
+  const userEmail = hasAccount?.email ?? DEMO_USER.email;
+
+  // The nonprofit's monthly minimum, with the same `?? 5` fallback every other
+  // caller uses (Dashboard, Activity, the cancel sheets). Settings read it bare.
+  const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
+
+  // THE billing explanation, from lib/donorContent - Settings is its only home
+  // in the product now. Dates and window length come from lib/billing, never
+  // from literals here.
+  const orgShort = selectedNonprofit?.shortName ?? 'your cause';
+  const billingParagraphs = billingExplainer({
+    orgShort,
+    minimum: monthlyMinimum,
+    chargeDay: CHARGE_DAY,
+    reviewDays: REVIEW_WINDOW_LAST_DAY,
+  });
 
   // ===== CANONICAL EXPORT SHAPE ==============================================
   // "Download My Data" is the donor's copy of their own record, and this object
@@ -1068,7 +1095,11 @@ export default function Settings() {
         style={{ paddingBottom: safeBottomAtLeast(112, 106) }}
       >
 
-        {/* Profile card  -  name/email from DEMO_USER; joinedAt from MONTHLY_DATA start */}
+        {/* Profile card  -  name/email from the signed-in account; joinedAt from
+            MONTHLY_DATA start. No lifetime total here: Home's hero owns that
+            figure, and repeating it was the whole reason the two disagreed.
+            "Member since" moved into the right-hand column the total vacated, so
+            the card keeps its two-column balance without duplicating a number. */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1076,18 +1107,17 @@ export default function Settings() {
         >
           <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-md"
             style={{ background: brand.gradient }}>
-            {DEMO_USER.name[0]}
+            {userName[0]}
           </div>
-          <div className="flex-1">
-            <p className="font-bold text-gray-900 text-lg">{DEMO_USER.name} Johnson</p>
-            <p className="text-gray-400 text-sm">{DEMO_USER.email}</p>
-            <p className="text-xs font-semibold mt-1" style={{ color: brand.textAccent }}>
-              Member since {memberSince}
-            </p>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-gray-900 text-lg truncate">{userName}</p>
+            <p className="text-gray-400 text-sm break-words">{userEmail}</p>
           </div>
-          <div className="text-right">
-            <p className="text-gray-400 text-xs">Donated</p>
-            <p className="text-gray-900 font-bold text-lg">${fmtMoney(totalDonated)}</p>
+          {/* Quiet stat, same treatment the lifetime total used to get: a label in
+              gray-400 over a gray-900 value. Brand accent here read as an alert. */}
+          <div className="text-right shrink-0">
+            <p className="text-gray-400" style={{ fontSize: 11 }}>Member since</p>
+            <p className="text-gray-900 font-bold text-sm">{memberSince}</p>
           </div>
         </motion.div>
 
@@ -1218,7 +1248,7 @@ export default function Settings() {
           <SettingRow
             icon={<span className="text-base">{PAYMENT_TYPE_ICON[paymentMethod?.type] ?? '💳'}</span>}
             label={paymentMethod?.label ?? 'Credit or Debit Card'}
-            sub={`${paymentMethod?.last4 ? `•••• ${paymentMethod.last4} · ` : ''}Charged once a month`}
+            sub={paymentMethod?.last4 ? `•••• ${paymentMethod.last4} · One monthly charge from ${orgShort}` : `One monthly charge from ${orgShort}`}
             color={brand.primary}
             right={<span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ color: '#0D9488', background: '#f0fdfa' }}>Active</span>}
           />
@@ -1233,19 +1263,26 @@ export default function Settings() {
           />
         </motion.div>
 
-        {/* Billing policy  -  dynamic nonprofit name + tax receipt disclosure */}
+        {/* THE billing explainer. One dense amber block became five short
+            paragraphs from lib/donorContent, styled like every other Settings
+            section (white card, uppercase label, same radius) rather than as an
+            alert: it is reference material a donor reads once, not a warning.
+            Hairlines separate the paragraphs so each fact can be found on its
+            own. This is the product's ONLY billing explanation - the Activity
+            tab's competing banner is gone. */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
-          className="bg-amber-50 rounded-3xl px-4 py-3.5" style={{ border: '1px solid #fde68a' }}>
-          <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Monthly Billing</p>
-          <p className="text-xs text-amber-800 leading-relaxed">
-            One monthly charge on {selectedNonprofit.shortName}&apos;s Stripe  -  minimum ${selectedNonprofit.monthlyMinimum}.
-            A flat <strong>$1/month</strong> app fee  -  only for months you&apos;re actively rounding up. If a month rolls over, the fee rolls with it and collects in the same single charge.
-            Your toggle covers {selectedNonprofit.shortName}&apos;s card-processing costs: on means a small amount (~2.2% + 30¢) is added and passes directly to them  -  PocketCache never keeps it. Off means {selectedNonprofit.shortName} nets your round-ups minus standard card costs.
-            They never pay PocketCache anything  -  the platform is always free for them.
-            Months under ${selectedNonprofit.monthlyMinimum} roll over; we settle every 3 months at most.{' '}
-            If months roll over, each active month adds $1  -  your charge breakdown itemizes it (e.g. &lsquo;App fee  -  $1 × 2 months&rsquo;).{' '}
-            {selectedNonprofit.shortName} sends your tax receipt  -  your round-ups are deductible, the $1 fee is not.
-          </p>
+          className="bg-white rounded-3xl overflow-hidden card-shadow">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">How Billing Works</p>
+          </div>
+          <div className="px-4 pb-4">
+            {billingParagraphs.map((para, i) => (
+              <div key={i}>
+                {i > 0 && <div className="h-px bg-gray-50" />}
+                <p className="text-gray-500 leading-relaxed py-2.5" style={{ fontSize: 12.5 }}>{para}</p>
+              </div>
+            ))}
+          </div>
         </motion.div>
 
         {/* Current cause */}
@@ -1289,7 +1326,7 @@ export default function Settings() {
           <SettingRow
             icon={<Bell size={18} />}
             label="Charge Reminder"
-            sub="Your exact amount on the 1st  -  charge runs the 11th"
+            sub={`Your exact amount on the 1st  -  charge runs the ${CHARGE_DAY_ORDINAL}`}
             color={brand.primary}
             right={<Toggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} color={brand.primary} />}
           />

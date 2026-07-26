@@ -1,15 +1,20 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
-import { DEMO_USER, avgPerMonth, momChange, sinceLabel, monthsGiving } from '../data/derived';
-import { TRANSACTIONS, MONTHLY_DATA } from '../data/transactions';
+import {
+  DEMO_USER, avgPerMonth, momChange, sinceLabel, monthsGiving, totalRoundupsCount,
+} from '../data/derived';
+import { TRANSACTIONS, CURRENT_MONTH_PENDING } from '../data/transactions';
+import { fmtMoney, fmtCount } from '../lib/format';
+import { getMilestonesUpTo, matchProgress, monthlyHistory, taxYearSummary } from '../lib/donorContent';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import { WebMyCause, WebShare, WebSettings, GiveExtraModal, AdjustChargeModal } from './WebPortalPages';
 import { useBiometricOffer, BiometricOfferCard } from '../components/BiometricLock';
 import ChargeReviewAlert from '../components/ChargeReviewAlert';
 import {
-  chargeTotal, effectiveCharge, nextChargeDate, nextChargeLabel,
+  chargeTotal, cycleDays, daysUntilNextCharge, effectiveCharge, nextChargeDate,
+  nextChargeLabel, previousChargeDate,
 } from '../lib/billing';
 // Skipped-cycle copy comes from the app Dashboard so the two donor surfaces
 // render byte-identical sentences and figures for a skip. See the block at the
@@ -38,9 +43,9 @@ const CARD = {
   boxShadow: '0 1px 2px rgba(11,42,74,0.04)',
 };
 
-function fmtMoney(n) {
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+// Money formatting comes from lib/format. This file used to define its own
+// byte-identical `fmtMoney`, which is how a second formatter (`.toFixed(2)`)
+// survived elsewhere in the product: two implementations, no single place to fix.
 
 // Billing schedule: the month's round-ups LOCK on the 1st (exact amount
 // emailed to the donor) and the charge runs on the 11th  -  10 full days'
@@ -74,18 +79,32 @@ function barPath(x, y, w, h, r = 4) {
 }
 
 // ─── Giving-by-month bar chart (single series, hover tooltip) ────────────────
-function GivingChart() {
+/**
+ * `data` MUST come from `monthlyHistory(pendingRoundUps)`.
+ *
+ * This chart used to read `MONTHLY_DATA` directly, whose last entry is the RAW
+ * sum of this month's round-ups, while every headline beside it printed the
+ * multiplied `pendingRoundUps`. At 3x the portal drew a $4.63 bar under a
+ * "$13.89 this month" figure for the same month. Taking the series as a prop is
+ * what makes that impossible to reintroduce here.
+ *
+ * Bar, not area, deliberately: six discrete monthly totals that a donor compares
+ * against each other. At desktop width the bars carry their own value labels and
+ * a hover tooltip; an area chart at six points reads as a trend line and makes
+ * the in-progress month look like a collapse rather than a partial total.
+ */
+function GivingChart({ data }) {
   const [hover, setHover] = useState(null);
   const W = 560, H = 210;
   const PAD = { top: 26, right: 12, bottom: 28, left: 40 };
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
-  const max = Math.max(...MONTHLY_DATA.map(m => m.donated));
-  const yMax = Math.ceil((max * 1.15) / 5) * 5; // nice ceiling
-  const n = MONTHLY_DATA.length;
+  const max = Math.max(...data.map(m => m.donated));
+  const yMax = Math.max(5, Math.ceil((max * 1.15) / 5) * 5); // nice ceiling
+  const n = data.length;
   const slot = plotW / n;
   const barW = Math.min(44, slot * 0.55);
-  const peakIdx = MONTHLY_DATA.findIndex(m => m.donated === max);
+  const peakIdx = data.findIndex(m => m.donated === max);
 
   const ticks = [0, yMax / 2, yMax];
 
@@ -105,7 +124,7 @@ function GivingChart() {
         {/* Baseline */}
         <line x1={PAD.left} x2={W - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} stroke="#e2e8f0" strokeWidth="1" />
 
-        {MONTHLY_DATA.map((m, i) => {
+        {data.map((m, i) => {
           const inProgress = i === n - 1;
           const h = (m.donated / yMax) * plotH;
           const x = PAD.left + i * slot + (slot - barW) / 2;
@@ -119,7 +138,10 @@ function GivingChart() {
                 <path d={barPath(x, y, barW, h)} fill={SERIES} opacity={hover === null || hover === i ? 1 : 0.55} />
               )}
               {labeled && (
-                <text x={x + barW / 2} y={y - 7} textAnchor="middle" fontSize="10.5" fontWeight="600" fill={INK.secondary}>
+                <text
+                  x={x + barW / 2} y={y - 7} textAnchor="middle" fontSize="10.5" fontWeight="600" fill={INK.secondary}
+                  data-testid={inProgress ? 'web-chart-current-value' : undefined}
+                >
                   ${fmtMoney(m.donated)}
                 </text>
               )}
@@ -148,7 +170,7 @@ function GivingChart() {
             padding: '5px 9px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', pointerEvents: 'none',
           }}
         >
-          {MONTHLY_DATA[hover].month} · ${fmtMoney(MONTHLY_DATA[hover].donated)}
+          {data[hover].month} · ${fmtMoney(data[hover].donated)}
           {hover === n - 1 && <span style={{ fontWeight: 400, opacity: 0.75 }}> · in progress</span>}
         </div>
       )}
@@ -187,7 +209,78 @@ function SectionTitle({ children, action }) {
   );
 }
 
-// ─── Activity table (shared by Overview + Activity tab) ─────────────────────
+// ─── Milestones ──────────────────────────────────────────────────────────────
+// The portal had NO milestones feature at all while the app celebrated every
+// tier, so the same donor was "$38.95 from the $100 club" on the phone and had
+// never heard of a club in the browser.
+//
+// The tier formula lives in lib/donorContent.js and BOTH surfaces import it, so
+// a badge can never light up on one and not the other.
+
+/**
+ * The portal's milestone card: the same badge row and the same
+ * progress-to-next-tier bar the app's Home carries, in the portal's own card
+ * language. Driven by lifetime `totalDonated`, exactly as the app is, so a badge
+ * can never light up on one surface and not the other.
+ */
+function MilestonesCard({ total }) {
+  const milestones = getMilestonesUpTo(total);
+  const next = milestones.find(m => !m.achieved);
+  const pct = next ? Math.min((total / next.amount) * 100, 100) : 100;
+  return (
+    <div style={{ ...CARD, padding: 20 }} data-testid="web-milestones">
+      <SectionTitle
+        action={next && (
+          <span style={{ fontSize: 12.5, color: INK.muted }} data-testid="web-milestones-to-next">
+            ${fmtMoney(next.amount - total)} to next
+          </span>
+        )}
+      >
+        Milestones
+      </SectionTitle>
+      <p style={{ margin: '2px 0 0', fontSize: 12.5, color: INK.muted }}>
+        Unlocked by your lifetime giving
+      </p>
+      <div style={{ display: 'flex', gap: 14, overflowX: 'auto', padding: '14px 2px 4px' }}>
+        {milestones.map(m => (
+          <div key={m.amount} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <div style={{
+              width: 46, height: 46, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22, lineHeight: 1,
+              background: m.achieved ? 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)' : '#f1f5f9',
+              boxShadow: m.achieved ? '0 2px 8px rgba(11,42,74,0.18)' : 'none',
+              filter: m.achieved ? 'none' : 'grayscale(1)', opacity: m.achieved ? 1 : 0.45,
+            }}>
+              {m.emoji}
+            </div>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', color: m.achieved ? INK.secondary : INK.muted }}>
+              {m.label}
+            </p>
+          </div>
+        ))}
+      </div>
+      {next && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: INK.muted, marginBottom: 5 }}>
+            <span>${fmtMoney(total)}</span>
+            <span>${fmtCount(next.amount)}</span>
+          </div>
+          <div style={{ background: '#f1f5f9', borderRadius: 999, height: 8, overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: SERIES, borderRadius: 999 }} />
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: 12.5, color: INK.secondary }}>
+            {Math.round(pct)}% of the way to the {next.label}.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Activity table (the Activity view's ledger) ─────────────────────────────
+// Overview used to render a 7-row copy of this table with the caption
+// "Purchases on your tracked card…". Activity owns transactions and Settings owns
+// the tracked card, so Overview now carries a link instead.
 function ActivityTable({ rows }) {
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -218,54 +311,109 @@ function ActivityTable({ rows }) {
 }
 
 // ─── Right-rail cards ────────────────────────────────────────────────────────
-function CauseCard({ org }) {
-  const story = org.description || org.mission || '';
+/**
+ * Compact cause row - NAVIGATION ONLY.
+ *
+ * This was `CauseCard`, which carried a 3-line clamp of the nonprofit's mission.
+ * My Cause owns the mission (in full, unclamped), so repeating a truncated copy
+ * here was both a duplicate and the worse version of it. Logo, name and the two
+ * ways into the cause are all that is left.
+ */
+function CauseRow({ org, onOpen }) {
   return (
-    <div style={{ ...CARD, padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        <OrgLogo nonprofit={org} size={11} rounded="xl" />
-        <div>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 14.5, color: INK.primary, lineHeight: 1.25 }}>{org.name}</p>
+    <div style={{ ...CARD, padding: 16 }} data-testid="web-cause-row">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <OrgLogo nonprofit={org} size={10} rounded="xl" />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: INK.primary, lineHeight: 1.25 }}>{org.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>Your chosen cause</p>
         </div>
       </div>
-      {story && (
-        <p style={{ margin: '0 0 12px', fontSize: 13, lineHeight: 1.6, color: INK.secondary, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {story}
-        </p>
-      )}
-      <a
-        href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
-        target="_blank" rel="noopener"
-        style={{ fontSize: 13, fontWeight: 600, color: '#003865', textDecoration: 'none' }}
-      >
-        Visit {org.shortName ?? 'their'} page →
-      </a>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12 }}>
+        <button
+          onClick={onOpen}
+          style={{ border: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 600, color: '#003865', cursor: 'pointer' }}
+        >
+          My Cause →
+        </button>
+        <a
+          href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
+          target="_blank" rel="noopener"
+          style={{ fontSize: 13, fontWeight: 600, color: INK.secondary, textDecoration: 'none' }}
+        >
+          Visit {org.shortName ?? 'their'} page ↗
+        </a>
+      </div>
     </div>
   );
 }
 
-function MatchCard({ match }) {
-  const pct = Math.min(100, Math.round((match.matched / match.maxAmount) * 100));
+/**
+ * One quiet line pointing at the active corporate match, the twin of the app
+ * Home's `MatchLine`.
+ *
+ * This was `MatchCard`: its own hand-written sentence ("X is matching round-ups
+ * dollar-for-dollar, up to $50K"), its own percentage math and its own meter -
+ * a THIRD wording of the fact My Cause already displays in full. Every string
+ * here now comes from `matchProgress()`, and the card is a link into the tab
+ * that owns the subject.
+ */
+function MatchLine({ match, onOpen }) {
+  const mp = matchProgress(match);
   return (
-    <div style={{ ...CARD, padding: 20 }}>
-      <SectionTitle>Corporate match</SectionTitle>
-      <p style={{ margin: '6px 0 10px', fontSize: 13, lineHeight: 1.55, color: INK.secondary }}>
-        <strong style={{ color: INK.primary }}>{match.companyShort ?? match.company}</strong> is matching round-ups
-        dollar-for-dollar, up to ${(match.maxAmount / 1000).toFixed(0)}K.
-      </p>
-      {/* Meter: labeled, never color-alone */}
-      <div style={{ background: '#f1f5f9', borderRadius: 999, height: 10, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: METER, borderRadius: 999 }} />
-      </div>
-      <p style={{ margin: '7px 0 0', fontSize: 12.5, color: INK.secondary }}>
-        ${match.matched.toLocaleString()} matched · {pct}% of pool used
-      </p>
-      {match.sample && (
-        <span style={{ display: 'inline-block', marginTop: 10, fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>
-          Example partnership
+    <button
+      onClick={onOpen}
+      data-testid="web-match-line"
+      style={{
+        ...CARD, padding: 16, width: '100%', textAlign: 'left', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}
+    >
+      {match.logoUrl ? (
+        <span style={{ width: 36, height: 36, borderRadius: '50%', background: '#fff', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <img src={match.logoUrl} alt={match.companyShort ?? match.company} style={{ height: 22, objectFit: 'contain' }} />
         </span>
+      ) : (
+        <span style={{ width: 36, height: 36, borderRadius: 12, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>🏢</span>
       )}
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: INK.primary }}>{mp.headline}</span>
+        <span style={{ display: 'block', fontSize: 12, color: METER, fontWeight: 600, marginTop: 2 }}>See the match on My Cause</span>
+      </span>
+      <span style={{ color: INK.muted, flexShrink: 0 }}>›</span>
+    </button>
+  );
+}
+
+/**
+ * Overview's pointer at the ledger. Replaces the 7-row transaction table.
+ * The two round-up COUNTS are Home's own facts (the app's third stat tile), so
+ * they live here rather than on Activity, which owns the transactions themselves.
+ */
+function ActivityLinkCard({ onOpen }) {
+  const figure = { margin: 0, fontSize: 20, fontWeight: 800, color: INK.primary, letterSpacing: '-0.3px' };
+  const cap = { margin: '2px 0 0', fontSize: 11.5, color: INK.muted };
+  return (
+    <div style={{ ...CARD, padding: 20 }} data-testid="web-activity-link">
+      <SectionTitle
+        action={
+          <button onClick={onOpen} style={{ border: 'none', background: 'transparent', color: '#003865', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            View activity →
+          </button>
+        }
+      >
+        Round-ups
+      </SectionTitle>
+      <div style={{ display: 'flex', gap: 32, marginTop: 12 }}>
+        <div>
+          <p style={figure}>{fmtCount(TRANSACTIONS.length)}</p>
+          <p style={cap}>This cycle</p>
+        </div>
+        <div>
+          <p style={figure}>{fmtCount(totalRoundupsCount)}</p>
+          <p style={cap}>All time (est.)</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -276,10 +424,18 @@ function MatchCard({ match }) {
 // $22 of round-ups saw $10 in the app and $22 in the browser from the same
 // stored state.
 function EstimateCard({
-  pending, feeMonths, paymentMethod, npShort, onGiveExtra, skipped,
+  pending, feeMonths, npShort, onGiveExtra, skipped,
   monthlyCap, chargeAdjustment, onAdjust, monthlyMinimum,
 }) {
   const fee = feeMonths;
+  // Cycle countdown and progress, both from lib/billing. The portal had NEITHER
+  // while the app showed a "17 days left" figure and a charge-day-to-charge-day
+  // bar, so a donor could not tell from the browser how much of the cycle was
+  // left. Measured charge day to charge day (28 to 31 days), never `daysLeft/30`.
+  const daysLeft = daysUntilNextCharge();
+  const cycleLength = cycleDays();
+  const cyclePct = Math.max(0, Math.min(100, ((cycleLength - daysLeft) / cycleLength) * 100));
+  const cycleStartLabel = previousChargeDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const roundUps = effectiveCharge({ pendingRoundUps: pending, monthlyCap, chargeAdjustment });
   const total = chargeTotal({ pendingRoundUps: pending, monthlyCap, chargeAdjustment, feeMonths });
   const capActive = monthlyCap !== null && monthlyCap !== undefined && pending > monthlyCap;
@@ -302,7 +458,33 @@ function EstimateCard({
           {skipStatusLine()}{' '}{skipAccruedLine(pending)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}
         </p>
       )}
-      <div style={{ marginTop: 8 }}>
+
+      {/* ── Where this cycle is ── */}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8 }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: INK.secondary }}>
+            {cycleLength}-day cycle
+          </p>
+          <p style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 22, fontWeight: 800, color: '#0B2A4A', letterSpacing: '-0.4px' }} data-testid="web-cycle-days-left">
+              {daysLeft}
+            </span>
+            {/* The countdown measures the CYCLE, and on a skipped cycle its end is
+                not a charge - "days left" beside "nothing is collected" would read
+                as a countdown to money leaving. Same split as the app. */}
+            <span style={{ fontSize: 12, color: INK.muted }}>{skipped ? 'days left in cycle' : 'days left'}</span>
+          </p>
+        </div>
+        <div style={{ background: '#f1f5f9', borderRadius: 999, height: 8, overflow: 'hidden' }}>
+          <div style={{ width: `${cyclePct}%`, height: '100%', background: SERIES, borderRadius: 999 }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontSize: 11.5, color: INK.muted }}>
+          <span>Cycle start {cycleStartLabel}</span>
+          <span>{skipped ? 'Skipped' : `Charge day ${nextChargeLabel()}`}</span>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
         <div style={row}>
           {/* Accrual line: on a skipped cycle this is the honest "you did round up
               this much", and the skip banner above says it is never charged. */}
@@ -361,9 +543,13 @@ function EstimateCard({
           in the banner above (SKIP_RESUME_LINE, shared with the app) replaces it,
           so neither surface ever pairs a skip with "charged on the 11th". */}
       {!skipped && (
+        /* The payment method used to be named right here ("charged to Credit or
+           Debit Card ····4242 on the 11th"). Settings owns the payment method -
+           it is the only screen that can change it - so this sentence keeps the
+           schedule and drops the instrument. */
         <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }} data-testid="web-estimate-schedule">
           Round-ups accrue through the last day of the month; the exact amount is emailed to you
-          on the 1st and charged to {paymentMethod?.label ?? 'your payment method'}{paymentMethod?.last4 ? ` ····${paymentMethod.last4}` : ''} on the 11th. Demo data  -  no real charge is made.
+          on the 1st and charged on the 11th. Demo data  -  no real charge is made.
         </p>
       )}
       {/* Always available, exactly like the app's Dashboard button. The shared
@@ -388,6 +574,151 @@ function EstimateCard({
   );
 }
 
+// ─── Activity view ───────────────────────────────────────────────────────────
+/**
+ * The portal's ledger tab. It used to be three elements - a title, one caption
+ * and the table - with no chart and no figures at all, while the app's Activity
+ * tab carried this month's total, the MoM change, the monthly chart and the month
+ * summary. This brings it to parity and adds the tax-year summary the app gained
+ * in the same pass, so neither surface has a fact the other lacks.
+ *
+ * The lifetime total is deliberately NOT here: Overview's hero owns it. Neither is
+ * a billing explainer - Settings owns that, and the one pointer this tab needs
+ * (where to download the history) is a single line at the bottom of the tax card.
+ */
+function ActivityView({ pending, history, org, multiplier, onSettings }) {
+  const current = history[history.length - 1];
+  const currentMonthLabel = `${current.month} ${current.year}`;
+  const taxYear = new Date().getFullYear();
+  const tax = taxYearSummary(pending, taxYear);
+  const taxMonthsLabel = tax.months === 1 ? '1 completed month' : `${tax.months} completed months`;
+  const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
+
+  return (
+    <>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Activity</h1>
+        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>Your giving history  -  demo data.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr]" style={{ display: 'grid', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gap: 20 }}>
+          {/* This month + the monthly chart, the two facts that belong together:
+              the final bar IS this figure (both read monthlyHistory). */}
+          <div style={{ ...CARD, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                  This month
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px', color: INK.primary }} data-testid="web-activity-month-total">
+                  ${fmtMoney(pending)}
+                </p>
+                {org && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <OrgLogo nonprofit={org} size={5} rounded="md" />
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: INK.secondary }}>{org.name}</span>
+                  </span>
+                )}
+              </div>
+              {momChange != null && (
+                <span
+                  data-testid="web-activity-mom"
+                  style={{
+                    fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', whiteSpace: 'nowrap',
+                    color: momChange >= 0 ? '#047857' : '#b91c1c',
+                    background: momChange >= 0 ? '#ecfdf5' : '#fef2f2',
+                  }}
+                >
+                  {momChange >= 0 ? '↑' : '↓'} {Math.abs(momChange).toFixed(0)}% vs last month
+                </span>
+              )}
+            </div>
+            <div style={{ height: 1, background: '#f1f5f9', margin: '16px 0 12px' }} />
+            <SectionTitle>Giving by month</SectionTitle>
+            <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
+              Monthly round-up totals · {currentMonthLabel} still in progress
+            </p>
+            <GivingChart data={history} />
+          </div>
+
+          {/* Month summary pill  -  raw round-ups and the boost shown separately so
+              the multiplied headline above is traceable. */}
+          <div style={{ ...CARD, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }} data-testid="web-activity-month-summary">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <span style={{ fontSize: 22 }}>🗓️</span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK.primary }}>{currentMonthLabel}</span>
+                <span style={{ display: 'block', fontSize: 12, color: INK.muted }}>
+                  {fmtCount(TRANSACTIONS.length)} transactions · ${fmtMoney(CURRENT_MONTH_PENDING)} rounded up
+                  {multiplier > 1 && ` × ${multiplier} boost`}
+                </span>
+              </span>
+            </span>
+            <span style={{ textAlign: 'right', flexShrink: 0 }}>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 800, color: '#047857' }}>${fmtMoney(pending)}</span>
+              {multiplier > 1 && (
+                <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>
+                  ${fmtMoney(CURRENT_MONTH_PENDING)} × {multiplier}
+                </span>
+              )}
+            </span>
+          </div>
+
+          <div style={{ ...CARD, padding: 20 }}>
+            <SectionTitle>All activity</SectionTitle>
+            <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
+              Every purchase this cycle and the spare change it set aside
+            </p>
+            <ActivityTable rows={TRANSACTIONS} />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 20 }}>
+          {/* Tax-year summary. Completed months only: the in-progress month has
+              not been charged, so counting it would overstate what a donor could
+              substantiate. Figures come from taxYearSummary(). */}
+          <div style={{ ...CARD, padding: 20 }} data-testid="web-taxyear">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                  {taxYear} tax year
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', color: INK.primary }} data-testid="web-taxyear-total">
+                  ${fmtMoney(tax.donated)}
+                </p>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+                Demo data
+              </span>
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 12.5, color: INK.muted }} data-testid="web-taxyear-months">
+              {tax.months === 0 ? 'No completed months yet this year' : `Donated across ${taxMonthsLabel}`}
+              {' · '}{currentMonthLabel} still in progress
+            </p>
+            <p style={{ margin: '12px 0 0', paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+              Your round-ups are tax-deductible. The $1 monthly app fee is not (${fmtMoney(tax.feeMonths)} so far
+              this year). {npShort} issues your receipt.
+            </p>
+            <button
+              onClick={onSettings}
+              data-testid="web-taxyear-settings-link"
+              style={{
+                width: '100%', marginTop: 14, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1',
+                background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, textAlign: 'left',
+              }}
+            >
+              <span>Download my giving history in Settings</span>
+              <span style={{ color: INK.muted, flexShrink: 0 }}>›</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── The portal ──────────────────────────────────────────────────────────────
 const NAV_TABS = [
   { id: 'overview', label: 'Overview' },
@@ -400,8 +731,8 @@ const NAV_TABS = [
 export default function WebDashboard() {
   const {
     selectedNonprofit, totalDonated, pendingRoundUps, skipNextCharge,
-    feeMonths, paymentMethod, signOut, adminRole, setPage, setLastMode, hasAccount,
-    monthlyCap, chargeAdjustment, setChargeAdjustment,
+    feeMonths, signOut, adminRole, setPage, setLastMode, hasAccount,
+    monthlyCap, chargeAdjustment, setChargeAdjustment, roundUpMultiplier,
   } = useApp();
   const brand = useTheme();
   const [navTab, setNavTab] = useState('overview');
@@ -425,6 +756,11 @@ export default function WebDashboard() {
     const h = new Date().getHours();
     return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   }, []);
+
+  // The one series every chart on this surface plots: MONTHLY_DATA with the
+  // in-progress month swapped for the live multiplied figure, so the final bar
+  // always equals the headline "this month" number.
+  const history = useMemo(() => monthlyHistory(pendingRoundUps), [pendingRoundUps]);
 
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb' }} onClick={() => menuOpen && setMenuOpen(false)}>
@@ -451,9 +787,9 @@ export default function WebDashboard() {
               <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {brand.appName ?? `${npShort} Round-Up`}
               </p>
-              <p style={{ margin: 0, fontSize: 10.5, color: INK.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
-                powered by PocketCache
-              </p>
+              {/* "powered by PocketCache" was here AND in the footer on every
+                  single view. The footer keeps it (Settings owns the attribution
+                  and the version string); the header carries the app name alone. */}
             </div>
           </div>
           <nav style={{ display: 'flex', gap: 4, flex: 1 }}>
@@ -551,40 +887,34 @@ export default function WebDashboard() {
               />
             </div>
 
-            {/* Main grid */}
+            {/* Main grid.
+                LAYOUT: the chart moved to Activity and the 7-row table became a
+                link, which emptied the wide left column. Rather than let Overview
+                become a wall of one huge card, the freed width went to the two
+                things the portal was missing - Milestones (a badge row genuinely
+                wants horizontal room, and at desktop width every tier fits with no
+                scrolling, which the phone cannot do) and the round-up counts - and
+                the cause row and match line moved across with them, because both
+                are wide horizontal rows that read badly squeezed into a rail.
+                That leaves the rail with ONE subject, the upcoming charge, with the
+                cycle countdown inside it so the number sits beside the date it
+                counts to, exactly where the app puts it. It also stops the left
+                column from ending 300px above the rail, which is what a naive
+                "just delete the two cards" pass produced. */}
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr]" style={{ gap: 20, display: 'grid', alignItems: 'start' }}>
               <div style={{ display: 'grid', gap: 20 }}>
-                <div style={{ ...CARD, padding: 20 }}>
-                  <SectionTitle>Giving by month</SectionTitle>
-                  <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
-                    Monthly round-up totals · current month still in progress
-                  </p>
-                  <GivingChart />
-                </div>
-                <div style={{ ...CARD, padding: 20 }}>
-                  <SectionTitle
-                    action={
-                      <button onClick={() => setNavTab('activity')} style={{ border: 'none', background: 'transparent', color: '#003865', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                        View all →
-                      </button>
-                    }
-                  >
-                    Recent activity
-                  </SectionTitle>
-                  <p style={{ margin: '2px 0 8px', fontSize: 12.5, color: INK.muted }}>
-                    Purchases on your tracked card and the spare change they set aside
-                  </p>
-                  <ActivityTable rows={TRANSACTIONS.slice(0, 7)} />
-                </div>
+                <MilestonesCard total={totalDonated} />
+                {org && <CauseRow org={org} onOpen={() => setNavTab('mycause')} />}
+                {org?.corporateMatch?.active && (
+                  <MatchLine match={org.corporateMatch} onOpen={() => setNavTab('mycause')} />
+                )}
+                <ActivityLinkCard onOpen={() => setNavTab('activity')} />
               </div>
 
               <div style={{ display: 'grid', gap: 20 }}>
-                {org && <CauseCard org={org} />}
-                {org?.corporateMatch?.active && <MatchCard match={org.corporateMatch} />}
                 <EstimateCard
                   pending={pendingRoundUps}
                   feeMonths={feeMonths}
-                  paymentMethod={paymentMethod}
                   npShort={npShort}
                   onGiveExtra={() => setGiveExtra(true)}
                   skipped={skipNextCharge}
@@ -599,13 +929,13 @@ export default function WebDashboard() {
         )}
 
         {navTab === 'activity' && (
-          <div style={{ ...CARD, padding: 20 }}>
-            <SectionTitle>All activity</SectionTitle>
-            <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
-              ${fmtMoney(pendingRoundUps)} in round-ups so far this cycle · demo data
-            </p>
-            <ActivityTable rows={TRANSACTIONS} />
-          </div>
+          <ActivityView
+            pending={pendingRoundUps}
+            history={history}
+            org={org}
+            multiplier={roundUpMultiplier}
+            onSettings={() => setNavTab('settings')}
+          />
         )}
 
         {navTab === 'mycause' && <WebMyCause />}

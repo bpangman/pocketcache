@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
+import { fmtMoney } from '../lib/format';
 import {
   chargeTotal, currentMonthName, effectiveCharge, inReviewWindow, monthKey, nextChargeLabel,
 } from '../lib/billing';
+import { adjustBounds } from '../lib/donorContent';
 import { Z, scrim, centered } from '../lib/overlay';
 
 // ─── Charge review alert (the 1st-10th window) ───────────────────────────────
@@ -117,11 +119,11 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
       {adjusting ? (
         <div style={{ marginBottom: 12 }}>
           <p style={{ textAlign: 'center', margin: '0 0 4px' }}>
-            <span style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>${value.toFixed(2)}</span>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}> of ${roundUps.toFixed(2)} round-ups</span>
+            <span style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>${fmtMoney(value)}</span>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}> of ${fmtMoney(roundUps)} round-ups</span>
           </p>
           <input
-            type="range" min={0} max={roundUps} step={0.25} value={value}
+            type="range" {...adjustBounds(roundUps)} value={value}
             onChange={e => setValue(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#0D9488' }}
           />
@@ -132,7 +134,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
           <div style={{ display: 'grid', gap: 8 }}>
             <button onClick={confirmAdjust}
               style={{ padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #0d9488, #003865)', color: '#fff', fontWeight: 700, fontSize: 13.5 }}>
-              Set this month&apos;s round-ups to ${value.toFixed(2)}
+              Set this month&apos;s round-ups to ${fmtMoney(value)}
             </button>
             <button onClick={() => setAdjusting(false)}
               style={{ padding: '9px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: '#0f172a', fontWeight: 600, fontSize: 13 }}>

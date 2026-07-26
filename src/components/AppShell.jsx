@@ -1,7 +1,7 @@
 import { useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronRight, Settings as SettingsIcon, CreditCard, Bell, HelpCircle, LogOut } from 'lucide-react';
+import { ChevronRight, Settings as SettingsIcon, HelpCircle, LogOut } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
@@ -94,11 +94,12 @@ export default function AppShell() {
             <ChevronRight size={16} className={adminRole ? 'text-white/50' : 'text-gray-300'} />
           </motion.button>
 
-          {/* Menu rows */}
+          {/* Menu rows. "Account Settings", "Payment Method" and
+              "Notifications" were three labels for one destination - all three
+              ran the same setTab('settings') and nothing else, so the donor
+              picked between three doors into the same room. One row now. */}
           {[
-            { icon: <SettingsIcon size={18} />, label: 'Account Settings', action: () => { setShowProfile(false); setTab('settings'); } },
-            { icon: <CreditCard size={18} />, label: 'Payment Method', action: () => { setShowProfile(false); setTab('settings'); } },
-            { icon: <Bell size={18} />, label: 'Notifications', action: () => { setShowProfile(false); setTab('settings'); } },
+            { icon: <SettingsIcon size={18} />, label: 'Account settings', action: () => { setShowProfile(false); setTab('settings'); } },
             { icon: <HelpCircle size={18} />, label: 'Help & Support', action: () => window.open('mailto:support@pocketcache.app') },
           ].map(({ icon, label, action }) => (
             <button

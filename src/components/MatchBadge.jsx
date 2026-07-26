@@ -1,9 +1,23 @@
-import { ExternalLink } from 'lucide-react';
+import { ChevronRight, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
+import { matchProgress } from '../lib/donorContent';
 
-export default function MatchBadge({ match, compact = false }) {
+/**
+ * The full corporate-match display. My Cause owns this; Home shows only a
+ * compact line pointing here.
+ *
+ * Every figure and sentence comes from `matchProgress()`. The percentage used to
+ * be recomputed here, in Dashboard.jsx and in MatchDetailsSheet.jsx, and the
+ * pool figures were hand-rolled with three different `.toFixed()` calls.
+ *
+ * @param {object} props
+ * @param {object} props.match - nonprofit.corporateMatch
+ * @param {boolean} [props.compact] - pill form, for tight rows
+ * @param {Function} [props.onDetails] - when given, renders a drill-in row
+ */
+export default function MatchBadge({ match, compact = false, onDetails }) {
   if (!match?.active) return null;
-  const pct = Math.round((match.matched / match.maxAmount) * 100);
+  const mp = matchProgress(match);
   if (compact) {
     return (
       <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full"
@@ -23,26 +37,42 @@ export default function MatchBadge({ match, compact = false }) {
           </div>
         )}
         <p className="text-xs font-bold text-amber-800 flex-1">
-          {match.company} is matching your round-ups this month
+          {mp.headline}
         </p>
         <span className="text-xs font-semibold text-amber-700 shrink-0">
-          ${(match.matched / 1000).toFixed(1)}K / ${(match.maxAmount / 1000).toFixed(0)}K
+          {mp.matchedLabel} / {mp.poolLabel}
         </span>
       </div>
       <div className="h-1.5 bg-amber-100 rounded-full overflow-hidden mb-1.5">
         <motion.div
           initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
+          animate={{ width: `${mp.pct}%` }}
           transition={{ duration: 1 }}
           className="h-full bg-amber-400 rounded-full"
         />
       </div>
-      <p className="text-amber-700 text-xs mb-2">{match.description}</p>
+      {/* Derived progress first, then the partner's own description - it carries
+          the match ratio, which no derived string does. */}
+      <p className="text-amber-700 text-xs">{mp.progressLabel}</p>
+      {match.description && (
+        <p className="text-amber-700 text-xs mt-1.5 mb-2 leading-relaxed">{match.description}</p>
+      )}
       {match.impactUrl && (
         <a href={match.impactUrl} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900">
-          See {match.companyShort}&apos;s community impact <ExternalLink size={11} />
+          {mp.impactLinkLabel} <ExternalLink size={11} />
         </a>
+      )}
+      {onDetails && (
+        <button
+          onClick={onDetails}
+          data-testid="match-details-link"
+          className="mt-3 w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-amber-800"
+          style={{ background: '#fef3c7' }}
+        >
+          <span>Match details</span>
+          <ChevronRight size={14} className="text-amber-600" />
+        </button>
       )}
     </div>
   );

@@ -4,11 +4,13 @@
 import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { ExternalLink } from 'lucide-react';
 import Sheet from '../Sheet';
+import { matchProgress } from '../../lib/donorContent';
 
 export default function MatchDetailsSheet({ show, onClose, match }) {
   if (!match?.active) return null;
-  const pct = Math.round((match.matched / match.maxAmount) * 100);
-  const remaining = ((match.maxAmount - match.matched) / 1000).toFixed(1);
+  // Figures and strings come from the shared derivation - this sheet used to
+  // recompute the same percentage and pool labels itself.
+  const mp = matchProgress(match);
 
   return (
     <Sheet show={show} onClose={onClose} title={`${match.companyShort} Match`}>
@@ -41,18 +43,18 @@ export default function MatchDetailsSheet({ show, onClose, match }) {
           <div className="flex justify-between items-center mb-2">
             <span className="text-amber-800 text-sm font-bold">Match Pool Progress</span>
             <span className="text-amber-700 text-sm font-semibold">
-              ${(match.matched / 1000).toFixed(1)}K / ${(match.maxAmount / 1000).toFixed(0)}K
+              {mp.matchedLabel} / {mp.poolLabel}
             </span>
           </div>
           <div className="h-2 bg-amber-100 rounded-full overflow-hidden mb-1.5">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
+              animate={{ width: `${mp.pct}%` }}
               transition={{ duration: 1 }}
               className="h-full bg-amber-400 rounded-full"
             />
           </div>
-          <p className="text-amber-700 text-xs">{pct}% of match pool used · ${remaining}K remaining</p>
+          <p className="text-amber-700 text-xs" data-testid="match-progress-label">{mp.progressLabel}</p>
         </div>
 
         {match.impactUrl && (

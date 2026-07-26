@@ -1,8 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { fmtMoney } from '../lib/format';
-import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { Zap, Heart, TrendingUp, X, Share2, Plus, ExternalLink, Building2, Flame } from 'lucide-react';
+import { Zap, Heart, TrendingUp, X, Plus, ChevronRight, Building2, Flame } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { loadKey, saveKey } from '../store/identityStore';
 import { useTheme } from '../store/ThemeContext';
@@ -10,18 +9,15 @@ import {
   MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal, cycleDays, daysUntilNextCharge,
   effectiveCharge, nextChargeLabel,
 } from '../lib/billing';
+import { adjustBounds, getMilestonesUpTo, matchProgress } from '../lib/donorContent';
 import { Z } from '../lib/overlay';
 import { safeBottomAtLeast, safeTopAtLeast } from '../lib/safeArea';
-import { MONTHLY_DATA } from '../data/transactions';
 import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
-import CustomTooltip from '../components/CustomTooltip';
 import Sheet from '../components/Sheet';
 import GiveExtraSheet from '../components/sheets/GiveExtraSheet';
 import BoostToast from '../components/sheets/BoostToast';
-import VolunteerSheet from '../components/sheets/VolunteerSheet';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
-import MatchDetailsSheet from '../components/sheets/MatchDetailsSheet';
 
 // ─── Skipped-cycle copy  -  SHARED with the web portal ───────────────────────
 // The rule (billing.js, rule 5): a skipped month is never charged at all.
@@ -86,33 +82,6 @@ export function skipFeeLine(feeMonths, now = new Date()) {
 }
 /* eslint-enable react-refresh/only-export-components */
 
-const MILESTONE_EMOJIS = ['🌱', '⭐', '🏆', '💎', '🦸', '🚀', '🌟', '👑', '🎯', '🔮'];
-
-function getMilestoneAt(index) {
-  const tier = Math.floor(index / 3);
-  const pos = index % 3;
-  const multiplier = pos === 0 ? 1 : pos === 1 ? 2.5 : 5;
-  const amount = Math.round(10 * Math.pow(10, tier) * multiplier);
-  const emoji = MILESTONE_EMOJIS[index % MILESTONE_EMOJIS.length];
-  const label = amount >= 1000
-    ? `$${(amount / 1000 % 1 === 0 ? amount / 1000 : (amount / 1000).toFixed(1))}K club`
-    : `$${amount} club`;
-  return { amount, label, emoji, index };
-}
-
-function getMilestonesUpTo(total) {
-  const result = [];
-  let i = 0;
-  while (true) {
-    const m = getMilestoneAt(i);
-    result.push({ ...m, achieved: total >= m.amount });
-    if (m.amount > total && result.filter(x => !x.achieved).length >= 5) break;
-    i++;
-    if (i > 50) break;
-  }
-  return result;
-}
-
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -147,44 +116,43 @@ function MilestoneToast({ milestone, onClose }) {
   );
 }
 
-// Displays the active corporate match progress inline on the Dashboard.
-// Clicking the Corp Match hero button opens MatchDetailsSheet instead.
-function MatchBanner({ m, pct }) {
+/**
+ * One quiet tappable line pointing at the active corporate match.
+ *
+ * Home used to carry the whole amber banner (logo, progress bar, pool figures,
+ * impact link) - byte-for-byte the same facts My Cause shows. My Cause now owns
+ * the full match display, so Home keeps only the single canonical sentence from
+ * `matchProgress().headline` and a chevron into that tab. No progress bar here.
+ */
+function MatchLine({ m, onOpen }) {
+  const mp = matchProgress(m);
   return (
-    <motion.div
+    <motion.button
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.12 }}
-      className="rounded-3xl p-4 card-shadow"
-      style={{ background: '#fffbeb', border: '1.5px solid #fde68a' }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onOpen}
+      data-testid="home-match-line"
+      className="w-full bg-white rounded-3xl px-4 py-3.5 card-shadow flex items-center gap-3 text-left"
     >
-      <div className="flex items-center gap-3 mb-2">
-        {m.logoUrl && (
-          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0"
-            style={{ border: '1px solid #f3f4f6' }}>
-            <img src={m.logoUrl} alt={m.companyShort} style={{ height: 28, objectFit: 'contain' }} />
-          </div>
-        )}
-        <p className="font-bold text-amber-900 text-sm flex-1">
-          {m.companyShort} is matching your round-ups this month  -  up to ${(m.maxAmount / 1000).toFixed(0)}K (${(m.matched / 1000).toFixed(1)}K matched so far)
-        </p>
-      </div>
-      <div className="h-2 bg-amber-100 rounded-full overflow-hidden mb-1.5">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 1, delay: 0.4 }}
-          className="h-full bg-amber-400 rounded-full"
-        />
-      </div>
-      <p className="text-amber-700 text-xs mb-3">{pct}% of match pool used · ${((m.maxAmount - m.matched) / 1000).toFixed(1)}K remaining</p>
-      {m.impactUrl && (
-        <a href={m.impactUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900">
-          See {m.companyShort}&apos;s community impact <ExternalLink size={11} />
-        </a>
+      {m.logoUrl ? (
+        <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0"
+          style={{ border: '1px solid #f3f4f6' }}>
+          <img src={m.logoUrl} alt={m.companyShort} style={{ height: 22, objectFit: 'contain' }} />
+        </div>
+      ) : (
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#fef3c7' }}>
+          <Building2 size={16} className="text-amber-700" />
+        </div>
       )}
-    </motion.div>
+      <div className="flex-1 min-w-0">
+        <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Corporate Match</p>
+        <p className="text-sm text-gray-700 leading-snug mt-0.5">{mp.headline}</p>
+      </div>
+      <ChevronRight size={18} className="text-gray-300 shrink-0" />
+    </motion.button>
   );
 }
 
@@ -194,6 +162,11 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
   // effectiveCharge - an existing adjustment, else the cap, else the raw
   // round-ups), never on a number the donor would not be billed.
   const [value, setValue] = useState(effectiveAmount);
+  // ONE set of bounds for this control, shared with the charge-review alert.
+  // This slider used to start at $1.00 in $0.01 steps while the review alert
+  // driving the same `chargeAdjustment` value started at $0 in $0.25 steps, so
+  // the two disagreed about what a donor was allowed to choose.
+  const bounds = adjustBounds(pendingRoundUps);
 
   function handleConfirm() {
     setChargeAdjustment(value);
@@ -209,22 +182,22 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
           One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
         </p>
         <div className="text-center">
-          <p className="text-4xl font-bold text-gray-900">${value.toFixed(2)}</p>
-          <p className="text-gray-400 text-xs mt-1">of ${pendingRoundUps.toFixed(2)} accrued this month</p>
+          <p className="text-4xl font-bold text-gray-900">${fmtMoney(value)}</p>
+          <p className="text-gray-400 text-xs mt-1">of ${fmtMoney(pendingRoundUps)} accrued this month</p>
         </div>
         <div className="px-2">
           <input
             type="range"
-            min={1.00}
-            max={pendingRoundUps}
-            step={0.01}
+            min={bounds.min}
+            max={bounds.max}
+            step={bounds.step}
             value={value}
             onChange={e => setValue(parseFloat(e.target.value))}
             className="w-full accent-teal-600"
           />
           <div className="flex justify-between text-xs text-gray-400 mt-1">
-            <span>$1.00</span>
-            <span>${pendingRoundUps.toFixed(2)}</span>
+            <span>${fmtMoney(bounds.min)}</span>
+            <span>${fmtMoney(bounds.max)}</span>
           </div>
         </div>
         <motion.button
@@ -233,7 +206,7 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
           className="w-full py-4 rounded-2xl text-white font-bold text-base"
           style={{ background: brand.gradient }}
         >
-          Set Charge to ${value.toFixed(2)}
+          Set Charge to ${fmtMoney(value)}
         </motion.button>
         {chargeAdjustment !== null && (
           <button
@@ -253,8 +226,6 @@ export default function Dashboard() {
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
-  const [showMatchDetails, setShowMatchDetails] = useState(false);
-  const [showVolunteer, setShowVolunteer] = useState(false);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const [boostToast, setBoostToast] = useState(null);
   const [showAdjustCharge, setShowAdjustCharge] = useState(false);
@@ -347,29 +318,9 @@ export default function Dashboard() {
         brand={brand}
       />
 
-      {/* Corp Match button opens match DETAILS when match is active;
-          falls back to Become a Sponsor when no match is running */}
-      {match?.active ? (
-        <MatchDetailsSheet
-          show={showMatchDetails}
-          onClose={() => setShowMatchDetails(false)}
-          match={match}
-        />
-      ) : (
-        <BecomeMatchSponsorSheet
-          show={showMatchDetails}
-          onClose={() => setShowMatchDetails(false)}
-          nonprofit={selectedNonprofit}
-          brand={brand}
-        />
-      )}
-
-      <VolunteerSheet
-        show={showVolunteer}
-        onClose={() => setShowVolunteer(false)}
-        nonprofit={selectedNonprofit}
-        brand={brand}
-      />
+      {/* Corp Match hero button - only rendered when NO match is running, so the
+          only sheet Home needs is Become a Sponsor. An active match is a compact
+          line into My Cause, which owns the match details drill-in. */}
       <BecomeMatchSponsorSheet
         show={showSponsorSheet}
         onClose={() => setShowSponsorSheet(false)}
@@ -433,25 +384,24 @@ export default function Dashboard() {
                   className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
                   <Plus size={12} /> Give Extra
                 </button>
-                {/* Corp Match button: opens match DETAILS when active, not a suggestion form */}
-                <button onClick={() => setShowMatchDetails(true)}
-                  className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
-                  <Building2 size={12} /> Corp Match
-                </button>
-                <button onClick={() => setShowVolunteer(true)}
-                  className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
-                  &#128588; Volunteer
-                </button>
+                {/* Corp Match: only when no match is running, and then it is an
+                    invitation to bring one in. While a match IS active the
+                    compact match line below carries it and My Cause owns the
+                    detail. Volunteer lives on My Cause with the other
+                    involvement actions. */}
+                {!match?.active && (
+                  <button onClick={() => setShowSponsorSheet(true)}
+                    className="bg-white/20 hover:bg-white/30 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1">
+                    <Building2 size={12} /> Corp Match
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Corporate match banner */}
-        {match?.active && (() => {
-          const pct = Math.round((match.matched / match.maxAmount) * 100);
-          return <MatchBanner m={match} pct={pct} />;
-        })()}
+        {/* Corporate match: one compact line into My Cause */}
+        {match?.active && <MatchLine m={match} onOpen={() => setTab('mycause')} />}
 
         {/* Stats row  -  all values computed from real data via derived.js */}
         <div className="flex gap-3">
@@ -615,7 +565,7 @@ export default function Dashboard() {
           {nextMilestone && (
             <div className="mt-3">
               <div className="flex justify-between text-xs text-gray-400 mb-1">
-                <span>${totalDonated.toFixed(0)}</span>
+                <span>${fmtMoney(totalDonated)}</span>
                 <span>${nextMilestone.amount}</span>
               </div>
               <div className="h-1.5 rounded-full" style={{ background: '#f3f4f6' }}>
@@ -631,60 +581,9 @@ export default function Dashboard() {
           )}
         </motion.div>
 
-        {/* Monthly chart */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-3xl p-5 card-shadow"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900 text-base">Monthly Giving</h3>
-            <span className="text-xs text-gray-400">Last {monthsGiving} months</span>
-          </div>
-          <div className="h-28">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={MONTHLY_DATA} barSize={22}>
-                <XAxis dataKey="month" axisLine={false} tickLine={false}
-                  tick={{ fill: '#9ca3af', fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} cursor={false} />
-                <Bar dataKey="donated" radius={[8, 8, 0, 0]} fill={brand.primary} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* Impact card */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="rounded-3xl p-5 text-white relative overflow-hidden"
-          style={{ background: brand.gradient }}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3" />
-          <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Your Impact</p>
-          <p className="text-white font-bold text-base leading-snug relative z-10">
-            &ldquo;{selectedNonprofit.impact}&rdquo;
-          </p>
-          <div className="flex items-center justify-between mt-3">
-            <div className="flex items-center gap-2">
-              <OrgLogo nonprofit={selectedNonprofit} size={7} rounded="full" className="shrink-0" />
-              <p className="text-white/70 text-xs">{selectedNonprofit.name}</p>
-            </div>
-            <button
-              onClick={() => setTab('share')}
-              className="bg-white/20 rounded-xl px-3 py-1.5 text-white text-xs font-semibold flex items-center gap-1"
-            >
-              <Share2 size={11} /> Share
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Footer */}
-        <div className="text-center py-4">
-          <p className="text-xs text-gray-300">Powered by <span className="font-semibold">PocketCache</span></p>
-        </div>
+        {/* Monthly history chart: Activity owns it.
+            "Your Impact" quote card: My Cause owns it.
+            "Powered by PocketCache" footer: Settings owns it. */}
 
       </div>
 

@@ -10,17 +10,12 @@ import BoostToast from '../components/sheets/BoostToast';
 import CorporateMatchSheet from '../components/sheets/CorporateMatchSheet';
 import VolunteerSheet from '../components/sheets/VolunteerSheet';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
+import MatchDetailsSheet from '../components/sheets/MatchDetailsSheet';
 import { getOrgStats } from '../lib/orgStats';
 import { fmtMoneyCompact } from '../lib/format';
-
-// Impact tier copy uses "example equivalency" language to be honest about
-// the approximate nature of impact figures.
-function impactTier(total) {
-  if (total >= 100) return 'About $100 could support roughly a month of after-school programming for one Club member  -  an example equivalency provided by the nonprofit.';
-  if (total >= 60) return 'About $60 might cover approximately 2 weeks of after-school snacks for a Club member  -  example equivalency.';
-  if (total >= 25) return 'About $25 could fund art and sports supplies for a Club session  -  example equivalency.';
-  return 'Every dollar helps fund safe, staffed after-school spaces for young people in their community.';
-}
+// impactTier used to be a verbatim duplicate of the one in WebPortalPages.jsx.
+// Both surfaces now read the single implementation in lib/donorContent.
+import { impactTier } from '../lib/donorContent';
 
 export default function MyCause() {
   const { selectedNonprofit, boostDonation, totalDonated } = useApp();
@@ -29,6 +24,7 @@ export default function MyCause() {
   const [showMatch, setShowMatch] = useState(false);       // "Suggest a Match Sponsor"
   const [showVolunteer, setShowVolunteer] = useState(false);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false); // "Become a Match Sponsor"
+  const [showMatchDetails, setShowMatchDetails] = useState(false); // drill-in on the active match
   const [boostToast, setBoostToast] = useState(null);
   const toastTimerRef = useRef(null);
   const [orgStats, setOrgStats] = useState(null);
@@ -75,6 +71,9 @@ export default function MyCause() {
       />
       <VolunteerSheet show={showVolunteer} onClose={() => setShowVolunteer(false)} nonprofit={np} brand={brand} />
       <BecomeMatchSponsorSheet show={showSponsorSheet} onClose={() => setShowSponsorSheet(false)} nonprofit={np} brand={brand} />
+      {/* Match drill-in: My Cause owns the full match display now that Home is
+          only a compact line. */}
+      <MatchDetailsSheet show={showMatchDetails} onClose={() => setShowMatchDetails(false)} match={match} />
 
       {/* Hero header */}
       <motion.div
@@ -122,11 +121,9 @@ export default function MyCause() {
           >
             <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3" />
             <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1 relative z-10">Impact</p>
+            {/* No org logo + name row here: the hero at the top of this same
+                screen already identifies the org. */}
             <p className="text-white font-bold text-base leading-snug relative z-10">&ldquo;{np.impact}&rdquo;</p>
-            <div className="flex items-center gap-2 mt-3 relative z-10">
-              <OrgLogo nonprofit={np} size={7} rounded="full" className="shrink-0" />
-              <p className="text-white/70 text-xs">{np.name}</p>
-            </div>
           </motion.div>
         )}
 
@@ -143,7 +140,9 @@ export default function MyCause() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-1">Your Impact</p>
-            <p className="text-gray-700 text-sm leading-relaxed">{impactTier(totalDonated)}</p>
+            <p className="text-gray-700 text-sm leading-relaxed" data-testid="impact-tier">
+              {impactTier(totalDonated, np.shortName)}
+            </p>
           </div>
         </motion.div>
 
@@ -188,7 +187,7 @@ export default function MyCause() {
                 </span>
               </div>
             )}
-            <MatchBadge match={match} />
+            <MatchBadge match={match} onDetails={() => setShowMatchDetails(true)} />
           </motion.div>
         )}
 
@@ -240,10 +239,7 @@ export default function MyCause() {
           </div>
         </motion.div>
 
-        {/* Footer */}
-        <div className="text-center py-2">
-          <p className="text-xs text-gray-300">Powered by <span className="font-semibold">PocketCache</span></p>
-        </div>
+        {/* "Powered by PocketCache" footer: Settings owns it. */}
 
       </div>
     </div>
