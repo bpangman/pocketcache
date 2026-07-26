@@ -7,6 +7,7 @@ import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { DEMO_USER } from '../data/derived';
 import TabBar from './TabBar';
+import { Z } from '../lib/overlay';
 import Sheet from './Sheet';
 import CoinMark from './CoinMark';
 import Dashboard from '../pages/Dashboard';
@@ -49,8 +50,8 @@ export default function AppShell() {
       {/* Global avatar button — fixed top-right inside the phone frame, visible on all donor tabs */}
       <button
         onClick={() => setShowProfile(true)}
-        className="absolute right-5 z-20 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30 active:scale-95 transition-transform"
-        style={{ top: 'calc(var(--pc-safe-top) + 12px)' }}
+        className="absolute right-5 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30 active:scale-95 transition-transform"
+        style={{ top: 'calc(var(--pc-safe-top) + 12px)', zIndex: Z.chrome }}
         aria-label="Open account settings"
       >
         {DEMO_USER.name[0]}

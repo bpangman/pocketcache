@@ -3,12 +3,14 @@ import { X } from 'lucide-react';
 import { safeTopAtLeast } from '../../lib/safeArea';
 import { Z } from '../../lib/overlay';
 
-// top-20 (80px) already clears a 47px notch, so the inset only has to win on
-// devices with a bigger one - hence the floor rather than 80 + inset, which
-// would push the toast into the middle of the screen. Z.pageToast is the
+// Offset by 60 rather than 12 so the toast clears the global avatar button
+// (safe-top + 12px, 40px tall = bottom at safe-top + 52). At the old value the
+// toast's X sat underneath the avatar on any notched device, so tapping it
+// opened the account sheet instead of dismissing the toast. The floor keeps the
+// toast near the top on devices with no inset at all. Z.pageToast is the
 // in-page celebration step: this confirmation belongs to the Dashboard, so it
 // sits BELOW an open bottom sheet rather than painting over its card.
-const TOAST_TOP = safeTopAtLeast(80, 12);
+const TOAST_TOP = safeTopAtLeast(80, 60);
 
 export default function BoostToast({ amount, nonprofit, onClose }) {
   return (

@@ -11,7 +11,7 @@ import {
   effectiveCharge, nextChargeLabel,
 } from '../lib/billing';
 import { Z } from '../lib/overlay';
-import { safeBottomAtLeast } from '../lib/safeArea';
+import { safeBottomAtLeast, safeTopAtLeast } from '../lib/safeArea';
 import { MONTHLY_DATA } from '../data/transactions';
 import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
@@ -126,11 +126,16 @@ function MilestoneToast({ milestone, onClose }) {
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -80, opacity: 0 }}
-      className="absolute top-20 left-4 right-4 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
+      className="absolute left-4 right-4 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
       // Z.pageToast, not Z.toast: this is a celebration on the Dashboard, so if
       // the donor has a bottom sheet open it belongs BEHIND the sheet with the
       // rest of the page instead of painting over the sheet's card.
-      style={{ zIndex: Z.pageToast }}
+      //
+      // The top offset clears the global avatar button (safe-top + 12px, 40px
+      // tall) rather than using a flat top-20. At top-20 the toast's X landed
+      // directly under the avatar on any device with a notch, so tapping the X
+      // opened the account sheet instead of dismissing the toast.
+      style={{ top: safeTopAtLeast(80, 60), zIndex: Z.pageToast }}
     >
       <div className="text-3xl">{milestone.emoji}</div>
       <div className="flex-1">

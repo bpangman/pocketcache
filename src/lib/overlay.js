@@ -105,6 +105,12 @@
  * or to the app? Pick the matching step rather than reaching for the highest.
  */
 export const Z = {
+  // Floating page chrome that hovers over a tab's own content: the global
+  // avatar button. It must sit ABOVE the page but BELOW pageToast, because a
+  // toast pinned near the top of the screen overlaps the avatar and its
+  // dismiss button has to stay tappable. The avatar was z-20 (above both
+  // pageToast AND sheetScrim), which swallowed the milestone toast's X.
+  chrome: 4,
   pageToast: 5,
   sheetScrim: 10,
   sheet: 20,
