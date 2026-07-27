@@ -18,13 +18,15 @@ import {
   chargeTotal, cycleDays, daysUntilNextCharge, effectiveCharge, nextChargeDate,
   nextChargeLabel, previousChargeDate, processingCoverFor,
 } from '../lib/billing';
-// Skipped-cycle copy comes from the app Dashboard so the two donor surfaces
-// render byte-identical sentences and figures for a skip. See the block at the
-// top of Dashboard.jsx for the rule these strings encode.
+// Skipped-cycle copy comes from lib/donorContent, the same module the app
+// Dashboard reads, so the two donor surfaces render byte-identical sentences and
+// figures for a skip. The honesty rule these strings encode - the "only charged
+// in the months you give" framing never appears without the $1-rolls-forward
+// sentence beside it - is documented at the top of that section.
 import {
-  SKIP_COLLECT_AMOUNT, SKIP_COLLECT_LABEL, SKIP_RESUME_LINE, SKIP_TILE_SUB,
-  SKIP_UNDO_LINE, skipAccruedLine, skipFeeLine, skipStatusLine,
-} from './Dashboard';
+  SKIP_COLLECT_AMOUNT, SKIP_COLLECT_LABEL, SKIP_TILE_SUB,
+  skipExplainer, skipSummaryLine,
+} from '../lib/donorContent';
 
 // ─── The browser-native donor portal ─────────────────────────────────────────
 // This is PocketCache as if it had been built as a web product: top nav, wide
@@ -457,7 +459,7 @@ function EstimateCard({
       <SectionTitle>Next charge · {skipped ? 'skipped this month' : nextChargeLabel()}</SectionTitle>
       {skipped && (
         <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }} data-testid="web-estimate-skipped">
-          {skipStatusLine()}{' '}{skipAccruedLine(pending)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}
+          {skipExplainer({ pendingRoundUps: pending, feeMonths })}
         </p>
       )}
 
@@ -946,7 +948,7 @@ export default function WebDashboard() {
                 // the word "Skipped": $0.00 is what leaves the account.
                 value={skipNextCharge ? SKIP_COLLECT_AMOUNT : nextChargeLabel()}
                 sub={skipNextCharge
-                  ? `${skipStatusLine()} ${skipFeeLine(feeMonths)}`
+                  ? skipSummaryLine(feeMonths)
                   : rollingOver
                     ? `$${fmtMoney(pendingRoundUps)} so far  -  rolls over at month-end (under ${npShort}'s $${monthlyMinimum} minimum)`
                     // Names the cover in the tile too, so the KPI figure is

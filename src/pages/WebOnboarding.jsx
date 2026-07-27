@@ -7,6 +7,7 @@ import { useTheme } from '../store/ThemeContext';
 import { saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, BANKS, PAYMENT_OPTIONS } from './Onboarding';
+import { findOrgByCode } from '../store/orgStore';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
@@ -24,10 +25,22 @@ import {
 } from './Dashboard';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
-// The signup journey as a real webpage: the donor arrived from THIS nonprofit's
-// micro-site, so the org is implied  -  no gate, no QR, no code entry. Left rail
-// carries the pitch + step progress; the right panel is the current step.
-// On completion it hands off to WebDashboard (page → 'home').
+// The signup journey as a real webpage. Left rail carries the pitch + step
+// progress; the right panel is the current step. On completion it hands off to
+// WebDashboard (page → 'home').
+//
+// TWO WAYS IN, ONE WIZARD
+// A donor who followed an org join link (?org=CODE, or a micro-site button) has
+// the nonprofit implied and starts at 'account'. A donor who arrives cold from
+// pocketcache.app (/demo/?app=1  -  no org, no code) starts one step earlier, at
+// 'join': the web-native version of the phone's OrgGateScreen (code entry with
+// the same validation and the same error copy, the "already have an account"
+// door, and the "Create your nonprofit page" CTA). It is a step of THIS wizard
+// rather than a second desktop screen, because the two entries differ by exactly
+// one question  -  which nonprofit  -  and a parallel screen would have to
+// duplicate the chrome, the rail and the handoff to keep them looking alike.
+// Before this existed the codeless donor fell through App.jsx's router into the
+// WebPortal column and got the phone UI at 440px on a 1440px page.
 
 const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
 const NAVY = '#003865';
@@ -48,6 +61,34 @@ const STEPS = [
 // Settings deep-links reuse the app's step names
 const DEEP_LINK_MAP = { 'connect-card': 'card', 'payment-method': 'payment', 'checkout-confirm': 'review', signup: 'account' };
 
+// The numbered step list. `idx` of -1 (the join step, which is not one of the
+// four) leaves every row muted, so the rail reads as "here is what is ahead".
+function StepList({ idx }) {
+  return (
+    <ol style={{ listStyle: 'none', padding: 0, margin: '0 0 22px', display: 'grid', gap: 2 }}>
+      {STEPS.map((s, i) => {
+        const done = i < idx;
+        const active = i === idx;
+        return (
+          <li key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0' }}>
+            <span style={{
+              width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, flexShrink: 0,
+              background: done ? '#0D9488' : active ? NAVY : '#e2e8f0',
+              color: done || active ? '#fff' : INK.muted,
+            }}>
+              {done ? '✓' : i + 1}
+            </span>
+            <span style={{ fontSize: 13.5, fontWeight: active ? 700 : 500, color: active ? INK.primary : done ? INK.secondary : INK.muted }}>
+              {s.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function StepRail({ current, org }) {
   const idx = STEPS.findIndex(s => s.id === current);
   return (
@@ -63,32 +104,96 @@ function StepRail({ current, org }) {
         Round up your everyday purchases and your spare change quietly adds up
         for {org?.shortName ?? 'your cause'}  -  one small monthly charge, straight to them.
       </p>
-      <ol style={{ listStyle: 'none', padding: 0, margin: '0 0 22px', display: 'grid', gap: 2 }}>
-        {STEPS.map((s, i) => {
-          const done = i < idx;
-          const active = i === idx;
-          return (
-            <li key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0' }}>
-              <span style={{
-                width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700, flexShrink: 0,
-                background: done ? '#0D9488' : active ? NAVY : '#e2e8f0',
-                color: done || active ? '#fff' : INK.muted,
-              }}>
-                {done ? '✓' : i + 1}
-              </span>
-              <span style={{ fontSize: 13.5, fontWeight: active ? 700 : 500, color: active ? INK.primary : done ? INK.secondary : INK.muted }}>
-                {s.label}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      <StepList idx={idx} />
       <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
         🔒 Bank connection is read-only via Plaid. Payments are processed by
         Stripe  -  {org?.shortName ?? 'your nonprofit'} is who charges you, never us. No passwords, ever.
       </p>
     </aside>
+  );
+}
+
+// Rail for the join and sign-in steps: no nonprofit is bound yet, so it carries
+// the PocketCache pitch instead of the org's, and previews the four steps that
+// follow. Same geometry as StepRail so the page does not jump when the code
+// lands and the rail switches over to the nonprofit's own story.
+function JoinRail({ preview = true }) {
+  return (
+    <aside style={{ position: 'sticky', top: 90 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <CoinMark size={44} />
+        <div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary, lineHeight: 1.25 }}>Round-up giving</p>
+          <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>for the nonprofit you already care about.</p>
+        </div>
+      </div>
+      <p style={{ margin: '0 0 20px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+        Your nonprofit hands out a short code  -  it is on their flyer, their
+        email, their website. Enter it and your everyday purchases round up to
+        the nearest dollar, with the spare change going straight to them in one
+        small monthly charge.
+      </p>
+      {preview && (
+        <>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+            Then, about two minutes
+          </p>
+          <StepList idx={-1} />
+        </>
+      )}
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
+        🔒 Bank connection is read-only via Plaid. Payments are processed by
+        Stripe  -  your nonprofit is who charges you, never us. No passwords, ever.
+      </p>
+    </aside>
+  );
+}
+
+// "For Nonprofits" first, donor path below  -  the phone gate's order
+// (Onboarding.jsx OrgGateScreen ~319), so the two surfaces lead with the same
+// thing. goToOnboardingStep('nonprofit-signup') is what App.jsx's WebExperience
+// latches on to route to the desktop nonprofit signup wizard instead of here.
+/**
+ * The "I am nonprofit staff, not a donor" door.
+ *
+ * `placement` decides which side the divider sits on, because this block is
+ * used both above the donor content (account step) and below it (join step).
+ * On the join step the donor path leads - that step is what "Start giving as a
+ * donor" lands on, so opening with a nonprofit CTA answered a question the
+ * visitor had not asked.
+ */
+function NonprofitCta({ onSignup, placement = 'above' }) {
+  const below = placement === 'below';
+  const divider = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: below ? '0 0 16px' : '16px 0 0' }}>
+      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+      <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>
+        {below ? 'Are you the nonprofit?' : 'Looking to support a nonprofit?'}
+      </span>
+      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+    </div>
+  );
+  return (
+    <div style={{ marginBottom: below ? 0 : 18, marginTop: below ? 22 : 0 }}>
+      {below && divider}
+      <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+        For Nonprofits
+      </p>
+      <button
+        onClick={onSignup}
+        data-testid="web-nonprofit-cta"
+        style={{
+          width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer',
+          background: `linear-gradient(135deg, ${NAVY}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 15,
+        }}
+      >
+        Create your nonprofit page
+      </button>
+      <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: INK.muted }}>
+        Run a nonprofit? List it on PocketCache and get your own round-up program  -  live in minutes.
+      </p>
+      {!below && divider}
+    </div>
   );
 }
 
@@ -132,19 +237,32 @@ function Checkbox({ checked, onChange, children }) {
   );
 }
 
-export default function WebOnboarding({ entryOrg }) {
+export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   const {
     selectedNonprofit, setSelectedNonprofit, hasAccount, accountStatus,
     setHasAccount, setAccountStatus, setLastMode, setTrackedCard, setPaymentMethod,
     setPage, pendingRoundUps, feeMonths, monthlyCap, setMonthlyCap, chargeAdjustment,
     initialOnboardingStep, clearInitialOnboardingStep, skipNextCharge, goToOnboardingStep,
-    coverProcessing, setCoverProcessing,
+    coverProcessing, setCoverProcessing, adminRole, setAdminRole, lastMode,
   } = useApp();
   const brand = useTheme();
   const org = selectedNonprofit ?? entryOrg;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
 
-  const [step, setStep] = useState('account');
+  // No nonprofit yet means one extra question first. Decided once, on mount: the
+  // join step binds the org itself, and re-deriving this would bounce the donor
+  // straight back out of the step they just completed.
+  const [step, setStep] = useState(() => (org ? 'account' : 'join'));
+  // Join step. A join link whose code this device cannot resolve prefills the
+  // input and explains itself rather than failing silently  -  same behaviour as
+  // the phone gate (Onboarding.jsx OrgGateScreen ~216).
+  const [code, setCode] = useState(() => (entryCode && !findOrgByCode(entryCode) ? entryCode.toUpperCase() : ''));
+  const [codeError, setCodeError] = useState(() => (
+    entryCode && !findOrgByCode(entryCode) ? 'Code not found. Ask your nonprofit for their PocketCache code.' : null
+  ));
+  // Sign-in step
+  const [ssoChosen, setSsoChosen] = useState(null);
+  const [noAccount, setNoAccount] = useState(false);
   // Account step
   const [selectedState, setSelectedState] = useState('');
   const [agreedTerms, setAgreedTerms] = useState(false);
@@ -187,6 +305,61 @@ export default function WebOnboarding({ entryOrg }) {
       clearInitialOnboardingStep();
     }
   }, [initialOnboardingStep, clearInitialOnboardingStep]);
+
+  // Join step: the real lookup, not a re-implementation of code matching  -
+  // findOrgByCode is the same resolver the phone gate, the ?org= link and the
+  // vanity-URL forwarder all go through, so custom orgs and BGCA behave alike.
+  function handleJoin(e) {
+    e?.preventDefault?.();
+    const np = findOrgByCode(code);
+    if (!np) {
+      setCodeError('Code not found. Ask your nonprofit for their PocketCache code.');
+      return;
+    }
+    setCodeError(null);
+    setSelectedNonprofit(np);
+    setStep('account');
+  }
+
+  // One sign-in for every role, same routing as the app's gate
+  // (Onboarding.jsx resumeSession ~2260): donor-only → giving, admin-only →
+  // dashboard, both → last-used mode.
+  //
+  // With one addition the phone does not need: the donor dashboard is
+  // per-nonprofit, so an identity that resolves with nothing bound on this
+  // device has no dashboard to land on. It comes back to the join step for the
+  // one question that is missing instead of being handed an empty one.
+  function resumeSession() {
+    const donorOnly = hasAccount && !adminRole;
+    const adminOnly = adminRole && !hasAccount;
+    if (adminOnly) { setLastMode('admin'); setPage('np-dashboard'); return; }
+    if (donorOnly) {
+      if (!selectedNonprofit) { setStep('join'); return; }
+      setLastMode('giving'); setPage('home'); return;
+    }
+    if (lastMode === 'admin' && adminRole) { setPage('np-dashboard'); return; }
+    if (!selectedNonprofit) { setStep('join'); return; }
+    setPage('home');
+  }
+
+  function handleSignInSSO(p) {
+    if (ssoChosen) return;
+    setSsoChosen(p);
+    setTimeout(() => {
+      // Production: the backend looks the identity up by SSO token and finds the
+      // account anywhere. Demo: nothing on this device, so say so plainly.
+      if (!hasAccount && !adminRole) { setNoAccount(true); setSsoChosen(null); return; }
+      resumeSession();
+    }, 800);
+  }
+
+  // Demo-only shortcut, carried over from the phone's sign-in empty state, so a
+  // prospect can see the admin side without creating an org first.
+  function previewAdminDashboard() {
+    if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    setLastMode('admin');
+    setPage('np-dashboard');
+  }
 
   function handleSSO(p) {
     if (hasAccount) { setLastMode('giving'); setPage('home'); return; }
@@ -280,7 +453,9 @@ export default function WebOnboarding({ entryOrg }) {
 
       <main style={{ flex: 1, width: '100%', maxWidth: 980, margin: '0 auto', padding: '36px 24px 48px' }}>
         <div className="grid grid-cols-1 md:grid-cols-[300px_1fr]" style={{ display: 'grid', gap: 36, alignItems: 'start' }}>
-          <StepRail current={step} org={org} />
+          {step === 'join' || step === 'signin'
+            ? <JoinRail preview={step === 'join'} />
+            : <StepRail current={step} org={org} />}
 
           <AnimatePresence mode="wait">
             <motion.section
@@ -291,6 +466,126 @@ export default function WebOnboarding({ entryOrg }) {
               transition={{ duration: 0.22 }}
               style={{ ...PANEL, padding: 28 }}
             >
+              {/* ── JOIN: which nonprofit? ──
+                  Only for a donor who arrived without one. Everything the phone
+                  gate offers, in the portal's own language.
+
+                  ORDER MATTERS: the donor code comes FIRST. This step is what
+                  "Start giving as a donor" on the marketing site lands on, and
+                  leading with a full-width navy "Create your nonprofit page"
+                  button answered a question the visitor did not ask. The
+                  nonprofit door stays on the page, below, for the minority who
+                  came here as staff. */}
+              {step === 'join' && (
+                <>
+                  <PanelTitle
+                    title="Which nonprofit are you giving to?"
+                    sub="Enter the PocketCache code they gave you. It is short enough to say out loud  -  BGCA, for example."
+                  />
+                  {/* Not a "continue as you" button, which is what the phone
+                      gate offers: on THIS step there is by definition no
+                      nonprofit bound, so there is nothing to continue to. It
+                      greets the identity and names the one thing still missing.
+                      This is also where a successful sign-in lands when the
+                      account has no nonprofit on this device (resumeSession). */}
+                  {hasAccount && accountStatus === 'active' && (
+                    <div
+                      data-testid="web-join-signed-in"
+                      style={{ marginBottom: 16, padding: '11px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', fontSize: 13.5, fontWeight: 600, color: '#92400e' }}
+                    >
+                      👋 Signed in as {hasAccount.name}  -  pick your nonprofit to carry on.
+                    </div>
+                  )}
+                  <form onSubmit={handleJoin}>
+                    <label htmlFor="pc-join-code" style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                      Nonprofit code
+                    </label>
+                    <input
+                      id="pc-join-code"
+                      type="text"
+                      autoComplete="off"
+                      data-testid="web-join-code"
+                      placeholder="BGCA"
+                      value={code}
+                      onChange={e => { setCode(e.target.value.toUpperCase()); setCodeError(null); }}
+                      style={{
+                        width: '100%', boxSizing: 'border-box', padding: '13px 15px', borderRadius: 12,
+                        border: `1.5px solid ${codeError ? '#ef4444' : code ? '#FBBF24' : '#d1d5db'}`,
+                        background: '#f9fafb', fontFamily: 'monospace', fontSize: 17, letterSpacing: '0.14em',
+                        textTransform: 'uppercase', color: INK.primary, outline: 'none',
+                      }}
+                    />
+                    {codeError && (
+                      <p data-testid="web-join-error" style={{ margin: '7px 0 0', fontSize: 12.5, color: '#dc2626' }}>{codeError}</p>
+                    )}
+                    <p style={{ margin: '7px 0 14px', fontSize: 12, lineHeight: 1.55, color: INK.muted }}>
+                      Demo code: BGCA. Holding their flyer? Point your phone camera at
+                      the QR code on it and it opens this page with the code already filled in.
+                    </p>
+                    <PrimaryButton disabled={!code} onClick={handleJoin}>Continue →</PrimaryButton>
+                  </form>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0 14px' }}>
+                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                    <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>Been here before?</span>
+                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                  </div>
+                  <button
+                    onClick={() => setStep('signin')}
+                    data-testid="web-join-signin"
+                    style={{ width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#f0f4f8', color: '#0B2A4A', fontWeight: 700, fontSize: 15 }}
+                  >
+                    Already have an account? Sign in
+                  </button>
+                  <NonprofitCta onSignup={() => goToOnboardingStep('nonprofit-signup')} placement="below" />
+                </>
+              )}
+
+              {/* ── SIGN IN ──
+                  The gate's universal door (Onboarding.jsx GateSignInScreen):
+                  one identity, whichever roles it holds. */}
+              {step === 'signin' && (
+                noAccount ? (
+                  <>
+                    <PanelTitle title="No account found" sub="We could not find an account on this device." />
+                    <p style={{ margin: '0 0 18px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+                      In the real app, signing in with Apple or Google finds your account
+                      anywhere  -  no device lock-in, nothing to remember.
+                    </p>
+                    <PrimaryButton onClick={() => { setNoAccount(false); setStep('join'); }}>← Back to the code</PrimaryButton>
+                    <button
+                      onClick={previewAdminDashboard}
+                      style={{ width: '100%', marginTop: 10, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: INK.muted }}
+                    >
+                      Demo: preview the BGCA admin dashboard →
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <PanelTitle title="Welcome back" sub="Sign in with the account you used before." />
+                    <SsoButtons onPress={handleSignInSSO} chosen={ssoChosen} />
+                    <p style={{ margin: '12px 0 0', fontSize: 12, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
+                      No passwords here  -  your Apple or Google account is your key, including its two-factor protection.
+                    </p>
+                    {onAdminSignIn && (
+                      <button
+                        onClick={onAdminSignIn}
+                        data-testid="web-signin-admin"
+                        style={{ width: '100%', marginTop: 14, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: INK.muted }}
+                      >
+                        Nonprofit admin? <span style={{ fontWeight: 700, textDecoration: 'underline', color: NAVY }}>Sign in with your work email</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setStep('join')}
+                      data-testid="web-signin-back"
+                      style={{ width: '100%', marginTop: 4, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: INK.muted }}
+                    >
+                      ← Back
+                    </button>
+                  </>
+                )
+              )}
+
               {step === 'account' && (
                 <>
                   {/* ── FOR NONPROFITS (first, same as the phone gate) ──
@@ -299,35 +594,8 @@ export default function WebOnboarding({ entryOrg }) {
                       viewport width alone), and the desktop wizard had no way out:
                       the phone gate's OrgGateScreen leads with "For Nonprofits /
                       Create your nonprofit page" above the donor path, and this
-                      had nothing. Same order, same words, web chrome.
-                      goToOnboardingStep('nonprofit-signup') is what App.jsx's
-                      WebExperience latches on to route to the desktop nonprofit
-                      signup frame instead of this wizard. */}
-                  <div style={{ marginBottom: 18 }}>
-                    <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
-                      For Nonprofits
-                    </p>
-                    <button
-                      onClick={() => goToOnboardingStep('nonprofit-signup')}
-                      data-testid="web-nonprofit-cta"
-                      style={{
-                        width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer',
-                        background: `linear-gradient(135deg, ${NAVY}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 15,
-                      }}
-                    >
-                      Create your nonprofit page
-                    </button>
-                    <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: INK.muted }}>
-                      Run a nonprofit? List it on PocketCache and get your own round-up program  -  live in minutes.
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
-                      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                      <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>
-                        Looking to support a nonprofit?
-                      </span>
-                      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                    </div>
-                  </div>
+                      had nothing. Same order, same words, web chrome. */}
+                  <NonprofitCta onSignup={() => goToOnboardingStep('nonprofit-signup')} />
                   <PanelTitle title="Create your account" sub="Sign up in seconds. No payment required yet." />
                   {hasAccount && accountStatus === 'active' && (
                     <button

@@ -8,15 +8,18 @@ import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
 import { fmtMoney, fmtMoneyCompact } from '../lib/format';
 import {
-  CHARGE_DAY, LARGE_DONATION_THRESHOLD, MAX_FEE_MONTHS, REVIEW_WINDOW_LAST_DAY,
-  chargeAfterNextLabel, chargeTotal, currentMonthName, effectiveCharge, nextChargeLabel,
+  CHARGE_DAY, LARGE_DONATION_THRESHOLD, REVIEW_WINDOW_LAST_DAY,
+  chargeTotal, currentMonthName, effectiveCharge, nextChargeLabel,
   processingCoverFor,
 } from '../lib/billing';
 // Shared donor-facing derivations. `impactTier` used to be a verbatim duplicate of
 // MyCause.jsx's copy in this file; `billingExplainer` is now the product's only
 // billing explanation and Settings is its only home; `adjustBounds` is the one set
 // of bounds for the adjust-charge control.
-import { adjustBounds, billingExplainer, impactTier, matchProgress } from '../lib/donorContent';
+import {
+  adjustBounds, billingExplainer, impactTier, matchProgress,
+  skipConfirmParagraphs, skipRowOfferSub, skipRowSub,
+} from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
 import { generateOneTimeCode } from '../lib/npSignup';
 import OrgLogo from '../components/OrgLogo';
@@ -1185,12 +1188,13 @@ export function WebSettings() {
   // wrong for days 1 to 10, when the upcoming charge is THIS month's 11th.
   const skipMonthName = currentMonthName();
   const chargeLabel = nextChargeLabel();
-  // A skipped cycle collects NOTHING on `chargeLabel`; the $1 fee rolls forward
-  // and lands on the charge after that, which billing can now name outright.
-  // Skip copy used to say "next month's charge" and hardcode "$1 × 2", so a
-  // donor who skipped twice was told $1 × 2 while the charge carried $1 × 3.
-  const afterChargeLabel = chargeAfterNextLabel();
-  const rolledFeeMonths = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
+  // A skipped cycle collects NOTHING on `chargeLabel`; the $1 fee is not waived,
+  // it rolls forward and lands on the charge after that. Every sentence that
+  // says so - here and in the app - comes from lib/donorContent's skip copy,
+  // which also derives the "$1 × n" multiplier from the real pending feeMonths
+  // (skip twice and the third charge honestly reads $1 × 3) and enforces the
+  // rule that the "only charged in the months you give" framing never renders
+  // without the fee sentence beside it.
 
   // ── CANONICAL EXPORT SHAPE (mirror of Settings.jsx handleDownloadData) ──────
   // Settings.jsx marks that object as canonical for BOTH surfaces; this is the
@@ -1311,8 +1315,8 @@ export function WebSettings() {
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Skip a month"
               sub={skipNextCharge
-                ? `${skipMonthName} skipped - nothing on ${chargeLabel}; the $1 fee rolls to ${afterChargeLabel} ($1 × ${rolledFeeMonths})`
-                : `Need a breather? Skip ${skipMonthName}'s charge`}
+                ? skipRowSub({ monthName: skipMonthName, feeMonths })
+                : skipRowOfferSub(skipMonthName)}
               right={skipNextCharge ? (
                 <button onClick={() => setSkipNextCharge(false)}
                   style={{
@@ -1475,22 +1479,20 @@ export function WebSettings() {
         pendingRoundUps={pendingRoundUps} feeMonths={feeMonths} nonprofit={np}
         monthlyCap={monthlyCap} chargeAdjustment={chargeAdjustment}
         onDonate={boostDonation} onCancelled={cancelAccount} />
-      {/* Mirror of the app's SkipConfirmModal (Settings.jsx ~95-148), sentence for
-          sentence. Both name the charge the fee actually lands on rather than
-          saying "the charge after that", and both derive the multiplier from the
-          real pending feeMonths (clamped at MAX_FEE_MONTHS) - skip two cycles
-          running and the third charge honestly reads $1 × 3. */}
+      {/* Mirror of the app's SkipConfirmModal (Settings.jsx ~121-176), sentence
+          for sentence - literally, because both render the same
+          skipConfirmParagraphs() array from lib/donorContent rather than two
+          hand-typed copies. That module names the charge the fee actually lands
+          on, derives the multiplier from the real pending feeMonths (clamped at
+          MAX_FEE_MONTHS) so skipping two cycles honestly reads $1 × 3, and keeps
+          the "$1 app fee is not waived" sentence attached to the good news. */}
       <Modal show={modal === 'skip'} onClose={() => setModal(null)} title={`${skipMonthName} skipped`}>
         <div data-testid="web-skip-modal">
-          <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-            You will skip {skipMonthName}&apos;s charges. Those round-ups are simply never charged - they don&apos;t roll over and they don&apos;t come out later.
-          </p>
-          <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-            Nothing is charged on {chargeLabel}. Only the $1 app fee rolls forward, so it joins your {afterChargeLabel} charge as $1 × {rolledFeeMonths}.
-          </p>
-          <p style={{ margin: '0 0 16px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
-            Changed your mind? Tap Undo on this screen any time before {chargeLabel}.
-          </p>
+          {skipConfirmParagraphs({ monthName: skipMonthName, feeMonths }).map((para, i, all) => (
+            <p key={i} style={{ margin: i === all.length - 1 ? '0 0 16px' : '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+              {para}
+            </p>
+          ))}
         </div>
         <ActionButton tone="primary" onClick={() => setModal(null)}>Got it</ActionButton>
       </Modal>

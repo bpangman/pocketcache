@@ -6,10 +6,13 @@ import { useApp } from '../store/AppContext';
 import { loadKey, saveKey } from '../store/identityStore';
 import { useTheme } from '../store/ThemeContext';
 import {
-  MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal, cycleDays, daysUntilNextCharge,
+  chargeTotal, cycleDays, daysUntilNextCharge,
   effectiveCharge, nextChargeLabel, processingCoverFor,
 } from '../lib/billing';
-import { adjustBounds, getMilestonesUpTo, matchProgress } from '../lib/donorContent';
+import {
+  SKIP_COLLECT_AMOUNT, SKIP_COLLECT_LABEL, SKIP_TILE_SUB,
+  adjustBounds, getMilestonesUpTo, matchProgress, skipExplainer,
+} from '../lib/donorContent';
 import { Z } from '../lib/overlay';
 import { safeBottomAtLeast, safeTopAtLeast } from '../lib/safeArea';
 import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER } from '../data/derived';
@@ -20,66 +23,21 @@ import BoostToast from '../components/sheets/BoostToast';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
 
 // ─── Skipped-cycle copy  -  SHARED with the web portal ───────────────────────
-// The rule (billing.js, rule 5): a skipped month is never charged at all.
-// Nothing at all comes out on the upcoming charge date - the round-ups do NOT
-// roll over and they are NOT collected later - and only the flat $1 app fee
-// rides forward onto the charge after that.
+// The sentences themselves now live in lib/donorContent, next to every other
+// piece of copy a donor reads on more than one screen, and the honesty rule they
+// encode is documented there: the "you're only charged in the months you give"
+// framing is true about TIMING and false about COST, so it never renders without
+// the $1-rolls-forward sentence beside it.
 //
-// Both donor surfaces render these exact strings: WebDashboard.jsx and
-// WebOnboarding.jsx import them from here rather than re-typing them, so the app
-// and the browser can never word (or number) a skip differently. Importing plain
-// data out of a page module is the same pattern WebOnboarding already uses for
-// Onboarding.jsx's US_STATES / BANKS / PAYMENT_OPTIONS.
+// These re-exports exist only so the import paths in WebDashboard.jsx and
+// WebOnboarding.jsx keep working. New callers should import from
+// '../lib/donorContent' directly.
 /* eslint-disable react-refresh/only-export-components */
-
-/** Label for the upcoming-charge figure while a skip is in effect. */
-export const SKIP_COLLECT_LABEL = 'To be collected';
-
-/** The upcoming-charge figure itself while a skip is in effect. Not a total to
- *  be computed - a skipped cycle collects nothing, so it is always zero. */
-export const SKIP_COLLECT_AMOUNT = '$0.00';
-
-/** When the normal lock-on-the-1st / charge-on-the-11th rhythm picks back up.
- *  Says "next month's round-ups" deliberately: this month's are gone, so the
- *  resumed schedule is about money the donor has not rounded up yet. */
-export const SKIP_RESUME_LINE = "Normal timing resumes with next month's round-ups  -  exact amount emailed on the 1st, charged on the 11th.";
-
-/** How a donor gets out of the skip. */
-export const SKIP_UNDO_LINE = 'Un-skip anytime in Settings.';
-
-/** Sub-label for an accrued round-ups tile while a skip is in effect, so the
- *  accrual figure can never read as money that is about to be collected. */
-export const SKIP_TILE_SUB = 'Never charged';
-
-/**
- * Sentence naming the upcoming charge date and saying nothing lands on it.
- * @param {Date} [now] - injectable clock, same convention as lib/billing.
- * @returns {string} e.g. 'Nothing is collected on Aug 11.'
- */
-export function skipStatusLine(now = new Date()) {
-  return `Nothing is collected on ${nextChargeLabel(now)}.`;
-}
-
-/**
- * Sentence stating the accrued round-ups are gone, not deferred.
- * @param {number} pendingRoundUps - round-ups accrued this cycle.
- * @returns {string}
- */
-export function skipAccruedLine(pendingRoundUps) {
-  return `Your $${pendingRoundUps.toFixed(2)} of round-ups this month is never charged  -  it does not roll over and it will not be collected later.`;
-}
-
-/**
- * Sentence naming where the rolled-forward $1 fee actually lands, with the
- * multiplier derived from real state and clamped by MAX_FEE_MONTHS.
- * @param {number} feeMonths - months of $1 fee pending today.
- * @param {Date} [now] - injectable clock.
- * @returns {string}
- */
-export function skipFeeLine(feeMonths, now = new Date()) {
-  const rolled = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
-  return `Only the $1 app fee rolls forward, joining your ${chargeAfterNextLabel(now)} charge as $1 × ${rolled}.`;
-}
+export {
+  SKIP_COLLECT_AMOUNT, SKIP_COLLECT_LABEL, SKIP_RESUME_LINE, SKIP_TILE_SUB,
+  SKIP_UNDO_LINE, skipAccruedLine, skipExplainer, skipFeeLine, skipStatusLine,
+  skipSummaryLine,
+} from '../lib/donorContent';
 /* eslint-enable react-refresh/only-export-components */
 
 function getGreeting() {
@@ -472,15 +430,21 @@ export default function Dashboard() {
           className="bg-white rounded-3xl p-5 card-shadow"
         >
           <div className="flex items-center justify-between mb-3">
-            <div>
+            <div className="min-w-0">
               <p className="font-bold text-gray-900 text-sm">
                 Monthly Charge to {selectedNonprofit.shortName}
               </p>
+              {/* On a skipped cycle this caption is a STATE WORD, not a claim.
+                  It shares a tight flex row with the day counter, so the sentence
+                  that carries the "only charged in the months you give" framing
+                  cannot live here - and the framing must never appear without the
+                  "$1 app fee is not waived" sentence beside it. Both live in the
+                  full-width skipExplainer paragraph below, together. */}
               <p className="text-gray-400 text-xs mt-0.5" data-testid="skip-status-line">
-                Next charge: {skipNextCharge ? skipStatusLine() : nextChargeDateLabel}
+                Next charge: {skipNextCharge ? 'Skipped' : nextChargeDateLabel}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-right shrink-0 ml-3">
               <p className="font-bold text-2xl" style={{ color: '#0B2A4A' }}>{daysLeft}</p>
               {/* The countdown measures the CYCLE, and on a skipped cycle its end
                   is not a charge - saying "days left" next to "nothing is
@@ -533,7 +497,7 @@ export default function Dashboard() {
           )}
           {skipNextCharge && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed" data-testid="skip-detail">
-              {skipAccruedLine(pendingRoundUps)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}
+              {skipExplainer({ pendingRoundUps, feeMonths })}
             </p>
           )}
           {belowMinimum && (

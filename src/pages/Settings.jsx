@@ -14,11 +14,11 @@ import OrgLogo from '../components/OrgLogo';
 import { findOrgByCode } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import {
-  CHARGE_DAY, MAX_FEE_MONTHS, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal,
+  CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeTotal,
   currentMonthName, effectiveCharge, nextChargeLabel, processingCoverFor,
 } from '../lib/billing';
 import { fmtMoney } from '../lib/format';
-import { billingExplainer } from '../lib/donorContent';
+import { billingExplainer, skipConfirmParagraphs, skipRowOfferSub, skipRowSub } from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { MONTHLY_DATA } from '../data/transactions';
@@ -118,7 +118,7 @@ function SettingRow({ icon, label, sub, right, onPress, color }) {
   );
 }
 
-function SkipConfirmModal({ show, onClose, monthName, chargeLabel, afterChargeLabel, feeMultiplier, brand }) {
+function SkipConfirmModal({ show, onClose, monthName, paragraphs, brand }) {
   return (
     <AnimatePresence>
       {show && (
@@ -146,20 +146,22 @@ function SkipConfirmModal({ show, onClose, monthName, chargeLabel, afterChargeLa
               <SkipForward size={22} />
             </div>
             <h3 className="font-bold text-gray-900 text-lg mb-2">{monthName} skipped</h3>
-            <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
-              You will skip {monthName}'s charges. Those round-ups are simply never charged - they don't roll over and they don't come out later.
-            </p>
-            {/* Both dates come from lib/billing (nextChargeLabel and
-                chargeAfterNextLabel) - the fee lands on a real date, so name it
-                rather than saying "the charge after that". feeMultiplier is
-                derived from the REAL pending feeMonths, not a hardcoded 2: skip
-                two months running and the third charge honestly carries $1 × 3. */}
-            <p className="text-gray-500 text-left mb-2" style={{ fontSize: 13 }}>
-              Nothing is charged on {chargeLabel}. Only the $1 app fee rolls forward, so it joins your {afterChargeLabel} charge as $1 × {feeMultiplier}.
-            </p>
-            <p className="text-gray-500 text-left mb-5" style={{ fontSize: 13 }}>
-              Changed your mind? Tap Undo on this screen any time before {chargeLabel}.
-            </p>
+            {/* The prose is NOT typed here: it is skipConfirmParagraphs() from
+                lib/donorContent, so this sheet and the web portal's skip modal
+                are string-identical. That module also owns the honesty rule -
+                the "only charged in the months you give" sentence and the "$1 app
+                fee is not waived" sentence always ship together - and it derives
+                the multiplier from the REAL pending feeMonths rather than a
+                hardcoded 2, so skipping two months running honestly reads $1 × 3. */}
+            {paragraphs.map((para, i) => (
+              <p
+                key={i}
+                className={`text-gray-500 text-left ${i === paragraphs.length - 1 ? 'mb-5' : 'mb-2'}`}
+                style={{ fontSize: 13 }}
+              >
+                {para}
+              </p>
+            ))}
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={onClose}
@@ -796,8 +798,16 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
             >
               Cancel without donating
             </button>
+            {/* CANCELLING, not skip-a-month. Cancelling really does waive the
+                unpaid app fee (Terms section 12); skipping a month does not
+                (Terms section 7). The old wording opened with "Skip it", which
+                borrowed the skip feature's verb for the one flow where the fee
+                genuinely disappears - so it read as confirmation that a skipped
+                month is free. Named the flow instead, and said "unpaid app fees"
+                rather than "all fees this month", because a rolled-forward fee
+                from an earlier month is waived here too. */}
             <p className="text-gray-400 text-xs text-center">
-              Skip it and your round-ups and all fees this month are simply waived  -  like the month never happened. Never a fee for leaving.
+              Cancel without donating and your round-ups and any unpaid app fees are simply waived  -  like the month never happened. Never a fee for leaving.
             </p>
           </>
         )}
@@ -1093,12 +1103,9 @@ export default function Settings() {
   // `month + 1` made Settings contradict the review alert for ten days a month.
   const skipMonthName = currentMonthName();
   const chargeLabel = nextChargeLabel();
-  // The charge AFTER the upcoming one - where a skipped cycle's $1 fee actually
-  // lands. Named, not described, so the donor can put it in a calendar.
-  const afterChargeLabel = chargeAfterNextLabel();
-  // What the fee actually becomes once a skipped cycle rolls over: today's
-  // pending feeMonths plus this one. Two skips in a row honestly reads $1 × 3.
-  const rolledFeeMonths = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
+  // The charge AFTER the upcoming one (where a skipped cycle's $1 fee lands) and
+  // the multiplier it lands as are derived inside lib/donorContent's skip copy,
+  // from the same lib/billing helpers, so they are not recomputed here.
 
   useEffect(() => {
     if (pendingSettingsAction === 'change-payment') {
@@ -1261,9 +1268,14 @@ export default function Settings() {
           <SettingRow
             icon={<SkipForward size={18} />}
             label="Skip a month"
+            // Both states come from lib/donorContent so the row reads the same
+            // here and in the web portal. The un-skipped state carries the fee
+            // caveat too: this row is the decision point, and "Skip July's
+            // charge" on its own was the one place a donor could opt in
+            // believing the month was free.
             sub={skipNextCharge
-              ? `${skipMonthName} skipped - nothing on ${chargeLabel}; the $1 fee rolls to ${afterChargeLabel} ($1 × ${rolledFeeMonths})`
-              : `Need a breather? Skip ${skipMonthName}'s charge`}
+              ? skipRowSub({ monthName: skipMonthName, feeMonths })
+              : skipRowOfferSub(skipMonthName)}
             color={brand.secondary}
             right={skipNextCharge ? (
               <motion.button
@@ -1657,9 +1669,7 @@ export default function Settings() {
         show={showSkipConfirm}
         onClose={() => setShowSkipConfirm(false)}
         monthName={skipMonthName}
-        chargeLabel={chargeLabel}
-        afterChargeLabel={afterChargeLabel}
-        feeMultiplier={rolledFeeMonths}
+        paragraphs={skipConfirmParagraphs({ monthName: skipMonthName, feeMonths })}
         brand={brand}
       />
     </div>

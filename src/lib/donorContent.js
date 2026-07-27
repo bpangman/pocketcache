@@ -18,6 +18,8 @@
  */
 
 import { MONTHLY_DATA } from '../data/transactions';
+import { MAX_FEE_MONTHS, chargeAfterNextLabel, nextChargeLabel } from './billing';
+import { fmtMoney } from './format';
 
 // ─── Monthly history ─────────────────────────────────────────────────────────
 
@@ -173,6 +175,163 @@ export function adjustBounds(accrued) {
   return { min: ADJUST_MIN, max: accrued, step: ADJUST_STEP };
 }
 
+// ─── Skipping a month: THE canonical wording ─────────────────────────────────
+
+/**
+ * WHAT ACTUALLY HAPPENS WHEN A DONOR SKIPS (lib/billing.js rule 5, and Terms
+ * section 7, "Skipping a month"):
+ *
+ *   - That month's round-ups are NEVER charged. They do not roll over and they
+ *     are not collected later. They are gone.
+ *   - NOTHING AT ALL is collected on that month's charge date.
+ *   - The $1 app fee is NOT waived. It rolls forward and joins the next charge,
+ *     which therefore carries $1 x 2 (or more, if the donor skipped twice).
+ *
+ * THE HONESTY RULE FOR THIS COPY. The house framing is "you're only charged in
+ * the months you give". That is true as a statement about TIMING - no money
+ * leaves the card in a month you skip - and it is false as a statement about
+ * COST, because the skipped month's $1 is deferred, not forgiven. So the
+ * framing sentence and the fee-rollover sentence are written as a pair and must
+ * be rendered as a pair. Never ship a surface that says a skipped month costs
+ * nothing without the fee sentence beside it. `skipSummaryLine()` is the
+ * shortest legal pairing; use it rather than rendering `skipStatusLine()` alone.
+ *
+ * Every donor surface renders these exact strings: the app Dashboard and
+ * Settings, the web dashboard, the web portal settings, and the web onboarding
+ * preview. They are here, not in a page module, because five hand-typed
+ * variants is how the app and the browser ended up telling a donor two
+ * different stories about the same $1.
+ */
+
+/** Label for the upcoming-charge figure while a skip is in effect. */
+export const SKIP_COLLECT_LABEL = 'To be collected';
+
+/** The upcoming-charge figure itself while a skip is in effect. Not a total to
+ *  be computed - a skipped cycle collects nothing, so it is always zero. */
+export const SKIP_COLLECT_AMOUNT = '$0.00';
+
+/** When the normal lock-on-the-1st / charge-on-the-11th rhythm picks back up.
+ *  Says "next month's round-ups" deliberately: this month's are gone, so the
+ *  resumed schedule is about money the donor has not rounded up yet. */
+export const SKIP_RESUME_LINE = "Normal timing resumes with next month's round-ups  -  exact amount emailed on the 1st, charged on the 11th.";
+
+/** How a donor gets out of the skip. */
+export const SKIP_UNDO_LINE = 'Un-skip anytime in Settings.';
+
+/** Sub-label for an accrued round-ups tile while a skip is in effect, so the
+ *  accrual figure can never read as money that is about to be collected. */
+export const SKIP_TILE_SUB = 'Never charged';
+
+/**
+ * The house framing, tied to the charge date it is actually true about.
+ *
+ * DO NOT RENDER THIS ALONE. On its own it reads as "a skipped month is free",
+ * which is not what happens to the $1. Pair it with `skipFeeLine()`, or use
+ * `skipSummaryLine()` which does the pairing for you.
+ *
+ * @param {Date} [now] - injectable clock, same convention as lib/billing.
+ * @returns {string} e.g. "You're only charged in the months you give, so nothing is collected on Aug 11."
+ */
+export function skipStatusLine(now = new Date()) {
+  return `You're only charged in the months you give, so nothing is collected on ${nextChargeLabel(now)}.`;
+}
+
+/**
+ * Sentence stating the accrued round-ups are gone, not deferred.
+ * @param {number} pendingRoundUps - round-ups accrued this cycle.
+ * @returns {string}
+ */
+export function skipAccruedLine(pendingRoundUps) {
+  return `Your $${fmtMoney(pendingRoundUps)} of round-ups this month is never charged  -  it does not roll over and it will not be collected later.`;
+}
+
+/**
+ * The other half of the pair: the $1 is deferred, not forgiven. Says "not
+ * waived" in as many words, because "rolls forward" alone was being read as a
+ * detail rather than as a cost. The multiplier is derived from real state and
+ * clamped by MAX_FEE_MONTHS, so two skips in a row honestly read $1 x 3.
+ *
+ * @param {number} feeMonths - months of $1 fee pending today.
+ * @param {Date} [now] - injectable clock.
+ * @returns {string}
+ */
+export function skipFeeLine(feeMonths, now = new Date()) {
+  const rolled = Math.min(feeMonths + 1, MAX_FEE_MONTHS);
+  return `The $1 app fee is not waived, though: it rolls forward and joins your ${chargeAfterNextLabel(now)} charge as $1 × ${rolled}.`;
+}
+
+/**
+ * The shortest honest statement of a skip: the timing claim plus the fee fact.
+ * This is what belongs in a one-line slot (a "next charge" caption, a KPI
+ * sub-label) where the full explainer will not fit.
+ * @param {number} feeMonths - months of $1 fee pending today.
+ * @param {Date} [now] - injectable clock.
+ * @returns {string}
+ */
+export function skipSummaryLine(feeMonths, now = new Date()) {
+  return `${skipStatusLine(now)} ${skipFeeLine(feeMonths, now)}`;
+}
+
+/**
+ * The full skipped-cycle paragraph, for the estimate card on both dashboards.
+ * Identical string on the app and in the browser - that is the whole point of
+ * composing it here instead of at each call site.
+ * @param {object} o
+ * @param {number} o.pendingRoundUps - round-ups accrued this cycle.
+ * @param {number} o.feeMonths - months of $1 fee pending today.
+ * @param {Date} [o.now] - injectable clock.
+ * @returns {string}
+ */
+export function skipExplainer({ pendingRoundUps, feeMonths, now = new Date() }) {
+  return [
+    skipStatusLine(now),
+    skipAccruedLine(pendingRoundUps),
+    skipFeeLine(feeMonths, now),
+    SKIP_RESUME_LINE,
+    SKIP_UNDO_LINE,
+  ].join(' ');
+}
+
+/**
+ * Sub-label for the "Skip a month" row once a skip is on.
+ * @param {object} o
+ * @param {string} o.monthName - the month being skipped, e.g. 'July'.
+ * @param {number} o.feeMonths - months of $1 fee pending today.
+ * @param {Date} [o.now] - injectable clock.
+ * @returns {string}
+ */
+export function skipRowSub({ monthName, feeMonths, now = new Date() }) {
+  return `${monthName} skipped. ${skipSummaryLine(feeMonths, now)}`;
+}
+
+/**
+ * Sub-label for the same row BEFORE a skip is on - the decision point, so the
+ * fee caveat has to be here too. "Skip {month}'s charge" on its own was the one
+ * place a donor could opt in believing the month was free.
+ * @param {string} monthName - the month that would be skipped.
+ * @returns {string}
+ */
+export function skipRowOfferSub(monthName) {
+  return `Need a breather? Skip ${monthName}'s round-ups  -  the $1 app fee still rolls forward to your next charge.`;
+}
+
+/**
+ * The skip confirmation modal, as short paragraphs. Same array on the app sheet
+ * and the web modal.
+ * @param {object} o
+ * @param {string} o.monthName - the month being skipped.
+ * @param {number} o.feeMonths - months of $1 fee pending today.
+ * @param {Date} [o.now] - injectable clock.
+ * @returns {string[]}
+ */
+export function skipConfirmParagraphs({ monthName, feeMonths, now = new Date() }) {
+  return [
+    `You're only charged in the months you give, so ${monthName}'s round-ups are simply never charged  -  they don't roll over and they don't come out later.`,
+    `Nothing is collected on ${nextChargeLabel(now)}. ${skipFeeLine(feeMonths, now)}`,
+    `Changed your mind? Tap Undo on this screen any time before ${nextChargeLabel(now)}.`,
+  ];
+}
+
 // ─── Canonical billing explainer ─────────────────────────────────────────────
 
 /**
@@ -197,7 +356,12 @@ export function billingExplainer({ orgShort, minimum, chargeDay, reviewDays }) {
     `Your round-ups add up all month. The exact amount is emailed to you on the 1st and charged on the ${ord}, so you get ${reviewDays} full days to review or adjust it.`,
     `It arrives as one charge from ${orgShort}, on ${orgShort}'s own Stripe account. They are the merchant of record and they issue your receipt.`,
     `A flat $1 app fee is included in that charge. ${orgShort} never pays PocketCache anything, and PocketCache never takes a percentage of your donation.`,
-    `Months under $${minimum} are not charged; the balance carries forward and settles within three months at most.`,
+    // The skip paragraph. The timing claim and the fee fact are one paragraph on
+    // purpose: split across two, a donor stops reading after the good news.
+    `Skip a month and you're only charged in the months you give: nothing at all is collected on that charge date, and that month's round-ups are never collected later. The $1 app fee is not waived, though  -  it rolls forward and joins your next charge.`,
+    // The fee rolls over with a below-minimum balance too (Terms section 7).
+    // This paragraph used to name only the balance, which read as a free month.
+    `Months under $${minimum} are not charged; the balance and the $1 app fee carry forward and settle within three months at most.`,
     `Your round-ups are tax-deductible. The $1 app fee is not.`,
   ];
 }

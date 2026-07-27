@@ -555,10 +555,14 @@ function useIsMobile() {
   return mobile;
 }
 
-// WebPortal  -  webpage shell for the step-by-step flows (account creation,
-// reactivation, admin) reached from an org micro-site on desktop. Same top-nav
-// webpage chrome as WebDashboard, with the flow presented as a centered panel  - 
-// the way a web checkout looks  -  so nothing on desktop ever reads as "an app".
+// WebPortal  -  webpage shell for the one desktop flow that is still phone-shaped:
+// cancelled-account reactivation (CancelledOverlay / ReactivateCheckinCard, both
+// rendered by AppContent). Same top-nav webpage chrome as WebDashboard, with the
+// flow presented as a centered panel  -  the way a web checkout looks.
+//
+// NOTHING NEW GOES IN HERE. Signup, join, admin sign-in and both dashboards are
+// all web-native pages now (see WebExperience). If you find yourself routing a
+// donor or admin journey through this column, build the webpage instead.
 function WebPortal({ children }) {
   const { w, h } = useWindowSize();
   const { selectedNonprofit } = useApp();
@@ -703,18 +707,26 @@ function ThemedApp() {
 // Desktop browser entry from a micro-site: a signed-in donor gets the real
 // web-native dashboard (WebDashboard); a signed-in nonprofit admin gets the
 // web-native admin portal (NpWebShell); a new donor gets the web-native signup
-// wizard (WebOnboarding  -  org implied, no gate/QR/code); a nonprofit listing
-// itself gets the web-native admin signup wizard (NpWebSignup); everything else
-// (admin sign-in, cancelled-account reactivation, unknown org) runs in the
-// centered WebPortal column.
+// wizard (WebOnboarding  -  which opens on its join step when no nonprofit is
+// bound yet, so a donor arriving cold from the marketing site enters their code
+// on a real webpage); a nonprofit listing itself gets the web-native admin
+// signup wizard (NpWebSignup); an admin signing in gets WebAdminSignIn. The only
+// thing left for the centered WebPortal column is cancelled-account
+// reactivation, whose overlays are still phone-shaped modals.
 function WebExperience() {
   const { page, accountStatus, selectedNonprofit, initialOnboardingStep, returnFromOnboarding } = useApp();
   const bioGate = useBiometricGate();
   // Capture the entry context ONCE  -  the pretty-URL rewrite strips the params.
   const [entry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
+    const code = params.get('org');
     return {
-      org: findOrgByCode(params.get('org')),
+      // The raw ?org= string as well as the resolved org: a code this device
+      // cannot resolve (custom orgs live in their creator's localStorage) has to
+      // reach the join step so it can be prefilled and explained, exactly as the
+      // phone gate does, rather than vanishing.
+      code,
+      org: findOrgByCode(code),
       npsignin: params.get('npsignin') === '1',
       npsignup: params.get('npsignup') === '1',
     };
@@ -734,6 +746,11 @@ function WebExperience() {
   // over to giving mode (goGiving → page 'onboarding') is not dropped back into
   // the signup wizard by a latch that outlived it.
   if (page === 'np-dashboard' && npSignup) setNpSignup(false);
+  // Admin sign-in is a route, not just a URL: ?npsignin=1 opens it, and so does
+  // the "Nonprofit admin? Sign in with your work email" link on the donor join
+  // step (the phone gate carries the same link, GateSignInScreen ~912). State,
+  // not the latched URL param, so that in-page link works without a reload.
+  const [adminSignIn, setAdminSignIn] = useState(entry.npsignin);
 
   const signedInDonor =
     page !== 'onboarding' && page !== 'np-dashboard' &&
@@ -748,12 +765,38 @@ function WebExperience() {
   }
   // Donor signup wizard  -  including an admin crossing over via "Start giving"
   // (selectedNonprofit gets bound before the jump, so this wins over npsignin).
-  if (page === 'onboarding' && accountStatus !== 'cancelled' && !npSignup && (selectedNonprofit || (entry.org && !entry.npsignin))) {
-    return <LazySurface surface="web"><WebOnboarding entryOrg={entry.org} /></LazySurface>;
+  //
+  // NO NONPROFIT YET IS A DONOR, TOO. This used to demand a bound org or an
+  // ?org=CODE link, so the one entry the marketing site actually sends donors to
+  // (/demo/?app=1  -  no org, no code) fell through to the WebPortal column and
+  // rendered the PHONE gate, 440px wide, floating in the middle of a desktop
+  // page. That is the thing we have said repeatedly desktop must never do. The
+  // wizard now owns the codeless donor: WebOnboarding opens on its web-native
+  // join step, takes the code there, and continues into the same four steps.
+  //
+  // "No nonprofit bound" also outranks whatever `page` says: a donor with no org
+  // has nothing to put on a dashboard, and the signed-in branch above declines
+  // them for exactly that reason. Without this they fell through to the column
+  // too. Sending them to the join step is the only answer that can actually
+  // resolve the state, and once they pick one the wizard's own "welcome back"
+  // row takes an existing account straight to the dashboard.
+  const donorRoute =
+    page !== 'np-dashboard' && accountStatus !== 'cancelled' && !npSignup &&
+    (page === 'onboarding' || !selectedNonprofit);
+  if (donorRoute && (selectedNonprofit || !adminSignIn)) {
+    return (
+      <LazySurface surface="web">
+        <WebOnboarding
+          entryOrg={entry.org}
+          entryCode={entry.code}
+          onAdminSignIn={() => setAdminSignIn(true)}
+        />
+      </LazySurface>
+    );
   }
   // Micro-site "Nonprofit admin? Sign in"  -  webpage version of the
   // passwordless work-email protocol (never the app-style column).
-  if (page === 'onboarding' && entry.npsignin && !npSignup) {
+  if (page === 'onboarding' && adminSignIn && !npSignup) {
     return <LazySurface surface="web"><WebAdminSignIn /></LazySurface>;
   }
   // Nonprofit org onboarding  -  the web-native admin signup wizard. Not the
