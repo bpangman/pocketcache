@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import { loadKey, saveKey } from '../store/identityStore';
-import { findOrgByCode, resolveAdminOrgByEmail } from '../store/orgStore';
+import { findOrgByCode, getCustomOrg, resolveAdminOrgByEmail } from '../store/orgStore';
 import { DEMO_USER, monthsGiving } from '../data/derived';
 import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
@@ -10,6 +10,7 @@ import { fmtMoney, fmtMoneyCompact } from '../lib/format';
 import {
   CHARGE_DAY, LARGE_DONATION_THRESHOLD, MAX_FEE_MONTHS, REVIEW_WINDOW_LAST_DAY,
   chargeAfterNextLabel, chargeTotal, currentMonthName, effectiveCharge, nextChargeLabel,
+  processingCoverFor,
 } from '../lib/billing';
 // Shared donor-facing derivations. `impactTier` used to be a verbatim duplicate of
 // MyCause.jsx's copy in this file; `billingExplainer` is now the product's only
@@ -36,9 +37,22 @@ import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlock
 // enrols real WebAuthn through lib/biometric, the same call the app makes, so
 // the web portal has working biometric unlock too. (This comment used to claim
 // Face ID was "intentionally absent" while the code right here implemented it.)
+//
+// DO NOT ADD AN APP-ICON CONTROL HERE. iOS cannot switch a home-screen icon from
+// remote-loaded web content, so the app's picker never changed anything; the app
+// keeps a row only as an explicitly labelled "Preview" of an anchor-partner perk
+// that arrives with the App Store build (Settings.jsx ~1488). A browser has no
+// home-screen icon to change at all, so the honest portal version of that
+// feature is its continued absence, and that absence is deliberate parity, not
+// an oversight to be "fixed".
 
 const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
 const NAVY = '#003865';
+// Same teal ink the app's My Cause uses for the sponsor tile (MyCause.jsx:25).
+// Fixed, never the per-nonprofit brand accent: the accent resolves to red under
+// BGCA, which turned the involvement group into a row of things that look like
+// errors. Navy and teal stay calm for every org.
+const TEAL_INK = '#0f766e';
 const CARD = {
   background: '#fff',
   borderRadius: 16,
@@ -109,9 +123,9 @@ function WebToggle({ value, onChange }) {
   );
 }
 
-function SectionCard({ label, children, style }) {
+function SectionCard({ label, children, style, testId }) {
   return (
-    <div style={{ ...CARD, padding: 20, ...style }}>
+    <div data-testid={testId} style={{ ...CARD, padding: 20, ...style }}>
       {label && <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>}
       {children}
     </div>
@@ -148,6 +162,36 @@ function ActionButton({ children, onClick, disabled, tone = 'primary' }) {
       }}
     >
       {children}
+    </button>
+  );
+}
+
+/**
+ * InvolveTile - one of the two equal-weight secondary actions in My Cause's
+ * "Get more involved" group. The web twin of the app's tiles (MyCause.jsx
+ * ~196-232): icon chip, what it is, one line saying what it actually does.
+ *
+ * The colour comes in as props on purpose. It must never be `brand.textAccent`:
+ * that is per-nonprofit and resolves to #E8192C under BGCA, which is what turned
+ * this group into three red-outlined buttons that read as error states. Navy and
+ * teal only.
+ */
+function InvolveTile({ onClick, emoji, title, sub, ink, tint, edge, chip, testId }) {
+  return (
+    <button
+      onClick={onClick}
+      data-testid={testId}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start', textAlign: 'left',
+        padding: 14, borderRadius: 14, cursor: 'pointer', minHeight: 118,
+        background: tint, border: `1.5px solid ${edge}`,
+      }}
+    >
+      <span style={{ width: 32, height: 32, borderRadius: 10, background: chip, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+        {emoji}
+      </span>
+      <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, lineHeight: 1.3, color: ink }}>{title}</span>
+      <span style={{ display: 'block', fontSize: 12, lineHeight: 1.4, color: ink, opacity: 0.78 }}>{sub}</span>
     </button>
   );
 }
@@ -322,13 +366,20 @@ export function GiveExtraModal({ show, onClose }) {
   const [step, setStep] = useState('amount'); // amount | review | confirm | done
   const [selected, setSelected] = useState(5);
   const [custom, setCustom] = useState('');
+  // DELIBERATELY LOCAL, and not the persisted `coverProcessing` preference.
+  // That preference is a standing instruction about the MONTHLY round-up charge;
+  // this is a separate, one-off gift the donor is deciding on right now, and the
+  // cover here is a percentage of THIS gift, not of the month's round-ups. Wiring
+  // this checkbox to the stored preference would mean an impulse decision about a
+  // $25 gift silently rewrote how every future monthly charge is billed. The app's
+  // GiveExtraSheet keeps its copy local for the same reason - keep both local.
   const [coverProcessing, setCoverProcessing] = useState(true);
 
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
   const amount = custom ? parseFloat(custom) : selected;
   const valid = amount > 0 && !isNaN(amount);
   const isLarge = valid && amount >= LARGE_DONATION_THRESHOLD;
-  const processingFee = valid ? parseFloat((amount * 0.022 + 0.30).toFixed(2)) : 0;
+  const processingFee = valid ? processingCoverFor(amount) : 0;
   const total = valid ? parseFloat((amount + 1.00 + (coverProcessing ? processingFee : 0)).toFixed(2)) : 0;
 
   useEffect(() => {
@@ -445,6 +496,159 @@ export function GiveExtraModal({ show, onClose }) {
           <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
         </div>
       )}
+    </Modal>
+  );
+}
+
+// ─── Transfer the nonprofit page to a colleague ──────────────────────────────
+/**
+ * TransferNonprofitModal - the portal twin of the app's TransferNonprofitSheet
+ * (src/components/sheets/TransferNonprofitSheet.jsx). Same three stages, same
+ * validation, same sentences; web chrome instead of a bottom sheet.
+ *
+ * WHY THIS EXISTS
+ * The product model is ONE admin email per nonprofit: the org record carries a
+ * single `adminEmail` and admin sign-in resolves the org by that address (see
+ * store/orgStore.js, resolveAdminOrgByEmail). That is a deliberate, simple model
+ * - but with no way to change the address, the day the person who signed the org
+ * up leaves, the nonprofit is locked out of its own page for good. This is that
+ * way. It lives in the account menu rather than in Settings because Settings is
+ * the DONOR's account, and this is an action on the nonprofit's page.
+ *
+ * DEMO HONESTY
+ * The handover is simulated and labelled as such at every stage. Nothing is
+ * written to the org record, no email is sent, and the current admin keeps their
+ * access - a demo that really moved control would strand whoever is showing it,
+ * and one that merely LOOKED like it moved control would be the same lie the
+ * app-icon picker was.
+ */
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Free-mail domains are rejected for the same reason admin signup rejects them:
+// a nonprofit page must belong to an address on the organisation's own domain.
+// Production checks this server-side against the org's verified domain; this
+// list is only enough to make the demo behave honestly. Mirrors the app sheet.
+const FREE_MAIL = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com'];
+
+export function TransferNonprofitModal({ show, onClose, adminRole }) {
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState(null);
+  const [stage, setStage] = useState('form'); // 'form' | 'confirm' | 'done'
+
+  const joinCode = adminRole?.joinCode ?? 'your nonprofit';
+  const currentAdminEmail = getCustomOrg(adminRole?.orgId)?.adminEmail || null;
+
+  useEffect(() => {
+    if (!show) return;
+    const id = setTimeout(() => { setEmail(''); setError(null); setStage('form'); }, 0);
+    return () => clearTimeout(id);
+  }, [show]);
+
+  function handleContinue(e) {
+    e?.preventDefault?.();
+    const value = email.trim();
+    if (!EMAIL_RE.test(value)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    const domain = value.split('@')[1].toLowerCase();
+    if (FREE_MAIL.includes(domain)) {
+      setError("Use a work email on your organization's own domain, not a personal address.");
+      return;
+    }
+    if (currentAdminEmail && value.toLowerCase() === currentAdminEmail.toLowerCase()) {
+      setError('That is the address already administering this page.');
+      return;
+    }
+    setError(null);
+    setStage('confirm');
+  }
+
+  const input = { width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1.5px solid #d1d5db', fontSize: 14 };
+
+  return (
+    <Modal show={show} onClose={onClose} title="Transfer nonprofit page" width={520}>
+      <div data-testid="web-transfer-modal">
+        {stage === 'done' ? (
+          <div style={{ textAlign: 'center', padding: '10px 0 4px' }} data-testid="web-transfer-done">
+            <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>Demo: transfer simulated</p>
+            <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.65, color: INK.secondary }}>
+              Nothing actually changed. You still administer {joinCode} and no email was sent to {email.trim()}.
+            </p>
+            <div style={{ textAlign: 'left', background: '#fef3c7', border: '1.5px solid #fde68a', borderRadius: 14, padding: '12px 14px', margin: '14px 0 16px' }}>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.65, color: '#92400e' }}>
+                In the live version we check the new address is on your organization&apos;s domain, email them a link to accept, email you a copy, and give you a window to reverse it before your access ends.
+              </p>
+            </div>
+            <ActionButton onClick={onClose}>Done</ActionButton>
+          </div>
+        ) : (
+          <form onSubmit={handleContinue}>
+            <p style={{ margin: '0 0 14px', fontSize: 13.5, lineHeight: 1.65, color: INK.secondary }}>
+              PocketCache gives each nonprofit one admin address, and right now that is
+              {currentAdminEmail ? <> <strong style={{ color: INK.primary }}>{currentAdminEmail}</strong></> : ' yours'}.
+              {' '}Moving on? Hand {joinCode} to a colleague so your organization keeps its page.
+            </p>
+
+            <label htmlFor="web-transfer-email" style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+              Colleague&apos;s work email
+            </label>
+            <input
+              id="web-transfer-email"
+              data-testid="web-transfer-email"
+              type="email" inputMode="email" autoCapitalize="none" autoCorrect="off"
+              placeholder="name@yourorg.org"
+              value={email}
+              disabled={stage === 'confirm'}
+              onChange={e => { setEmail(e.target.value); setError(null); }}
+              style={{ ...input, borderColor: error ? '#ef4444' : email ? NAVY : '#e5e7eb' }}
+            />
+            {error && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#dc2626' }} data-testid="web-transfer-error">{error}</p>}
+
+            {/* Names what is LOST, not just what is gained. A handover screen that
+                only describes the colleague's new powers is not a warning. */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 14, padding: '12px 14px', marginTop: 14 }} data-testid="web-transfer-warning">
+              <span style={{ fontSize: 15, lineHeight: 1.2 }}>⚠️</span>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.65, color: '#b91c1c' }}>
+                This hands over control of {joinCode}. They get the donor list, the payout settings, and the page itself. You lose your admin access, and you will not be able to take it back yourself - only the new admin can transfer it again.
+              </p>
+            </div>
+
+            <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.65, color: INK.muted }}>
+              Demo: this transfer is simulated. Nothing is handed over, no email is sent, and you keep your admin access.
+            </p>
+
+            {stage === 'confirm' && (
+              <div style={{ background: '#fff7ed', border: '2px solid #fed7aa', borderRadius: 14, padding: 16, marginTop: 14 }} data-testid="web-transfer-confirm">
+                <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 13.5, color: '#9a3412' }}>
+                  Give {joinCode} to {email.trim()}?
+                </p>
+                <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.65, color: '#9a3412' }}>
+                  They become the only admin for {joinCode}. Your own admin access ends. Confirm only if this person works at your organization and is expecting it.
+                </p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button type="button" onClick={() => setStage('form')}
+                    style={{ flex: 1, padding: '11px 14px', borderRadius: 12, background: '#fff', border: '1px solid #fed7aa', fontWeight: 700, fontSize: 13, color: '#9a3412', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button type="button" onClick={() => setStage('done')}
+                    style={{ flex: 1, padding: '11px 14px', borderRadius: 12, background: '#c2410c', border: 'none', fontWeight: 700, fontSize: 13, color: '#fff', cursor: 'pointer' }}>
+                    Yes, transfer control
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stage === 'form' && (
+              <div style={{ marginTop: 16 }}>
+                <ActionButton disabled={!email.trim()} onClick={handleContinue}>Continue</ActionButton>
+              </div>
+            )}
+          </form>
+        )}
+      </div>
     </Modal>
   );
 }
@@ -602,23 +806,24 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
 function InvolvementModal({ kind, show, onClose, npShort }) {
   const [fields, setFields] = useState({});
   const [submitted, setSubmitted] = useState(false);
-  // Captured AT SUBMIT TIME, exactly like the app's CorporateMatchSheet
-  // (src/components/sheets/CorporateMatchSheet.jsx:9-26 and its comment): the
-  // success copy names the company, and reading `fields.company` while
-  // rendering the done state would show whatever the input holds later - blank
-  // once the reset effect runs. A captured value cannot go stale.
-  const [submittedCompany, setSubmittedCompany] = useState('');
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setFields({}); setSubmitted(false); setSubmittedCompany(''); }, 0);
+    const id = setTimeout(() => { setFields({}); setSubmitted(false); }, 0);
     return () => clearTimeout(id);
   }, [show]);
 
   function submit() {
-    setSubmittedCompany((fields.company ?? '').trim());
     setSubmitted(true);
   }
 
+  // 'suggest' (Suggest a Match Sponsor) is GONE, on both surfaces, and this is
+  // the whole reason it was dropped rather than tidied: a donor naming a company
+  // they think should sponsor a match is a lead the nonprofit cannot act on and
+  // the donor never hears about again. "Become a Match Sponsor" is the real
+  // version of the same intent - it collects a company, a named contact and an
+  // email, which the partnerships team can actually work. Two buttons three
+  // pixels apart that differ only in whether the donor works there was the whole
+  // problem. Do not re-add a 'suggest' entry here.
   const COPY = {
     volunteer: {
       title: 'Volunteer Opportunities',
@@ -626,20 +831,6 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
       done: { emoji: '🙌', head: 'Interest Noted!', body: `${npShort} will reach out about volunteer opportunities near you.` },
       inputs: [{ key: 'interest', placeholder: "Tell us how you'd like to help…", textarea: true, required: true }],
       cta: 'Express Interest',
-    },
-    suggest: {
-      title: 'Suggest a Match Sponsor',
-      intro: `Know a company that should be matching round-ups for ${npShort}? Let us know  -  ${npShort}'s corporate partnerships team will reach out to them.`,
-      done: {
-        emoji: '🏢',
-        head: 'Inquiry Sent!',
-        // Names the company, like the app's CorporateMatchSheet does.
-        body: submittedCompany
-          ? <>{npShort}&apos;s corporate partnerships team will follow up with <strong style={{ color: INK.primary }}>{submittedCompany}</strong> about sponsoring the monthly match.</>
-          : `${npShort}'s corporate partnerships team will follow up about sponsoring the monthly match.`,
-      },
-      inputs: [{ key: 'company', placeholder: "Company you'd like to suggest", required: true }],
-      cta: 'Send Suggestion',
     },
     sponsor: {
       title: 'Become a Match Sponsor',
@@ -752,7 +943,7 @@ export function WebMyCause() {
   const [orgStats, setOrgStats] = useState(null);
   const [giveExtra, setGiveExtra] = useState(false);
   const [matchDetails, setMatchDetails] = useState(false);
-  const [involve, setInvolve] = useState(null); // 'volunteer' | 'suggest' | 'sponsor'
+  const [involve, setInvolve] = useState(null); // 'volunteer' | 'sponsor'
   const np = selectedNonprofit;
 
   useEffect(() => {
@@ -819,6 +1010,50 @@ export function WebMyCause() {
         </div>
 
         <div style={{ display: 'grid', gap: 20 }}>
+          {/* ── Get more involved  -  FIRST in the rail ──
+              It used to sit under the match badge, i.e. below the fold on a
+              laptop, which put the only three things a donor can DO on this page
+              beneath everything they can only read. The rail's top edge is level
+              with the org header, so as the first card these actions land at the
+              very top of the page. Same move the app made by lifting the group up
+              its scroll.
+
+              STYLING: navy and teal, never the brand accent. The accent is
+              per-nonprofit and under BGCA it resolves to red, so an accent-tinted
+              action group read as a row of warnings - three red-bordered buttons
+              saying "Volunteer" is a colour telling the donor to stop. Navy for
+              the primary, teal for the secondaries: calm, brand-independent, and
+              it cannot turn into an alarm for the next nonprofit either. */}
+          <SectionCard label="Get more involved" testId="web-involvement">
+            {/* Same sentence the app's group leads with. */}
+            <p style={{ margin: '-4px 0 14px', fontSize: 12.5, lineHeight: 1.6, color: INK.muted }}>
+              Your round-ups are already running. Here are three ways to do more for {npShort}.
+            </p>
+            {/* One lead action, then two equal-weight tiles that say what they
+                actually do - the same shape and the same two sub-labels as the
+                app's group, in the portal's card language. */}
+            <ActionButton onClick={() => setGiveExtra(true)}>＋ Give Extra Now</ActionButton>
+            {/* "Suggest a Match Sponsor" was the fourth button here and is gone on
+                both surfaces - see the note on InvolvementModal's COPY map. */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+              <InvolveTile
+                testId="web-involve-become-sponsor"
+                onClick={() => setInvolve('sponsor')}
+                emoji="🏢"
+                title="Become a Match Sponsor"
+                sub="Your company funds the monthly match"
+                ink={TEAL_INK} tint="#f0fdfa" edge="#99f6e4" chip="#ccfbf1"
+              />
+              <InvolveTile
+                testId="web-involve-volunteer"
+                onClick={() => setInvolve('volunteer')}
+                emoji="🙌"
+                title="Volunteer Opportunities"
+                sub="Give time near you, not just money"
+                ink={NAVY} tint="#eef4fa" edge="#cbd9e8" chip="#dce7f2"
+              />
+            </div>
+          </SectionCard>
           {match?.active && (
             <div>
               {match.sample && (
@@ -835,14 +1070,6 @@ export function WebMyCause() {
               <MatchBadge match={match} onDetails={() => setMatchDetails(true)} />
             </div>
           )}
-          <SectionCard label="Get more involved">
-            <div style={{ display: 'grid', gap: 10 }}>
-              <ActionButton onClick={() => setGiveExtra(true)}>＋ Give Extra Now</ActionButton>
-              <ActionButton tone="quiet" onClick={() => setInvolve('sponsor')}>🏢 Become a Match Sponsor</ActionButton>
-              <ActionButton tone="quiet" onClick={() => setInvolve('suggest')}>🏘 Suggest a Match Sponsor</ActionButton>
-              <ActionButton tone="quiet" onClick={() => setInvolve('volunteer')}>🙌 Volunteer Opportunities</ActionButton>
-            </div>
-          </SectionCard>
         </div>
       </div>
     </>
@@ -905,7 +1132,10 @@ export function WebShare() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 14 }}>
               <ActionButton tone="quiet" onClick={() => copy(`${shareText}\n${shareUrl}`, setCopied)}>{copied ? '✓ Copied' : 'Copy link'}</ActionButton>
               <ActionButton tone="quiet" onClick={() => navigator.share?.({ title: brand.appName, text: shareText, url: shareUrl })}>Share via…</ActionButton>
-              <ActionButton tone="quiet" onClick={() => window.open(`mailto:?subject=Join me on ${brand.appName}&body=${encodeURIComponent(shareText + '\n' + shareUrl)}`)}>Email</ActionButton>
+              {/* location.href, not window.open - see the note on Settings'
+                  support row: a mailto: through window.open does nothing at all
+                  inside the iOS WebView. */}
+              <ActionButton tone="quiet" onClick={() => { window.location.href = `mailto:?subject=${encodeURIComponent(`Join me on ${brand.appName}`)}&body=${encodeURIComponent(shareText + '\n' + shareUrl)}`; }}>Email</ActionButton>
             </div>
           </SectionCard>
           <div style={{ ...CARD, border: 'none', padding: 20, background: `linear-gradient(135deg, ${NAVY}, #0B2A4A)`, color: '#fff' }}>
@@ -936,7 +1166,7 @@ export function WebSettings() {
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod, linkedCards,
     pendingSettingsAction, clearPendingSettingsAction,
     monthlyCap, setMonthlyCap, skipNextCharge, setSkipNextCharge, hasAccount, feeMonths,
-    chargeAdjustment,
+    chargeAdjustment, coverProcessing, setCoverProcessing,
   } = useApp();
   const { message: toast, showToast, clearToast } = useWebToast();
 
@@ -949,7 +1179,7 @@ export function WebSettings() {
   const [commsOptin, setCommsOptinState] = useState(() => loadKey('pc_comms_optin', true));
   function updateCommsOptin(v) { setCommsOptinState(v); saveKey('pc_comms_optin', v); }
 
-  const [modal, setModal] = useState(null); // 'card' | 'payment' | 'switch' | 'privacy' | 'cancel' | 'skip'
+  const [modal, setModal] = useState(null); // 'card' | 'payment' | 'switch' | 'privacy' | 'cancel' | 'skip' | 'billing'
 
   // Dates come from lib/billing - the old local `new Date(y, m + 1, 11)` was
   // wrong for days 1 to 10, when the upcoming charge is THIS month's 11th.
@@ -1030,6 +1260,14 @@ export function WebSettings() {
     chargeDay: CHARGE_DAY,
     reviewDays: REVIEW_WINDOW_LAST_DAY,
   });
+
+  // What the processing cover actually costs at today's numbers, quoted against
+  // the amount that will really be charged (cap and one-time adjustment
+  // applied), not the raw accrual - the processor takes its cut of the charge,
+  // so quoting the accrual would overstate it whenever a cap is on. Same two
+  // lines as the app's Settings (Settings.jsx ~1140).
+  const chargeableThisMonth = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
+  const coverEstimate = processingCoverFor(chargeableThisMonth);
 
   return (
     <>
@@ -1113,6 +1351,53 @@ export function WebSettings() {
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Change payment method" sub="Bank account, Apple Pay, or card" onPress={() => setModal('payment')}
               right={<span style={{ color: INK.muted }}>›</span>} />
+            <div style={{ height: 1, background: '#f1f5f9' }} />
+            {/* THE STANDING processing-cover preference, in the same card as the
+                payment method on both surfaces (Settings.jsx ~1395), because it
+                is part of "what leaves your account each month".
+
+                It was previously a pre-checked checkbox on the signup screen held
+                in local state and thrown away when onboarding finished, plus two
+                more local copies inside the Give Extra and Cancel sheets - so a
+                donor who agreed to cover the cost had nowhere to see it, no way
+                to change it, and it never reached a single monthly charge. It
+                lives in AppContext now (pc_cover_processing) and this row is
+                where a donor changes their mind. The figure is quoted from
+                lib/billing, never typed. */}
+            <div data-testid="web-cover-processing">
+              <Row
+                label="Cover processing costs"
+                sub={coverEstimate > 0
+                  ? `Adds about $${fmtMoney(coverEstimate)} to your ${chargeLabel} charge so ${npShort} keeps your full round-ups. Every cent of it goes to ${npShort}, never to PocketCache.`
+                  : `Adds the card cost to your monthly charge so ${npShort} keeps your full round-ups. Every cent of it goes to ${npShort}, never to PocketCache.`}
+                right={<WebToggle value={coverProcessing} onChange={setCoverProcessing} />}
+              />
+            </div>
+            <div style={{ height: 1, background: '#f1f5f9' }} />
+            {/* THE billing explainer, and the only one in the product - now one
+                row that opens a popup instead of five paragraphs of permanent
+                wall text sitting between two controls. Settings is a list of
+                things a donor can change; reference prose parked in the middle of
+                it pushed the real controls down the page and got skimmed past
+                anyway. One row, one popup, read once.
+
+                It sits in this card, directly under the payment method and the
+                cover, on BOTH surfaces (Settings.jsx ~1410) - "when you are
+                charged" belongs with "how you pay", and a card of its own needed
+                a section label that just repeated the row's own name.
+
+                The prose still comes from lib/donorContent (billingExplainer);
+                the popup only lays it out. The old copy elsewhere told donors to
+                use "your toggle" for a processing-cover control they could not
+                find. There IS a real standing control for it now - the row right
+                above - but this copy still does not mention a toggle, and that
+                sentence should not come back. */}
+            <Row
+              label="How billing works"
+              sub="When you're charged, who charges you, and what the $1 app fee is"
+              onPress={() => setModal('billing')}
+              right={<span style={{ color: INK.muted }}>›</span>}
+            />
           </SectionCard>
 
           <SectionCard label="Your cause">
@@ -1138,29 +1423,16 @@ export function WebSettings() {
               right={<span style={{ color: INK.muted }}>›</span>} />
           </SectionCard>
 
-          {/* THE billing explainer, and the only one in the product. Rendered as a
-              plain card with hairlines between the paragraphs (the app renders the
-              same array the same way) rather than as an amber alert: this is
-              reference material a donor reads once, not a warning. The old copy
-              elsewhere told donors to use "your toggle" for a processing-cover
-              control that exists only inside the Give Extra and Cancel sheets  -
-              this copy does not, so do not reintroduce it. */}
-          <SectionCard label="How billing works">
-            <div data-testid="web-billing-explainer">
-              {billingParagraphs.map((para, i) => (
-                <div key={i}>
-                  {i > 0 && <div style={{ height: 1, background: '#f1f5f9' }} />}
-                  <p style={{ margin: 0, padding: '9px 0', fontSize: 12.5, lineHeight: 1.65, color: INK.secondary }}>{para}</p>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-
           {/* Terms and Privacy are in the global portal footer on every view, so the
               duplicate rows that used to sit here are gone: one home per surface. */}
+          {/* `window.location.href`, NOT `window.open`. A mailto: through
+              window.open is silently swallowed inside the iOS WebView the app
+              ships as (no window to open, no handler, no error) - the support
+              link simply did nothing. Assigning location.href hands the URL to
+              the OS and works on desktop browsers and in the WebView alike. */}
           <SectionCard label="Help & support">
             <Row label="Contact support" sub="support@pocketcache.app · we reply within 2 business days"
-              onPress={() => window.open('mailto:support@pocketcache.app')} right={<span style={{ color: INK.muted }}>↗</span>} />
+              onPress={() => { window.location.href = 'mailto:support@pocketcache.app'; }} right={<span style={{ color: INK.muted }}>↗</span>} />
           </SectionCard>
 
           <SectionCard label="Subscription">
@@ -1221,6 +1493,21 @@ export function WebSettings() {
           </p>
         </div>
         <ActionButton tone="primary" onClick={() => setModal(null)}>Got it</ActionButton>
+      </Modal>
+
+      {/* The billing explainer popup. Content is `billingExplainer()` from
+          lib/donorContent - one array, five short paragraphs, hairline between
+          each - so this popup and the app's say the same thing in the same order.
+          The portal's shared Modal already provides the ✕ and the click-out. */}
+      <Modal show={modal === 'billing'} onClose={() => setModal(null)} title="How billing works" width={520}>
+        <div data-testid="web-billing-explainer">
+          {billingParagraphs.map((para, i) => (
+            <div key={i}>
+              {i > 0 && <div style={{ height: 1, background: '#f1f5f9' }} />}
+              <p style={{ margin: 0, padding: '9px 0', fontSize: 12.5, lineHeight: 1.65, color: INK.secondary }}>{para}</p>
+            </div>
+          ))}
+        </div>
       </Modal>
 
       <WebToast message={toast} onClose={clearToast} />
@@ -1541,13 +1828,20 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
 }
 
 function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, monthlyCap, chargeAdjustment, onDonate, onCancelled }) {
-  const [coverProcessing, setCoverProcessing] = useState(true);
+  const { coverProcessing: coverPref } = useApp();
+  // Seeded from the donor's STANDING preference, not a hardcoded true: someone
+  // who turned the cover off in Settings should not find it silently re-ticked
+  // on the way out. It stays local from there - this is a one-off settle-up, so
+  // changing it here must not rewrite the standing preference of an account the
+  // donor is about to close. Same two lines as the app's CancelSheet
+  // (Settings.jsx ~659).
+  const [coverProcessing, setCoverProcessing] = useState(coverPref);
   const [result, setResult] = useState(null);
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setResult(null); setCoverProcessing(true); }, 0);
+    const id = setTimeout(() => { setResult(null); setCoverProcessing(coverPref); }, 0);
     return () => clearTimeout(id);
-  }, [show]);
+  }, [show, coverPref]);
 
   const raw = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   // The final settle-up is a CHARGE, so it obeys the same precedence every other
@@ -1564,7 +1858,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
   const trimmed = chargeable < raw;
   // Processing cover is a percentage OF THE CHARGE, so it follows the chargeable
   // amount, not the raw accrual.
-  const processingCover = parseFloat((chargeable * 0.022 + 0.30).toFixed(2));
+  const processingCover = processingCoverFor(chargeable);
   const total = chargeTotal({
     pendingRoundUps: raw,
     monthlyCap,

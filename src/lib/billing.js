@@ -151,6 +151,25 @@ export function chargeAfterNextLabel(d = new Date()) {
 }
 
 /**
+ * Card-processing cost on a given amount, at standard US card rates.
+ *
+ * A donor can choose to add this on top so the nonprofit receives 100% of the
+ * round-ups instead of netting the processor's cut. The formula was copy-pasted
+ * into six files; it lives here now so a rate change is one edit.
+ *
+ * @param {number} amount - the donation the processor would take its cut from.
+ * @returns {number} dollars, rounded to cents.
+ */
+export function processingCoverFor(amount) {
+  if (!amount || amount <= 0) return 0;
+  return parseFloat((amount * PROCESSING_RATE + PROCESSING_FIXED).toFixed(2));
+}
+
+/** Standard US card rate PocketCache quotes donors: 2.2% + 30c. */
+export const PROCESSING_RATE = 0.022;
+export const PROCESSING_FIXED = 0.30;
+
+/**
  * A one-off "give extra" gift at or above this many dollars gets an extra
  * "was that intentional?" confirmation step before it is charged. Lives here so
  * the app sheet and the web portal modal cannot drift apart.

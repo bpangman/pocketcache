@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronDown } from 'lucide-react';
@@ -28,9 +28,9 @@ import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import HeroBackButton from '../components/HeroBackButton';
 import ManualCardForm from '../components/ManualCardForm';
-import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, effectiveCharge, nextChargeLabel } from '../lib/billing';
+import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
 import { Z, scrim } from '../lib/overlay';
-import { safeBottom, safeBottomAtLeast } from '../lib/safeArea';
+import { safeBottomAtLeast } from '../lib/safeArea';
 
 
 const SLIDES = [
@@ -125,37 +125,31 @@ const SLIDES = [
   },
 ];
 
-// ─── Pinned-footer clearance + scroll affordance ─────────────────────────────
+// ─── Sheet bottom air + scroll affordance ────────────────────────────────────
 // Four screens below (sign-up, connect card, payment method, checkout confirm)
-// scroll a sheet above a CTA footer that lives OUTSIDE the scroll area. At rest
-// the tail of each sheet - the consent copy, the Plaid disclaimer, the whole
-// "How charges work" block - sat below the fold with nothing on screen to say it
-// was there.
+// scroll a sheet above a CTA footer. At rest the tail of each sheet - the
+// consent copy, the Plaid disclaimer, the whole "How charges work" block - sat
+// below the fold with nothing on screen to say it was there, so a quiet fade at
+// the bottom edge appears whenever there is more to scroll and disappears at the
+// end.
 //
-// Two fixes, applied identically on all four:
-//   1. the sheet pads itself past the footer, using the footer's MEASURED height
-//      rather than a guessed number, so its last child can scroll fully clear;
-//   2. a quiet fade at the bottom edge appears whenever there is more to scroll
-//      and disappears at the end.
+// What this hook deliberately does NOT do any more is reserve footer clearance.
+// The footer on all four screens is a STATIC SIBLING below the scroll area in
+// the same `flex flex-col h-full` column, so the scrollport already stops
+// exactly where the footer starts and nothing can ever be trapped underneath it.
+// Padding the sheet by the measured footer height (161px on a 393x852 iPhone)
+// therefore bought no clearance at all - it just parked ~172px of empty sheet
+// after the last card, which is the "large gap after How charges work" the owner
+// reported. All the sheet needs is its own bottom air. If a future screen ever
+// overlays its footer on the scroll area, that screen owns the clearance.
 
 const FADE_HEIGHT = 28;
 
-function useFooterClearance(scrollRef, barHeight) {
-  const footerRef = useRef(null);
-  const [footerHeight, setFooterHeight] = useState(0);
-  const [atEnd, setAtEnd] = useState(true);
+/** Air under the last card so it does not sit flush against the footer border. */
+const SHEET_BOTTOM_AIR = 24;
 
-  // Footers here are 100-170px tall depending on their own copy, and grow again
-  // by the device's bottom inset, so measure instead of hardcoding.
-  useLayoutEffect(() => {
-    const el = footerRef.current;
-    if (!el) return;
-    const measure = () => setFooterHeight(el.offsetHeight);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+function useSheetScroll(scrollRef) {
+  const [atEnd, setAtEnd] = useState(true);
 
   const syncFade = useCallback(() => {
     const el = scrollRef.current;
@@ -177,10 +171,7 @@ function useFooterClearance(scrollRef, barHeight) {
   }, [scrollRef, syncFade]);
 
   return {
-    footerRef,
-    // Room for the whole sheet to clear the footer: the measured footer plus a
-    // little air, never less than the compact bar plus the device bottom inset.
-    sheetPadBottom: `max(${footerHeight + 12}px, ${safeBottom(barHeight + 12)})`,
+    sheetPadBottom: SHEET_BOTTOM_AIR,
     showFade: !atEnd,
     syncFade,
   };
@@ -478,7 +469,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
-  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
+  const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
   const [chosen, setChosen] = useState(null);
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [commsOptin, setCommsOptin] = useState(true);
@@ -639,7 +630,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
       </AnimatePresence>
 
       {/* Consent checkbox  -  pinned below the scroll area */}
-      <div ref={footerRef} className="bg-white px-5 pt-3 space-y-3" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      <div className="bg-white px-5 pt-3 space-y-3" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
           <label
             className="flex items-start gap-3 cursor-pointer"
             onClick={e => { if (e.target.tagName !== 'A') { setAgreedTerms(v => !v); setShowTermsHint(false); } }}
@@ -943,7 +934,7 @@ function ConnectCardScreen({ onNext, onBack }) {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
-  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
+  const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -1093,7 +1084,7 @@ function ConnectCardScreen({ onNext, onBack }) {
         <ScrollFadeEdge show={showFade} rgb="240,253,251" />
       </div>
 
-      <div ref={footerRef} className="px-4 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb', paddingBottom: safeBottomAtLeast(40, 12) }}>
+      <div className="px-4 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb', paddingBottom: safeBottomAtLeast(40, 12) }}>
           <motion.button
             whileTap={connected ? { scale: 0.97 } : {}}
             onClick={() => connected && onNext(connected)}
@@ -1142,7 +1133,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
-  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
+  const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
   const { selectedNonprofit, monthlyCap, setMonthlyCap } = useApp();
   const [selected, setSelected] = useState(null);
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -1301,7 +1292,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
         <ScrollFadeEdge show={showFade} rgb="249,250,251" />
       </div>
 
-      <div ref={footerRef} className="px-4 pt-3 bg-gray-50 border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
+      <div className="px-4 pt-3 bg-gray-50 border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
           <motion.button
             whileTap={selected ? { scale: 0.97 } : {}}
             onClick={() => {
@@ -1492,9 +1483,19 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
-  const { footerRef, sheetPadBottom, showFade, syncFade } = useFooterClearance(scrollRef, barHeight);
-  const { selectedNonprofit, pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment } = useApp();
-  const [coverProcessing, setCoverProcessing] = useState(true);
+  const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
+  const {
+    selectedNonprofit, pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment,
+    coverProcessing, setCoverProcessing,
+  } = useApp();
+  // The tick box below is the donor's standing answer, not a one-screen toggle.
+  // It used to be local `useState(true)` that was thrown away when onboarding
+  // finished, so a pre-checked promise ("100% of my round-ups reach them") never
+  // reached a single monthly charge and the nonprofit quietly ate the card fee.
+  // It now reads and writes the persisted `coverProcessing` in AppContext
+  // (pc_cover_processing), which is the same value the dashboard, the charge
+  // review alert and Settings bill from.
+  //
   // The cap the donor just ticked on PaymentMethodScreen is live state, so this
   // screen has to honour it: without monthlyCap in the math, the same stored
   // state produced an uncapped total here and a capped one in the web review
@@ -1504,7 +1505,7 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
   const appFee = feeMonths;
   // Processing cover follows what is actually charged, not the raw accrual  -
   // same as WebOnboarding, so the two review screens agree to the cent.
-  const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
+  const processingCover = processingCoverFor(roundUps);
   // Amounts and dates both come from lib/billing  -  this screen must never do
   // its own charge math or assume "next month's 11th".
   const total = chargeTotal({
@@ -1517,6 +1518,15 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
   const capActive = monthlyCap !== null && monthlyCap !== undefined && accrued > monthlyCap;
   const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
   const chargeOn = nextChargeLabel();
+
+  // Commit the answer on the way out, even when the donor never touched the box.
+  // The box is pre-checked, so "left alone" is still an affirmative answer to a
+  // question about money, and it should be a stored fact rather than an absent
+  // key that only happens to default the right way.
+  function confirm() {
+    setCoverProcessing(coverProcessing);
+    onConfirm();
+  }
   const rolloverCharge = chargeAfterNextLabel();
 
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
@@ -1625,8 +1635,12 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
           </div>
 
           {/* Processing cover toggle */}
+          {/* Writes through to AppContext, so the answer survives onboarding and
+              every later charge bills from it. `setCoverProcessing` persists a
+              boolean - it is not a useState setter, so no updater function. */}
           <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl"
-            onClick={() => setCoverProcessing(v => !v)}
+            data-testid="cover-processing-toggle"
+            onClick={() => setCoverProcessing(!coverProcessing)}
             style={{ background: coverProcessing ? '#d1fae5' : '#f9fafb', border: coverProcessing ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}>
             <div
               className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
@@ -1667,8 +1681,8 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
         <ScrollFadeEdge show={showFade} rgb="255,255,255" />
       </div>
 
-      <div ref={footerRef} className="px-4 pt-3 bg-white border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={onConfirm}
+      <div className="px-4 pt-3 bg-white border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={confirm}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{ background: 'linear-gradient(135deg, #003865, #001a33)' }}>
             Start Giving to {npShort}

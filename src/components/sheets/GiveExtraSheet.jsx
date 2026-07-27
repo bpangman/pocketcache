@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import Sheet from '../Sheet';
 import { safeBottomAtLeast } from '../../lib/safeArea';
-import { LARGE_DONATION_THRESHOLD } from '../../lib/billing';
+import { LARGE_DONATION_THRESHOLD, processingCoverFor } from '../../lib/billing';
+import { fmtMoney } from '../../lib/format';
 import { CheckCircle } from 'lucide-react';
 
 const BOOST_PRESETS = [1, 5, 10, 25];
@@ -11,13 +12,22 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
   const [selected, setSelected] = useState(5);
   const [custom, setCustom] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
+  // DELIBERATELY LOCAL, and deliberately NOT seeded from the donor's persisted
+  // `coverProcessing` setting in AppContext. That setting is a standing consent
+  // about the recurring monthly round-up charge; a one-off "give extra" gift is
+  // a separate decision made in the moment, and silently carrying the monthly
+  // preference onto an ad-hoc gift would be putting words in the donor's mouth.
+  // It resets to checked every time the sheet opens (see the effect below).
+  // Please do not "fix" this by wiring it to useApp().
   const [coverProcessing, setCoverProcessing] = useState(true);
   const inputRef = useRef(null);
   const amount = custom ? parseFloat(custom) : selected;
   const valid = amount > 0 && !isNaN(amount);
   const isLarge = valid && amount >= LARGE_DONATION_THRESHOLD;
 
-  const processingFee = valid ? parseFloat((amount * 0.022 + 0.30).toFixed(2)) : 0;
+  // Card-processing cost comes from lib/billing, the single source of the rate.
+  // This file used to carry its own hardcoded copy of the rate-plus-fixed formula.
+  const processingFee = valid ? processingCoverFor(amount) : 0;
   const total = valid ? parseFloat((amount + 1.00 + (coverProcessing ? processingFee : 0)).toFixed(2)) : 0;
 
   useEffect(() => {
@@ -117,13 +127,13 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
                 {coverProcessing && <CheckCircle size={10} className="text-white" />}
               </div>
               <span className="text-xs text-gray-500 leading-relaxed flex-1">
-                Cover {orgShort}&apos;s card processing (~${processingFee.toFixed(2)})
+                Cover {orgShort}&apos;s card processing (~${fmtMoney(processingFee)})  -  goes to them, counts as part of your gift
               </span>
             </label>
             <div className="h-px bg-gray-200" />
             <div className="flex justify-between text-sm font-bold">
               <span className="text-gray-900">Total charged</span>
-              <span style={{ color: brand.primary ?? '#003865' }}>${total.toFixed(2)}</span>
+              <span style={{ color: brand.primary ?? '#003865' }}>${fmtMoney(total)}</span>
             </div>
           </div>
         )}

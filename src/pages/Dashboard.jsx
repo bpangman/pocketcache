@@ -7,7 +7,7 @@ import { loadKey, saveKey } from '../store/identityStore';
 import { useTheme } from '../store/ThemeContext';
 import {
   MAX_FEE_MONTHS, chargeAfterNextLabel, chargeTotal, cycleDays, daysUntilNextCharge,
-  effectiveCharge, nextChargeLabel,
+  effectiveCharge, nextChargeLabel, processingCoverFor,
 } from '../lib/billing';
 import { adjustBounds, getMilestonesUpTo, matchProgress } from '../lib/donorContent';
 import { Z } from '../lib/overlay';
@@ -222,7 +222,7 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
 }
 
 export default function Dashboard() {
-  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge } = useApp();
+  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge, coverProcessing } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
@@ -267,8 +267,24 @@ export default function Dashboard() {
   // the web portal cannot drift.
   const capActive = monthlyCap !== null && pendingRoundUps > monthlyCap;
   const chargeAmount = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
-  const chargeDue = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths });
+  // The donor's standing "cover the card-processing costs" consent (persisted in
+  // AppContext, pre-checked at signup) is real money on every charge, so it has
+  // to be in this figure. Two rules:
+  //   - It is computed on `chargeAmount`, the EFFECTIVE round-ups after any cap
+  //     or one-time adjustment, because the processor only takes its cut of what
+  //     is actually collected. Basing it on the raw accrual would overcharge a
+  //     capped donor.
+  //   - A skipped cycle collects nothing, so there is nothing to process and no
+  //     cover - which is why the skipped state below still reads $0.00.
+  const processingCover = coverProcessing && !skipNextCharge
+    ? processingCoverFor(chargeAmount)
+    : 0;
+  const chargeDue = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths, processingCover });
   const feeLabel = feeMonths === 1 ? '$1 app fee' : `$1 × ${feeMonths} app fee`;
+  // Shown only when the donor actually has the cover on. An always-visible
+  // "+ $0.00 processing cover" term is noise, and the itemisation still adds up
+  // without it because `processingCover` is 0 in that case.
+  const coverLabel = processingCover > 0 ? ` + $${fmtMoney(processingCover)} processing cover` : '';
 
   // MoM display: "↑ 14% vs last" or "↓ 5% vs last" or "First month"
   const momDisplay = momChange === null
@@ -481,27 +497,40 @@ export default function Dashboard() {
               style={{ background: brand.gradient }}
             />
           </div>
+          {/* The bar's two end labels get their own row, and the itemisation sits
+              on a full-width line below it. It used to be the middle child of a
+              three-way justify-between, which left it about 200px: enough for
+              "round-ups + fee · total", not enough once the processing cover
+              became a third term. */}
           <div className="flex justify-between mt-1.5">
             <p className="text-gray-400 text-xs">Cycle start</p>
-            {skipNextCharge ? (
-              /* The figure a skipped donor sees for the upcoming charge: zero.
-                 It used to print the full "$13.89 + $1 app fee · $14.89 pending"
-                 immediately under copy saying the charge was skipped. */
-              <p className="text-xs font-semibold text-amber-600" data-testid="skip-collect-line">
-                {SKIP_COLLECT_LABEL}: {SKIP_COLLECT_AMOUNT}
-              </p>
-            ) : belowMinimum ? (
-              <p className="text-xs font-semibold text-amber-600">
-                ${pendingRoundUps.toFixed(2)} so far  -  rolls over at month-end
-              </p>
-            ) : (
-              <p className="text-xs font-semibold" style={{ color: '#059669' }}>
-                ${chargeAmount.toFixed(2)} + {feeLabel} · ${chargeDue.toFixed(2)} pending
-              </p>
-            )}
             {/* On a skipped cycle the right-hand end of the bar is not a charge day. */}
             <p className="text-gray-400 text-xs">{skipNextCharge ? 'Skipped' : 'Charge day'}</p>
           </div>
+          {skipNextCharge ? (
+            /* The figure a skipped donor sees for the upcoming charge: zero.
+               It used to print the full "$13.89 + $1 app fee · $14.89 pending"
+               immediately under copy saying the charge was skipped. */
+            <p className="text-xs font-semibold text-amber-600 mt-1.5" data-testid="skip-collect-line">
+              {SKIP_COLLECT_LABEL}: {SKIP_COLLECT_AMOUNT}
+            </p>
+          ) : belowMinimum ? (
+            <p className="text-xs font-semibold text-amber-600 mt-1.5">
+              ${fmtMoney(pendingRoundUps)} so far  -  rolls over at month-end
+            </p>
+          ) : (
+            <p className="text-xs font-semibold mt-1.5" style={{ color: '#059669' }} data-testid="charge-itemization">
+              ${fmtMoney(chargeAmount)} + {feeLabel}{coverLabel} · ${fmtMoney(chargeDue)} pending
+            </p>
+          )}
+          {/* Says where the extra money lands. The cover is a donation to the
+              nonprofit, not a PocketCache charge, and the donor pre-agreed to it
+              at signup - so the one place the total names it should also say so. */}
+          {!skipNextCharge && !belowMinimum && processingCover > 0 && (
+            <p className="text-gray-400 text-xs mt-1 leading-relaxed" data-testid="charge-cover-note">
+              The ${fmtMoney(processingCover)} processing cover goes to {selectedNonprofit.shortName}, not to PocketCache, so 100% of your round-ups reach them. Change it in Settings.
+            </p>
+          )}
           {skipNextCharge && (
             <p className="text-amber-600 text-xs mt-2 leading-relaxed" data-testid="skip-detail">
               {skipAccruedLine(pendingRoundUps)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}

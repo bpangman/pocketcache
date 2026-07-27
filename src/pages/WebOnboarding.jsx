@@ -13,7 +13,8 @@ import SsoButtons from '../components/SsoButtons';
 import StripeCardForm from '../components/StripeCardForm';
 import { CapControl } from './WebPortalPages';
 import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
-import { chargeTotal, effectiveCharge, nextChargeLabel } from '../lib/billing';
+import { fmtMoney } from '../lib/format';
+import { chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
 // A donor can reach this wizard with the current month already skipped (Settings
 // deep-links land here, and the skip survives), so the review step needs the same
 // skipped-cycle copy the two dashboards use - imported, never re-typed.
@@ -137,6 +138,7 @@ export default function WebOnboarding({ entryOrg }) {
     setHasAccount, setAccountStatus, setLastMode, setTrackedCard, setPaymentMethod,
     setPage, pendingRoundUps, feeMonths, monthlyCap, setMonthlyCap, chargeAdjustment,
     initialOnboardingStep, clearInitialOnboardingStep, skipNextCharge, goToOnboardingStep,
+    coverProcessing, setCoverProcessing,
   } = useApp();
   const brand = useTheme();
   const org = selectedNonprofit ?? entryOrg;
@@ -158,8 +160,14 @@ export default function WebOnboarding({ entryOrg }) {
   // "Credit or Debit Card" - the wizard used to store last4: null no matter what.
   const [cardEntry, setCardEntry] = useState(false);
   const [cardInfo, setCardInfo] = useState(null);
-  // Review step
-  const [coverProcessing, setCoverProcessing] = useState(true);
+  // Review step.
+  // `coverProcessing` is NOT local state here. It was, and that is exactly the
+  // bug: the checkbox below is pre-checked, the donor agrees to cover the
+  // nonprofit's card-processing cost, and the moment onboarding finished the
+  // value was thrown away with the component - so no monthly charge on either
+  // surface ever included it. It now reads and writes the persisted preference in
+  // AppContext (`pc_cover_processing`), the same store the app's checkout writes,
+  // so the consent survives signup and both dashboards bill it.
   const [showAppModal, setShowAppModal] = useState(false);
 
   const isCA = selectedState === 'CA';
@@ -230,7 +238,12 @@ export default function WebOnboarding({ entryOrg }) {
   // the app. Mirrors the app's confirm step (Onboarding.jsx ~1499-1516).
   const accrued = pendingRoundUps ?? 4.63;
   const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap, chargeAdjustment });
-  const processingCover = parseFloat((roundUps * 0.022 + 0.30).toFixed(2));
+  // Computed on the EFFECTIVE round-ups (after cap / adjustment), never the raw
+  // accrual: the processor only takes its cut of what is actually collected, so
+  // basing the cover on the accrual would overcharge a capped donor. The rate
+  // itself lives in lib/billing - this used to be a hand-rolled
+  // `roundUps * 0.022 + 0.30`, one of six copies of the same formula.
+  const processingCover = processingCoverFor(roundUps);
   const total = chargeTotal({
     pendingRoundUps: accrued,
     monthlyCap,
@@ -498,8 +511,8 @@ export default function WebOnboarding({ entryOrg }) {
                       <span style={{ color: INK.secondary }}>Round-ups this month</span>
                       <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-confirm-roundups">
                         {!skipNextCharge && roundUps !== accrued
-                          ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${accrued.toFixed(2)}</s> ${roundUps.toFixed(2)}</>
-                          : `$${accrued.toFixed(2)}`}
+                          ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${fmtMoney(accrued)}</s> ${fmtMoney(roundUps)}</>
+                          : `$${fmtMoney(accrued)}`}
                       </span>
                     </div>
                     {/* Same notes, same wording and same precedence as the app's
@@ -513,7 +526,7 @@ export default function WebOnboarding({ entryOrg }) {
                     )}
                     {!skipNextCharge && adjusted && (
                       <p style={{ margin: '2px 0 0', fontSize: 11.5, fontWeight: 600, color: '#059669' }} data-testid="web-confirm-adjust-note">
-                        Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
+                        Adjusted to ${fmtMoney(chargeAdjustment)} for this month.
                       </p>
                     )}
                     {/* The $1 fee and the processing cover are not on a skipped
@@ -522,7 +535,7 @@ export default function WebOnboarding({ entryOrg }) {
                     {!skipNextCharge && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
                         <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
-                        <span>+${feeMonths.toFixed(2)}</span>
+                        <span>+${fmtMoney(feeMonths)}</span>
                       </div>
                     )}
                     {!skipNextCharge && feeMonths > 1 && (
@@ -531,9 +544,9 @@ export default function WebOnboarding({ entryOrg }) {
                       </p>
                     )}
                     {!skipNextCharge && coverProcessing && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }} data-testid="web-confirm-cover">
                         <span>Processing cover (goes to {npShort})</span>
-                        <span>+${processingCover.toFixed(2)}</span>
+                        <span>+${fmtMoney(processingCover)}</span>
                       </div>
                     )}
                     <div style={{ height: 1, background: '#cbd5e1', margin: '8px 0' }} />
@@ -542,14 +555,20 @@ export default function WebOnboarding({ entryOrg }) {
                         {skipNextCharge ? SKIP_COLLECT_LABEL : `One charge from ${npShort}`}
                       </span>
                       <span style={{ fontWeight: 800, fontSize: 18, color: skipNextCharge ? '#b45309' : NAVY }} data-testid="web-confirm-total">
-                        {skipNextCharge ? SKIP_COLLECT_AMOUNT : `$${total.toFixed(2)}`}
+                        {skipNextCharge ? SKIP_COLLECT_AMOUNT : `$${fmtMoney(total)}`}
                       </span>
                     </div>
                     <p style={{ margin: '8px 0 0', fontSize: 11.5, fontStyle: 'italic', color: INK.muted }}>This is an example  -  no real charge is made in this demo.</p>
                   </div>
 
+                  {/* Writes straight through to the persisted preference (the
+                      AppContext setter takes a value, not an updater), so what
+                      the donor leaves checked here is what every later charge
+                      on BOTH surfaces bills. Settings carries the same standing
+                      control if they change their mind. */}
                   <div
-                    onClick={() => setCoverProcessing(v => !v)}
+                    onClick={() => setCoverProcessing(!coverProcessing)}
+                    data-testid="web-confirm-cover-toggle"
                     style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, cursor: 'pointer', marginBottom: 14, border: coverProcessing ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb', background: coverProcessing ? '#d1fae5' : '#f9fafb' }}>
                     <span style={{
                       width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -569,7 +588,7 @@ export default function WebOnboarding({ entryOrg }) {
                         {skipNextCharge
                           ? `Applies from your next charge  -  nothing is collected this month.`
                           : coverProcessing
-                            ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
+                            ? `The ~$${fmtMoney(processingCover)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
                             : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
                       </span>
                     </span>

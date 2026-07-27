@@ -13,7 +13,7 @@ const DONOR_KEYS = [
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
   'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment', 'pc_fee_months',
   'pc_bio', 'pc_bio_prompt_dismissed', 'pc_skip_next', 'pc_review_ack',
-  'pc_skip_month', 'pc_last_cycle',
+  'pc_skip_month', 'pc_last_cycle', 'pc_cover_processing',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];
@@ -114,6 +114,12 @@ export function AppProvider({ children }) {
   );
 
   const [monthlyCap, setMonthlyCapState] = useState(() => loadKey('pc_monthly_cap', null));
+  // Whether the donor covers the nonprofit's card-processing cost on top of
+  // their round-ups. The signup checkout pre-checks this and a donor can change
+  // it in Settings. It MUST be persisted: it was previously local state on the
+  // checkout screen, so the donor's consent was thrown away the moment
+  // onboarding finished and no monthly charge ever included it.
+  const [coverProcessing, setCoverProcessingState] = useState(() => loadKey('pc_cover_processing', true));
   // Giving is ALWAYS automatic (no manual-deposit mode) — but a donor can skip
   // their next monthly charge ONCE; giving resumes automatically after. The skip
   // is therefore stored as the month key it applies to ('2026-07'), not as a
@@ -201,6 +207,11 @@ export function AppProvider({ children }) {
     setMonthlyCapState(val);
   }
 
+  function setCoverProcessing(val) {
+    saveKey('pc_cover_processing', val);
+    setCoverProcessingState(val);
+  }
+
   // Same name and signature as before: setSkipNextCharge(true|false). True marks
   // THIS cycle as skipped; false takes the mark off.
   function setSkipNextCharge(val) {
@@ -277,11 +288,12 @@ export function AppProvider({ children }) {
     setPaymentMethodState(DEFAULT_PAYMENT_METHOD);
     setMonthlyCapState(null);
     setChargeAdjustmentState(null);
+    setCoverProcessingState(true);
     setFeeMonthsState(1);
     // Billing cycle bookkeeping: no skip, no settled cycle — a true first open.
     // (The keys themselves are in DONOR_KEYS, which every caller wipes.)
     setSkipMonthState(null);
-    removeKeys(['pc_skip_month', 'pc_last_cycle', 'pc_skip_next']);
+    removeKeys(['pc_skip_month', 'pc_last_cycle', 'pc_cover_processing', 'pc_skip_next']);
   }
 
   // deleteAccount: deletes the donor role only. If an admin role exists the
@@ -378,6 +390,7 @@ export function AppProvider({ children }) {
       paymentMethod, setPaymentMethod,
       pendingSettingsAction, setPendingSettingsAction, clearPendingSettingsAction,
       monthlyCap, setMonthlyCap,
+      coverProcessing, setCoverProcessing,
       skipNextCharge, setSkipNextCharge,
       chargeAdjustment, setChargeAdjustment,
       feeMonths, setFeeMonths,

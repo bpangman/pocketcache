@@ -1,7 +1,7 @@
 import { useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronRight, Settings as SettingsIcon, HelpCircle, LogOut } from 'lucide-react';
+import { ChevronRight, Settings as SettingsIcon, HelpCircle, LogOut, ArrowLeftRight } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
@@ -10,11 +10,29 @@ import TabBar from './TabBar';
 import { Z } from '../lib/overlay';
 import Sheet from './Sheet';
 import CoinMark from './CoinMark';
+import TransferNonprofitSheet from './sheets/TransferNonprofitSheet';
 import Dashboard from '../pages/Dashboard';
 import MyCause from '../pages/MyCause';
 import Activity from '../pages/Activity';
 import Share from '../pages/Share';
 import Settings from '../pages/Settings';
+
+const SUPPORT_EMAIL = 'support@pocketcache.app';
+
+/**
+ * Open the donor's mail app at support.
+ *
+ * NOT window.open(). Inside the Capacitor WKWebView, window.open() with a
+ * mailto: URL is routinely blocked and fails silently - the donor taps
+ * "Help & Support" and nothing at all happens, which is exactly what was
+ * reported from the TestFlight build. Assigning window.location.href puts the
+ * URL through the normal navigation path, which Capacitor hands to the OS, and
+ * it is also what a desktop browser expects. The same call is duplicated in
+ * pages/Settings.jsx's contact-support row; keep the two in step.
+ */
+function contactSupport() {
+  window.location.href = `mailto:${SUPPORT_EMAIL}`;
+}
 
 const PAGES = {
   dashboard: Dashboard,
@@ -29,6 +47,7 @@ export default function AppShell() {
   const { resetNpContent } = useNp();
   const brand = useTheme();
   const [showProfile, setShowProfile] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const Page = PAGES[tab] || Dashboard;
 
   return (
@@ -88,8 +107,15 @@ export default function AppShell() {
               : { background: '#f9fafb', color: '#374151' }}
           >
             <span className="text-lg">🏛️</span>
+            {/* One line on a 320pt-class phone (iPhone SE), which the old
+                "Run a nonprofit? Create your page" was not: at 32 characters it
+                wrapped onto a second line inside this row's ~172px of text
+                space. "Create a nonprofit page" is 23 characters, still names
+                the audience and still reads as an action, and measures one line
+                at 320px. Deliberately NOT truncate/nowrap: an ellipsis is still
+                a broken row, so the copy has to fit honestly. */}
             <span className="flex-1 font-semibold text-sm">
-              {adminRole ? `Switch to Admin · ${adminRole.joinCode}` : 'Run a nonprofit? Create your page'}
+              {adminRole ? `Switch to Admin · ${adminRole.joinCode}` : 'Create a nonprofit page'}
             </span>
             <ChevronRight size={16} className={adminRole ? 'text-white/50' : 'text-gray-300'} />
           </motion.button>
@@ -100,7 +126,13 @@ export default function AppShell() {
               picked between three doors into the same room. One row now. */}
           {[
             { icon: <SettingsIcon size={18} />, label: 'Account settings', action: () => { setShowProfile(false); setTab('settings'); } },
-            { icon: <HelpCircle size={18} />, label: 'Help & Support', action: () => window.open('mailto:support@pocketcache.app') },
+            // Only for someone who actually administers a nonprofit. One admin
+            // email per org (store/orgStore.js) means that when the admin
+            // leaves, without this the organization loses its page for good.
+            ...(adminRole
+              ? [{ icon: <ArrowLeftRight size={18} />, label: 'Transfer nonprofit page', action: () => setShowTransfer(true) }]
+              : []),
+            { icon: <HelpCircle size={18} />, label: 'Help & Support', action: contactSupport },
           ].map(({ icon, label, action }) => (
             <button
               key={label}
@@ -128,6 +160,16 @@ export default function AppShell() {
           </p>
         </div>
       </Sheet>
+
+      {/* Rendered AFTER the account sheet so it paints above it (same z step),
+          the way Settings stacks AddCardSheet over ChangePaymentSheet - closing
+          it returns the admin to the account sheet they opened it from. */}
+      <TransferNonprofitSheet
+        show={showTransfer}
+        onClose={() => setShowTransfer(false)}
+        adminRole={adminRole}
+        brand={brand}
+      />
     </div>
   );
 }

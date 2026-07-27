@@ -35,6 +35,30 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   **not** for this Connect hand-off, and the backend is not deployed.
 - **Action:** build when the live backend + Stripe platform account are in place.
 
+### 3. Custom app icon for anchor partners - needs a native build, not a web push
+- **Now (demo):** Settings > App Icon shows the PocketCache icon and the BGCA anchor-partner icon
+  side by side. It is a PREVIEW and is labelled as one ("Preview" pill on the row, "Not available
+  yet" banner in the sheet, "Current" / "Coming soon" badges on the two tiles). Nothing is
+  selectable. It previously offered a radio choice that moved a dot and did nothing else - the
+  home-screen icon never changed, which Blake confirmed on his own phone.
+- **Why it cannot be done from here:** iOS only swaps a home-screen icon through
+  `UIApplication.setAlternateIconName`, and every alternate icon must be compiled into the app
+  bundle. The app remote-loads its web bundle from `/demo/`, so no JavaScript we push can deliver
+  this. It ships with an App Store / TestFlight build or not at all.
+- **Production needs all four:**
+  1. Alternate icon assets (every required size) added to the iOS project's asset catalogue.
+  2. `CFBundleAlternateIcons` declared in `Info.plist` under `CFBundleIcons`, one entry per
+     partner icon, with `UIPrerenderedIcon` set as appropriate.
+  3. A Capacitor plugin or a small native shim exposing `UIApplication.setAlternateIconName` to
+     the web layer (with the "you have changed your icon" system alert handled), so the sheet's
+     tiles can become real selectable options.
+  4. A new TestFlight/App Store build. A web push to `/demo/` cannot deliver any of the above.
+- **Also decide:** whether a per-tenant icon set is even viable at scale (every partner icon has
+  to be bundled into the single shipped app), or whether this stays an anchor-partner-only perk.
+  The sheet's copy currently promises the latter.
+- **Action:** build it into the native project during the iOS build phase; until then the UI must
+  keep saying it is a preview.
+
 ### [TESTING MODE] Native fresh-start wipe on every cold launch
 - **Now (demo):** src/main.jsx clears all localStorage/sessionStorage on every native cold launch so Blake can re-test onboarding from scratch each time.
 - **Production:** This block MUST be removed before the official launch. It is marked with "TESTING MODE - REMOVE BEFORE LAUNCH" in the code.
@@ -142,6 +166,20 @@ Each item notes where PocketCache stands today and what "done" looks like.
   has a PocketCache account - ask your admin to invite you"); (c) admin work-email signup
   detects an existing admin account for that address and offers sign-in. All three need the
   real backend account store - impossible client-side.
+- **Nonprofit page transfer (added 2026-07-26):** one admin email per org (`adminEmail` on the org
+  record; admin sign-in resolves the org by that address) means that when the person who signed the
+  organization up leaves, the nonprofit is locked out of its own page permanently. The account
+  sheet now offers "Transfer nonprofit page" to anyone holding an admin role, and it is
+  SIMULATED - labelled "Demo" before and after confirming, nothing is written to the org record and
+  no email is sent. Production needs: (a) verification that the new address is on the
+  organization's own domain (same domain rule and same source of truth as admin signup: free-mail
+  domains rejected, cross-checked against IRS/Stripe-KYC records), (b) an email to BOTH parties -
+  an accept link to the incoming admin and a "your page is being transferred" notice to the
+  outgoing one, with the handover only completing when the new address confirms, and (c) a
+  reversal window during which the outgoing admin can cancel the transfer before their access
+  ends (and a support path after it, since a departing admin's mailbox may already be closed).
+  Decide the window length with Nathan alongside the license terms. Until all three exist the
+  demo must keep saying it is a demo.
 - **Billing schedule (DECIDED by Blake 2026-07-06, rev 2 same day): lock on the 1st,
   charge on the 11th.** Round-ups accrue through the last calendar day of the month. On the
   1st the cycle CLOSES: the exact amount is locked and emailed to the donor ("here's your

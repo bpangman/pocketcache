@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles, Building2, HandHeart } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import OrgLogo from '../components/OrgLogo';
 import MatchBadge from '../components/MatchBadge';
 import GiveExtraSheet from '../components/sheets/GiveExtraSheet';
 import BoostToast from '../components/sheets/BoostToast';
-import CorporateMatchSheet from '../components/sheets/CorporateMatchSheet';
 import VolunteerSheet from '../components/sheets/VolunteerSheet';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
 import MatchDetailsSheet from '../components/sheets/MatchDetailsSheet';
@@ -17,11 +16,18 @@ import { fmtMoneyCompact } from '../lib/format';
 // Both surfaces now read the single implementation in lib/donorContent.
 import { impactTier } from '../lib/donorContent';
 
+/**
+ * PocketCache teal, dark enough to carry small bold text on the teal-50 tile
+ * (teal-700). The org's own brand colour is used for everything else in the
+ * involvement group, but the two tiles need to be told apart at a glance and a
+ * second org colour would just be more red under BGCA.
+ */
+const TEAL_INK = '#0f766e';
+
 export default function MyCause() {
   const { selectedNonprofit, boostDonation, totalDonated } = useApp();
   const brand = useTheme();
   const [showBoost, setShowBoost] = useState(false);
-  const [showMatch, setShowMatch] = useState(false);       // "Suggest a Match Sponsor"
   const [showVolunteer, setShowVolunteer] = useState(false);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false); // "Become a Match Sponsor"
   const [showMatchDetails, setShowMatchDetails] = useState(false); // drill-in on the active match
@@ -62,13 +68,13 @@ export default function MyCause() {
         nonprofit={np}
         brand={brand}
       />
-      {/* "Suggest a Match Sponsor"  -  reachable from the Get More Involved section */}
-      <CorporateMatchSheet
-        show={showMatch}
-        onClose={() => setShowMatch(false)}
-        nonprofit={np}
-        brand={brand}
-      />
+      {/* "Suggest a Match Sponsor" (CorporateMatchSheet) used to mount here.
+          Removed 2026-07: two adjacent buttons that both said "match sponsor"
+          made the donor pick between a real action and a suggestion box, and the
+          suggestion box was the weaker of the two. "Become a Match Sponsor" is
+          the one that survives. Nothing in the app mounts CorporateMatchSheet
+          any more; the component file is left in place because the web portal
+          keeps its own equivalent flow. */}
       <VolunteerSheet show={showVolunteer} onClose={() => setShowVolunteer(false)} nonprofit={np} brand={brand} />
       <BecomeMatchSponsorSheet show={showSponsorSheet} onClose={() => setShowSponsorSheet(false)} nonprofit={np} brand={brand} />
       {/* Match drill-in: My Cause owns the full match display now that Home is
@@ -127,11 +133,94 @@ export default function MyCause() {
           </motion.div>
         )}
 
-        {/* Your impact storytelling card */}
+        {/* Get more involved  -  deliberately placed HERE, immediately after the
+            org's Impact quote and above everything else.
+
+            Position: this used to be the LAST card on a 1380px scroll, so the ask
+            only arrived after the reference material (your-impact line, total
+            raised, donor count, EIN, sponsor badge) had already cooled the
+            moment. Here it lands on the emotional peak - mission, then the
+            headline impact quote, then "here is how to do more" - and, measured
+            on a 393x852 phone, the whole group including both tiles now sits
+            inside the first screenful, so a motivated donor never scrolls to
+            act. It is not directly under the hero because asking for more before
+            the mission has been stated is the wrong order.
+
+            Colour: the old buttons used brand.textAccent / brand.accentLight,
+            which under BGCA is #E8192C  -  three red-outlined buttons that read
+            as errors. Everything here now uses the calm product palette the rest
+            of the app already uses for primary actions: brand.gradient and
+            brand.primary (navy under BGCA, exactly as Settings and Home do it)
+            plus PocketCache teal for the sponsor tile. No brand.textAccent. */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08 }}
+          className="bg-white rounded-3xl p-5 card-shadow"
+          data-testid="get-involved"
+        >
+          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Get More Involved</p>
+          <p className="text-gray-500 text-xs mt-1 mb-4 leading-relaxed">
+            Your round-ups are already running. Here are three ways to do more for {np.shortName}.
+          </p>
+
+          {/* One lead action, then two equal-weight tiles. Not three identical
+              full-width bars: the tiles say what each one actually does, and the
+              48px+ tile height keeps every target comfortably tappable. */}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setShowBoost(true)}
+            className="w-full py-3.5 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2"
+            style={{ background: brand.gradient }}
+            data-testid="involve-give-extra"
+          >
+            <Plus size={16} /> Give Extra Now
+          </motion.button>
+
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowSponsorSheet(true)}
+              className="rounded-2xl p-3 text-left flex flex-col gap-2 min-h-[104px]"
+              style={{ background: '#f0fdfa', border: '1.5px solid #99f6e4' }}
+              data-testid="involve-become-sponsor"
+            >
+              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#ccfbf1' }}>
+                <Building2 size={16} style={{ color: TEAL_INK }} />
+              </span>
+              <span className="font-bold text-sm leading-tight" style={{ color: TEAL_INK }}>
+                Become a Match Sponsor
+              </span>
+              <span className="text-xs leading-snug" style={{ color: '#0d9488' }}>
+                Your company funds the monthly match
+              </span>
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowVolunteer(true)}
+              className="rounded-2xl p-3 text-left flex flex-col gap-2 min-h-[104px]"
+              style={{ background: brand.primary + '12', border: `1.5px solid ${brand.primary}40` }}
+              data-testid="involve-volunteer"
+            >
+              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: brand.primary + '1F' }}>
+                <HandHeart size={16} style={{ color: brand.primary }} />
+              </span>
+              <span className="font-bold text-sm leading-tight" style={{ color: brand.primary }}>
+                Volunteer Opportunities
+              </span>
+              <span className="text-xs leading-snug" style={{ color: brand.primary, opacity: 0.75 }}>
+                Give time near you, not just money
+              </span>
+            </motion.button>
+          </div>
+        </motion.div>
+
+        {/* Your impact storytelling card */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
           className="bg-white rounded-3xl p-5 card-shadow flex items-start gap-3"
         >
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
@@ -151,7 +240,7 @@ export default function MyCause() {
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={{ delay: 0.14 }}
           >
             {(orgStats != null ? orgStats.isDemo : !!np.sampleStats) && (
               <p className="text-right mb-1">
@@ -178,7 +267,7 @@ export default function MyCause() {
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.14 }}
+            transition={{ delay: 0.18 }}
           >
             {match.sample && (
               <div className="mb-1.5 px-1">
@@ -190,54 +279,6 @@ export default function MyCause() {
             <MatchBadge match={match} onDetails={() => setShowMatchDetails(true)} />
           </motion.div>
         )}
-
-        {/* Action buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18 }}
-          className="bg-white rounded-3xl p-5 card-shadow"
-        >
-          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-4">Get More Involved</p>
-
-          <div className="space-y-3">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowBoost(true)}
-              className="w-full py-3.5 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2"
-              style={{ background: brand.gradient }}
-            >
-              <Plus size={16} /> Give Extra Now
-            </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowSponsorSheet(true)}
-              className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
-              style={{ borderColor: '#f59e0b', color: '#92400e', background: '#fffbeb' }}
-            >
-              🏢 Become a Match Sponsor
-            </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowMatch(true)}
-              className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
-              style={{ borderColor: brand.textAccent, color: brand.textAccent, background: brand.accentLight }}
-            >
-              &#127962; Suggest a Match Sponsor
-            </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowVolunteer(true)}
-              className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2"
-              style={{ borderColor: brand.textAccent + '80', color: brand.textAccent, background: brand.accentLight }}
-            >
-              &#128588; Volunteer Opportunities
-            </motion.button>
-          </div>
-        </motion.div>
 
         {/* "Powered by PocketCache" footer: Settings owns it. */}
 

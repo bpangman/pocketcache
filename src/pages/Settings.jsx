@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle, HelpCircle, SkipForward } from 'lucide-react';
+import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle, HelpCircle, SkipForward, Receipt, X } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
@@ -15,8 +15,9 @@ import { findOrgByCode } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import {
   CHARGE_DAY, MAX_FEE_MONTHS, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal,
-  currentMonthName, effectiveCharge, nextChargeLabel,
+  currentMonthName, effectiveCharge, nextChargeLabel, processingCoverFor,
 } from '../lib/billing';
+import { fmtMoney } from '../lib/format';
 import { billingExplainer } from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
@@ -41,6 +42,23 @@ const CARD_ELEMENT_OPTIONS = {
 };
 
 const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover'];
+
+const SUPPORT_EMAIL = 'support@pocketcache.app';
+
+/**
+ * Open the donor's mail app at support.
+ *
+ * NOT window.open(). Inside the Capacitor WKWebView, window.open() with a
+ * mailto: URL is routinely blocked and fails silently - the donor taps
+ * "Contact support" and nothing at all happens, which is exactly what was
+ * reported from the TestFlight build. Assigning window.location.href puts the
+ * URL through the normal navigation path, which Capacitor hands to the OS, and
+ * it is also what a desktop browser expects. The same call is duplicated in
+ * AppShell.jsx's account sheet; keep the two in step.
+ */
+function contactSupport() {
+  window.location.href = `mailto:${SUPPORT_EMAIL}`;
+}
 
 // The charge day as an ordinal, derived from lib/billing rather than typed as
 // "11th" - Settings now carries the canonical billing explainer, so a literal
@@ -150,6 +168,80 @@ function SkipConfirmModal({ show, onClose, monthName, chargeLabel, afterChargeLa
             >
               Got it
             </motion.button>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/**
+ * THE billing explanation, as a popup.
+ *
+ * It used to render inline as a five-paragraph card, which is a wall of
+ * reference text sitting permanently between two things a donor actually came
+ * to change. It is now one row that opens this modal, so the text is one tap
+ * away instead of always underfoot.
+ *
+ * The prose is NOT inlined here: it comes from billingExplainer() in
+ * lib/donorContent, which stays the single source shared with every other
+ * surface. This component only lays it out.
+ *
+ * Same centred-modal shape as SkipConfirmModal above, including the framer-motion
+ * centring trap: the -50% translate lives in the x/y props, never in
+ * style.transform, because framer-motion owns transform during the scale
+ * animation (see AppDownloadQRModal.jsx for the full note).
+ */
+function BillingExplainerModal({ show, onClose, paragraphs, brand }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ ...scrim('dim'), zIndex: Z.modalScrim }}
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }}
+            animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
+            exit={{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }}
+            transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+            className="absolute left-1/2 top-1/2 bg-white rounded-3xl flex flex-col"
+            style={{ width: 'min(340px, 90%)', maxHeight: '78%', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', zIndex: Z.modal }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="How billing works"
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: brand.primary + '18', color: brand.primary }}
+                >
+                  <Receipt size={18} />
+                </div>
+                <h3 className="font-bold text-gray-900 text-base">How billing works</h3>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.9, opacity: 0.6 }}
+                onClick={onClose}
+                aria-label="Close"
+                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-gray-100"
+              >
+                <X size={16} className="text-gray-500" />
+              </motion.button>
+            </div>
+            {/* Hairlines between paragraphs, exactly as the old card had them, so
+                each fact can still be found on its own. */}
+            <div className="px-5 pb-5 overflow-y-auto pc-scrollbar">
+              {paragraphs.map((para, i) => (
+                <div key={i}>
+                  {i > 0 && <div className="h-px bg-gray-100" />}
+                  <p className="text-gray-500 leading-relaxed py-2.5" style={{ fontSize: 12.5 }}>{para}</p>
+                </div>
+              ))}
+            </div>
           </motion.div>
         </>
       )}
@@ -476,67 +568,80 @@ function SwitchOrgSheet({ show, onClose, brand, onBind }) {
   );
 }
 
+/**
+ * App icon - PREVIEW ONLY, and it says so.
+ *
+ * This sheet used to offer a radio choice between the PocketCache icon and a
+ * BGCA one. Tapping it moved a radio dot and nothing else: iOS can only swap a
+ * home-screen icon through UIApplication.setAlternateIconName, with every
+ * alternate icon compiled into the app bundle and declared in Info.plist. The
+ * iOS project has neither, and the app remote-loads its web bundle, so no
+ * amount of JavaScript shipped from here can change the icon on a phone. The
+ * control was therefore a lie: the donor picked BGCA, the home screen never
+ * changed.
+ *
+ * It is kept rather than deleted because it is a real anchor-partner selling
+ * point for nonprofit partners, and losing it loses the pitch. So it is now
+ * plainly a preview of what arrives with the App Store build: nothing is
+ * selectable, nothing claims to have changed, and the current icon is labelled
+ * as the current icon. See PRELAUNCH.md for what shipping it for real needs.
+ */
 function AppIconSheet({ show, onClose, brand }) {
-  const [selectedIcon, setSelectedIcon] = useState('pocketcache');
-
   return (
     <Sheet show={show} onClose={onClose} title="App Icon">
       {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
       <div className="px-6 pt-5 space-y-4">
-        <div className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background: brand.accentLight }}>
-          <span className="text-2xl">⚓</span>
+        <div className="rounded-2xl px-4 py-3 flex items-start gap-3" style={{ background: '#fef3c7', border: '1.5px solid #fde68a' }}>
+          <span className="text-xl leading-none mt-0.5">🔒</span>
           <div>
-            <p className="font-bold text-sm" style={{ color: brand.textAccent }}>BGCA Anchor Partner</p>
-            <p className="text-gray-500 text-xs">Custom icon available</p>
+            <p className="font-bold text-sm" style={{ color: '#92400e' }}>Not available yet</p>
+            <p className="text-xs mt-0.5" style={{ color: '#92400e' }}>
+              You can&apos;t change your icon from here. This is a preview of an anchor-partner perk that arrives with the App Store version.
+            </p>
           </div>
         </div>
 
-        <p className="text-gray-500 text-sm">Choose your app icon. Custom icons are available for anchor nonprofit partners.</p>
+        <p className="text-gray-500 text-sm">
+          Swapping the icon on your home screen is something iOS only lets an app do from a full app update, so it ships with a new App Store build rather than a change we can send to your phone today.
+        </p>
 
         <div className="space-y-3">
           {[
-            { id: 'pocketcache', label: 'PocketCache Icon', sub: 'Default', coin: true, logoImg: null },
-            { id: 'bgca', label: 'BGCA Custom Icon', sub: 'Anchor partner benefit', coin: false, logoImg: bgcaLogoUrl },
+            { id: 'pocketcache', label: 'PocketCache icon', sub: 'Your icon today', logoImg: null, badge: 'Current', badgeStyle: { color: '#0D9488', background: '#f0fdfa' } },
+            { id: 'bgca', label: 'BGCA icon', sub: 'Anchor partner perk', logoImg: bgcaLogoUrl, badge: 'Coming soon', badgeStyle: { color: '#92400e', background: '#fef3c7' } },
           ].map(opt => (
-            <motion.button
+            <div
               key={opt.id}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setSelectedIcon(opt.id)}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all"
-              style={selectedIcon === opt.id
+              className="w-full flex items-center gap-4 p-4 rounded-2xl border-2"
+              style={opt.id === 'pocketcache'
                 ? { borderColor: brand.primary, background: brand.accentLight }
                 : { borderColor: '#f3f4f6', background: '#f9fafb' }}
             >
               {opt.logoImg ? (
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm overflow-hidden"
-                  style={{ background: '#fff', border: selectedIcon === opt.id ? `2px solid ${brand.primary}` : '2px solid #e5e7eb' }}>
-                  <img src={opt.logoImg} alt={opt.label} className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+                  style={{ background: '#fff', border: '2px solid #e5e7eb', opacity: 0.55 }}>
+                  <img src={opt.logoImg} alt="" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
                 </div>
               ) : (
                 // The real app icon: navy tile with the official coin (gold + teal block arrow)
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm"
-                  style={{ background: '#0B2A4A', border: selectedIcon === opt.id ? `2px solid ${brand.primary}` : '2px solid transparent' }}>
+                  style={{ background: '#0B2A4A', border: `2px solid ${brand.primary}` }}>
                   <CoinMark size={30} />
                 </div>
               )}
-              <div className="text-left flex-1">
+              <div className="text-left flex-1 min-w-0">
                 <p className="font-semibold text-sm text-gray-900">{opt.label}</p>
                 <p className="text-gray-400 text-xs">{opt.sub}</p>
               </div>
-              <div
-                className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                style={selectedIcon === opt.id
-                  ? { borderColor: brand.primary, background: brand.primary }
-                  : { borderColor: '#d1d5db', background: 'transparent' }}
-              >
-                {selectedIcon === opt.id && <div className="w-2 h-2 rounded-full bg-white" />}
-              </div>
-            </motion.button>
+              <span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={opt.badgeStyle}>
+                {opt.badge}
+              </span>
+            </div>
           ))}
         </div>
 
         <p className="text-gray-400 text-xs text-center px-2">
-          Custom icons are available for anchor nonprofit partners. For iOS, icons are bundled at app build time. Non-anchor tenants use the PocketCache icon.
+          Custom icons are an anchor nonprofit partner benefit. Everyone else keeps the PocketCache icon.
         </p>
       </div>
     </Sheet>
@@ -544,9 +649,14 @@ function AppIconSheet({ show, onClose, brand }) {
 }
 
 function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonate, onCancelled }) {
-  const { feeMonths, monthlyCap, chargeAdjustment } = useApp();
+  const { feeMonths, monthlyCap, chargeAdjustment, coverProcessing: coverPref } = useApp();
   const [result, setResult] = useState(null); // 'donated' | 'cancelled'
-  const [coverProcessing, setCoverProcessing] = useState(true);
+  // Seeded from the donor's STANDING preference, not a hardcoded true: someone
+  // who turned the cover off in Settings should not find it silently re-ticked
+  // on the way out. It stays local from there - this is a one-off settle-up, so
+  // changing it here must not rewrite the standing preference of an account the
+  // donor is about to close.
+  const [coverProcessing, setCoverProcessing] = useState(coverPref);
 
   useEffect(() => {
     if (result) {
@@ -565,7 +675,10 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
   const chargeableStr = chargeable.toFixed(2);
   const trimmed = chargeable < rawAmount;
   const appFee = feeMonths;
-  const processingCover = parseFloat((chargeable * 0.022 + 0.30).toFixed(2));
+  // Rate lives in lib/billing (processingCoverFor), never as local arithmetic:
+  // this figure has to match what Settings quotes and what the charge actually
+  // carries.
+  const processingCover = processingCoverFor(chargeable);
   const finalTotal = chargeTotal({
     pendingRoundUps: rawAmount, monthlyCap, chargeAdjustment, feeMonths,
     processingCover: coverProcessing ? processingCover : 0,
@@ -930,7 +1043,8 @@ export default function Settings() {
     boostDonation, cancelAccount, adminRole, deleteAccount,
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
     pendingSettingsAction, clearPendingSettingsAction, showToast,
-    monthlyCap, setMonthlyCap,
+    monthlyCap, setMonthlyCap, chargeAdjustment,
+    coverProcessing, setCoverProcessing,
     skipNextCharge, setSkipNextCharge, feeMonths, hasAccount,
   } = useApp();
   const brand = useTheme();
@@ -972,6 +1086,7 @@ export default function Settings() {
   const [showTrackCard, setShowTrackCard] = useState(false);
   const [showChangePayment, setShowChangePayment] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [showBilling, setShowBilling] = useState(false);
 
   // Dates come from lib/billing, never from local math: during the review
   // window (days 1-10) the upcoming charge is THIS month's 11th, so a local
@@ -1017,6 +1132,13 @@ export default function Settings() {
     chargeDay: CHARGE_DAY,
     reviewDays: REVIEW_WINDOW_LAST_DAY,
   });
+
+  // What the processing cover actually costs at today's numbers, quoted against
+  // the amount that will really be charged (cap and one-time adjustment
+  // applied), not the raw accrual - the processor takes its cut of the charge,
+  // so quoting the accrual would overstate it whenever a cap is on.
+  const chargeableThisMonth = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
+  const coverAmount = processingCoverFor(chargeableThisMonth);
 
   // ===== CANONICAL EXPORT SHAPE ==============================================
   // "Download My Data" is the donor's copy of their own record, and this object
@@ -1261,28 +1383,38 @@ export default function Settings() {
             onPress={() => setShowChangePayment(true)}
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
-        </motion.div>
-
-        {/* THE billing explainer. One dense amber block became five short
-            paragraphs from lib/donorContent, styled like every other Settings
-            section (white card, uppercase label, same radius) rather than as an
-            alert: it is reference material a donor reads once, not a warning.
-            Hairlines separate the paragraphs so each fact can be found on its
-            own. This is the product's ONLY billing explanation - the Activity
-            tab's competing banner is gone. */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
-          className="bg-white rounded-3xl overflow-hidden card-shadow">
-          <div className="px-4 pt-4 pb-2">
-            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">How Billing Works</p>
-          </div>
-          <div className="px-4 pb-4">
-            {billingParagraphs.map((para, i) => (
-              <div key={i}>
-                {i > 0 && <div className="h-px bg-gray-50" />}
-                <p className="text-gray-500 leading-relaxed py-2.5" style={{ fontSize: 12.5 }}>{para}</p>
-              </div>
-            ))}
-          </div>
+          <div className="h-px bg-gray-50 mx-4" />
+          {/* The STANDING processing-cover preference. It was previously a
+              checkbox on the signup screen held in local state and thrown away
+              at the end of onboarding, plus two more local copies inside the
+              Give Extra and Cancel sheets - so a donor who agreed to cover the
+              cost had no way to see it, no way to change it, and it never
+              reached a monthly charge. It lives in AppContext now
+              (pc_cover_processing) and this is where a donor changes their
+              mind. The figure is quoted from lib/billing, not typed. */}
+          <SettingRow
+            icon={<span className="text-base">💚</span>}
+            label="Cover processing costs"
+            sub={coverAmount > 0
+              ? `Adds about $${fmtMoney(coverAmount)} to your ${chargeLabel} charge so ${orgShort} keeps your full round-ups. Every cent of it goes to ${orgShort}, never to PocketCache.`
+              : `Adds the card cost to your monthly charge so ${orgShort} keeps your full round-ups. Every cent of it goes to ${orgShort}, never to PocketCache.`}
+            color={brand.primary}
+            right={<Toggle value={coverProcessing} onChange={setCoverProcessing} color={brand.primary} />}
+          />
+          <div className="h-px bg-gray-50 mx-4" />
+          {/* THE billing explainer, now one row instead of five paragraphs of
+              permanent wall text between two controls. The prose still comes
+              from lib/donorContent (billingExplainer) - the modal only lays it
+              out. This is the product's ONLY billing explanation; the Activity
+              tab's competing banner is gone. */}
+          <SettingRow
+            icon={<Receipt size={18} />}
+            label="How billing works"
+            sub="When you're charged, who charges you, and what the $1 app fee is"
+            color={brand.secondary}
+            onPress={() => setShowBilling(true)}
+            right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+          />
         </motion.div>
 
         {/* Current cause */}
@@ -1348,13 +1480,20 @@ export default function Settings() {
             right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
           />
           <div className="h-px bg-gray-50 mx-4" />
+          {/* App icon: a PREVIEW, and the row says so before the donor taps it.
+              The sheet cannot change the icon and no longer pretends to - see
+              AppIconSheet above for why iOS makes this a native-build feature. */}
           <SettingRow
             icon={<span className="text-base">🖼️</span>}
             label="App Icon"
-            sub="BGCA is an anchor partner  -  custom icon available"
+            sub="Preview the BGCA anchor-partner icon, coming with the App Store version"
             color={brand.secondary}
             onPress={() => setShowAppIcon(true)}
-            right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+            right={
+              <span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ color: '#92400e', background: '#fef3c7' }}>
+                Preview
+              </span>
+            }
           />
         </motion.div>
 
@@ -1367,9 +1506,9 @@ export default function Settings() {
           <SettingRow
             icon={<HelpCircle size={18} />}
             label="Contact support"
-            sub="support@pocketcache.app"
+            sub={SUPPORT_EMAIL}
             color={brand.primary}
-            onPress={() => window.open('mailto:support@pocketcache.app')}
+            onPress={contactSupport}
             right={<ExternalLink size={14} className="text-gray-300 shrink-0" />}
           />
         </motion.div>
@@ -1503,6 +1642,14 @@ export default function Settings() {
         nonprofit={selectedNonprofit}
         onDonate={(amount) => boostDonation(amount)}
         onCancelled={() => { setShowCancel(false); cancelAccount(); }}
+      />
+
+      {/* How billing works - popup, text from lib/donorContent */}
+      <BillingExplainerModal
+        show={showBilling}
+        onClose={() => setShowBilling(false)}
+        paragraphs={billingParagraphs}
+        brand={brand}
       />
 
       {/* Skip a month confirmation */}

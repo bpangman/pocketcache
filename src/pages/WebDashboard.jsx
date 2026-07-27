@@ -9,12 +9,14 @@ import { fmtMoney, fmtCount } from '../lib/format';
 import { getMilestonesUpTo, matchProgress, monthlyHistory, taxYearSummary } from '../lib/donorContent';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
-import { WebMyCause, WebShare, WebSettings, GiveExtraModal, AdjustChargeModal } from './WebPortalPages';
+import {
+  WebMyCause, WebShare, WebSettings, GiveExtraModal, AdjustChargeModal, TransferNonprofitModal,
+} from './WebPortalPages';
 import { useBiometricOffer, BiometricOfferCard } from '../components/BiometricLock';
 import ChargeReviewAlert from '../components/ChargeReviewAlert';
 import {
   chargeTotal, cycleDays, daysUntilNextCharge, effectiveCharge, nextChargeDate,
-  nextChargeLabel, previousChargeDate,
+  nextChargeLabel, previousChargeDate, processingCoverFor,
 } from '../lib/billing';
 // Skipped-cycle copy comes from the app Dashboard so the two donor surfaces
 // render byte-identical sentences and figures for a skip. See the block at the
@@ -425,7 +427,7 @@ function ActivityLinkCard({ onOpen }) {
 // stored state.
 function EstimateCard({
   pending, feeMonths, npShort, onGiveExtra, skipped,
-  monthlyCap, chargeAdjustment, onAdjust, monthlyMinimum,
+  monthlyCap, chargeAdjustment, onAdjust, monthlyMinimum, processingCover,
 }) {
   const fee = feeMonths;
   // Cycle countdown and progress, both from lib/billing. The portal had NEITHER
@@ -437,7 +439,7 @@ function EstimateCard({
   const cyclePct = Math.max(0, Math.min(100, ((cycleLength - daysLeft) / cycleLength) * 100));
   const cycleStartLabel = previousChargeDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const roundUps = effectiveCharge({ pendingRoundUps: pending, monthlyCap, chargeAdjustment });
-  const total = chargeTotal({ pendingRoundUps: pending, monthlyCap, chargeAdjustment, feeMonths });
+  const total = chargeTotal({ pendingRoundUps: pending, monthlyCap, chargeAdjustment, feeMonths, processingCover });
   const capActive = monthlyCap !== null && monthlyCap !== undefined && pending > monthlyCap;
   const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
   // Same gate as the app Dashboard: under the nonprofit's monthly minimum the
@@ -500,6 +502,22 @@ function EstimateCard({
         {!skipped && (
           <div style={row}><span style={{ color: INK.secondary }}>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span><span style={{ color: INK.secondary }}>+${fmtMoney(fee)}</span></div>
         )}
+        {/* The donor's standing processing-cover consent, itemised as its own
+            line rather than folded into the total, because it is real money the
+            donor agreed to at signup and it goes somewhere different from the
+            rest (to the nonprofit, not to PocketCache). Rendered only when the
+            cover is actually on - a permanent "+$0.00" row is noise, and the
+            total is still right without it because `processingCover` is 0.
+            Suppressed on a skipped or rolling-over cycle for the same reason the
+            fee-bearing total is: nothing is collected, so nothing is processed
+            and there is no cost to cover. Same rule as the app Dashboard's
+            itemisation line (Dashboard.jsx `coverLabel`). */}
+        {!skipped && !rollingOver && processingCover > 0 && (
+          <div style={row} data-testid="web-estimate-cover">
+            <span style={{ color: INK.secondary }}>Processing cover (goes to {npShort})</span>
+            <span style={{ color: INK.secondary }}>+${fmtMoney(processingCover)}</span>
+          </div>
+        )}
         <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
         {skipped ? (
           /* Zero, not a total. This row used to read "One charge from BGCA
@@ -519,6 +537,16 @@ function EstimateCard({
           <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }} data-testid="web-estimate-total">≈ ${fmtMoney(total)}</span></div>
         )}
       </div>
+      {/* Says where the extra money lands. The cover is a donation to the
+          nonprofit, not a PocketCache charge, and the donor pre-agreed to it at
+          signup - so the one place the total names it should also say so, and
+          point at the control that changes it. Sentence for sentence the same as
+          the shared ChargeReviewAlert's `charge-cover-note`. */}
+      {!skipped && !rollingOver && processingCover > 0 && (
+        <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: INK.muted }} data-testid="web-estimate-cover-note">
+          The ${fmtMoney(processingCover)} processing cover goes to {npShort}, not to PocketCache, so 100% of your round-ups reach them. Change it in Settings.
+        </p>
+      )}
       {/* Rollover explainer  -  the app Dashboard's below-minimum copy verbatim. */}
       {rollingOver && (
         <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: '#b45309' }}>
@@ -733,16 +761,33 @@ export default function WebDashboard() {
     selectedNonprofit, totalDonated, pendingRoundUps, skipNextCharge,
     feeMonths, signOut, adminRole, setPage, setLastMode, hasAccount,
     monthlyCap, chargeAdjustment, setChargeAdjustment, roundUpMultiplier,
+    coverProcessing,
   } = useApp();
   const brand = useTheme();
   const [navTab, setNavTab] = useState('overview');
   const [menuOpen, setMenuOpen] = useState(false);
   const [giveExtra, setGiveExtra] = useState(false);
   const [adjustCharge, setAdjustCharge] = useState(false);
+  const [transferOrg, setTransferOrg] = useState(false);
   const bioOffer = useBiometricOffer();
 
+  // The donor's standing "cover the card-processing costs" consent, pre-checked
+  // at signup and persisted in AppContext. It is real money on every charge, so
+  // it belongs in the upcoming-charge figure - it was missing from BOTH surfaces,
+  // which is how a consent the donor gave at checkout came to bill nothing.
+  // Two rules, identical to the app Dashboard (Dashboard.jsx ~279-282):
+  //   - computed on the EFFECTIVE round-ups (after cap or one-time adjustment),
+  //     because the processor only takes its cut of what is actually collected;
+  //     the raw accrual would overcharge a capped donor.
+  //   - a skipped cycle collects nothing, so there is nothing to process and no
+  //     cover, which is why the skipped state still reads $0.00.
+  // Computed once here and handed down, so the KPI tile and the estimate card
+  // cannot arrive at two different numbers.
+  const processingCover = coverProcessing && !skipNextCharge
+    ? processingCoverFor(effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment }))
+    : 0;
   // One number for "what will actually be charged", from lib/billing.
-  const upcomingCharge = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths });
+  const upcomingCharge = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths, processingCover });
   // Below the nonprofit's minimum nothing is collected, so this tile must not
   // quote a charge - the app's card says "rolls over at month-end" here.
   const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
@@ -772,6 +817,11 @@ export default function WebDashboard() {
         chargeAdjustment={chargeAdjustment}
         setChargeAdjustment={setChargeAdjustment}
         monthlyCap={monthlyCap}
+      />
+      <TransferNonprofitModal
+        show={transferOrg}
+        onClose={() => setTransferOrg(false)}
+        adminRole={adminRole}
       />
       <BiometricOfferCard offer={bioOffer} surface="web" />
       <ChargeReviewAlert surface="web" />
@@ -831,6 +881,22 @@ export default function WebDashboard() {
                     Switch to admin dashboard
                   </button>
                 )}
+                {/* Admins only, and it belongs in the account menu rather than in
+                    Settings: Settings is the DONOR's account, and this is an
+                    action about the nonprofit's page, taken by the one person who
+                    holds it. One admin email per nonprofit means that when this
+                    person leaves, the org is locked out unless they hand the page
+                    on first - so the way out has to be somewhere they will
+                    stumble across it, next to "switch to admin". */}
+                {adminRole && (
+                  <button
+                    onClick={() => { setMenuOpen(false); setTransferOrg(true); }}
+                    data-testid="web-transfer-nonprofit"
+                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 13, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
+                  >
+                    Transfer nonprofit page
+                  </button>
+                )}
                 <button
                   onClick={() => signOut()}
                   style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 13, fontWeight: 600, color: '#b91c1c', cursor: 'pointer', borderRadius: 8 }}
@@ -883,7 +949,9 @@ export default function WebDashboard() {
                   ? `${skipStatusLine()} ${skipFeeLine(feeMonths)}`
                   : rollingOver
                     ? `$${fmtMoney(pendingRoundUps)} so far  -  rolls over at month-end (under ${npShort}'s $${monthlyMinimum} minimum)`
-                    : `≈ $${fmtMoney(upcomingCharge)} incl. $1 fee · exact amount locks ${lockLabel()}`}
+                    // Names the cover in the tile too, so the KPI figure is
+                    // traceable without opening the estimate card.
+                    : `≈ $${fmtMoney(upcomingCharge)} incl. $1 fee${processingCover > 0 ? ` + $${fmtMoney(processingCover)} processing cover` : ''} · exact amount locks ${lockLabel()}`}
               />
             </div>
 
@@ -922,6 +990,7 @@ export default function WebDashboard() {
                   chargeAdjustment={chargeAdjustment}
                   onAdjust={() => setAdjustCharge(true)}
                   monthlyMinimum={org?.monthlyMinimum ?? 5}
+                  processingCover={processingCover}
                 />
               </div>
             </div>

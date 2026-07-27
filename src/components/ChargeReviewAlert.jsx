@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext';
 import { fmtMoney } from '../lib/format';
 import {
   chargeTotal, currentMonthName, effectiveCharge, inReviewWindow, monthKey, nextChargeLabel,
+  processingCoverFor,
 } from '../lib/billing';
 import { adjustBounds } from '../lib/donorContent';
 import { Z, scrim, centered } from '../lib/overlay';
@@ -29,6 +30,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const {
     hasAccount, accountStatus, skipNextCharge, selectedNonprofit,
     pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment, setChargeAdjustment,
+    coverProcessing,
   } = useApp();
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(ACK_KEY) === monthKey(); } catch { return false; }
@@ -59,7 +61,15 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   // came to offer "charge $14.89" while both dashboards said $11.00 for the same
   // $13.89 pending against a $10 cap: one number, computed two ways.
   const effective = effectiveCharge({ pendingRoundUps: roundUps, monthlyCap, chargeAdjustment });
-  const total = chargeTotal({ pendingRoundUps: roundUps, monthlyCap, chargeAdjustment, feeMonths }).toFixed(2);
+  // The donor's standing processing-cover consent (pre-checked at signup, stored
+  // in AppContext) is part of what actually leaves their account, so this alert -
+  // the last screen before money moves - must both include it in the total and
+  // itemise it. It is computed on `effective`, the round-ups after cap and
+  // adjustment, because that is all the processor ever sees.
+  const processingCover = coverProcessing ? processingCoverFor(effective) : 0;
+  const total = fmtMoney(chargeTotal({
+    pendingRoundUps: roundUps, monthlyCap, chargeAdjustment, feeMonths, processingCover,
+  }));
   const monthName = currentMonthName();
   const chargeDay = nextChargeLabel();
   // The cap is doing the trimming (rather than a donor adjustment) - worth
@@ -96,19 +106,30 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
             {/* Strike through the raw figure whenever ANYTHING trimmed it - a
                 cap does that just as much as a donor adjustment does. */}
             {effective !== roundUps
-              ? <><s style={{ color: '#94a3b8', fontWeight: 400 }}>${roundUps.toFixed(2)}</s> ${effective.toFixed(2)}</>
-              : `$${roundUps.toFixed(2)}`}
+              ? <><s style={{ color: '#94a3b8', fontWeight: 400 }}>${fmtMoney(roundUps)}</s> ${fmtMoney(effective)}</>
+              : `$${fmtMoney(roundUps)}`}
           </span>
         </div>
         {capTrimmed && (
           <div style={{ padding: '2px 0', fontSize: 11.5, color: '#b45309' }}>
-            Capped at ${monthlyCap.toFixed(2)}/month  -  the rest is never charged.
+            Capped at ${fmtMoney(monthlyCap)}/month  -  the rest is never charged.
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#64748b' }}>
           <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span>
-          <span>+${feeMonths.toFixed(2)}</span>
+          <span>+${fmtMoney(feeMonths)}</span>
         </div>
+        {/* Only rendered when the donor has the cover on: a permanent "+$0.00"
+            row is noise, and the total is still correct without it because
+            `processingCover` is 0. Wording matches the signup checkout and
+            Settings - the point being that this money is part of the donation,
+            not a PocketCache charge. */}
+        {processingCover > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#64748b' }}>
+            <span>Processing cover (goes to {npShort})</span>
+            <span>+${fmtMoney(processingCover)}</span>
+          </div>
+        )}
         <div style={{ height: 1, background: '#cbd5e1', margin: '6px 0' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 700, color: '#0f172a' }}>Charging on {chargeDay}</span>
@@ -129,7 +150,8 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
           />
           <p style={{ margin: '4px 0 10px', fontSize: 11.5, color: '#94a3b8', textAlign: 'center' }}>
             One-time change for this month only  -  the $1 × {feeMonths} app fee still applies.
-            {capTrimmed && ` Setting this above your $${monthlyCap.toFixed(2)} cap overrides the cap for this month only.`}
+            {processingCover > 0 && ' Your processing cover follows the new amount.'}
+            {capTrimmed && ` Setting this above your $${fmtMoney(monthlyCap)} cap overrides the cap for this month only.`}
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             <button onClick={confirmAdjust}
