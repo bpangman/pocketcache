@@ -1730,7 +1730,7 @@ function NonprofitSignupFlow({ onBack }) {
     stripeConnecting, stripeConnected,
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
-    joinCode, joinCodeError,
+    joinCode, joinCodeError, showBrandingHint,
     accepted, setAccepted, showLicenseHint,
     verifyEIN, confirmOrg, reenterEIN,
     sendCode, changeEmail, verifyCode,
@@ -2044,6 +2044,11 @@ function NonprofitSignupFlow({ onBack }) {
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
               Continue →
             </motion.button>
+            {/* submitBranding() refuses on a bad join code. Without this the
+                button just did nothing, which reads as broken. */}
+            {showBrandingHint && joinCodeError && (
+              <p className="text-red-500 text-xs text-center">{joinCodeError}</p>
+            )}
           </form>
         )}
 

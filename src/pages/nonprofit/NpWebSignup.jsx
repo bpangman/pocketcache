@@ -289,7 +289,7 @@ export default function NpWebSignup({ onExit }) {
     stripeConnecting, stripeConnected,
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
-    joinCode, joinCodeError, accepted, setAccepted, showLicenseHint,
+    joinCode, joinCodeError, accepted, setAccepted, showLicenseHint, showBrandingHint,
     config,
   } = w;
 
@@ -714,6 +714,11 @@ export default function NpWebSignup({ onExit }) {
 
                       <div>
                         <Button type="submit">Continue →</Button>
+                        {/* submitBranding() refuses on a bad join code. Without this
+                            the button just did nothing, which reads as broken. */}
+                        {showBrandingHint && joinCodeError && (
+                          <Hint tone="error">{joinCodeError}</Hint>
+                        )}
                       </div>
                     </div>
                   </Pane>

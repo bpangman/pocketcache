@@ -278,6 +278,10 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // License
   const [accepted, setAccepted] = useState(false);
   const [showLicenseHint, setShowLicenseHint] = useState(false);
+  // Same idea as showLicenseHint: submitBranding() used to just return false, so
+  // pressing Continue with a bad join code did nothing visible and read as a
+  // dead button. This lets the surface say why, next to the button that refused.
+  const [showBrandingHint, setShowBrandingHint] = useState(false);
 
   const requiredDomain = requiredDomainFor(orgName);
 
@@ -299,9 +303,24 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   function changeJoinCode(raw) {
     const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
     setJoinCodeCustom(v);
-    if (v.length > 0 && v.length < 2) setJoinCodeError('At least 2 characters.');
-    else if (v && !isJoinCodeAvailable(v)) setJoinCodeError('That code is taken  -  try another.');
-    else setJoinCodeError(null);
+    setShowBrandingHint(false);
+    // Clearing the field is not an error: `joinCode` falls back to the code
+    // generated from the org name, so blank means "use the suggested one".
+    setJoinCodeError(v ? validateJoinCode(v) : null);
+  }
+
+  /**
+   * The join code rules, in one place so the field and the Continue button agree.
+   * Returns an error string, or null when the code is fine.
+   *
+   * Callers pass the code that would actually SHIP - `joinCode`, not the raw
+   * field - because a blank field means the generated fallback applies.
+   */
+  function validateJoinCode(v) {
+    if (!v) return 'Pick a join code  -  donors type this to find you.';
+    if (v.length < 2) return 'At least 2 characters.';
+    if (!isJoinCodeAvailable(v)) return 'That code is taken  -  try another.';
+    return null;
   }
 
   async function verifyEIN(e) {
@@ -403,7 +422,17 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
 
   function submitBranding(e) {
     e?.preventDefault?.();
-    if (joinCodeError) return false;
+    // Validate the code that would actually ship: `joinCode` falls back to one
+    // generated from the org name, and that generated value never passed through
+    // changeJoinCode(), so it had never been checked at all.
+    const err = validateJoinCode(joinCode);
+    if (err) {
+      setJoinCodeError(err);
+      setShowBrandingHint(true);
+      return false;
+    }
+    setJoinCodeError(null);
+    setShowBrandingHint(false);
     setStep('license');
     return true;
   }
@@ -453,7 +482,7 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeError,
     // license
-    accepted, setAccepted, showLicenseHint,
+    accepted, setAccepted, showLicenseHint, showBrandingHint,
     // actions
     verifyEIN, confirmOrg, reenterEIN,
     sendCode, changeEmail, verifyCode,
