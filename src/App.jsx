@@ -63,6 +63,7 @@ const NpWebShell = lazyChunk(() => import('./pages/nonprofit/NpWebShell'));
 const NpWebSignup = lazyChunk(() => import('./pages/nonprofit/NpWebSignup'));
 const WebDashboard = lazyChunk(() => import('./pages/WebDashboard'));
 const WebOnboarding = lazyChunk(() => import('./pages/WebOnboarding'));
+const WebReactivate = lazyChunk(() => import('./pages/WebReactivate'));
 const OrgLandingPage = lazyChunk(() => import('./pages/OrgLandingPage'));
 const WebAdminSignIn = lazyChunk(() => import('./pages/WebPortalPages').then(m => ({ default: m.WebAdminSignIn })));
 
@@ -555,77 +556,12 @@ function useIsMobile() {
   return mobile;
 }
 
-// WebPortal  -  webpage shell for the one desktop flow that is still phone-shaped:
-// cancelled-account reactivation (CancelledOverlay / ReactivateCheckinCard, both
-// rendered by AppContent). Same top-nav webpage chrome as WebDashboard, with the
-// flow presented as a centered panel  -  the way a web checkout looks.
-//
-// NOTHING NEW GOES IN HERE. Signup, join, admin sign-in and both dashboards are
-// all web-native pages now (see WebExperience). If you find yourself routing a
-// donor or admin journey through this column, build the webpage instead.
-function WebPortal({ children }) {
-  const { w, h } = useWindowSize();
-  const { selectedNonprofit } = useApp();
-  const brand = useTheme();
-  const org = selectedNonprofit;
-  const colW = Math.min(440, w - 24);
-  const colH = Math.max(480, Math.min(860, h - 170));
-  return (
-    <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
-      {/* Top nav  -  same chrome as the signed-in dashboard */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : <CoinMark size={30} />}
-            <div style={{ lineHeight: 1.15 }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: '#0f172a' }}>
-                {brand.appName ?? 'PocketCache'}
-              </p>
-              <p style={{ margin: 0, fontSize: 10.5, color: '#94a3b8' }}>powered by PocketCache</p>
-            </div>
-          </div>
-          {org && (
-            <a
-              href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
-              style={{ fontSize: 13, fontWeight: 600, color: '#003865', textDecoration: 'none' }}
-            >
-              About {org.shortName ?? 'this nonprofit'} →
-            </a>
-          )}
-        </div>
-      </header>
-
-      {/* Flow panel  -  centered like a web checkout */}
-      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div
-          style={{
-            width: colW,
-            height: colH,
-            background: '#fff',
-            borderRadius: 20,
-            overflow: 'hidden',
-            position: 'relative',
-            border: '1px solid #e5e7eb',
-            boxShadow: '0 16px 48px rgba(11,42,74,0.10), 0 2px 8px rgba(11,42,74,0.06)',
-          }}
-        >
-          <ScaleFit viewport={{ width: colW, height: colH }}>
-            {children}
-          </ScaleFit>
-        </div>
-      </main>
-
-      <footer style={{ padding: '0 24px 20px', textAlign: 'center' }}>
-        <p style={{ color: '#94a3b8', fontSize: 12, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <CoinMark size={14} />
-          Powered by PocketCache ·{' '}
-          <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Terms</a>{' '}
-          <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: '#64748b' }}>Privacy</a>
-        </p>
-      </footer>
-    </div>
-  );
-}
+// The phone-shaped desktop column (WebPortal) lived here and is gone.
+// Every desktop journey is a real webpage now: donor join and signup
+// (WebOnboarding), donor dashboard (WebDashboard), admin sign-in, admin signup
+// (NpWebSignup), admin dashboard (NpWebShell) and closed accounts
+// (WebReactivate). If a new route needs a shell, build the page - do not
+// reintroduce a 440px app-in-a-box on a desktop screen.
 
 function ThemedApp() {
   const isMobile = useIsMobile();
@@ -710,9 +646,11 @@ function ThemedApp() {
 // wizard (WebOnboarding  -  which opens on its join step when no nonprofit is
 // bound yet, so a donor arriving cold from the marketing site enters their code
 // on a real webpage); a nonprofit listing itself gets the web-native admin
-// signup wizard (NpWebSignup); an admin signing in gets WebAdminSignIn. The only
-// thing left for the centered WebPortal column is cancelled-account
-// reactivation, whose overlays are still phone-shaped modals.
+// signup wizard (NpWebSignup); an admin signing in gets WebAdminSignIn; and a
+// donor whose account is CLOSED gets WebReactivate, the web-native closed
+// account / reactivation page. Every desktop journey is a real webpage. The
+// centered WebPortal column below is now only the router's dead end - see the
+// note on the component for the one state that still leaks into it.
 function WebExperience() {
   const { page, accountStatus, selectedNonprofit, initialOnboardingStep, returnFromOnboarding } = useApp();
   const bioGate = useBiometricGate();
@@ -751,6 +689,21 @@ function WebExperience() {
   // step (the phone gate carries the same link, GateSignInScreen ~912). State,
   // not the latched URL param, so that in-page link works without a reload.
   const [adminSignIn, setAdminSignIn] = useState(entry.npsignin);
+
+  // ── Closed account, FIRST ──
+  // cancelAccount() leaves `page` at 'onboarding', so a cancelled donor used to
+  // fall through to the join step (page 'onboarding') or the phone column
+  // (page 'home') depending on what else was in storage. Both shapes are the
+  // same person and the same answer: the web-native closed-account page, which
+  // owns both the closed state and the reactivation check-in. It is above every
+  // donor branch because none of them can act for someone whose account is
+  // shut, and below nothing, because there is nothing above it.
+  // The nonprofit admin surface is unaffected: `accountStatus` is the DONOR
+  // account's, and an admin whose donor side is closed still has page
+  // 'np-dashboard'... which is why that branch is the one exception below.
+  if (accountStatus === 'cancelled' && page !== 'np-dashboard') {
+    return <LazySurface surface="web"><WebReactivate /></LazySurface>;
+  }
 
   const signedInDonor =
     page !== 'onboarding' && page !== 'np-dashboard' &&
@@ -796,13 +749,22 @@ function WebExperience() {
   }
   // Micro-site "Nonprofit admin? Sign in"  -  webpage version of the
   // passwordless work-email protocol (never the app-style column).
-  if (page === 'onboarding' && adminSignIn && !npSignup) {
+  //
+  // Deliberately NOT gated on page === 'onboarding' any more. `adminSignIn` is
+  // an explicit intent latch (the ?npsignin=1 link, or the in-page link), and it
+  // could be set while `page` was 'home' - an admin with no nonprofit bound on
+  // this device who used "Switch to Giving", for instance. The donor branch
+  // above declines them (they asked for admin sign-in), so the page guard sent
+  // them to the phone column instead of the thing they asked for.
+  if (adminSignIn && !npSignup) {
     return <LazySurface surface="web"><WebAdminSignIn /></LazySurface>;
   }
   // Nonprofit org onboarding  -  the web-native admin signup wizard. Not the
   // phone flow in a box: its own multi-column page, no ScaleFit, no 449px cap.
   // Completion routes to page 'np-dashboard', which lands on NpWebShell above.
-  if (page === 'onboarding' && npSignup) {
+  // Same reasoning as the admin sign-in branch above: npSignup is an explicit
+  // intent latch, not a function of which page the donor side happens to be on.
+  if (npSignup) {
     // A cold ?npsignup=1 visitor has nowhere to go "back" to, so the wizard
     // hides its exit control rather than offering a dead one.
     return (
@@ -813,10 +775,20 @@ function WebExperience() {
       </LazySurface>
     );
   }
+  // LAST RESORT IS A WEBPAGE, NOT A PHONE IN A BOX.
+  // This used to render AppContent inside a 440px ScaleFit column, which is the
+  // pattern desktop is not allowed to use. Everything that reached it was a
+  // donor with no nonprofit bound, and the join step is the only screen that can
+  // resolve that state - so it is the honest fallback as well as the safe one.
+  // WebPortal itself is gone; if a future route needs a shell, build the page.
   return (
-    <WebPortal>
-      <AppContent />
-    </WebPortal>
+    <LazySurface surface="web">
+      <WebOnboarding
+        entryOrg={entry.org}
+        entryCode={entry.code}
+        onAdminSignIn={() => setAdminSignIn(true)}
+      />
+    </LazySurface>
   );
 }
 

@@ -1629,8 +1629,15 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
  *    uses) and the last4 comes from Stripe's own response, exactly like
  *    Settings.jsx AddCardSheet → handleCardAdded. ACH and Apple Pay legitimately
  *    have no last4 - they store null, as the app does.
+ *
+ * EXPORTED, because the reactivation check-in needs the same modal. The phone's
+ * check-in has no room for one, so its "Change" reopens the account and
+ * deep-links into Settings (App.jsx handleChangePaymentFromCheckin); the web
+ * page (WebReactivate) opens THIS, changes the method in place, and leaves the
+ * account closed until the donor actually restarts. One modal, both callers -
+ * a second copy would be the third implementation of the same Stripe form.
  */
-function ChangePaymentModal({ show, onClose, onChanged }) {
+export function ChangePaymentModal({ show, onClose, onChanged }) {
   const [saving, setSaving] = useState(null);
   const [staged, setStaged] = useState(null);   // ready to confirm, NOT committed
   const [cardEntry, setCardEntry] = useState(false);
