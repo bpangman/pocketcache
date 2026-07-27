@@ -124,9 +124,21 @@ export function generateOneTimeCode() {
 export const NP_BRAND_COLORS = ['#003865', '#0D9488', '#059669', '#2563EB', '#4F46E5', '#7C3AED', '#DB2777', '#DC2626', '#EA580C', '#F59E0B'];
 
 /** License summary shown before the accept control. Legally load-bearing, so
- *  the two surfaces read from one array rather than two hand-typed copies. */
+ *  the two surfaces read from one array rather than two hand-typed copies.
+ *
+ *  These bullets summarise legal/nonprofit-license/index.html and must not
+ *  overstate what a donor is committed to. One bullet used to compress the whole
+ *  money story into a sentence and got both halves wrong: it read as though the
+ *  $1 is owed every month regardless, and as though covering the processing cost
+ *  is simply what happens. The license itself is more careful - section 4 calls
+ *  the fee payable "for each month a linked account is actively rounding up",
+ *  and the processing cover a "donor election" that is "voluntary" and merely
+ *  pre-checked - so the summary now matches the document it is summarising, and
+ *  says what the nonprofit actually nets if a donor declines. */
 export const NP_LICENSE_POINTS = [
-  ['Always free for you.', 'Donors pay the flat $1/month app fee, and most also cover your card-processing costs (pre-selected). You never pay PocketCache anything  -  never a % of donations.'],
+  ['Always free for you.', 'You never pay PocketCache anything, and PocketCache never takes a percentage of a donation. You will never receive an invoice from us.'],
+  ['Donors pay a flat $1 app fee,', 'and only in the months a charge actually runs. A month where their card never rounds up carries no fee, and if a donor skips a month nothing at all is collected then  -  that $1 simply joins their next charge.'],
+  ["Covering your processing cost is the donor's choice.", 'It is pre-selected at checkout and most donors leave it on, which is how you net 100% of their round-ups, and every cent of it passes to you. A donor who unchecks it still gives: you receive their round-ups minus standard card-processing costs, the same as any card donation.'],
   ['You are the merchant of record.', 'Donations charge directly on your Stripe. PocketCache never holds donation funds.'],
   ['You issue tax receipts', 'directly to donors. PocketCache does not.'],
   ['You handle charitable solicitation registration', 'in applicable states.'],
