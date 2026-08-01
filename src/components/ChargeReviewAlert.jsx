@@ -7,6 +7,7 @@ import {
 } from '../lib/billing';
 import { adjustBounds } from '../lib/donorContent';
 import { Z, scrim, centered } from '../lib/overlay';
+import { loadKey, saveKey } from '../store/identityStore';
 
 // ─── Charge review alert (the 1st-10th window) ───────────────────────────────
 // The cycle locks on the 1st; the charge runs on the 11th (10 full days'
@@ -26,15 +27,37 @@ import { Z, scrim, centered } from '../lib/overlay';
 // The month key is billing's canonical cycle id.
 const ACK_KEY = 'pc_review_ack';
 
+// One-time migration: this key used to be written directly with
+// localStorage.setItem(ACK_KEY, monthKey()) - a bare, unquoted month string
+// like "2026-08" - instead of going through this codebase's loadKey/saveKey
+// JSON convention (see store/identityStore.js). A bare string like that is
+// not valid JSON, so loadKey()'s own try/catch would silently swallow it and
+// read back `null`, which would have made every donor's existing "Looks
+// good" acknowledgment reappear as unacknowledged. Read the raw value once,
+// and if it is present but not valid JSON, re-save it through saveKey() (so
+// it becomes a proper JSON string) and every later read goes through
+// loadKey() like the rest of the app.
+function migrateReviewAck() {
+  let raw;
+  try { raw = localStorage.getItem(ACK_KEY); } catch { return; }
+  if (raw == null) return;
+  try {
+    JSON.parse(raw);
+    return; // already in the new JSON form - nothing to do
+  } catch {
+    // legacy bare string - fall through and migrate it below
+  }
+  saveKey(ACK_KEY, raw);
+}
+migrateReviewAck();
+
 export default function ChargeReviewAlert({ surface = 'app' }) {
   const {
     hasAccount, accountStatus, skipNextCharge, selectedNonprofit,
     pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment, setChargeAdjustment,
     coverProcessing,
   } = useApp();
-  const [dismissed, setDismissed] = useState(() => {
-    try { return localStorage.getItem(ACK_KEY) === monthKey(); } catch { return false; }
-  });
+  const [dismissed, setDismissed] = useState(() => loadKey(ACK_KEY) === monthKey());
   // ?review=1 preview flag  -  captured ONCE at mount (the pretty-URL rewrite
   // strips query params later; the alert must not vanish mid-interaction).
   // ?review=force re-shows it even after "Looks good" (demo convenience).
@@ -78,7 +101,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
     && monthlyCap !== null && monthlyCap !== undefined && roundUps > monthlyCap;
 
   function dismiss() {
-    try { localStorage.setItem(ACK_KEY, monthKey()); } catch { /* noop */ }
+    saveKey(ACK_KEY, monthKey());
     setDismissed(true);
     setClosedNow(true);
   }

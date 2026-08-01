@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { NpProvider } from './store/NpContext';
 import { ThemeProvider, useTheme } from './store/ThemeContext';
@@ -13,7 +13,8 @@ import { findOrgByCode } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
 import ChargeReviewAlert from './components/ChargeReviewAlert';
 import { WebPortalPrompt } from './components/WebPortalLinkModal';
-import { Z, scrim, centered } from './lib/overlay';
+import { AppDownloadPrompt } from './components/AppDownloadQRModal';
+import { Z, scrim, centered, subscribeSheetOpen, isAnySheetOpen } from './lib/overlay';
 import { safeBottom } from './lib/safeArea';
 
 // ─── Route-level code splitting ───────────────────────────────────────────────
@@ -66,6 +67,7 @@ const WebDashboard = lazyChunk(() => import('./pages/WebDashboard'));
 const WebOnboarding = lazyChunk(() => import('./pages/WebOnboarding'));
 const WebReactivate = lazyChunk(() => import('./pages/WebReactivate'));
 const OrgLandingPage = lazyChunk(() => import('./pages/OrgLandingPage'));
+const PlatformAdmin = lazyChunk(() => import('./pages/PlatformAdmin'));
 const WebAdminSignIn = lazyChunk(() => import('./pages/WebPortalPages').then(m => ({ default: m.WebAdminSignIn })));
 
 // Warm a chunk the user is about to need, so the hop into it never waits on the
@@ -326,15 +328,23 @@ function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, 
   );
 }
 
-function Toast({ message }) {
+// `nearSheet` repositions the toast to the top of the frame instead of its
+// usual spot near the bottom, while any Sheet.jsx sheet is open - a
+// bottom-pinned toast otherwise lands visually on top of rows inside that
+// sheet's own scrollable body. See the "OPEN-SHEET TRACKING" note in
+// lib/overlay.js. z-index is unchanged either way (globalToast already clears
+// the sheet's own z-index).
+function Toast({ message, nearSheet }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: nearSheet ? -16 : 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
+      exit={{ opacity: 0, y: nearSheet ? -16 : 20 }}
       className="absolute left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm font-semibold shadow-lg whitespace-nowrap"
       // globalToast === modal (50) on purpose: DOM order keeps deciding. See lib/overlay.
-      style={{ bottom: safeBottom(80), zIndex: Z.globalToast }}
+      style={nearSheet
+        ? { top: 'calc(var(--pc-safe-top) + 12px)', zIndex: Z.globalToast }
+        : { bottom: safeBottom(80), zIndex: Z.globalToast }}
     >
       {message}
     </motion.div>
@@ -346,6 +356,9 @@ function AppContent() {
   const [showReactivateCheckin, setShowReactivateCheckin] = useState(false);
   const bioGate = useBiometricGate();
   const bioOffer = useBiometricOffer();
+  // Whether a Sheet.jsx sheet (Dashboard's / Settings' bottom sheets, the
+  // account sheet, etc.) is currently open anywhere on this surface.
+  const sheetOpen = useSyncExternalStore(subscribeSheetOpen, isAnySheetOpen);
 
   function handleReactivateTap() {
     setShowReactivateCheckin(true);
@@ -371,12 +384,18 @@ function AppContent() {
     <div className="w-full h-full relative">
       <LazySurface surface="npApp"><NpShell /></LazySurface>
       <WebPortalPrompt />
+      {/* Queued by the nonprofit signup wizard's license-accept step (see
+          npSignup usage in Onboarding.jsx) - fires here, once the dashboard
+          itself has mounted, instead of over the wizard's own Benevity /
+          Team ID buttons. */}
+      <AppDownloadPrompt />
     </div>
   );
   return (
     <div className="w-full h-full relative">
       <LazySurface surface="app"><AppShell /></LazySurface>
       <WebPortalPrompt />
+      <AppDownloadPrompt />
       <BiometricOfferCard offer={bioOffer} surface="app" />
       <ChargeReviewAlert surface="app" />
       <AnimatePresence>
@@ -401,7 +420,7 @@ function AppContent() {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {toast && <Toast key="toast" message={toast} />}
+        {toast && <Toast key="toast" message={toast} nearSheet={sheetOpen} />}
       </AnimatePresence>
     </div>
   );
@@ -566,13 +585,21 @@ function useIsMobile() {
 
 function ThemedApp() {
   const isMobile = useIsMobile();
-  const { goToOnboardingStep } = useApp();
+  const { goToOnboardingStep, page, setPage, hasAccount, adminRole, lastMode, accountStatus } = useApp();
   // Donors arriving through an org's join link (?org=CODE)  -  or admins signing
   // in from their micro-site (?npsignin=1) or listing their org (?npsignup=1)  -
   // get the real app experience: full-bleed on phones, a real webpage in a
   // desktop browser. ?app=1 forces it too. Everyone else gets the phone-mockup
-  // demo shell. Captured ONCE  -  the pretty-URL rewrite below strips the
-  // params, and re-renders must not flip the shell.
+  // demo shell EXCEPT a device that already has a session: `hasAccount` (an
+  // identity with pc_donor_role) or `adminRole` (pc_admin_role) means someone
+  // signed in here before, and a returning donor or admin lands on bare /demo/
+  // constantly (bookmarked, re-opened tab, PWA icon) - showing them the
+  // decorative phone-mockup instead of their own dashboard was the single root
+  // cause behind this whole bug cluster. Captured ONCE  -  the pretty-URL
+  // rewrite below strips the params, and re-renders must not flip the shell.
+  // AppProvider's useState initializers have already read localStorage
+  // synchronously by the time this runs, so `hasAccount`/`adminRole` here are
+  // NOT stale.
   const [appEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return Boolean(
@@ -580,16 +607,52 @@ function ThemedApp() {
       params.get('npsignin') === '1' ||
       params.get('npsignup') === '1' ||
       params.get('app') === '1' ||
-      window.Capacitor?.isNativePlatform?.()
+      window.Capacitor?.isNativePlatform?.() ||
+      hasAccount ||
+      adminRole
     );
   });
 
   // ?npsignup=1  -  a direct link into the nonprofit signup wizard, for the
   // marketing site's "list your nonprofit" CTA. Drives Onboarding to its
   // nonprofit-signup step; WebExperience pairs it with the desktop container.
+  // Guarded on `page` at mount: the URL param is never stripped (unlike ?org=,
+  // which gets a pretty-URL rewrite below), so a RELOAD after the wizard
+  // already finished still carries ?npsignup=1. Without this guard that reload
+  // called goToOnboardingStep again, which forces `page` back to 'onboarding'
+  // and drops the admin who just finished signing their nonprofit up back at
+  // wizard step one instead of their new dashboard.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('npsignup') !== '1') return;
+    if (page === 'np-dashboard') return;
     goToOnboardingStep('nonprofit-signup');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Bare-entry resume: a device with a persisted session (no ?org= / ?npsignin=
+  // / ?npsignup= / ?app=1 in the URL - those each drive their own routing) has
+  // to land on the surface its role/lastMode actually points to, not just
+  // whatever `pc_page` happens to hold. Same rule Onboarding's resumeSession()
+  // uses for the explicit "Welcome back" tap: admin-only -> dashboard,
+  // donor-only -> home, both -> last-used mode. `pc_page` is device-shared
+  // (localStorage, no per-tab isolation), so it can go stale for THIS tab
+  // without this tab doing anything wrong - e.g. a donor join link opened in a
+  // second tab writes pc_page='onboarding' for the whole device (see the
+  // ?org= reset block in store/AppContext.jsx), which used to survive into an
+  // admin tab's next reload and knock it back to signup. Only corrects a
+  // mismatch at this one mount-time read; it does not fight in-app navigation,
+  // and a cancelled donor's deliberate page='onboarding' (cancelAccount) is
+  // left alone so WebReactivate / the mobile cancel flow still take over.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasEntryParam = params.get('org') || params.get('npsignin') === '1' || params.get('npsignup') === '1' || params.get('app') === '1';
+    if (hasEntryParam) return;
+    if (!hasAccount && !adminRole) return;
+    if (accountStatus === 'cancelled') return;
+    const donorOnly = hasAccount && !adminRole;
+    const adminOnly = adminRole && !hasAccount;
+    const target = adminOnly ? 'np-dashboard' : donorOnly ? 'home' : (lastMode === 'admin' ? 'np-dashboard' : 'home');
+    if (page !== target) setPage(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -710,12 +773,25 @@ function WebExperience() {
     page !== 'onboarding' && page !== 'np-dashboard' &&
     accountStatus !== 'cancelled' && selectedNonprofit;
   if (signedInDonor && bioGate.locked) return <WebLockScreen gate={bioGate} />;
-  if (signedInDonor) return <LazySurface surface="web"><WebDashboard /></LazySurface>;
+  if (signedInDonor) return (
+    <>
+      <LazySurface surface="web"><WebDashboard /></LazySurface>
+      <AppDownloadPrompt fixed />
+    </>
+  );
   // Nonprofit admin dashboard  -  the web-native admin portal, not the phone
   // shell in a column. Face ID / Touch ID still gates it, same as the donor's.
   if (page === 'np-dashboard') {
     if (bioGate.locked) return <WebLockScreen gate={bioGate} />;
-    return <LazySurface surface="web"><NpWebShell /></LazySurface>;
+    return (
+      <>
+        <LazySurface surface="web"><NpWebShell /></LazySurface>
+        {/* Queued by NpWebSignup's license-accept step - fires here, once the
+            dashboard has mounted, instead of over the wizard's own Benevity /
+            Team ID buttons. */}
+        <AppDownloadPrompt fixed />
+      </>
+    );
   }
   // Donor signup wizard  -  including an admin crossing over via "Start giving"
   // (selectedNonprofit gets bound before the jump, so this wins over npsignin).
@@ -797,6 +873,13 @@ export default function App() {
   const orgPageCode = new URLSearchParams(window.location.search).get('orgpage');
   if (orgPageCode) {
     return <LazySurface surface="web"><OrgLandingPage code={orgPageCode} /></LazySurface>;
+  }
+  // Platform-owner-only console - ?padmin=1, never linked from anywhere in the
+  // UI. Same pattern as ?orgpage= above: rendered outside AppProvider/NpProvider
+  // since it does its own gate and reads localStorage directly.
+  const isPlatformAdmin = new URLSearchParams(window.location.search).get('padmin') === '1';
+  if (isPlatformAdmin) {
+    return <LazySurface surface="web"><PlatformAdmin /></LazySurface>;
   }
   return (
     <AppProvider>

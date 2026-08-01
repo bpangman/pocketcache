@@ -14,7 +14,8 @@ import CoinMark from '../components/CoinMark';
 import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
-import { findOrgByCode, resolveAdminOrgByEmail, getAppleApproval } from '../store/orgStore';
+import { useNp } from '../store/NpContext';
+import { findOrgByCode, resolveAdminOrg, getAppleApproval } from '../store/orgStore';
 import {
   useNpSignup, useNpGoLive, generateOneTimeCode,
   NP_BRAND_COLORS, NP_LICENSE_POINTS, widgetSnippet, joinQrValue, launchKitMailto,
@@ -25,7 +26,7 @@ import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
 import { useHeroCollapse } from '../lib/useHeroCollapse';
-import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
+import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRModal';
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import HeroBackButton from '../components/HeroBackButton';
 import ManualCardForm from '../components/ManualCardForm';
@@ -34,6 +35,8 @@ import AppleLogo from '../components/AppleLogo';
 import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
+import { pcBeacon } from '../lib/beacon.js';
+import { copyText } from '../lib/clipboard';
 
 
 const SLIDES = [
@@ -773,7 +776,11 @@ function AdminSignInScreen({ onBack, onComplete }) {
   function verify(e) {
     e?.preventDefault?.();
     if (codeInput.trim() !== code) { setCodeError("That code doesn't match  -  check the email and try again."); return; }
-    onComplete(email.trim().toLowerCase());
+    // onComplete resolves the org this email actually administers and returns
+    // false for an email it does not recognize - stay on this screen and say
+    // so instead of navigating into a dashboard that is not this admin's.
+    const ok = onComplete(email.trim().toLowerCase());
+    if (!ok) { setCodeError("We don't recognize that email. Use the work email you verified during setup."); return; }
   }
 
   return (
@@ -1781,14 +1788,14 @@ const NP_SIGNUP_HEADER = {
 function NonprofitSignupFlow({ onBack }) {
   const {
     step,
-    ein, setEin, einError, verifying, einDemoMode,
+    ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
     adminEmail, workEmail, setWorkEmail, emailError,
     codeSent, codeInput, setCodeInput, codeError, demoBypassNote, requiredDomain,
     stripeConnecting, stripeConnected,
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
-    joinCode, joinCodeError, showBrandingHint,
+    joinCode, joinCodeCustom, joinCodeError, showBrandingHint,
     accepted, setAccepted, showLicenseHint,
     appleApproval,
     openBenevityPortal, confirmBenevityRegistered, deferBenevity,
@@ -1801,17 +1808,19 @@ function NonprofitSignupFlow({ onBack }) {
   } = useNpSignup({ onExit: onBack, defaultLogo: bgcaLogoUrl });
   const goLive = useNpGoLive();
   const fileInputRef = useRef(null);
-  const [showAppModal, setShowAppModal] = useState(false);
   const [teamIdCopied, setTeamIdCopied] = useState(false);
+  const [teamIdCopyFailed, setTeamIdCopyFailed] = useState(false);
 
-  function copyTeamId() {
-    navigator.clipboard?.writeText?.(APPLE_TEAM_ID);
-    setTeamIdCopied(true);
-    setTimeout(() => setTeamIdCopied(false), 2200);
-  }
-
-  function handleAccept(e) {
-    if (acceptLicense(e)) setShowAppModal(true);
+  async function copyTeamId() {
+    const ok = await copyText(APPLE_TEAM_ID);
+    if (ok) {
+      setTeamIdCopied(true);
+      setTeamIdCopyFailed(false);
+      setTimeout(() => setTeamIdCopied(false), 2200);
+    } else {
+      setTeamIdCopyFailed(true);
+      setTimeout(() => setTeamIdCopyFailed(false), 2500);
+    }
   }
 
   return (
@@ -1886,8 +1895,18 @@ function NonprofitSignupFlow({ onBack }) {
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-white flex items-center justify-center border border-gray-100">
                   <img src={bgcaLogoUrl} alt="Org" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
                 </div>
-                <div>
-                  <p className="font-bold text-gray-900 text-base">{orgName}</p>
+                <div className="flex-1 min-w-0">
+                  {einNameEditable ? (
+                    <input
+                      type="text"
+                      value={orgName}
+                      onChange={e => setOrgName(e.target.value)}
+                      placeholder="Your Nonprofit"
+                      className="w-full font-bold text-gray-900 text-base bg-white rounded-lg px-2 py-1 outline-none border border-gray-200 focus:border-teal-400"
+                    />
+                  ) : (
+                    <p className="font-bold text-gray-900 text-base">{orgName}</p>
+                  )}
                   <p className="text-gray-500 text-xs">{orgAddress}</p>
                 </div>
               </div>
@@ -1899,7 +1918,9 @@ function NonprofitSignupFlow({ onBack }) {
               </div>
               {einDemoMode && (
                 <p className="text-xs text-amber-600 italic">
-                  Demo data  -  live verification uses IRS public records.
+                  {einNameEditable
+                    ? "Demo data  -  we couldn't match this EIN, so enter your organization's name."
+                    : 'Demo data  -  live verification uses IRS public records.'}
                 </p>
               )}
             </div>
@@ -2024,7 +2045,8 @@ function NonprofitSignupFlow({ onBack }) {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Donor Join Code</label>
-              <input type="text" value={joinCode} onChange={e => changeJoinCode(e.target.value)}
+              <input type="text" value={joinCodeCustom} onChange={e => changeJoinCode(e.target.value)}
+                placeholder={joinCode}
                 className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono uppercase tracking-widest"
                 style={{ borderColor: joinCodeError ? '#ef4444' : '#e5e7eb' }} />
               {joinCodeError && <p className="text-red-500 text-xs mt-1 px-1">{joinCodeError}</p>}
@@ -2120,7 +2142,7 @@ function NonprofitSignupFlow({ onBack }) {
         )}
 
         {step === 'license' && (
-          <form onSubmit={handleAccept} className="space-y-4">
+          <form onSubmit={acceptLicense} className="space-y-4">
             <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
             <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
               {NP_LICENSE_POINTS.map(([heading, body]) => (
@@ -2177,9 +2199,13 @@ function NonprofitSignupFlow({ onBack }) {
                 <button
                   onClick={copyTeamId}
                   className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-xl"
-                  style={{ background: teamIdCopied ? '#d1fae5' : 'rgba(255,255,255,0.12)', color: teamIdCopied ? '#065f46' : '#fff' }}
+                  style={{
+                    background: teamIdCopied ? '#d1fae5' : teamIdCopyFailed ? '#fee2e2' : 'rgba(255,255,255,0.12)',
+                    color: teamIdCopied ? '#065f46' : teamIdCopyFailed ? '#fecaca' : '#fff',
+                  }}
+                  title={teamIdCopyFailed ? 'Copy failed  -  select and copy manually' : undefined}
                 >
-                  {teamIdCopied ? 'Copied!' : 'Copy'}
+                  {teamIdCopied ? 'Copied!' : teamIdCopyFailed ? 'Try again' : 'Copy'}
                 </button>
               </div>
               <p className="text-gray-400 text-xs mt-1">Benevity will ask for this alongside your organization&apos;s own details.</p>
@@ -2302,7 +2328,6 @@ function NonprofitSignupFlow({ onBack }) {
         </div>
 
       </div>
-      <AppDownloadQRModal show={showAppModal} onDismiss={() => setShowAppModal(false)} />
     </motion.div>
   );
 }
@@ -2325,11 +2350,11 @@ function GateWithSplash({ children }) {
 
 export default function Onboarding() {
   const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, goToOnboardingStep, returnFromOnboarding, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
+  const { adoptOrgById } = useNp();
   const [slide, setSlide] = useState(0);
   const [signupProvider, setSignupProvider] = useState('demo');
   const [connectedBank, setConnectedBank] = useState(null);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
-  const [showAppModal, setShowAppModal] = useState(false);
   // True when the nonprofit wizard was entered from the gate, which is the one
   // entry point whose "back" target is the gate itself rather than a page the
   // user came from. See enterNonprofitSignup below.
@@ -2395,25 +2420,27 @@ export default function Onboarding() {
   function handleNpSignIn() {
     // Production: backend verifies the SSO token and returns the org linked to this identity.
     // Demo: use an existing custom-org admin role if one was created; otherwise default to BGCA.
-    if (!adminRole) {
-      setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
-    }
+    const orgId = adminRole?.orgId ?? 'bgca';
+    if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    adoptOrgById(orgId);
     setLastMode('admin');
     setPage('np-dashboard');
   }
 
   // Passwordless admin sign-in complete: the verified work email is the
-  // username. Demo resolves custom orgs created on this device; unknown
-  // emails fall back to the BGCA sample dashboard. Production: server lookup.
+  // username. Demo resolves custom orgs created on this device, and BGCA's own
+  // demo admin address; every other email is refused - production does the
+  // same lookup against a real backend. Returns false (and does nothing) for
+  // an unrecognized email so AdminSignInScreen can show an inline error
+  // instead of handing the caller a dashboard that belongs to someone else.
   function completeAdminSignIn(email) {
-    const custom = resolveAdminOrgByEmail(email);
-    if (custom) {
-      setAdminRole({ orgId: custom.id, joinCode: custom.shortName });
-    } else if (!adminRole) {
-      setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
-    }
+    const resolved = resolveAdminOrg(email);
+    if (!resolved) return false;
+    setAdminRole(resolved);
+    adoptOrgById(resolved.orgId);
     setLastMode('admin');
     setPage('np-dashboard');
+    return true;
   }
 
   // One sign-in for every role: donor-only → giving, admin-only → dashboard,
@@ -2485,32 +2512,39 @@ export default function Onboarding() {
     <NonprofitSignupFlow onBack={exitNonprofitSignup} />
   );
   if (step === 'checkout-confirm') return (
-    <div style={{position:'relative', width:'100%', height:'100%'}}>
-      <CheckoutConfirmScreen
-        onBack={() => setStep('payment-method')}
-        onConfirm={() => {
-          setHasAccount({
-            name: DEMO_USER.name,
-            email: DEMO_USER.email,
-            provider: signupProvider || 'demo',
-            joinedAt: new Date().toISOString(),
-          });
-          setAccountStatus('active');
-          setLastMode('giving');
-          if (connectedBank) {
-            setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
-          }
-          if (pendingPaymentMethod) {
-            setPaymentMethod(pendingPaymentMethod);
-          }
-          // Web shows the QR popup here; native goes straight home and the
-          // web-portal popup (inverse of the QR one) appears on the dashboard.
-          if (isNative()) { queueWebPortalPrompt(); setPage('home'); return; }
-          setShowAppModal(true);
-        }}
-      />
-      <AppDownloadQRModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} />
-    </div>
+    <CheckoutConfirmScreen
+      onBack={() => setStep('payment-method')}
+      onConfirm={() => {
+        setHasAccount({
+          name: DEMO_USER.name,
+          email: DEMO_USER.email,
+          provider: signupProvider || 'demo',
+          joinedAt: new Date().toISOString(),
+        });
+        setAccountStatus('active');
+        setLastMode('giving');
+        if (connectedBank) {
+          setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
+        }
+        if (pendingPaymentMethod) {
+          setPaymentMethod(pendingPaymentMethod);
+        }
+        // pc_page flips to 'home' IMMEDIATELY, in the same tick as the queued
+        // prompt flag - a reload one second from now must land the signed-up
+        // donor on their dashboard, not back at the intro slides (this used to
+        // leave `page` at 'onboarding' until the QR modal was dismissed, which
+        // never persisted if the donor reloaded, or never came, first). The
+        // popup itself is a one-shot flag consumed by AppDownloadPrompt once
+        // AppShell mounts, not local state here, so it still shows up "on top"
+        // of the dashboard even though this screen unmounts the instant `page`
+        // changes. Native goes straight home and shows the inverse (web-portal)
+        // popup there instead - same mechanism, see WebPortalLinkModal.jsx.
+        if (isNative()) queueWebPortalPrompt();
+        else queueAppDownloadPrompt();
+        setPage('home');
+        pcBeacon('donor signup', { org: selectedNonprofit?.shortName, surface: 'app' });
+      }}
+    />
   );
   if (step === 'card-entry') return <CardEntryScreen onBack={() => setStep('payment-method')} onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null }); setStep('checkout-confirm'); }} />;
   if (step === 'payment-method') return <PaymentMethodScreen onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;

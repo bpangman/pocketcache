@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useApp } from '../../store/AppContext';
 import { useNp } from '../../store/NpContext';
 import CoinMark from '../../components/CoinMark';
 import { NP_TABS, npTabDef } from './npTabs';
@@ -30,6 +31,18 @@ export default function NpWebShell() {
   const { npTab, setNpTab, npOrg } = useNp();
   const [menuOpen, setMenuOpen] = useState(false);
   const { goGiving, handleSignOut, givingLabel } = useNpAdminActions(npOrg);
+  const { adminRole, setPage } = useApp();
+
+  // Defense-in-depth: WebExperience renders this shell purely off `page ===
+  // 'np-dashboard'', with no role check of its own. Real auth is a backend
+  // concern this demo doesn't have, but hand-setting pc_page in localStorage
+  // without pc_admin_role should not be enough to see someone else's admin
+  // dashboard - bounce to the join step, one click from the real admin sign-in
+  // link (WebOnboarding's "Nonprofit admin? Sign in with your work email").
+  useEffect(() => {
+    if (!adminRole) setPage('onboarding');
+  }, [adminRole, setPage]);
+  if (!adminRole) return null;
 
   const tab = npTabDef(npTab);
   const Page = tab.component;

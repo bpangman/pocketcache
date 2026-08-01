@@ -5,31 +5,40 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Check } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
 import { useApp } from '../../../store/AppContext';
-import { getCustomOrg, saveCustomOrg, isJoinCodeAvailable, JOIN_CODE_RE } from '../../../store/orgStore';
+import { isJoinCodeAvailable, JOIN_CODE_RE, renameCustomOrgCode } from '../../../store/orgStore';
 import { CHARGE_DAY, nextChargeLabel } from '../../../lib/billing';
 import CoinMark from '../../../components/CoinMark';
 import PocketCacheLogo from '../../../components/PocketCacheLogo';
 import { AdminVerifyModal, SaveBar } from '../AdminVerify';
 import DemoPill from '../DemoPill';
 import { NpPage, NpBlock, useNpLayout } from '../NpLayout';
+import { copyText } from '../../../lib/clipboard';
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  function handleCopy() {
-    navigator.clipboard.writeText(text).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopy() {
+    const ok = await copyText(text);
+    if (ok) {
+      setCopied(true);
+      setFailed(false);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setFailed(true);
+      setTimeout(() => setFailed(false), 2500);
+    }
   }
 
   return (
     <button
       onClick={handleCopy}
       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors"
-      style={{ background: copied ? '#d1fae5' : '#f3f4f6', color: copied ? '#065f46' : '#374151' }}
+      style={{ background: copied ? '#d1fae5' : failed ? '#fee2e2' : '#f3f4f6', color: copied ? '#065f46' : failed ? '#991b1b' : '#374151' }}
+      title={failed ? 'Copy failed  -  select and copy manually' : undefined}
     >
       {copied ? <Check size={13} /> : <Copy size={13} />}
-      {copied ? 'Copied!' : 'Copy'}
+      {copied ? 'Copied!' : failed ? 'Try again' : 'Copy'}
     </button>
   );
 }
@@ -93,10 +102,13 @@ export default function Grow() {
   }
 
   function commitCode() {
-    const record = getCustomOrg(npOrg._orgId);
-    if (record) saveCustomOrg({ ...record, shortName: codeDraft });
-    setNpOrg({ ...npOrg, joinCode: codeDraft });
-    if (adminRole?.orgId === npOrg._orgId) setAdminRole({ ...adminRole, joinCode: codeDraft });
+    // Moves the record to a new id (id === current code, lowercased) so the
+    // NEW code resolves immediately and the OLD code stops resolving - see
+    // orgStore.renameCustomOrgCode.
+    const renamed = npOrg._orgId ? renameCustomOrgCode(npOrg._orgId, codeDraft) : null;
+    const newOrgId = renamed?.id ?? npOrg._orgId;
+    setNpOrg({ ...npOrg, joinCode: codeDraft, _orgId: newOrgId });
+    if (adminRole?.orgId === npOrg._orgId) setAdminRole({ ...adminRole, orgId: newOrgId, joinCode: codeDraft });
     setVerifyingCode(false);
     setEditingCode(false);
     showToast?.(`Join code updated to ${codeDraft}. Reprint any QR codes that used the old one.`);
@@ -270,9 +282,9 @@ export default function Grow() {
                   <div style={{ textAlign: 'center', padding: '11px 14px', borderRadius: 12, background: `linear-gradient(135deg, ${widgetColor}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 14 }}>
                     {widgetLabel || 'Start giving →'}
                   </div>
-                  <p style={{ margin: '8px 0 0', fontSize: 10.5, color: '#94a3b8', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <div style={{ margin: '8px 0 0', fontSize: 10.5, color: '#94a3b8', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                     Powered by <PocketCacheLogo size={11} />
-                  </p>
+                  </div>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
-import { ExternalLink, CheckCircle, RefreshCw } from 'lucide-react';
+import { ExternalLink, CheckCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
 import { CHARGE_HISTORY } from '../demoData';
 import { fmtMoney } from '../../../lib/format';
@@ -21,6 +21,28 @@ export default function Charges() {
           {!web && <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Charge Runs</p>}
           <DemoPill />
         </div>
+      </NpBlock>
+
+      {/* Demo-data honesty banner  -  same amber "demo" treatment used elsewhere
+          in the nonprofit tabs (NpWebSignup's DemoNote, Grow.jsx's code-change
+          warning), not a new pattern. Every figure below is fabricated seed
+          data; a tiny "Demo data" pill above is easy to miss on a page that is
+          entirely numbers, so this page gets a real banner too. */}
+      <NpBlock span="full">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl p-4 flex items-start gap-3"
+          style={{ background: '#FFFBEB', border: '1.5px solid #FBBF24' }}
+        >
+          <AlertTriangle size={18} className="shrink-0 mt-0.5" style={{ color: '#b45309' }} />
+          <div>
+            <p className="text-amber-900 text-sm font-bold">These are sample figures, not real charges</p>
+            <p className="text-amber-700 text-xs mt-0.5 leading-relaxed">
+              Every run below (amounts, donor counts, fee breakdowns) is simulated demo data. Nothing here has actually moved through Stripe yet - this page will show your real charge history once your program is live and donors are being charged for real.
+            </p>
+          </div>
+        </motion.div>
       </NpBlock>
 
       {/* Honest framing banner */}

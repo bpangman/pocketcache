@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState } from 'react';
-import { saveCustomOrg, getCustomOrg, saveBgcaOverrides, computeBrandFromColor } from './orgStore';
+import { saveCustomOrg, getCustomOrg, saveBgcaOverrides, getBgcaOverrides, computeBrandFromColor } from './orgStore';
 import { loadKey, saveKey, removeKeys } from './identityStore';
 
 // localStorage keys — all prefixed pc_np_ so they don't collide with donor keys
@@ -61,6 +61,41 @@ export function NpProvider({ children }) {
     }
   }
 
+  // Admin sign-in resolves WHICH org an email administers (adminRole - see
+  // orgStore.resolveAdminOrg), but npOrg is separate state that otherwise only
+  // ever changes at org creation or an explicit Settings edit. Nothing kept
+  // them in sync, so an admin signing in on a device that last had a DIFFERENT
+  // org loaded here (BGCA is the device default) saw, and could edit, THAT
+  // org's data instead of their own - the exact way a stranger's "Cancel my
+  // giving subscription"-adjacent Settings edit used to land in BGCA's shared
+  // demo record. Call right after setAdminRole resolves a real org.
+  function adoptOrgById(orgId) {
+    const currentId = npOrg._orgId || (npOrg.joinCode ? npOrg.joinCode.toLowerCase() : 'bgca');
+    if (currentId === orgId) return; // already showing the right org
+    if (orgId === 'bgca') {
+      const next = { ...DEFAULT_NP_ORG, ...(getBgcaOverrides() ?? {}) };
+      saveKey(NP_KEYS.org, next);
+      setNpOrgState(next);
+      return;
+    }
+    const org = getCustomOrg(orgId);
+    if (!org) return;
+    const next = {
+      name: org.name,
+      shortName: org.shortName,
+      color: org.brand?.primary ?? '#0D9488',
+      logoPreview: org.logoUrl,
+      mission: org.description,
+      longDescription: org.longDescription ?? '',
+      monthlyMinimum: org.monthlyMinimum,
+      adminEmail: org.adminEmail,
+      joinCode: org.shortName,
+      _orgId: org.id,
+    };
+    saveKey(NP_KEYS.org, next);
+    setNpOrgState(next);
+  }
+
   function setNpTab(tab) {
     saveKey(NP_KEYS.tab, tab);
     setNpTabState(tab);
@@ -77,6 +112,7 @@ export function NpProvider({ children }) {
       npOrg, setNpOrg,
       npTab, setNpTab,
       resetNpContent,
+      adoptOrgById,
     }}>
       {children}
     </NpContext.Provider>

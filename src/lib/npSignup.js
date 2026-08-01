@@ -31,9 +31,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { buildOrgFromSignup, saveCustomOrg, generateJoinCode, isJoinCodeAvailable } from '../store/orgStore';
-import { isNative } from '../components/AppDownloadQRModal';
+import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRModal';
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import { NONPROFITS } from '../data/nonprofits';
+import { pcBeacon } from './beacon.js';
 
 // ─── Apple app-listing (iPhone app only - never the web) ──────────────────────
 //
@@ -102,12 +103,28 @@ export async function lookupEIN(digits9) {
 }
 
 /** Fallback used when the lookup fails (offline, rate limit, unknown EIN).
- *  Surfaces MUST show the demo note when this is what they got. */
+ *  Surfaces MUST show the demo note when this is what they got. Only used
+ *  as-is when the typed EIN actually belongs to a seeded org (see
+ *  einIsSeeded below) - an EIN that matches nothing gets EIN_UNKNOWN_NAME
+ *  instead, so an unknown org never sails through signup still branded as
+ *  BGCA. */
 export const EIN_DEMO_FALLBACK = {
   name:    'Boys & Girls Clubs of America',
   address: 'Atlanta, GA',
   is501c3: true,
 };
+
+/** Neutral placeholder org name for a demo-fallback EIN that matches no
+ *  seeded org. Shown editable on the confirm-org step (both surfaces) so the
+ *  admin sets their real org's name instead of inheriting BGCA's. */
+export const EIN_UNKNOWN_NAME = 'Your Nonprofit';
+
+/** Does this EIN (digits only) belong to a seeded org (BGCA today)? Shared by
+ *  the Candid Seal check and the EIN-demo-fallback name resolution so both
+ *  agree on which EINs are "known" vs genuinely unknown. */
+function einIsSeeded(einDigits) {
+  return NONPROFITS.some(np => (np.ein ?? '').replace(/\D/g, '') === einDigits);
+}
 
 // ─── Simulated Candid Seal of Transparency lookup ──────────────────────────────
 //
@@ -123,12 +140,11 @@ export const EIN_DEMO_FALLBACK = {
 // found, which is what lets an admin type literally any EIN and walk the
 // Benevity path end to end in this demo.
 function determineCandidSeal({ einDemoMode, einDigits, orgName }) {
-  const einIsSeeded = NONPROFITS.some(np => (np.ein ?? '').replace(/\D/g, '') === einDigits);
-  if (einDemoMode) return einIsSeeded ? 'found' : 'none';
+  if (einDemoMode) return einIsSeeded(einDigits) ? 'found' : 'none';
   // Live ProPublica success (unreachable from a browser today, but kept
   // correct for tests/future non-browser callers): trust the real name too.
   const nameIsSeeded = NONPROFITS.some(np => np.name === orgName);
-  return (einIsSeeded || nameIsSeeded) ? 'found' : 'none';
+  return (einIsSeeded(einDigits) || nameIsSeeded) ? 'found' : 'none';
 }
 
 // ─── Work-email verification (DEMO one-time code) ─────────────────────────────
@@ -247,6 +263,13 @@ export function useNpGoLive() {
       joinCode:       config.joinCode,
       appleApproval:  config.appleApproval,
     });
+    // Stamp facts buildOrgFromSignup doesn't know about, so the platform admin
+    // console (src/pages/PlatformAdmin.jsx) can show real "created" and
+    // "Stripe connected" data instead of guessing. Orgs created before this
+    // existed simply have neither field, and callers must treat that as
+    // "not recorded", never as false/never-happened.
+    org.createdAt = new Date().toISOString();
+    org.stripeConnected = !!config.stripeConnected;
     saveCustomOrg(org);
 
     setNpOrg({
@@ -262,10 +285,17 @@ export function useNpGoLive() {
     });
     setAdminRole({ orgId: org.id, joinCode: org.shortName });
     setLastMode('admin');
-    // Native: queue the web-portal popup to appear on the admin dashboard
-    // (inverse of the QR popup web admins saw on the You're Live screen).
+    // Queue the "get our other surface" popup to appear once the admin
+    // DASHBOARD itself mounts - never mid-wizard. It used to show immediately
+    // on license-accept (web) and painted straight over the Benevity portal /
+    // Team ID buttons on the very next step (app-listing) or the QR/copy
+    // actions on 'live'. Native has no native "app" to recommend, so it gets
+    // the web-portal link instead (inverse pairing - see WebPortalLinkModal.jsx
+    // and AppDownloadQRModal.jsx, and the donor-side flow this now matches).
     if (isNative()) queueWebPortalPrompt();
+    else queueAppDownloadPrompt();
     setPage('np-dashboard');
+    pcBeacon('nonprofit signup', { org: org.name, joinCode: org.shortName, path: config.appleApproval?.method });
     return org;
   }, [setPage, setAdminRole, setLastMode, setNpOrg]);
 }
@@ -291,6 +321,10 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   const [einError, setEinError] = useState(null);
   const [verifying, setVerifying] = useState(false);
   const [einDemoMode, setEinDemoMode] = useState(false);
+  // True only for a demo-fallback whose EIN matches no seeded org - the
+  // confirm-org step makes the name field editable in that case, instead of
+  // silently branding an unknown org as BGCA.
+  const [einNameEditable, setEinNameEditable] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [orgAddress, setOrgAddress] = useState('');
   const [org501c3, setOrg501c3] = useState(true);
@@ -386,6 +420,7 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     setEinError(null);
     setVerifying(true);
     setEinDemoMode(false);
+    setEinNameEditable(false);
 
     try {
       const result = await lookupEIN(digits);
@@ -396,12 +431,19 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       setEinDemoMode(false);
       setStep('confirm-org');
     } catch {
-      // Graceful fallback  -  use simulated BGCA result with demo note
+      // Graceful fallback  -  use simulated result with demo note. Only the
+      // EIN that actually belongs to a seeded org (BGCA's real EIN) gets
+      // BGCA's name - any other EIN is genuinely unknown, so the name must
+      // NOT default to BGCA's. It gets a neutral placeholder instead, and
+      // the confirm-org step (both surfaces) makes it editable via
+      // einNameEditable so the admin sets their real org's name.
       setVerifying(false);
-      setOrgName(EIN_DEMO_FALLBACK.name);
+      const seeded = einIsSeeded(digits);
+      setOrgName(seeded ? EIN_DEMO_FALLBACK.name : EIN_UNKNOWN_NAME);
       setOrgAddress(EIN_DEMO_FALLBACK.address);
       setOrg501c3(EIN_DEMO_FALLBACK.is501c3);
       setEinDemoMode(true);
+      setEinNameEditable(!seeded);
       setStep('confirm-org');
     }
   }
@@ -564,12 +606,13 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     ein,
     orgAddress,
     appleApproval,
-  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress, appleApproval]);
+    stripeConnected,
+  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress, appleApproval, stripeConnected]);
 
   return {
     step, setStep,
     // EIN
-    ein, setEin, einError, verifying, einDemoMode,
+    ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
     // email
     adminEmail, workEmail, setWorkEmail, emailError,
@@ -579,7 +622,13 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     // branding
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
-    joinCode, joinCodeError,
+    // joinCode is the EFFECTIVE code (falls back to the generated suggestion
+    // when the admin hasn't typed one) - use it for preview text and links.
+    // joinCodeCustom is the raw field the admin is actually editing - bind
+    // the <input> to THIS, not to joinCode, or a cleared field snaps back to
+    // the generated fallback text on every render and corrupts what gets typed
+    // next (e.g. clearing then typing "UNKORG1" would land as "BGCA2UNK").
+    joinCode, joinCodeCustom, joinCodeError,
     // license
     accepted, setAccepted, showLicenseHint, showBrandingHint,
     // apple app-listing

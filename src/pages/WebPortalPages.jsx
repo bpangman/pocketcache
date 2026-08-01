@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
+import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { loadKey, saveKey } from '../store/identityStore';
-import { findOrgByCode, getCustomOrg, resolveAdminOrgByEmail } from '../store/orgStore';
+import { findOrgByCode, getCustomOrg, resolveAdminOrg } from '../store/orgStore';
 import { DEMO_USER, monthsGiving } from '../data/derived';
 import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
@@ -267,7 +268,8 @@ function WebToast({ message, onClose }) {
 // org-domain email verified at signup; a one-time code per sign-in, never a
 // password. Demo: any email works and the code auto-fills (labeled).
 export function WebAdminSignIn() {
-  const { adminRole, setAdminRole, setLastMode, setPage } = useApp();
+  const { setAdminRole, setLastMode, setPage } = useApp();
+  const { adoptOrgById } = useNp();
   const [email, setEmail] = useState('');
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);
@@ -290,9 +292,18 @@ export function WebAdminSignIn() {
   function verify(e) {
     e?.preventDefault?.();
     if (codeInput.trim() !== code) { setCodeError("That code doesn't match  -  check the email and try again."); return; }
-    const custom = resolveAdminOrgByEmail(email);
-    if (custom) setAdminRole({ orgId: custom.id, joinCode: custom.shortName });
-    else if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    // Production: the backend looks this email up and either returns the org
+    // it administers or rejects the sign-in - it never guesses. The demo does
+    // the same lookup locally (resolveAdminOrg): a KNOWN email (a custom org
+    // created on this device, or BGCA's own demo admin address) adopts THEIR
+    // org; an unknown one is refused, not silently handed the BGCA dashboard.
+    const resolved = resolveAdminOrg(email);
+    if (!resolved) {
+      setCodeError("We don't recognize that email. Use the work email you verified during setup.");
+      return;
+    }
+    setAdminRole(resolved);
+    adoptOrgById(resolved.orgId);
     setLastMode('admin');
     setPage('np-dashboard');
   }
@@ -1422,7 +1433,17 @@ export function WebSettings() {
             <Row label="Charge reminder" sub="Your exact amount on the 1st  -  charge runs the 11th"
               right={<WebToggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
-            <Row label={`Account emails & ${npShort} updates`} sub="Giving updates from PocketCache and your cause"
+            {/* Split from a single "Account emails & X updates" toggle (Terms
+                §4a): charge confirmations, receipts, and account/security
+                notices are mandatory service messages while the account is
+                active and cannot be turned off. Only the nonprofit's optional
+                updates are a real toggle - pc_comms_optin keeps its existing
+                storage key and semantics for that one. Same split as
+                Settings.jsx's donor Preferences card. */}
+            <Row label="Service emails" sub="Charge confirmations, receipts, and account & security notices - required while your account is active"
+              right={<span style={{ color: INK.muted, fontSize: 12, fontWeight: 700 }}>Always on</span>} />
+            <div style={{ height: 1, background: '#f1f5f9' }} />
+            <Row label={`${npShort} updates`} sub="Optional giving updates and news from your cause"
               right={<WebToggle value={commsOptin} onChange={updateCommsOptin} />} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Privacy & security" sub="Data, analytics, delete account" onPress={() => setModal('privacy')}
@@ -1863,6 +1884,18 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
     const id = setTimeout(() => { setResult(null); setCoverProcessing(coverPref); }, 0);
     return () => clearTimeout(id);
   }, [show, coverPref]);
+
+  // Auto-commit once the donor has chosen an outcome, same as the app's
+  // CancelSheet (Settings.jsx ~665-670). Without this the confirmation screen
+  // below claims "Subscription Cancelled" while accountStatus is still
+  // 'active' underneath it - true only once the "Done" button is clicked, so
+  // closing the modal any other way (the header ×, navigating away) left the
+  // account never actually cancelled despite what the donor was just told.
+  useEffect(() => {
+    if (!result) return;
+    const id = setTimeout(() => { onCancelled?.(); }, 2000);
+    return () => clearTimeout(id);
+  }, [result, onCancelled]);
 
   const raw = typeof pendingRoundUps === 'number' ? pendingRoundUps : 0;
   // The final settle-up is a CHARGE, so it obeys the same precedence every other

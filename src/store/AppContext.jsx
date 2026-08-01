@@ -3,13 +3,14 @@ import { CURRENT_MONTH_PENDING, PRIOR_MONTHS_SUM } from '../data/transactions';
 import { findOrgByCode } from './orgStore';
 import { IDENTITY_KEYS, migrate, loadKey, saveKey, removeKeys, clearIdentityKeys } from './identityStore';
 import { monthKey, settleCycle } from '../lib/billing';
+import { pcBeacon } from '../lib/beacon.js';
 
 // Donor-scoped keys — cleared on donor-account deletion; identity/admin keys survive.
 // 'pc_skip_next' is the retired forever-boolean: kept in the list so the wipe
 // paths still clear it on devices that predate the per-cycle skip record.
 const DONOR_KEYS = [
-  'pc_page', 'pc_cause_id', 'pc_multiplier', 'pc_cards', 'pc_total_donated',
-  'pc_seen_milestone', 'pc_dismiss_countdown', 'pc_prefs', 'pc_account_status',
+  'pc_page', 'pc_tab', 'pc_cause_id', 'pc_multiplier', 'pc_cards', 'pc_total_donated',
+  'pc_seen_milestone', 'pc_prefs', 'pc_account_status',
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
   'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment', 'pc_fee_months',
   'pc_bio', 'pc_bio_prompt_dismissed', 'pc_skip_next', 'pc_review_ack',
@@ -90,7 +91,9 @@ const BASE_PENDING = CURRENT_MONTH_PENDING;
 
 export function AppProvider({ children }) {
   const [page, setPageState] = useState(() => loadKey('pc_page', 'onboarding'));
-  const [tab, setTab] = useState('dashboard');
+  // Persisted so a reload (or reopening the app) lands back on the donor tab
+  // they were viewing instead of always resetting to Dashboard.
+  const [tab, setTabState] = useState(() => loadKey('pc_tab', 'dashboard'));
   const [selectedNonprofitId, setSelectedNonprofitIdState] = useState(() => loadKey('pc_cause_id', null));
   const [roundUpMultiplier, setRoundUpMultiplierState] = useState(() => loadKey('pc_multiplier', 1));
   const [linkedCards, setLinkedCardsState] = useState(() => loadKey('pc_cards', [
@@ -163,6 +166,11 @@ export function AppProvider({ children }) {
   function setPage(p) {
     saveKey('pc_page', p);
     setPageState(p);
+  }
+
+  function setTab(t) {
+    saveKey('pc_tab', t);
+    setTabState(t);
   }
 
   function setSelectedNonprofit(np) {
@@ -321,6 +329,10 @@ export function AppProvider({ children }) {
     setAccountStatusState('cancelled');
     saveKey('pc_page', 'onboarding');
     setPageState('onboarding');
+    // selectedNonprofit is the current org record (findOrgByCode above);
+    // shortName is its donor-facing join code, same field Share.jsx/Grow.jsx
+    // read for the same purpose.
+    pcBeacon('donor cancelled', { org: selectedNonprofit?.shortName });
   }
 
   function reactivateAccount(msg = 'Welcome back!') {

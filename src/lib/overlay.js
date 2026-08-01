@@ -202,3 +202,56 @@ export function centered(padding = 20) {
     padding,
   };
 }
+
+/**
+ * OPEN-SHEET TRACKING
+ *
+ * overlay.js did not track any live UI state before this - it was pure
+ * constants and style helpers. Adding a minimal registry here (rather than in
+ * Sheet.jsx or App.jsx separately) keeps the "is something open" question in
+ * the one file that already owns the stacking rules, and every Sheet consumer
+ * (Sheet.jsx, and every src/components/sheets/* built on top of it) picks it
+ * up for free instead of each needing its own wiring.
+ *
+ * Why this exists: App.jsx's global Toast is absolutely positioned near the
+ * bottom of the whole surface, above a sheet's z-index, so it can render
+ * visually on top of rows inside an open sheet's own scrollable body - a
+ * collision, not a stacking bug (the toast is already above the sheet, which
+ * is correct; it is just sitting in the wrong PLACE while a sheet is up).
+ * Sheet.jsx registers itself here for as long as it is open; Toast reads the
+ * count (via useSheetOpen) and repositions itself to the top of the frame
+ * instead, clear of the sheet's content, while any sheet is open.
+ *
+ * A count, not a boolean: one sheet can open another (TransferNonprofitSheet
+ * layered over AppShell's account sheet), so "closed" only means zero.
+ */
+let openSheetCount = 0;
+const sheetListeners = new Set();
+
+function notifySheetListeners() {
+  sheetListeners.forEach(fn => fn());
+}
+
+/** Call when a sheet opens; call the returned function when it closes. */
+export function registerOpenSheet() {
+  openSheetCount += 1;
+  notifySheetListeners();
+  let released = false;
+  return () => {
+    if (released) return; // guard against a double-release (e.g. StrictMode)
+    released = true;
+    openSheetCount = Math.max(0, openSheetCount - 1);
+    notifySheetListeners();
+  };
+}
+
+/** Snapshot getter for useSyncExternalStore. */
+export function isAnySheetOpen() {
+  return openSheetCount > 0;
+}
+
+/** Subscribe function for useSyncExternalStore. */
+export function subscribeSheetOpen(listener) {
+  sheetListeners.add(listener);
+  return () => sheetListeners.delete(listener);
+}

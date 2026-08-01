@@ -1,14 +1,14 @@
 /*!
- * PocketCache embed widget — https://pocketcache.app/widget.js
+ * PocketCache embed widget - https://pocketcache.app/widget.js
  *
- * Usage (from your PocketCache dashboard → Grow tab):
+ * Usage (from your PocketCache dashboard \u2192 Grow tab):
  *   <script src="https://pocketcache.app/widget.js" data-org="BGCA"></script>
  *
  * Optional attributes:
- *   data-name="Boys & Girls Clubs of America"  — display name (defaults to the code)
- *   data-color="#003865"                       — button/brand color
- *   data-width="340"                           — card max width in px (240–600)
- *   data-label="Start giving →"                — button text
+ *   data-name="Boys & Girls Clubs of America"  - display name (defaults to the code)
+ *   data-color="#003865"                       - button/brand color
+ *   data-width="340"                           - card max width in px (240-600)
+ *   data-label="Start giving \u2192"                - button text
  *
  * Renders a small self-contained "Round up for us" card exactly where the
  * script tag is placed, linking to the org's giving page (tagged src=widget
@@ -24,11 +24,11 @@
   var name = s.getAttribute('data-name') || org;
   var color = (s.getAttribute('data-color') || '#003865').replace(/[^#a-zA-Z0-9(),. %-]/g, '');
   var width = Math.min(600, Math.max(240, parseInt(s.getAttribute('data-width'), 10) || 340));
-  var label = s.getAttribute('data-label') || 'Start giving →';
+  var label = s.getAttribute('data-label') || 'Start giving \u2192';
   // src=widget lets the org's analytics attribute donors who came from the widget
   var giveUrl = 'https://pocketcache.app/' + encodeURIComponent(org) + '/give?src=widget';
 
-  // Everything is built with createElement/textContent — org-provided strings
+  // Everything is built with createElement/textContent - org-provided strings
   // are never parsed as HTML.
   function el(tag, style, text) {
     var n = document.createElement(tag);
@@ -44,7 +44,7 @@
     'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
     'line-height:1.45;color:#0f172a;');
 
-  // The official PocketCache coin — gold coin, teal block arrow, white halo
+  // The official PocketCache coin - gold coin, teal block arrow, white halo
   function coinSvg(px) {
     return '<svg width="' + px + '" height="' + px + '" viewBox="0 0 100 100" aria-hidden="true" style="display:inline-block;vertical-align:-0.12em;">' +
       '<circle cx="50" cy="50" r="50" fill="#E5A800"/>' +
@@ -77,7 +77,7 @@
   btn.rel = 'noopener';
   card.appendChild(btn);
 
-  // Footer: "Powered by P◉cketCache" — the coin IS the o, per the brand
+  // Footer: "Powered by P\u25c9cketCache" - the coin IS the o, per the brand
   var foot = el('p', 'margin:8px 0 0;font-size:10.5px;color:#94a3b8;text-align:center;');
   var footLink = el('a', 'color:#94a3b8;text-decoration:none;');
   footLink.href = 'https://pocketcache.app';

@@ -43,12 +43,17 @@ const PAGES = {
 };
 
 export default function AppShell() {
-  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep } = useApp();
+  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep, hasAccount } = useApp();
   const { resetNpContent } = useNp();
   const brand = useTheme();
   const [showProfile, setShowProfile] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const Page = PAGES[tab] || Dashboard;
+
+  // Identity comes from the signed-in account, exactly as Settings.jsx reads
+  // it; DEMO_USER is the fallback only, for a device with no account yet.
+  const userName = hasAccount?.name ?? DEMO_USER.name;
+  const userEmail = hasAccount?.email ?? DEMO_USER.email;
 
   return (
     <div className="w-full h-full relative bg-gray-50 overflow-hidden">
@@ -73,7 +78,7 @@ export default function AppShell() {
         style={{ top: 'calc(var(--pc-safe-top) + 12px)', zIndex: Z.chrome }}
         aria-label="Open account settings"
       >
-        {DEMO_USER.name[0]}
+        {userName[0]}
         <span className="absolute inset-0 rounded-full border border-white/40 animate-ping opacity-30" style={{ animationDuration: '3s' }} />
       </button>
 
@@ -87,10 +92,10 @@ export default function AppShell() {
               className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
               style={{ background: brand.gradient }}
             >
-              {DEMO_USER.name[0]}
+              {userName[0]}
             </div>
-            <p className="font-bold text-gray-900 text-lg mt-1">{DEMO_USER.name}</p>
-            <p className="text-gray-400 text-sm">{DEMO_USER.email}</p>
+            <p className="font-bold text-gray-900 text-lg mt-1">{userName}</p>
+            <p className="text-gray-400 text-sm">{userEmail}</p>
           </div>
 
           {/* Mode switch */}

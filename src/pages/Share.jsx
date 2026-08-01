@@ -7,12 +7,15 @@ import Logo from '../components/Logo';
 import OrgLogo from '../components/OrgLogo';
 import { monthsGiving, DEMO_USER } from '../data/derived';
 import { fmtMoney } from '../lib/format';
+import { copyText } from '../lib/clipboard';
 
 export default function Share() {
-  const { selectedNonprofit, totalDonated } = useApp();
+  const { selectedNonprofit, totalDonated, showToast } = useApp();
   const brand = useTheme();
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [codeCopyFailed, setCodeCopyFailed] = useState(false);
 
   if (!selectedNonprofit) return null;
 
@@ -28,21 +31,52 @@ export default function Share() {
   // or solicitations. Share copy positions it as the tool, not the benefactor.
   const shareText = `I give to ${selectedNonprofit.name} with every purchase I make  -  spare change that actually adds up. You should try it too. 💙`;
 
-  function handleCopy() {
-    navigator.clipboard?.writeText(`${shareText}\n${shareUrl}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopy() {
+    const ok = await copyText(`${shareText}\n${shareUrl}`);
+    if (ok) {
+      setCopied(true);
+      setCopyFailed(false);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 2500);
+    }
   }
 
-  function handleCopyCode() {
-    navigator.clipboard?.writeText(referralCode);
-    setCodeCopied(true);
-    setTimeout(() => setCodeCopied(false), 2000);
+  async function handleCopyCode() {
+    const ok = await copyText(referralCode);
+    if (ok) {
+      setCodeCopied(true);
+      setCodeCopyFailed(false);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } else {
+      setCodeCopyFailed(true);
+      setTimeout(() => setCodeCopyFailed(false), 2500);
+    }
+  }
+
+  // navigator.share is missing on plenty of browsers, and even where it exists
+  // the call can reject for a real reason (no share targets registered,
+  // permission denied). A user-cancelled share (AbortError) is silent by
+  // design - anything else falls back to copying the link, with an honest
+  // toast either way.
+  async function handleShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: brand.appName, text: shareText, url: shareUrl });
+        return;
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        // fall through to the clipboard fallback below
+      }
+    }
+    const ok = await copyText(`${shareText}\n${shareUrl}`);
+    showToast(ok ? 'Link copied instead  -  paste it anywhere' : 'Could not share or copy  -  select and copy manually');
   }
 
   const SHARE_OPTIONS = [
     {
-      label: 'Copy Link',
+      label: copyFailed ? 'Copy failed  -  try again' : copied ? 'Copied!' : 'Copy Link',
       icon: copied ? <CheckCircle size={20} /> : <Copy size={20} />,
       color: brand.textAccent,
       onPress: handleCopy,
@@ -51,7 +85,7 @@ export default function Share() {
       label: 'Share via...',
       icon: <Share2 size={20} />,
       color: brand.secondary,
-      onPress: () => navigator.share?.({ title: brand.appName, text: shareText, url: shareUrl }),
+      onPress: handleShare,
     },
     {
       label: 'Email a Friend',
@@ -174,8 +208,9 @@ export default function Share() {
             <button
               onClick={handleCopyCode}
               className="bg-white/20 rounded-xl px-3 py-1.5 text-white text-xs font-semibold"
+              title={codeCopyFailed ? 'Copy failed  -  select and copy manually' : undefined}
             >
-              {codeCopied ? 'Copied!' : 'Copy code'}
+              {codeCopied ? 'Copied!' : codeCopyFailed ? 'Try again' : 'Copy code'}
             </button>
           </div>
         </motion.div>

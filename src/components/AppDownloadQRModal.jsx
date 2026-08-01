@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
 import { Z, scrim } from '../lib/overlay';
@@ -133,4 +134,31 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
       )}
     </AnimatePresence>
   );
+}
+
+// One-shot flag: set at donor-signup completion (non-native only), consumed by
+// AppDownloadPrompt when the donor lands on their dashboard. Mirrors
+// WebPortalLinkModal's queueWebPortalPrompt/WebPortalPrompt pair (the native
+// inverse of this one) — the modal has to survive the wizard unmounting the
+// moment `page` flips to 'home', so it can no longer live as local state
+// inside the checkout-confirm screen.
+const PROMPT_KEY = 'pc_app_download_prompt';
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function queueAppDownloadPrompt() {
+  try { localStorage.setItem(PROMPT_KEY, '1'); } catch { /* storage unavailable - skip */ }
+}
+
+// Self-managing wrapper: shows the modal once when the dashboard mounts with the
+// flag set (non-native only), clears the flag on dismiss. Render inside a
+// position:relative app container - the modal uses position:absolute.
+export function AppDownloadPrompt({ fixed = false }) {
+  const [show, setShow] = useState(() => {
+    try { return !isNative() && localStorage.getItem(PROMPT_KEY) === '1'; } catch { return false; }
+  });
+  function dismiss() {
+    try { localStorage.removeItem(PROMPT_KEY); } catch { /* ignore */ }
+    setShow(false);
+  }
+  return <AppDownloadQRModal show={show} onDismiss={dismiss} fixed={fixed} />;
 }

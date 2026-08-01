@@ -1,0 +1,435 @@
+import { useState, useEffect, useCallback } from 'react';
+import { IDENTITY_KEYS, loadKey, saveKey } from '../store/identityStore';
+import { listCustomOrgs, findOrgByCode, getAppleApproval, BGCA_DEMO_ADMIN_EMAIL } from '../store/orgStore';
+import { CURRENT_MONTH_PENDING } from '../data/transactions';
+import { chargeTotal, effectiveCharge, processingCoverFor, nextChargeLabel, monthKey } from '../lib/billing';
+import { fmtMoney } from '../lib/format';
+import CoinMark from '../components/CoinMark';
+
+// src/pages/PlatformAdmin.jsx - platform-owner-only console.
+// Reachable ONLY by typing ?padmin=1 in the address bar - it is never linked
+// from anywhere else in the app. It shows Blake (the one person who runs
+// PocketCache) everything currently knowable about the demo: what is saved in
+// THIS browser, plus the real cross-visitor signal from the event beacon.
+//
+// This gate is a courtesy, not real security - there is no backend yet to
+// check a password against, so it just compares a typed email to a constant.
+// It is fully separate from the app's real donor/admin sign-in - it never
+// reads or writes pc_identity, pc_donor_role, or pc_admin_role.
+
+const PLATFORM_ADMIN_EMAIL = 'info@pocketcache.app';
+const PADMIN_KEY = 'pc_padmin';
+const NTFY_TOPIC_URL = 'https://ntfy.sh/pocketcache-wl-x7k2m9q4';
+const EVENT_LOG_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Mx1Hu3kupeKzmaU5irhBsJgPPjYXJpBtOgALn2hYVfE/edit';
+
+// ── Shared visual bits (same card language as the rest of the app: white
+//    rounded-2xl cards with card-shadow, gray-400 uppercase tracking-widest
+//    labels) ───────────────────────────────────────────────────────────────
+
+function Card({ title, right, children }) {
+  return (
+    <div className="bg-white rounded-2xl p-4 sm:p-5 card-shadow mb-4">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{title}</p>
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-1.5 text-sm border-b border-gray-100 last:border-0">
+      <span className="text-gray-500">{label}</span>
+      <span className="text-gray-900 font-medium text-right">{value}</span>
+    </div>
+  );
+}
+
+// ── Access gate ─────────────────────────────────────────────────────────────
+
+function GateCard({ onUnlock }) {
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState(null);
+
+  function submit(e) {
+    e?.preventDefault?.();
+    const normalized = email.trim().toLowerCase();
+    if (normalized === PLATFORM_ADMIN_EMAIL) {
+      saveKey(PADMIN_KEY, true);
+      setError(null);
+      onUnlock();
+    } else {
+      setError("That doesn't match the platform admin email - try again.");
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B2A4A', padding: '1.5rem' }}>
+      <form onSubmit={submit} className="bg-white rounded-2xl p-6 card-shadow w-full" style={{ maxWidth: 360 }}>
+        <div className="flex items-center gap-2 mb-4">
+          <CoinMark size={28} />
+          <span className="font-bold text-gray-900">PocketCache</span>
+        </div>
+        <h1 className="text-lg font-bold text-gray-900 mb-1">What&apos;s your platform admin email?</h1>
+        <p className="text-sm text-gray-500 mb-4">This page is only for the person who runs PocketCache.</p>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm mb-3 outline-none focus:border-gray-500"
+          autoFocus
+        />
+        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+        <button type="submit" className="w-full bg-gray-900 text-white rounded-xl py-2.5 font-semibold text-sm">
+          Continue
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ── Section 2: Live activity ────────────────────────────────────────────────
+
+function parseNdjson(text) {
+  const out = [];
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let obj;
+    try { obj = JSON.parse(trimmed); } catch { continue; }
+    if (!obj || (!obj.message && !obj.title)) continue;
+    out.push(obj);
+  }
+  out.sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
+  return out;
+}
+
+function LiveActivityCard() {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Always attempted, on every hostname including localhost - this is the
+      // ntfy READ endpoint, not the beacon's write side, so it does not need
+      // the production-only restriction that lib/beacon.js uses for posting.
+      const res = await fetch(`${NTFY_TOPIC_URL}/json?poll=1&since=12h`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const text = await res.text();
+      setEvents(parseNdjson(text));
+    } catch {
+      setError("Couldn't load live activity right now - try Refresh in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <Card
+      title="Live activity (all visitors, last 12 hours)"
+      right={
+        <button
+          onClick={load}
+          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      }
+    >
+      {error ? (
+        <p className="text-sm text-amber-700 bg-amber-50 rounded-xl p-3">{error}</p>
+      ) : loading ? (
+        <p className="text-sm text-gray-400">Loading…</p>
+      ) : events.length === 0 ? (
+        <p className="text-sm text-gray-400">No events in the last 12 hours</p>
+      ) : (
+        <div className="space-y-2">
+          {events.map((ev, i) => (
+            <div key={ev.id ?? i} className="text-sm border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+              <div className="text-xs text-gray-400 mb-0.5">
+                {ev.time ? new Date(ev.time * 1000).toLocaleString() : 'time unknown'}
+              </div>
+              {ev.title && <div className="font-semibold text-gray-900">{ev.title}</div>}
+              {ev.message && <div className="text-gray-600">{ev.message}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+      <a
+        href={EVENT_LOG_SHEET_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 inline-block text-sm font-semibold text-teal-700 bg-teal-50 rounded-xl px-3 py-2 hover:bg-teal-100 transition-colors"
+      >
+        Open the permanent event log (Google Sheet) →
+      </a>
+    </Card>
+  );
+}
+
+// ── Section 3: Nonprofits on this device ────────────────────────────────────
+
+function resolveBgcaAdminEmail() {
+  const npOrg = loadKey('pc_np_org', null);
+  if (npOrg && (npOrg.joinCode ?? '').toUpperCase() === 'BGCA' && npOrg.adminEmail) {
+    return npOrg.adminEmail;
+  }
+  return BGCA_DEMO_ADMIN_EMAIL;
+}
+
+function appleApprovalLabel(approval) {
+  if (approval.status === 'approved') return 'Verified';
+  if (approval.status === 'benevity_submitted') return 'Registration submitted';
+  return 'Not yet registered';
+}
+
+function orgPublicUrl(code) {
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return `${base}?orgpage=${encodeURIComponent((code || '').toUpperCase())}`;
+}
+
+function OrgCard({ org }) {
+  const isBgca = org.id === 'bgca';
+  const approval = getAppleApproval(org);
+  const stripeLabel = org.stripeConnected === true
+    ? 'Connected'
+    : org.stripeConnected === false
+      ? 'Not connected'
+      : 'Not recorded (this org predates tracking that)';
+  return (
+    <div className="border border-gray-100 rounded-xl p-3 mb-2 last:mb-0">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <span className="font-semibold text-gray-900 text-sm">{org.name}</span>
+        <a
+          href={orgPublicUrl(org.shortName)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-semibold text-teal-700 bg-teal-50 rounded-lg px-2.5 py-1 hover:bg-teal-100 transition-colors"
+        >
+          View public page →
+        </a>
+      </div>
+      <Row label="Join code" value={org.shortName} />
+      <Row label="EIN" value={org.ein || 'not recorded'} />
+      <Row label="Admin email" value={isBgca ? resolveBgcaAdminEmail() : (org.adminEmail || 'not recorded')} />
+      <Row label="Created" value={org.createdAt ? new Date(org.createdAt).toLocaleString() : 'not recorded'} />
+      <Row label="Apple app-listing" value={appleApprovalLabel(approval)} />
+      <Row label="Stripe" value={stripeLabel} />
+    </div>
+  );
+}
+
+function NonprofitsCard() {
+  const bgca = findOrgByCode('bgca');
+  const customOrgs = listCustomOrgs();
+  const allOrgs = [bgca, ...customOrgs].filter(Boolean);
+  return (
+    <Card title="Nonprofits on this device">
+      <p className="text-xs text-gray-400 mb-3">
+        Opening a nonprofit&apos;s own admin dashboard from here isn&apos;t something this console does -
+        this device isn&apos;t signed in as their admin, and there is no real login system yet to borrow.
+        The public page link below shows what any visitor sees.
+      </p>
+      {allOrgs.map(org => <OrgCard key={org.id} org={org} />)}
+    </Card>
+  );
+}
+
+// ── Section 4: Donor account on this device ─────────────────────────────────
+
+function DonorCard() {
+  const donorRole = loadKey(IDENTITY_KEYS.donorRole, null);
+  const hasDonor = !!donorRole?.active;
+
+  if (!hasDonor) {
+    return (
+      <Card title="Donor account on this device">
+        <p className="text-sm text-gray-500">No donor account has been created in this browser.</p>
+      </Card>
+    );
+  }
+
+  const identity = loadKey(IDENTITY_KEYS.identity, null);
+  const causeId = loadKey('pc_cause_id', null);
+  const causeOrg = causeId ? findOrgByCode(causeId) : null;
+  const accountStatus = loadKey('pc_account_status', 'active');
+  const trackedCard = loadKey('pc_tracked_card', null);
+  const paymentMethod = loadKey('pc_payment_method', null);
+  const multiplier = loadKey('pc_multiplier', 1);
+  const monthlyCap = loadKey('pc_monthly_cap', null);
+  const chargeAdjustment = loadKey('pc_charge_adjustment', null);
+  const feeMonths = loadKey('pc_fee_months', 1);
+  const coverProcessingPref = loadKey('pc_cover_processing', true);
+  const skipMonth = loadKey('pc_skip_month', null);
+
+  // Same math WebDashboard.jsx uses (~line 786-796) so this console can never
+  // quote a different number than the donor's own screen.
+  const pendingRoundUps = parseFloat((CURRENT_MONTH_PENDING * multiplier).toFixed(2));
+  const skipNextCharge = skipMonth !== null && skipMonth === monthKey();
+  const processingCover = coverProcessingPref && !skipNextCharge
+    ? processingCoverFor(effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment }))
+    : 0;
+  const upcomingCharge = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths, processingCover });
+  const roundUpsCharged = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
+  const monthlyMinimum = causeOrg?.monthlyMinimum ?? 5;
+  const rollingOver = pendingRoundUps < monthlyMinimum && !skipNextCharge;
+
+  return (
+    <Card title="Donor account on this device">
+      <Row label="Name" value={identity?.name || 'not recorded'} />
+      <Row label="Email" value={identity?.email || 'not recorded'} />
+      <Row label="Giving to" value={causeOrg?.name || 'no cause picked'} />
+      <Row label="Account status" value={accountStatus === 'cancelled' ? 'Cancelled' : 'Active'} />
+      {paymentMethod && <Row label="Payment method" value={`${paymentMethod.label ?? paymentMethod.type ?? ''}${paymentMethod.last4 ? ` ····${paymentMethod.last4}` : ''}`} />}
+      {trackedCard && <Row label="Card being tracked" value={`${trackedCard.brand ?? trackedCard.institution ?? trackedCard.name ?? 'card'}${trackedCard.last4 ? ` ····${trackedCard.last4}` : ''}`} />}
+      <Row label="Round-up multiplier" value={`${multiplier}x`} />
+      <Row label="Monthly cap" value={monthlyCap != null ? `$${fmtMoney(monthlyCap)}` : 'no cap'} />
+      <Row label="Pending round-ups this cycle" value={`$${fmtMoney(pendingRoundUps)}`} />
+
+      <div className="mt-4 pt-3 border-t border-gray-200">
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+          Next charge: {nextChargeLabel()}
+        </p>
+        {skipNextCharge ? (
+          <p className="text-sm text-gray-700">
+            This cycle is skipped - nothing will be charged on {nextChargeLabel()}. The $1 monthly fee
+            rolls forward and rides along with the next charge instead.
+          </p>
+        ) : rollingOver ? (
+          <p className="text-sm text-gray-700">
+            Round-ups are below {causeOrg?.name || 'the nonprofit'}&apos;s ${fmtMoney(monthlyMinimum)} minimum this
+            cycle, so nothing is charged yet - the amount rolls into next month instead.
+          </p>
+        ) : (
+          <>
+            <Row label="Round-ups (after any cap or adjustment)" value={`$${fmtMoney(roundUpsCharged)}`} />
+            <Row label={`App fee ($1 × ${feeMonths} month${feeMonths === 1 ? '' : 's'})`} value={`$${fmtMoney(feeMonths)}`} />
+            {processingCover > 0 && <Row label="Card processing cover (donor opted in)" value={`$${fmtMoney(processingCover)}`} />}
+            <Row label="Total" value={<span className="font-bold">${fmtMoney(upcomingCharge)}</span>} />
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ── Section 5: How the money runs ───────────────────────────────────────────
+
+function HowTheMoneyRunsCard() {
+  return (
+    <Card title="How the money runs">
+      <ul className="text-sm text-gray-700 space-y-2 list-disc pl-4">
+        <li>Charges shown in this demo are simulated entirely inside each visitor&apos;s own browser.</li>
+        <li>Nothing shown here has ever charged a real card or moved real money.</li>
+        <li>A real monthly charge requires the backend, which exists in this repo but is not running yet.</li>
+        <li>That backend is on the launch checklist before PocketCache can go live to real users or real money.</li>
+      </ul>
+    </Card>
+  );
+}
+
+// ── Section 6: Raw data ─────────────────────────────────────────────────────
+
+function RawKeyBlock({ storageKey }) {
+  const [open, setOpen] = useState(false);
+  let value = localStorage.getItem(storageKey);
+  try { value = JSON.parse(value); } catch { /* keep raw string */ }
+  return (
+    <details className="border border-gray-100 rounded-xl mb-2 last:mb-0" open={open} onToggle={e => setOpen(e.target.open)}>
+      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-mono text-gray-800">{storageKey}</summary>
+      <pre className="text-xs bg-gray-50 rounded-b-xl p-3 overflow-x-auto m-0">{JSON.stringify(value, null, 2)}</pre>
+    </details>
+  );
+}
+
+function RawDataCard() {
+  const pcKeys = Object.keys(localStorage).filter(k => k.startsWith('pc_')).sort();
+
+  function exportAll() {
+    const data = {};
+    pcKeys.forEach(k => {
+      const raw = localStorage.getItem(k);
+      try { data[k] = JSON.parse(raw); } catch { data[k] = raw; }
+    });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = url;
+    a.download = `pocketcache-device-export-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <Card
+      title="Raw data"
+      right={
+        <button
+          onClick={exportAll}
+          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+        >
+          Export everything (JSON file)
+        </button>
+      }
+    >
+      <p className="text-xs text-gray-400 mb-3">
+        Every saved item on this device, read-only. This page never deletes or changes anything.
+      </p>
+      {pcKeys.length === 0 ? (
+        <p className="text-sm text-gray-400">Nothing saved on this device yet.</p>
+      ) : (
+        pcKeys.map(k => <RawKeyBlock key={k} storageKey={k} />)
+      )}
+    </Card>
+  );
+}
+
+// ── The console ──────────────────────────────────────────────────────────────
+
+function PlatformAdminConsole() {
+  return (
+    <div style={{ minHeight: '100dvh', background: '#f6f8fb', fontFamily: "'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <div style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)' }} className="px-4 sm:px-6 py-6">
+        <div style={{ maxWidth: 820, margin: '0 auto' }} className="flex items-center gap-2.5">
+          <CoinMark size={30} />
+          <div>
+            <div className="text-white font-bold text-base leading-tight">PocketCache platform admin</div>
+            <div className="text-white/60 text-xs">Everything currently knowable about the demo</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 820, margin: '0 auto' }} className="px-4 sm:px-6 py-5">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 text-sm text-amber-900 leading-relaxed">
+          This page shows everything saved in this browser. Every visitor&apos;s account lives only in
+          their own browser until the real backend exists. Real signups from anyone, anywhere show up
+          below in Live activity and in the permanent Google Sheet log - that is the one part of this
+          page that reflects visitors other than you.
+        </div>
+
+        <LiveActivityCard />
+        <NonprofitsCard />
+        <DonorCard />
+        <HowTheMoneyRunsCard />
+        <RawDataCard />
+      </div>
+    </div>
+  );
+}
+
+export default function PlatformAdmin() {
+  const [unlocked, setUnlocked] = useState(() => loadKey(PADMIN_KEY, false) === true);
+  if (!unlocked) return <GateCard onUnlock={() => setUnlocked(true)} />;
+  return <PlatformAdminConsole />;
+}

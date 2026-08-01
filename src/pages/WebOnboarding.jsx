@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
 import { useApp } from '../store/AppContext';
+import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
@@ -15,8 +16,9 @@ import StripeCardForm from '../components/StripeCardForm';
 import ApplePaySheet from '../components/ApplePaySheet';
 import AppleLogo from '../components/AppleLogo';
 import { CapControl } from './WebPortalPages';
-import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
+import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRModal';
 import { fmtMoney } from '../lib/format';
+import { pcBeacon } from '../lib/beacon.js';
 import { chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
 // A donor can reach this wizard with the current month already skipped (Settings
 // deep-links land here, and the skip survives), so the review step needs the same
@@ -247,6 +249,7 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     initialOnboardingStep, clearInitialOnboardingStep, skipNextCharge, goToOnboardingStep,
     coverProcessing, setCoverProcessing, adminRole, setAdminRole, lastMode,
   } = useApp();
+  const { adoptOrgById } = useNp();
   const brand = useTheme();
   const org = selectedNonprofit ?? entryOrg;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
@@ -289,7 +292,6 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   // surface ever included it. It now reads and writes the persisted preference in
   // AppContext (`pc_cover_processing`), the same store the app's checkout writes,
   // so the consent survives signup and both dashboards bill it.
-  const [showAppModal, setShowAppModal] = useState(false);
 
   const isCA = selectedState === 'CA';
   const canContinue = agreedTerms && selectedState !== '' && !isCA;
@@ -359,7 +361,9 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   // Demo-only shortcut, carried over from the phone's sign-in empty state, so a
   // prospect can see the admin side without creating an org first.
   function previewAdminDashboard() {
+    const orgId = adminRole?.orgId ?? 'bgca';
     if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
+    adoptOrgById(orgId);
     setLastMode('admin');
     setPage('np-dashboard');
   }
@@ -397,10 +401,16 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
     // A card's last4 comes from the Stripe result; bank/Apple Pay have none.
     if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: opt.id === 'card' ? (cardInfo?.last4 ?? null) : null });
-    // Native never shows the QR popup - go straight home so the flow
-    // doesn't wait on a dismiss that can't happen.
-    if (isNative()) { setPage('home'); return; }
-    setShowAppModal(true);
+    // pc_page flips to 'home' IMMEDIATELY - this used to stay 'onboarding'
+    // until the QR modal was dismissed, so a reload before that dismiss (or a
+    // donor who never dismissed it) landed back on this step, not signed in.
+    // Native never shows the QR popup at all; the popup itself is now a
+    // one-shot flag (queueAppDownloadPrompt) consumed by AppDownloadPrompt once
+    // WebDashboard mounts, so it still shows up "on top" of the dashboard even
+    // though this wizard unmounts the instant `page` changes.
+    if (!isNative()) queueAppDownloadPrompt();
+    setPage('home');
+    pcBeacon('donor signup', { org: org?.shortName, surface: 'web' });
   }
 
   // The review estimate has to respect the cap the donor may have just set on
@@ -931,7 +941,6 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
         </p>
       </footer>
     </div>
-    <AppDownloadQRModal show={showAppModal} onDismiss={() => { setShowAppModal(false); setPage('home'); }} fixed />
     </div>
   );
 }

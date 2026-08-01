@@ -12,7 +12,7 @@ Legend for money invariants that can NEVER be violated:
 - **INV-1: Never charge twice for the same round-ups.**
 - **INV-2: Never charge without a recorded, matching accrual trail.**
 - **INV-3: Every charge lands on the NONPROFIT's Stripe — PocketCache's balance only ever
-  receives the flat $0.50 application fee.**
+  receives the flat $1.00/month application fee.**
 - **INV-4: A donor can always see an accurate answer to "was I charged, and how much?"**
 
 ---
@@ -95,9 +95,9 @@ Legend for money invariants that can NEVER be violated:
 > posting AFTER lock rolls to next month; (c) charge-day failure retries still respect the
 > locked amount; (d) skip-a-month set mid-window cancels the pending charge, fee rolls.
 
-- [ ] **C1. Below the minimum** ($4.63 accrued, $10 minimum). → NO charge; balance rolls
-  over; app shows "building toward your $10 minimum," not "ready to send." Nonprofit is
-  NOT billed the $0.50 SaaS fee for that donor that month (⚖️ confirm "active user"
+- [ ] **C1. Below the minimum** ($4.63 accrued, $5 minimum). → NO charge; balance rolls
+  over; app shows "building toward your $5 minimum," not "ready to send." Nonprofit is
+  NOT billed the flat $1.00/month fee for that donor that month (⚖️ confirm "active user"
   definition = charged users, else nonprofits pay fees on donors generating $0). 
 - [ ] **C2. Rollover then success** ($4.63 June + $6.10 July = $10.73 charged Aug 1). →
   One charge; both months' rows marked; receipt math exact. 
@@ -141,10 +141,10 @@ Legend for money invariants that can NEVER be violated:
   accrual immediately + notify donors (recommended), define what happens to sub-minimum
   balances (evaporate — they were never charged). Must be in the nonprofit license + donor
   terms.
-- [ ] **C16. The $0.50 application fee when round-ups are tiny** (donor accrued exactly
-  $10.00, doesn't cover fee → nonprofit nets $9.50 minus Stripe's ~$0.59 = $8.91). → Verify
-  the receipt/dashboard math shows this honestly. Also verify fee is $0.50 — never a
-  percentage anywhere in code, copy, or receipts. INV-3.
+- [ ] **C16. The flat $1.00/month application fee when round-ups are tiny** (donor accrued
+  exactly $10.00 → nonprofit nets $9.00 minus Stripe's ~$0.59 = $8.41). → Verify the
+  receipt/dashboard math shows this honestly. Also verify the fee is a flat $1.00/month -
+  never a percentage anywhere in code, copy, or receipts. INV-3.
 - [ ] **C17. Charge on Jan 1 / DST-shift nights / leap day.** → Cron fires once and only
   once; period labels correct across year boundary ('2026-12' → '2027-01').
 - [ ] **C18. Zero eligible donors.** → Job completes cleanly, logs "0 charged," no crash.
@@ -201,7 +201,7 @@ Legend for money invariants that can NEVER be violated:
   it double-counted $4.63.) Verify against Stripe records exactly.
 - [ ] **E2. Pending shows the rollover state when below minimum** — never "ready to send"
   for an amount that won't be sent. (Fixed in overhaul — verify.)
-- [ ] **E3. The $0.50 fee appears before the charge happens** (checkout + monthly-charge
+- [ ] **E3. The flat $1.00/month fee appears before the charge happens** (checkout + monthly-charge
   card + cancel flow), not just in Settings fine print. (Reg E-style disclosure hygiene.)
 - [ ] **E4. Tax-receipt attribution appears at checkout and in billing copy** ("BGCA emails
   your receipt directly") — PocketCache never implies it issues receipts.

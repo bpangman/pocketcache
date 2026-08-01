@@ -15,22 +15,31 @@ import {
 import DemoPill from '../DemoPill';
 import { NpPage, NpBlock, useNpLayout } from '../NpLayout';
 import gmLogoUrl from '../../../assets/gm-logo.svg';
+import { copyText } from '../../../lib/clipboard';
 
 function TeamIdCopyButton() {
   const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    navigator.clipboard?.writeText?.(APPLE_TEAM_ID).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const [failed, setFailed] = useState(false);
+  async function handleCopy() {
+    const ok = await copyText(APPLE_TEAM_ID);
+    if (ok) {
+      setCopied(true);
+      setFailed(false);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setFailed(true);
+      setTimeout(() => setFailed(false), 2500);
+    }
   }
   return (
     <button
       onClick={handleCopy}
       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors shrink-0"
-      style={{ background: copied ? '#d1fae5' : '#f3f4f6', color: copied ? '#065f46' : '#374151' }}
+      style={{ background: copied ? '#d1fae5' : failed ? '#fee2e2' : '#f3f4f6', color: copied ? '#065f46' : failed ? '#991b1b' : '#374151' }}
+      title={failed ? 'Copy failed  -  select and copy manually' : undefined}
     >
       {copied ? <Check size={13} /> : <Copy size={13} />}
-      {copied ? 'Copied!' : 'Copy'}
+      {copied ? 'Copied!' : failed ? 'Try again' : 'Copy'}
     </button>
   );
 }

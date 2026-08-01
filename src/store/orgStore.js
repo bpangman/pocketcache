@@ -125,6 +125,37 @@ export function resolveAdminOrgByEmail(email) {
   return listCustomOrgs().find(o => (o.adminEmail ?? '').toLowerCase() === lower) ?? null;
 }
 
+// The BGCA demo tenant has no signup flow of its own (it ships pre-seeded), so
+// it has no adminEmail on its NONPROFITS record for resolveAdminOrgByEmail to
+// match against. This is its stand-in: the address NpContext's DEFAULT_NP_ORG
+// ships as BGCA's admin, and the one email the demo's admin sign-in has ever
+// promised will "still work for BGCA" (Onboarding's AdminSignInScreen and
+// WebAdminSignIn both point at it).
+export const BGCA_DEMO_ADMIN_EMAIL = 'info@bgca.org';
+
+// Admin sign-in, resolved for real: a KNOWN work email adopts the org it
+// actually administers - a custom org created on this device, or BGCA via its
+// demo admin address (also honoring an admin-edited BGCA email saved through
+// NpSettings, since that edit is NOT mirrored into pc_bgca_overrides). An
+// UNKNOWN email resolves to null so the caller can refuse sign-in instead of
+// silently handing out the shared BGCA demo record - the previous behavior,
+// and the reason any email at all used to land an impostor on BGCA's real
+// dashboard, able to overwrite it via Settings.
+export function resolveAdminOrg(email) {
+  const lower = (email ?? '').trim().toLowerCase();
+  if (!lower) return null;
+  const custom = resolveAdminOrgByEmail(lower);
+  if (custom) return { orgId: custom.id, joinCode: custom.shortName };
+  const savedNpOrg = lsGet('pc_np_org', null);
+  const bgcaEditedEmail = savedNpOrg && (savedNpOrg.joinCode ?? '').toUpperCase() === 'BGCA'
+    ? (savedNpOrg.adminEmail ?? '').toLowerCase()
+    : null;
+  if (lower === BGCA_DEMO_ADMIN_EMAIL || (bgcaEditedEmail && lower === bgcaEditedEmail)) {
+    return { orgId: 'bgca', joinCode: 'BGCA' };
+  }
+  return null;
+}
+
 export function saveCustomOrg(org) {
   const list = listCustomOrgs();
   const idx = list.findIndex(o => o.id === org.id);
@@ -135,6 +166,25 @@ export function saveCustomOrg(org) {
 
 export function getCustomOrg(id) {
   return listCustomOrgs().find(o => o.id === id) ?? null;
+}
+
+// Rename a custom org's donor join code. `id` is always the lowercase form
+// of the CURRENT code (see buildOrgFromSignup: `id = shortName.toLowerCase()`),
+// so a rename has to move the record to a new id, not just overwrite
+// `shortName` in place - otherwise the record stays filed under its old id,
+// the new code never resolves via findOrgByCode/getCustomOrg, and the old
+// code silently keeps working forever. There is no grace period: once this
+// runs, the old code stops resolving immediately.
+export function renameCustomOrgCode(orgId, newCode) {
+  const list = listCustomOrgs();
+  const idx = list.findIndex(o => o.id === orgId);
+  if (idx < 0) return null;
+  const newId = newCode.toLowerCase();
+  const renamed = { ...list[idx], id: newId, shortName: newCode };
+  const next = list.filter((o, i) => i !== idx && o.id !== newId);
+  next.push(renamed);
+  lsSet(CUSTOM_ORGS_KEY, next);
+  return renamed;
 }
 
 // BGCA overrides: NpSettings edits on the BGCA demo session are stored separately

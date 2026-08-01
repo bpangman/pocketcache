@@ -5,7 +5,6 @@ import { CheckCircle, ShieldCheck, Mail, Landmark, Search } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../../store/AppContext';
 import CoinMark from '../../components/CoinMark';
-import AppDownloadQRModal from '../../components/AppDownloadQRModal';
 import {
   useNpSignup, useNpGoLive,
   NP_BRAND_COLORS, NP_LICENSE_POINTS,
@@ -13,6 +12,7 @@ import {
   APPLE_TEAM_ID,
 } from '../../lib/npSignup';
 import { nextChargeLabel } from '../../lib/billing';
+import { copyText } from '../../lib/clipboard';
 
 // ─── The browser-native nonprofit signup wizard ──────────────────────────────
 // The admin counterpart to WebOnboarding: a real desktop webpage, not a phone
@@ -284,19 +284,20 @@ export default function NpWebSignup({ onExit }) {
   const { initialOnboardingStep, clearInitialOnboardingStep } = useApp();
   const w = useNpSignup({ onExit });
   const goLive = useNpGoLive();
-  const [showAppModal, setShowAppModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [teamIdCopied, setTeamIdCopied] = useState(false);
+  const [teamIdCopyFailed, setTeamIdCopyFailed] = useState(false);
 
   const {
-    step, ein, setEin, einError, verifying, einDemoMode,
+    step, ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
     adminEmail, workEmail, setWorkEmail, emailError,
     codeSent, codeInput, setCodeInput, codeError, demoBypassNote, requiredDomain,
     stripeConnecting, stripeConnected,
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
-    joinCode, joinCodeError, accepted, setAccepted, showLicenseHint, showBrandingHint,
+    joinCode, joinCodeCustom, joinCodeError, accepted, setAccepted, showLicenseHint, showBrandingHint,
     candidSeal, appleApproval, openBenevityPortal, confirmBenevityRegistered, deferBenevity,
     config,
   } = w;
@@ -310,21 +311,29 @@ export default function NpWebSignup({ onExit }) {
     if (initialOnboardingStep) clearInitialOnboardingStep();
   }, [initialOnboardingStep, clearInitialOnboardingStep]);
 
-  function handleAccept(e) {
-    if (w.acceptLicense(e)) setShowAppModal(true);
-  }
-
-  function copySnippet() {
+  async function copySnippet() {
     const text = widgetSnippet(orgName, joinCode);
-    navigator.clipboard?.writeText?.(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2200);
+    const ok = await copyText(text);
+    if (ok) {
+      setCopied(true);
+      setCopyFailed(false);
+      setTimeout(() => setCopied(false), 2200);
+    } else {
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 2600);
+    }
   }
 
-  function copyTeamId() {
-    navigator.clipboard?.writeText?.(APPLE_TEAM_ID);
-    setTeamIdCopied(true);
-    setTimeout(() => setTeamIdCopied(false), 2200);
+  async function copyTeamId() {
+    const ok = await copyText(APPLE_TEAM_ID);
+    if (ok) {
+      setTeamIdCopied(true);
+      setTeamIdCopyFailed(false);
+      setTimeout(() => setTeamIdCopied(false), 2200);
+    } else {
+      setTeamIdCopyFailed(true);
+      setTimeout(() => setTeamIdCopyFailed(false), 2600);
+    }
   }
 
   return (
@@ -450,7 +459,17 @@ export default function NpWebSignup({ onExit }) {
                     <div>
                       <p style={{ margin: 0, fontSize: 12.5, color: INK.secondary }}>We found a match. Is this your organization?</p>
                       <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 14, padding: 16, background: '#f9fafb' }}>
-                        <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: INK.primary, lineHeight: 1.3 }}>{orgName}</p>
+                        {einNameEditable ? (
+                          <input
+                            type="text"
+                            value={orgName}
+                            onChange={e => setOrgName(e.target.value)}
+                            placeholder="Your Nonprofit"
+                            style={inputStyle(false, { fontSize: 16, fontWeight: 800, color: INK.primary })}
+                          />
+                        ) : (
+                          <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: INK.primary, lineHeight: 1.3 }}>{orgName}</p>
+                        )}
                         <p style={{ margin: '3px 0 0', fontSize: 13, color: INK.secondary }}>{orgAddress}</p>
                         <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#15803d' }}>
                           <CheckCircle size={15} color="#22c55e" />
@@ -458,7 +477,9 @@ export default function NpWebSignup({ onExit }) {
                         </p>
                         {einDemoMode && (
                           <p style={{ margin: '10px 0 0', fontSize: 12, fontStyle: 'italic', color: '#b45309' }}>
-                            Demo data  -  live verification uses IRS public records.
+                            {einNameEditable
+                              ? "Demo data  -  we couldn't match this EIN, so enter your organization's name."
+                              : 'Demo data  -  live verification uses IRS public records.'}
                           </p>
                         )}
                       </div>
@@ -615,8 +636,9 @@ export default function NpWebSignup({ onExit }) {
                         <Label>Your donor join code</Label>
                         <input
                           type="text"
-                          value={joinCode}
+                          value={joinCodeCustom}
                           onChange={e => w.changeJoinCode(e.target.value)}
+                          placeholder={joinCode}
                           style={inputStyle(joinCodeError, { width: 220, fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 })}
                         />
                         {joinCodeError && <Hint tone="error">{joinCodeError}</Hint>}
@@ -790,7 +812,7 @@ export default function NpWebSignup({ onExit }) {
                 </Pane>
 
                 <Side label="Accept and go live" style={{ position: 'sticky', top: 24 }}>
-                  <form onSubmit={handleAccept}>
+                  <form onSubmit={w.acceptLicense}>
                     <label
                       onClick={e => { if (e.target.tagName !== 'A') setAccepted(!accepted); }}
                       style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}
@@ -844,7 +866,7 @@ export default function NpWebSignup({ onExit }) {
                       {APPLE_TEAM_ID}
                     </code>
                     <Button tone="quiet" onClick={copyTeamId} style={{ padding: '8px 14px', fontSize: 13 }}>
-                      {teamIdCopied ? 'Copied ✓' : 'Copy'}
+                      {teamIdCopied ? 'Copied ✓' : teamIdCopyFailed ? 'Try again' : 'Copy'}
                     </Button>
                   </div>
                   <Hint>Benevity will ask for this alongside your organization&apos;s own details.</Hint>
@@ -925,7 +947,7 @@ export default function NpWebSignup({ onExit }) {
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                       <Button tone="quiet" onClick={copySnippet} style={{ padding: '8px 14px', fontSize: 13 }}>
-                        {copied ? 'Copied ✓' : 'Copy snippet'}
+                        {copied ? 'Copied ✓' : copyFailed ? 'Copy failed  -  try again' : 'Copy snippet'}
                       </Button>
                       <span style={{ fontSize: 12, color: INK.muted }}>Paste where the &ldquo;Round up for us&rdquo; card should appear.</span>
                     </div>
@@ -985,8 +1007,6 @@ export default function NpWebSignup({ onExit }) {
           <a href="mailto:support@pocketcache.app" style={{ color: INK.secondary }}>Stuck? Email us</a>
         </p>
       </footer>
-
-      <AppDownloadQRModal show={showAppModal} onDismiss={() => setShowAppModal(false)} fixed />
     </div>
   );
 }

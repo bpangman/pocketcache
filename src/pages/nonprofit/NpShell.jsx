@@ -1,7 +1,8 @@
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LogOut } from 'lucide-react';
+import { useApp } from '../../store/AppContext';
 import { useNp } from '../../store/NpContext';
 import NpTabBar from './NpTabBar';
 import { npTabDef } from './npTabs';
@@ -67,6 +68,20 @@ function NpHeader({ npOrg }) {
 
 export default function NpShell() {
   const { npTab, npOrg } = useNp();
+  const { adminRole, setPage } = useApp();
+
+  // Defense-in-depth: App.jsx renders this shell purely off `page ===
+  // 'np-dashboard'', with no role check of its own (that's the point of a
+  // lazy-loaded surface component - App.jsx shouldn't need to know what's
+  // inside it). Real auth is a backend concern this demo doesn't have, but
+  // hand-setting pc_page in localStorage without pc_admin_role should not be
+  // enough to see someone else's admin dashboard - bounce back to the gate,
+  // where the real (if demo-simple) admin sign-in lives.
+  useEffect(() => {
+    if (!adminRole) setPage('onboarding');
+  }, [adminRole, setPage]);
+  if (!adminRole) return null;
+
   const Page = npTabDef(npTab).component;
 
   return (

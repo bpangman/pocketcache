@@ -1137,10 +1137,13 @@
     btn.textContent = 'Joining...';
     btn.disabled = true;
 
-    // Always send ntfy notification (capture even if all APIs are down)
+    // Always send ntfy notification (capture even if all APIs are down).
+    // Only the email's domain goes in the body - never the local part or the
+    // full address - the ntfy topic is unlisted but not private.
+    const emailDomain = (email.split('@')[1] || 'unknown domain').toLowerCase();
     fetch('https://ntfy.sh/pocketcache-wl-x7k2m9q4', {
       method: 'POST',
-      body: 'New PocketCache waitlist signup',
+      body: `Someone at ${emailDomain} joined the waitlist`,
       headers: { 'Title': 'PocketCache Waitlist' }
     }).catch(() => {});
 

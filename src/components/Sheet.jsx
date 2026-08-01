@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
 import { safeBottomAtLeast } from '../lib/safeArea';
-import { Z, scrim } from '../lib/overlay';
+import { Z, scrim, registerOpenSheet } from '../lib/overlay';
 
 /**
  * Shared bottom sheet. Public API is { show, onClose, title, children } plus the
@@ -37,6 +38,14 @@ import { Z, scrim } from '../lib/overlay';
 const SHEET_PAD = safeBottomAtLeast(32, 12);
 
 export default function Sheet({ show, onClose, title, children, padBottom = true }) {
+  // Register with overlay.js's open-sheet count for as long as this sheet is
+  // shown, so App.jsx's global Toast can avoid rendering over this sheet's
+  // rows. See the "OPEN-SHEET TRACKING" note in lib/overlay.js.
+  useEffect(() => {
+    if (!show) return undefined;
+    return registerOpenSheet();
+  }, [show]);
+
   return (
     <AnimatePresence>
       {show && (

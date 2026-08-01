@@ -1495,10 +1495,24 @@ export default function Settings() {
             right={<Toggle value={prefs.chargeReminder} onChange={v => updatePref('chargeReminder', v)} color={brand.primary} />}
           />
           <div className="h-px bg-gray-50 mx-4" />
+          {/* Split from a single "Account emails & nonprofit updates" toggle
+              (Terms §4a): charge confirmations, receipts, and account/security
+              notices are mandatory service messages while the account is
+              active and cannot be turned off. Only the nonprofit's optional
+              updates are a real toggle - pc_comms_optin keeps its existing
+              storage key and semantics for that one. */}
           <SettingRow
             icon={<Bell size={18} />}
-            label="Account emails & nonprofit updates"
-            sub="Charges, receipts, and updates from PocketCache and your nonprofit"
+            label="Service emails"
+            sub="Charge confirmations, receipts, and account & security notices - required while your account is active"
+            color={brand.secondary}
+            right={<span className="text-xs font-semibold text-gray-400 shrink-0">Always on</span>}
+          />
+          <div className="h-px bg-gray-50 mx-4" />
+          <SettingRow
+            icon={<Bell size={18} />}
+            label="Nonprofit updates"
+            sub="Optional giving updates and news from your nonprofit"
             color={brand.secondary}
             right={<Toggle value={commsOptin} onChange={updateCommsOptin} color={brand.primary} />}
           />
