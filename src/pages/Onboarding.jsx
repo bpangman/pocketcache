@@ -14,10 +14,11 @@ import CoinMark from '../components/CoinMark';
 import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
-import { findOrgByCode, resolveAdminOrgByEmail } from '../store/orgStore';
+import { findOrgByCode, resolveAdminOrgByEmail, getAppleApproval } from '../store/orgStore';
 import {
   useNpSignup, useNpGoLive, generateOneTimeCode,
   NP_BRAND_COLORS, NP_LICENSE_POINTS, widgetSnippet, joinQrValue, launchKitMailto,
+  APPLE_TEAM_ID, BENEVITY_PORTAL_URL,
 } from '../lib/npSignup';
 import { loadKey, saveKey } from '../store/identityStore';
 import { DEMO_USER } from '../data/derived';
@@ -28,6 +29,8 @@ import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import HeroBackButton from '../components/HeroBackButton';
 import ManualCardForm from '../components/ManualCardForm';
+import ApplePaySheet from '../components/ApplePaySheet';
+import AppleLogo from '../components/AppleLogo';
 import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
@@ -433,6 +436,49 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
           </p>
         </div>
       </div>
+    </motion.div>
+  );
+}
+
+// ─── Native app-listing gate ──────────────────────────────────────────────────
+// Shown INSTEAD of the join flow when: this is the native iPhone app, AND the
+// org is not yet approved to be listed inside it (see getAppleApproval).
+// Apple has no say over the web, so this screen only ever appears here - a
+// browser donor following the same join link goes straight through.
+function NativeAppGateScreen({ nonprofit, onBack }) {
+  const code = nonprofit?.shortName || nonprofit?.id?.toUpperCase() || '';
+  const webUrl = `https://pocketcache.app/${code}`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex flex-col h-full items-center justify-center gap-4 px-8 text-center"
+      style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', paddingTop: 'var(--pc-safe-top)' }}
+    >
+      {nonprofit ? <OrgLogo nonprofit={nonprofit} size={18} rounded="2xl" /> : <div className="text-6xl">🏀</div>}
+      <h1 className="text-white font-bold text-2xl leading-tight">
+        {nonprofit?.name ?? 'This nonprofit'} is almost in the iPhone app
+      </h1>
+      <p className="text-white/70 text-sm leading-relaxed">
+        Apple is still verifying {nonprofit?.name ? `${nonprofit.name}'s` : 'their'} listing before it can appear
+        inside the PocketCache app. That&apos;s an app-only step  -  their giving page works today.
+      </p>
+      <div className="w-full bg-white/10 rounded-2xl p-4 mt-2">
+        <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-1">Join today on the web</p>
+        <p className="text-white text-sm font-mono break-all">{webUrl}</p>
+      </div>
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        onClick={() => window.open(webUrl, '_blank', 'noopener')}
+        className="w-full py-4 rounded-2xl font-bold text-base mt-1"
+        style={{ background: 'linear-gradient(135deg, #FBBF24, #E5A800)', color: '#0B2A4A' }}
+      >
+        Open their webpage →
+      </motion.button>
+      <button onClick={onBack} className="text-white/60 text-sm font-semibold py-2">
+        ← Back
+      </button>
     </motion.div>
   );
 }
@@ -1114,7 +1160,7 @@ export const PAYMENT_OPTIONS = [
   },
   {
     id: 'apple_pay',
-    icon: '🍎',
+    icon: <AppleLogo size={22} />,
     label: 'Apple Pay',
     sub: 'Set up once, fully automatic · Includes flat $1/month app fee',
     badge: null,
@@ -1136,8 +1182,16 @@ function PaymentMethodScreen({ onNext, onBack }) {
   const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
   const { selectedNonprofit, monthlyCap, setMonthlyCap } = useApp();
   const [selected, setSelected] = useState(null);
+  const [showApplePay, setShowApplePay] = useState(false);
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
+
+  function handleContinue() {
+    if (!selected) return;
+    if (selected === 'apple_pay') { setShowApplePay(true); return; }
+    const opt = PAYMENT_OPTIONS.find(o => o.id === selected);
+    onNext(selected, { type: selected, label: opt?.label ?? selected, last4: null });
+  }
 
   return (
     <motion.div
@@ -1176,7 +1230,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
         >
           <motion.div className="mb-2 flex flex-col items-center gap-2">
             <div className="flex gap-2">
-              {['🏦', '🍎', '💳'].map((icon, i) => (
+              {['🏦', <AppleLogo key="apple-hero-icon" size={22} color="#fff" />, '💳'].map((icon, i) => (
                 <motion.div
                   key={i}
                   initial={{ scale: 0, opacity: 0 }}
@@ -1295,11 +1349,7 @@ function PaymentMethodScreen({ onNext, onBack }) {
       <div className="px-4 pt-3 bg-gray-50 border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
           <motion.button
             whileTap={selected ? { scale: 0.97 } : {}}
-            onClick={() => {
-              if (!selected) return;
-              const opt = PAYMENT_OPTIONS.find(o => o.id === selected);
-              onNext(selected, { type: selected, label: opt?.label ?? selected, last4: null });
-            }}
+            onClick={handleContinue}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{
               background: selected ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
@@ -1307,12 +1357,19 @@ function PaymentMethodScreen({ onNext, onBack }) {
               cursor: selected ? 'pointer' : 'default',
             }}
           >
-            {selected ? 'Continue →' : 'Choose a payment method'}
+            {selected === 'apple_pay' ? 'Pay with Apple Pay →' : selected ? 'Continue →' : 'Choose a payment method'}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
             Your round-ups charge once a month through {npName}&apos;s Stripe. You&apos;ll see &ldquo;{npShort}&rdquo; on your statement. They issue your receipt.
           </p>
       </div>
+      <ApplePaySheet
+        show={showApplePay}
+        payee={npName}
+        contextLine="Charged once a month for your round-ups  -  set up now, nothing charges today."
+        onCancel={() => setShowApplePay(false)}
+        onSuccess={info => { setShowApplePay(false); onNext('apple_pay', info); }}
+      />
     </motion.div>
   );
 }
@@ -1717,6 +1774,7 @@ const NP_SIGNUP_HEADER = {
   stripe:         { title: 'Connect\nStripe',          sub: 'Donations charge on your Stripe account. You stay the merchant of record.' },
   branding:       { title: 'Customize\nYour Page',     sub: 'This is what donors see when they scan your code or open your link.' },
   license:        { title: 'License\nAgreement',       sub: 'Always free for your nonprofit. Never a percentage of donations.' },
+  'app-listing':  { title: 'One Last Thing\nfor the App', sub: 'Your webpage and widget are already live  -  this is only about the iPhone app.' },
   live:           { title: "You're\nLive! 🎉",         sub: 'Share your join code and donors can start rounding up today.' },
 };
 
@@ -1732,6 +1790,8 @@ function NonprofitSignupFlow({ onBack }) {
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeError, showBrandingHint,
     accepted, setAccepted, showLicenseHint,
+    appleApproval,
+    openBenevityPortal, confirmBenevityRegistered, deferBenevity,
     verifyEIN, confirmOrg, reenterEIN,
     sendCode, changeEmail, verifyCode,
     connectStripe, stripeNext,
@@ -1742,6 +1802,13 @@ function NonprofitSignupFlow({ onBack }) {
   const goLive = useNpGoLive();
   const fileInputRef = useRef(null);
   const [showAppModal, setShowAppModal] = useState(false);
+  const [teamIdCopied, setTeamIdCopied] = useState(false);
+
+  function copyTeamId() {
+    navigator.clipboard?.writeText?.(APPLE_TEAM_ID);
+    setTeamIdCopied(true);
+    setTimeout(() => setTeamIdCopied(false), 2200);
+  }
 
   function handleAccept(e) {
     if (acceptLicense(e)) setShowAppModal(true);
@@ -2089,8 +2156,62 @@ function NonprofitSignupFlow({ onBack }) {
           </form>
         )}
 
+        {step === 'app-listing' && (
+          <div className="space-y-4">
+            <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
+              <p className="text-green-800 text-sm font-bold">Your webpage and widget go live today</p>
+              <p className="text-green-700 text-xs mt-1">
+                This next part only affects whether donors can find you inside the PocketCache iPhone app  -  everything else about your program is already set.
+              </p>
+            </div>
+            <p className="text-gray-500 text-sm">
+              Apple asks every nonprofit to be verified once before it can appear inside the iPhone app.
+              Your organization doesn&apos;t have a Candid Seal of Transparency on file, so the fastest path
+              is to register  -  free  -  at the Benevity Causes Portal, using your organization&apos;s
+              details and the ID below.
+            </p>
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">PocketCache Developer ID</p>
+              <div className="flex items-center gap-2 bg-gray-900 rounded-2xl p-3">
+                <code className="text-green-400 text-sm font-mono flex-1 truncate">{APPLE_TEAM_ID}</code>
+                <button
+                  onClick={copyTeamId}
+                  className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-xl"
+                  style={{ background: teamIdCopied ? '#d1fae5' : 'rgba(255,255,255,0.12)', color: teamIdCopied ? '#065f46' : '#fff' }}
+                >
+                  {teamIdCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-gray-400 text-xs mt-1">Benevity will ask for this alongside your organization&apos;s own details.</p>
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={openBenevityPortal}
+              className="w-full py-4 rounded-2xl font-bold text-base border-2"
+              style={{ borderColor: '#003865', color: '#003865', background: '#fff' }}
+            >
+              Open the Benevity portal →
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={confirmBenevityRegistered}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
+            >
+              I have registered →
+            </motion.button>
+            <button onClick={deferBenevity} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
+              I&apos;ll do this later
+            </button>
+            <p className="text-gray-400 text-xs text-center px-2">
+              Either choice takes you live right now. Nothing here blocks your webpage, your widget, or your donors.
+            </p>
+          </div>
+        )}
+
         {step === 'live' && (
           <div className="space-y-4">
+            <p className="text-xs font-bold text-teal-700 uppercase tracking-widest">Live right now</p>
             <div className="rounded-2xl p-4 bg-green-50 border border-green-200 text-center">
               <p className="text-green-800 font-bold text-base mb-1">Your page is live!</p>
               <p className="text-green-700 text-sm font-mono">
@@ -2119,6 +2240,33 @@ function NonprofitSignupFlow({ onBack }) {
               </div>
               <p className="text-gray-400 text-xs mt-1">See a live preview anytime in your dashboard → Grow tab.</p>
             </div>
+
+            {/* iPhone app listing  -  its own zone, on purpose: Apple has no say
+                over the webpage/QR/widget above, so this status never delays it. */}
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest pt-1">PocketCache iPhone app</p>
+            <div className="rounded-2xl p-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              {appleApproval.status === 'approved' ? (
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={16} className="text-green-500 shrink-0" />
+                  <p className="text-gray-700 text-xs">
+                    {appleApproval.method === 'candid_seal'
+                      ? 'Verified through your Candid Seal of Transparency  -  nothing to do.'
+                      : 'Approved and ready to appear in the app.'}
+                  </p>
+                </div>
+              ) : appleApproval.status === 'benevity_submitted' ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-500 shrink-0">⏳</span>
+                  <p className="text-gray-700 text-xs">We&apos;ll list you in the iPhone app once Benevity approval comes through.</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-500 shrink-0">⚠️</span>
+                  <p className="text-gray-700 text-xs">Register with Benevity when you&apos;re ready  -  it&apos;s in your dashboard.</p>
+                </div>
+              )}
+            </div>
+
             {/* Launch kit  -  auto-sent to the verified admin email at go-live;
                 this button forwards a copy to a colleague (recipient left blank) */}
             <a
@@ -2231,8 +2379,16 @@ export default function Onboarding() {
     if (!returnFromOnboarding()) setStep('gate');
   }
 
+  // Gate at the moment the org is actually resolved (manual code entry AND the
+  // auto-bind ?org= link both funnel through here as `onBind`), so nothing
+  // downstream has to know this check exists. Native only: Apple has no say
+  // over the web, so a browser donor is never shown this screen.
   function handleBind(np) {
     setSelectedNonprofit(np);
+    if (isNative() && getAppleApproval(np).status !== 'approved') {
+      setStep('native-app-gate');
+      return;
+    }
     setStep('slides');
   }
 
@@ -2300,6 +2456,12 @@ export default function Onboarding() {
         onUniversalSignIn={() => setStep('gate-signin')}
       />
     </GateWithSplash>
+  );
+  if (step === 'native-app-gate') return (
+    <NativeAppGateScreen
+      nonprofit={selectedNonprofit}
+      onBack={() => { setSelectedNonprofit(null); setStep('gate'); }}
+    />
   );
   if (step === 'admin-signin') return (
     <AdminSignInScreen

@@ -81,7 +81,7 @@ export function isJoinCodeAvailable(code, excludeOrgId = null) {
   return !hit || hit.id === excludeOrgId;
 }
 
-export function buildOrgFromSignup({ name, adminEmail, story, color, logoPreview, monthlyMinimum, ein, orgAddress, joinCode }) {
+export function buildOrgFromSignup({ name, adminEmail, story, color, logoPreview, monthlyMinimum, ein, orgAddress, joinCode, appleApproval }) {
   const existing = listCustomOrgs();
   const custom = (joinCode ?? '').toUpperCase();
   const shortName = (JOIN_CODE_RE.test(custom) && isJoinCodeAvailable(custom))
@@ -101,6 +101,11 @@ export function buildOrgFromSignup({ name, adminEmail, story, color, logoPreview
     address: orgAddress || '',
     adminEmail: adminEmail || '',
     brand: computeBrandFromColor(color || '#0D9488', shortName),
+    // Apple requires every nonprofit listed INSIDE the iPhone app to be
+    // verified (a Candid Seal of Transparency, or Benevity registration).
+    // Falls back to 'approved' via getAppleApproval() below when absent, but
+    // useNpGoLive always passes a real value now - see lib/npSignup.js.
+    appleApproval: appleApproval || { status: 'approved', method: 'candid_seal' },
     _isCustom: true,
   };
 }
@@ -139,6 +144,34 @@ export function getBgcaOverrides() {
 }
 export function saveBgcaOverrides(overrides) {
   lsSet(BGCA_OVERRIDES_KEY, overrides);
+}
+
+// ── Apple app-listing approval ──────────────────────────────────────────────
+// Apple requires every nonprofit listed INSIDE the iPhone app to be verified:
+// a US 501(c)(3) with a Candid Seal of Transparency is already covered; every
+// other org registers once, for free, at the Benevity Causes Portal
+// (https://causes.benevity.org). This is an iPhone-app-only requirement - the
+// org's PocketCache webpage and website widget are never gated by it.
+
+/**
+ * Resolve an org's Apple app-listing status. ALWAYS read through this (never
+ * `org.appleApproval` directly) so a legacy/seeded record with no field at
+ * all - anything created before this existed - reads as already approved
+ * instead of silently blocking its iPhone-app listing.
+ */
+export function getAppleApproval(org) {
+  return org?.appleApproval ?? { status: 'approved', method: 'candid_seal' };
+}
+
+/** Persist a status change (from the signup wizard or the dashboard card). */
+export function setOrgAppleApproval(orgId, appleApproval) {
+  if (!orgId) return;
+  if (orgId === 'bgca') {
+    saveBgcaOverrides({ ...(getBgcaOverrides() ?? {}), appleApproval });
+    return;
+  }
+  const record = getCustomOrg(orgId);
+  if (record) saveCustomOrg({ ...record, appleApproval });
 }
 
 // ── Unified org lookup ────────────────────────────────────────────────────────

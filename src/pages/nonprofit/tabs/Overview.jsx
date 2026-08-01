@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { AlertCircle, CalendarDays, TrendingUp, Users } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle, Copy, Check, TrendingUp, Users } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
+import { useApp } from '../../../store/AppContext';
 import { fmtMoney } from '../../../lib/format';
 import { nextChargeLabel } from '../../../lib/billing';
+import { findOrgByCode, getAppleApproval, setOrgAppleApproval } from '../../../store/orgStore';
+import { APPLE_TEAM_ID, BENEVITY_PORTAL_URL } from '../../../lib/npSignup';
 import {
   ACTIVE_COUNT, MTD_TOTAL,
   LAST_MONTH_GROSS, AVG_PER_DONOR, FAILED_COUNT, GROWTH_CHART,
@@ -11,6 +15,102 @@ import {
 import DemoPill from '../DemoPill';
 import { NpPage, NpBlock, useNpLayout } from '../NpLayout';
 import gmLogoUrl from '../../../assets/gm-logo.svg';
+
+function TeamIdCopyButton() {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    navigator.clipboard?.writeText?.(APPLE_TEAM_ID).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors shrink-0"
+      style={{ background: copied ? '#d1fae5' : '#f3f4f6', color: copied ? '#065f46' : '#374151' }}
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+}
+
+/**
+ * "iPhone app listing" status card. Apple requires every nonprofit inside
+ * the iPhone app to be verified (Candid Seal, or a free Benevity Causes
+ * Portal registration) - the org's webpage and website widget are NEVER
+ * gated by this, which is why every state below says so.
+ */
+function AppleListingCard() {
+  const { npOrg } = useNp();
+  const { showToast } = useApp();
+  const orgRecord = findOrgByCode(npOrg.joinCode);
+  const [approval, setApproval] = useState(() => getAppleApproval(orgRecord));
+
+  function markRegistered() {
+    const next = { status: 'benevity_submitted', method: 'benevity' };
+    setOrgAppleApproval(orgRecord?.id ?? npOrg._orgId ?? 'bgca', next);
+    setApproval(next);
+    showToast?.('Marked as registered with Benevity.');
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-2xl p-4 card-shadow"
+    >
+      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">iPhone app listing</p>
+      {approval.status === 'approved' ? (
+        <div className="flex items-center gap-2">
+          <CheckCircle size={16} className="text-green-500 shrink-0" />
+          <p className="text-gray-700 text-sm">
+            {approval.method === 'candid_seal'
+              ? 'Verified through your Candid Seal of Transparency  -  nothing to do.'
+              : 'Approved and listed in the app.'}
+          </p>
+        </div>
+      ) : approval.status === 'benevity_submitted' ? (
+        <>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-amber-500 shrink-0">⏳</span>
+            <p className="text-gray-700 text-sm font-semibold">In review with Benevity</p>
+          </div>
+          <p className="text-gray-500 text-xs">We&apos;ll list you in the iPhone app as soon as that approval comes through.</p>
+        </>
+      ) : (
+        <>
+          <p className="text-gray-600 text-xs leading-relaxed mb-3">
+            Apple asks every nonprofit to be verified once before it can appear inside the iPhone app.
+            Register free at the Benevity Causes Portal using your organization&apos;s details and the ID below.
+          </p>
+          <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 mb-3">
+            <code className="text-xs text-gray-700 font-mono flex-1 truncate">{APPLE_TEAM_ID}</code>
+            <TeamIdCopyButton />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={BENEVITY_PORTAL_URL}
+              target="_blank"
+              rel="noopener"
+              className="text-xs font-bold px-3 py-2 rounded-xl bg-gray-100 text-gray-700"
+            >
+              Open the Benevity portal →
+            </a>
+            <button
+              onClick={markRegistered}
+              className="text-xs font-bold px-3 py-2 rounded-xl text-white"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
+            >
+              I have registered →
+            </button>
+          </div>
+        </>
+      )}
+      <p className="text-gray-400 text-xs mt-2.5">Your webpage and widget are already live either way  -  Apple only decides the app listing.</p>
+    </motion.div>
+  );
+}
 
 function StatCard({ iconComponent, label, value, sub, accent }) {
   const TheIcon = iconComponent;
@@ -40,6 +140,11 @@ export default function Overview() {
           {!web && <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live snapshot</p>}
           <DemoPill />
         </div>
+      </NpBlock>
+
+      {/* iPhone app listing status - near the top so it's never missed */}
+      <NpBlock span="full">
+        <AppleListingCard />
       </NpBlock>
 
       {/* Fee model framing */}

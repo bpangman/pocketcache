@@ -24,6 +24,9 @@ export const NONPROFITS = [
     ein: '13-5562976',
     featured: true,
     monthlyMinimum: 5,
+    // BGCA holds a Candid Seal of Transparency, so it is already covered for
+    // the iPhone app listing - see store/orgStore.js getAppleApproval().
+    appleApproval: { status: 'approved', method: 'candid_seal' },
     corporateMatch: {
       company: 'General Motors',
       companyShort: 'GM',

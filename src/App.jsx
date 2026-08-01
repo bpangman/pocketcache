@@ -8,6 +8,7 @@ import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/Devi
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLogo from './components/OrgLogo';
+import AppleLogo from './components/AppleLogo';
 import { findOrgByCode } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
 import ChargeReviewAlert from './components/ChargeReviewAlert';
@@ -191,7 +192,7 @@ function LazySurface({ surface, children }) {
 // (full-bleed, proportionally scaled to viewport width).
 const MOBILE_BP = 600;
 
-const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: '🍎', card: '💳' };
+const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' };
 
 function CancelledOverlay({ onReactivate, onBack }) {
   return (

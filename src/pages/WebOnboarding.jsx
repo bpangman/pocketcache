@@ -12,6 +12,8 @@ import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
 import StripeCardForm from '../components/StripeCardForm';
+import ApplePaySheet from '../components/ApplePaySheet';
+import AppleLogo from '../components/AppleLogo';
 import { CapControl } from './WebPortalPages';
 import AppDownloadQRModal, { isNative } from '../components/AppDownloadQRModal';
 import { fmtMoney } from '../lib/format';
@@ -274,6 +276,7 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   const [connected, setConnected] = useState(null);
   // Payment step
   const [paymentSel, setPaymentSel] = useState(null);
+  const [showApplePay, setShowApplePay] = useState(false);
   // Real card details, captured through Stripe Elements when the donor picks
   // "Credit or Debit Card" - the wizard used to store last4: null no matter what.
   const [cardEntry, setCardEntry] = useState(false);
@@ -694,9 +697,31 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
               {step === 'payment' && (
                 <>
                   <PanelTitle title="How should we collect your round-ups?" sub="Once a month, your round-ups total into one clean charge  -  to the method you pick here." />
+                  <button
+                    onClick={() => setShowApplePay(true)}
+                    data-testid="web-apple-pay-pill"
+                    style={{
+                      width: '100%', padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
+                      background: '#000', color: '#fff', fontWeight: 700, fontSize: 15,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 6,
+                    }}
+                  >
+                    <AppleLogo size={16} color="#fff" /> Pay
+                  </button>
+                  <p style={{ margin: '0 0 16px', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>
+                    Fastest on iPhone and Safari
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 14px' }}>
+                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                    <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>or choose another way to pay</span>
+                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                  </div>
                   <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
                     {PAYMENT_OPTIONS.map(opt => (
                       <button key={opt.id} onClick={() => {
+                        // Apple Pay always goes through the real (simulated) sheet,
+                        // whether picked here or via the pill button above.
+                        if (opt.id === 'apple_pay') { setShowApplePay(true); return; }
                         setPaymentSel(opt.id);
                         // Picking the card option opens the real Stripe form.
                         if (opt.id === 'card') { if (!cardInfo) setCardEntry(true); }
@@ -759,6 +784,14 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                   <PrimaryButton disabled={!paymentSel || !cardReady} onClick={() => setStep('review')}>
                     {!paymentSel ? 'Choose a payment method' : !cardReady ? 'Add your card to continue' : 'Continue →'}
                   </PrimaryButton>
+                  <ApplePaySheet
+                    show={showApplePay}
+                    payee={npShort}
+                    contextLine="Charged once a month for your round-ups  -  set up now, nothing charges today."
+                    onCancel={() => setShowApplePay(false)}
+                    onSuccess={() => { setPaymentSel('apple_pay'); setCardEntry(false); setShowApplePay(false); }}
+                    fixed
+                  />
                 </>
               )}
 

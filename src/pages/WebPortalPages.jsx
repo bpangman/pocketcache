@@ -27,6 +27,8 @@ import CoinMark from '../components/CoinMark';
 import MatchBadge from '../components/MatchBadge';
 import ManualCardForm from '../components/ManualCardForm';
 import StripeCardForm from '../components/StripeCardForm';
+import ApplePaySheet from '../components/ApplePaySheet';
+import AppleLogo from '../components/AppleLogo';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 
 // ─── Web-native My Cause / Share / Settings + shared modals ──────────────────
@@ -79,7 +81,7 @@ const MULTIPLIER_OPTIONS = [
 
 const PAYMENT_METHOD_OPTIONS = [
   { id: 'ach',       icon: '🏦', label: 'Bank Account',        sub: 'Direct bank transfer · Includes flat $1/month app fee' },
-  { id: 'apple_pay', icon: '🍎', label: 'Apple Pay',            sub: 'Set up once, fully automatic · Includes flat $1/month app fee' },
+  { id: 'apple_pay', icon: <AppleLogo size={20} />, label: 'Apple Pay',            sub: 'Set up once, fully automatic · Includes flat $1/month app fee' },
   { id: 'card',      icon: '💳', label: 'Credit or Debit Card', sub: 'Visa, Mastercard, Amex, or Discover · Includes flat $1/month app fee' },
 ];
 
@@ -1351,7 +1353,7 @@ export function WebSettings() {
           <SectionCard label="How you pay">
             <Row label={paymentMethod?.label ?? 'Credit or Debit Card'}
               sub={paymentMethod?.last4 ? `•••• ${paymentMethod.last4} · One monthly charge from ${npShort}` : `One monthly charge from ${npShort}`}
-              right={<span style={{ fontSize: 18 }}>{{ ach: '🏦', apple_pay: '🍎', card: '💳' }[paymentMethod?.type] ?? '💳'}</span>} />
+              right={<span style={{ fontSize: 18 }}>{{ ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' }[paymentMethod?.type] ?? '💳'}</span>} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Change payment method" sub="Bank account, Apple Pay, or card" onPress={() => setModal('payment')}
               right={<span style={{ color: INK.muted }}>›</span>} />
@@ -1638,17 +1640,20 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
  * a second copy would be the third implementation of the same Stripe form.
  */
 export function ChangePaymentModal({ show, onClose, onChanged }) {
+  const { selectedNonprofit } = useApp();
   const [saving, setSaving] = useState(null);
   const [staged, setStaged] = useState(null);   // ready to confirm, NOT committed
   const [cardEntry, setCardEntry] = useState(false);
+  const [showApplePay, setShowApplePay] = useState(false);
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setSaving(null); setStaged(null); setCardEntry(false); }, 0);
+    const id = setTimeout(() => { setSaving(null); setStaged(null); setCardEntry(false); setShowApplePay(false); }, 0);
     return () => clearTimeout(id);
   }, [show]);
 
   function pick(opt) {
     if (opt.id === 'card') { setCardEntry(true); return; }
+    if (opt.id === 'apple_pay') { setShowApplePay(true); return; }
     setSaving(opt.id);
     setTimeout(() => {
       setSaving(null);
@@ -1717,6 +1722,13 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
           </p>
         </>
       )}
+      <ApplePaySheet
+        show={showApplePay}
+        payee={selectedNonprofit?.name}
+        onCancel={() => setShowApplePay(false)}
+        onSuccess={info => { setShowApplePay(false); setStaged(info); }}
+        fixed
+      />
     </Modal>
   );
 }

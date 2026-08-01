@@ -5,6 +5,8 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
 import ManualCardForm from '../components/ManualCardForm';
+import ApplePaySheet from '../components/ApplePaySheet';
+import AppleLogo from '../components/AppleLogo';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import CoinLogo from '../components/CoinLogo';
@@ -266,11 +268,11 @@ const TRACKED_CARD_BANKS = [
 
 const PAYMENT_METHOD_OPTIONS = [
   { id: 'ach',       icon: '🏦', label: 'Bank Account',          sub: 'Direct bank transfer · Includes flat $1/month app fee' },
-  { id: 'apple_pay', icon: '🍎', label: 'Apple Pay',              sub: 'Set up once, fully automatic · Includes flat $1/month app fee' },
+  { id: 'apple_pay', icon: <AppleLogo size={20} />, label: 'Apple Pay',              sub: 'Set up once, fully automatic · Includes flat $1/month app fee' },
   { id: 'card',      icon: '💳', label: 'Credit or Debit Card',   sub: 'Visa, Mastercard, Amex, or Discover · Includes flat $1/month app fee' },
 ];
 
-const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: '🍎', card: '💳' };
+const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' };
 
 function AddCardForm({ onAdd, onClose, brand }) {
   const stripe = useStripe();
@@ -949,15 +951,20 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
   );
 }
 
-function ChangePaymentSheet({ show, onClose, brand, onMethodChanged }) {
+function ChangePaymentSheet({ show, onClose, brand, onMethodChanged, nonprofit }) {
   const [selected, setSelected] = useState(null);
   const [setting, setSetting] = useState(false);
   const [done, setDone] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
+  const [showApplePay, setShowApplePay] = useState(false);
 
   function handleSelect(optId) {
     if (optId === 'card') {
       setShowAddCard(true);
+      return;
+    }
+    if (optId === 'apple_pay') {
+      setShowApplePay(true);
       return;
     }
     setSelected(optId);
@@ -966,6 +973,12 @@ function ChangePaymentSheet({ show, onClose, brand, onMethodChanged }) {
       setSetting(false);
       setDone(true);
     }, 1200);
+  }
+
+  function handleApplePaySuccess() {
+    setSelected('apple_pay');
+    setDone(true);
+    setShowApplePay(false);
   }
 
   function handleCardAdded(card) {
@@ -1041,6 +1054,13 @@ function ChangePaymentSheet({ show, onClose, brand, onMethodChanged }) {
         onClose={() => setShowAddCard(false)}
         onAdd={handleCardAdded}
         brand={brand}
+      />
+
+      <ApplePaySheet
+        show={showApplePay}
+        payee={nonprofit?.name}
+        onCancel={() => setShowApplePay(false)}
+        onSuccess={handleApplePaySuccess}
       />
     </>
   );
@@ -1608,6 +1628,7 @@ export default function Settings() {
         show={showChangePayment}
         onClose={() => setShowChangePayment(false)}
         brand={brand}
+        nonprofit={selectedNonprofit}
         onMethodChanged={(method) => {
           setPaymentMethod(method);
           showToast('Payment method updated.');

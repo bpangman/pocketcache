@@ -6,6 +6,7 @@ import { nextChargeLabel } from '../lib/billing';
 import { monthsGiving, sinceLabel } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
+import AppleLogo from '../components/AppleLogo';
 import { ChangePaymentModal } from './WebPortalPages';
 
 // ─── Web-native closed account / reactivation ────────────────────────────────
@@ -46,7 +47,7 @@ const PANEL = {
   boxShadow: '0 16px 48px rgba(11,42,74,0.08), 0 2px 8px rgba(11,42,74,0.05)',
 };
 
-const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: '🍎', card: '💳' };
+const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' };
 
 function PanelTitle({ title, sub }) {
   return (

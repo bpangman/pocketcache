@@ -33,13 +33,37 @@ import { useNp } from '../store/NpContext';
 import { buildOrgFromSignup, saveCustomOrg, generateJoinCode, isJoinCodeAvailable } from '../store/orgStore';
 import { isNative } from '../components/AppDownloadQRModal';
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
+import { NONPROFITS } from '../data/nonprofits';
+
+// ─── Apple app-listing (iPhone app only - never the web) ──────────────────────
+//
+// Apple's charity-platform rules require every nonprofit listed INSIDE the
+// iPhone app to be verified once: a US 501(c)(3) with a Candid Seal of
+// Transparency is already covered, everyone else registers free at the
+// Benevity Causes Portal using the org's details plus our Apple Developer
+// Team ID. This never touches the web: the org's PocketCache webpage and
+// website widget go live at go-live time regardless of this check.
+//
+// The Team ID lives in the iOS Xcode project (app/ios/App/App.xcodeproj -
+// DEVELOPMENT_TEAM). Grepped from there at the time this was written; if the
+// Apple Developer account's team ever changes, update this constant.
+export const APPLE_TEAM_ID = 'YJU5U6VX8V';
+
+export const BENEVITY_PORTAL_URL = 'https://causes.benevity.org';
 
 // ─── Step sequence ────────────────────────────────────────────────────────────
 
-/** Ordered wizard steps. Both surfaces walk this exact sequence. */
-export const NP_SIGNUP_STEPS = ['ein', 'confirm-org', 'verify-email', 'stripe', 'branding', 'license', 'live'];
+/**
+ * Ordered wizard steps. Both surfaces walk this exact sequence, EXCEPT
+ * 'app-listing': it only renders when the simulated Candid Seal lookup comes
+ * back empty (see useNpSignup's `candidSeal`). A seal match skips straight
+ * from 'license' to 'live' - zero extra steps for the common case.
+ */
+export const NP_SIGNUP_STEPS = ['ein', 'confirm-org', 'verify-email', 'stripe', 'branding', 'license', 'app-listing', 'live'];
 
-/** Previous step for each step; `ein` has no previous (the surface exits). */
+/** Previous step for each step; `ein` has no previous (the surface exits).
+ *  'live' points at 'app-listing' here - useNpSignup.back() special-cases the
+ *  seal-found path, where 'app-listing' was skipped on the way in too. */
 const NP_SIGNUP_PREV = {
   ein: null,
   'confirm-org': 'ein',
@@ -47,7 +71,8 @@ const NP_SIGNUP_PREV = {
   stripe: 'verify-email',
   branding: 'stripe',
   license: 'branding',
-  live: 'license',
+  'app-listing': 'license',
+  live: 'app-listing',
 };
 
 // ─── EIN lookup ───────────────────────────────────────────────────────────────
@@ -83,6 +108,28 @@ export const EIN_DEMO_FALLBACK = {
   address: 'Atlanta, GA',
   is501c3: true,
 };
+
+// ─── Simulated Candid Seal of Transparency lookup ──────────────────────────────
+//
+// DEMO: there is no real Candid API call. There is also no real ProPublica
+// call in a browser - projects.propublica.org sends no CORS headers, so
+// verifyEIN's fetch always throws and always falls back to the BGCA sample
+// org, no matter what EIN was actually typed (see EIN_DEMO_FALLBACK below).
+// That means orgName can't be trusted to tell BGCA apart from "some unknown
+// org" once einDemoMode is true - it always reads as BGCA. The only signal
+// that survives the fallback untouched is the EIN digits the admin actually
+// entered, so that's what this keys off: BGCA's real EIN (or any other
+// seeded org's EIN) reads as already sealed; anything else reads as not
+// found, which is what lets an admin type literally any EIN and walk the
+// Benevity path end to end in this demo.
+function determineCandidSeal({ einDemoMode, einDigits, orgName }) {
+  const einIsSeeded = NONPROFITS.some(np => (np.ein ?? '').replace(/\D/g, '') === einDigits);
+  if (einDemoMode) return einIsSeeded ? 'found' : 'none';
+  // Live ProPublica success (unreachable from a browser today, but kept
+  // correct for tests/future non-browser callers): trust the real name too.
+  const nameIsSeeded = NONPROFITS.some(np => np.name === orgName);
+  return (einIsSeeded || nameIsSeeded) ? 'found' : 'none';
+}
 
 // ─── Work-email verification (DEMO one-time code) ─────────────────────────────
 
@@ -198,6 +245,7 @@ export function useNpGoLive() {
       ein:            config.ein,
       orgAddress:     config.orgAddress,
       joinCode:       config.joinCode,
+      appleApproval:  config.appleApproval,
     });
     saveCustomOrg(org);
 
@@ -260,6 +308,11 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // Stripe (DEMO connect)
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
+
+  // Apple app-listing: simulated Candid Seal lookup + the Benevity choice the
+  // admin makes on the app-listing step (only reachable when no seal was found).
+  const [candidSeal, setCandidSeal] = useState('checking'); // 'checking' | 'found' | 'none'
+  const [benevityChoice, setBenevityChoice] = useState(null); // null | 'benevity_submitted' | 'benevity_needed'
 
   // Branding
   const [story, setStory] = useState('');
@@ -355,6 +408,14 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
 
   function confirmOrg() {
     setStep('verify-email');
+    // Kick off the simulated Candid Seal lookup now, so its ~1.2s has plenty
+    // of time to resolve before the admin could possibly reach the license
+    // step (email verify + Stripe connect + branding all come first).
+    setCandidSeal('checking');
+    const einDigits = ein.replace(/\D/g, '');
+    setTimeout(() => {
+      setCandidSeal(determineCandidSeal({ einDemoMode, einDigits, orgName }));
+    }, 1200);
   }
 
   function reenterEIN() {
@@ -438,19 +499,56 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   }
 
   /** Returns true when the license was accepted and the wizard advanced, so the
-   *  surface can fire its own completion chrome (QR popup, confetti, ...). */
+   *  surface can fire its own completion chrome (QR popup, confetti, ...).
+   *  A seal match skips 'app-listing' entirely - straight to 'live'. Anything
+   *  else (including a seal check that is still 'checking' this instant, which
+   *  should not happen given confirmOrg's head start, but is handled safely)
+   *  shows the app-listing step so the admin always sees a real answer. */
   function acceptLicense(e) {
     e?.preventDefault?.();
     if (!accepted) { setShowLicenseHint(true); return false; }
-    setStep('live');
+    setStep(candidSeal === 'found' ? 'live' : 'app-listing');
     return true;
   }
 
+  function openBenevityPortal() {
+    window.open(BENEVITY_PORTAL_URL, '_blank', 'noopener');
+  }
+
+  /** "I have registered" on the app-listing step. Either choice below goes
+   *  live immediately - neither one blocks go-live, only the iPhone-app
+   *  listing itself waits. */
+  function confirmBenevityRegistered() {
+    setBenevityChoice('benevity_submitted');
+    setStep('live');
+  }
+
+  /** "I'll do this later" on the app-listing step. */
+  function deferBenevity() {
+    setBenevityChoice('benevity_needed');
+    setStep('live');
+  }
+
   function back() {
+    // The seal-found path skipped 'app-listing' on the way in, so going back
+    // from 'live' has to skip it too, or back() would land on a step that was
+    // never shown and dead-end the admin on a re-click of "Back".
+    if (step === 'live' && candidSeal === 'found') { setStep('license'); return; }
     const prev = NP_SIGNUP_PREV[step];
     if (prev) setStep(prev);
     else onExit?.();
   }
+
+  // The Apple app-listing status that will be written to the org record at
+  // go-live. Seal match -> approved, nothing else to decide. No seal -> what
+  // the admin picked on the app-listing step, defaulting to 'benevity_needed'
+  // if they somehow reach 'live' without picking (should not happen; both
+  // buttons on that step set this before advancing).
+  const appleApproval = useMemo(() => (
+    candidSeal === 'found'
+      ? { status: 'approved', method: 'candid_seal' }
+      : { status: benevityChoice ?? 'benevity_needed', method: 'benevity' }
+  ), [candidSeal, benevityChoice]);
 
   /** Everything useNpGoLive needs. A logo the admin never changed stays null so
    *  the org falls back to its default mark rather than storing the demo asset. */
@@ -465,7 +563,8 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     joinCode,
     ein,
     orgAddress,
-  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress]);
+    appleApproval,
+  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress, appleApproval]);
 
   return {
     step, setStep,
@@ -483,6 +582,9 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     joinCode, joinCodeError,
     // license
     accepted, setAccepted, showLicenseHint, showBrandingHint,
+    // apple app-listing
+    candidSeal, benevityChoice, appleApproval,
+    openBenevityPortal, confirmBenevityRegistered, deferBenevity,
     // actions
     verifyEIN, confirmOrg, reenterEIN,
     sendCode, changeEmail, verifyCode,

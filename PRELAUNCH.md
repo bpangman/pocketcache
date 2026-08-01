@@ -64,12 +64,60 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
 - **Production:** This block MUST be removed before the official launch. It is marked with "TESTING MODE - REMOVE BEFORE LAUNCH" in the code.
 - **Action:** Delete the testing-mode block in src/main.jsx before any TestFlight or App Store submission.
 
+### 4. Candid Seal of Transparency check - real Candid API lookup
+- **Now (demo):** the nonprofit signup wizard runs a simulated ~1.2s "seal lookup" (src/lib/npSignup.js
+  `determineCandidSeal`). The result is deterministic, not a real API call: BGCA and anything that fell
+  back to the BGCA sample data (an EIN lookup that could not reach ProPublica) always comes back "seal
+  found"; every org resolved live from ProPublica comes back "not found," which routes it to the
+  Benevity path below.
+- **Production:** call the real Candid API to check whether the organization holds a current Seal of
+  Transparency, with the same graceful-fallback behavior the EIN lookup already has.
+- **Action:** wire the live lookup once Candid API access is set up; keep the fallback path (route to
+  Benevity registration) for orgs the API cannot confirm.
+
+### 5. Benevity registration - real completion tracking, not a self-reported toggle
+- **Now (demo):** the app-listing signup step and the dashboard's "iPhone app listing" card
+  (nonprofit/tabs/Overview.jsx) let the admin click "I have registered," which just flips
+  `appleApproval.status` to `benevity_submitted` in localStorage (store/orgStore.js
+  `setOrgAppleApproval`). Nothing verifies the org actually completed Benevity's Causes Portal
+  registration.
+- **Why it matters:** this is an Apple requirement, not a PocketCache preference - every nonprofit
+  listed INSIDE the iPhone app must be verified (a Candid Seal, or Benevity registration). A
+  self-reported checkbox is fine for the demo but is not a real approval gate.
+- **Production:** either poll/receive a real status callback from Benevity, or manually confirm each
+  org's registration before flipping its status to `benevity_submitted` and, once Benevity actually
+  approves it, to `approved`. Until every listed nonprofit clears this, do not list it in the iPhone
+  app's org picker.
+- **Action:** build the real verification path once the Benevity integration (or a manual review
+  process) exists. Note this never touches the web: the org's PocketCache webpage and website widget
+  are not gated by Apple at all, only the iPhone-app listing is.
+
+### 6. Real Apple Pay via Stripe - replacing the simulated sheet
+- **Now (demo):** src/components/ApplePaySheet.jsx is a fully simulated Apple Pay sheet (dark card,
+  payee, a masked "Visa •••• 4242" line, ~1.2s fake processing, a success check). No PassKit session is
+  created and no card is ever added to a real wallet. It is wired into every payment-method surface:
+  donor onboarding (app and web), Settings, and the web portal.
+- **Production needs:** a real Stripe + Apple Pay merchant account, domain verification for the web
+  surfaces, and - because round-ups are billed monthly rather than at the moment of consent - an
+  off-session / merchant-initiated payment setup (Stripe's Apple Pay + SetupIntent flow) so later
+  monthly charges do not require the donor to reopen the sheet each time.
+- **Action:** build once Stripe's Apple Pay merchant setup is complete; swap ApplePaySheet's simulated
+  confirm for the real PassKit + Stripe flow, keeping the same success payload shape
+  (`{ type: 'apple_pay', label: 'Apple Pay', last4: null }`) so nothing downstream has to change.
+
 ## Launch-blocking legal / ops (see also memory: project_pocketcache_prelaunch_checklist)
 - E&O + cyber insurance in place.
 - Nathan (lawyer) review of the Nonprofit Software License Agreement.
 - Liability caps confirmed in the license.
 - Secure the Plaid access tokens (no plaintext storage).
 - California: confirmed blocked at signup until availability is confirmed.
+- Confirm with Apple how the $1/month app fee is treated before launch. The fee is currently charged
+  to the donor outside the app, on the nonprofit's Stripe account (see lib/billing.js) - that
+  structure is the one most likely to avoid Apple's In-App Purchase (IAP) rules entirely, since no
+  purchase happens inside the app itself. If that ever changes to a donor-facing in-app charge, it
+  risks being treated as a digital purchase subject to Apple's IAP cut (up to 15-30%). Get this in
+  writing from Apple (or counsel familiar with App Review's charity/donation guidelines) before
+  launch, and before any change to where or how the $1 fee is collected.
 - Before launch, point the /app/ page (QR target) at the real App Store listing. `app/index.html`
   still ships the placeholder badge and carries two `TODO: Replace ... with the real App Store
   badge + link when the listing goes live` comments (one on the `.store-placeholder` CSS rule,

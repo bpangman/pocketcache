@@ -10,6 +10,7 @@ import {
   useNpSignup, useNpGoLive,
   NP_BRAND_COLORS, NP_LICENSE_POINTS,
   widgetSnippet, joinQrValue, launchKitMailto,
+  APPLE_TEAM_ID,
 } from '../../lib/npSignup';
 import { nextChargeLabel } from '../../lib/billing';
 
@@ -49,13 +50,17 @@ const PANEL = {
 
 // The indicator collapses `ein` + `confirm-org` into one milestone, because on
 // desktop they are one screen: the form on the left, the result on the right.
+// 'app-listing' is its own milestone, but only when it will actually be shown -
+// the Candid Seal check (candidSeal) skips it entirely for orgs that already
+// have a seal, and StepBar hides the 'iPhone app' entry to match.
 const STEP_BAR = [
-  { key: 'verify',  label: 'Verify nonprofit', steps: ['ein', 'confirm-org'] },
-  { key: 'email',   label: 'Work email',       steps: ['verify-email'] },
-  { key: 'stripe',  label: 'Stripe',           steps: ['stripe'] },
-  { key: 'brand',   label: 'Your page',        steps: ['branding'] },
-  { key: 'license', label: 'License',          steps: ['license'] },
-  { key: 'live',    label: 'Go live',          steps: ['live'] },
+  { key: 'verify',      label: 'Verify nonprofit', steps: ['ein', 'confirm-org'] },
+  { key: 'email',       label: 'Work email',       steps: ['verify-email'] },
+  { key: 'stripe',      label: 'Stripe',           steps: ['stripe'] },
+  { key: 'brand',       label: 'Your page',        steps: ['branding'] },
+  { key: 'license',     label: 'License',          steps: ['license'] },
+  { key: 'app-listing', label: 'iPhone app',       steps: ['app-listing'] },
+  { key: 'live',        label: 'Go live',          steps: ['live'] },
 ];
 
 const NEEDS = [
@@ -190,11 +195,12 @@ function DemoNote({ children }) {
   );
 }
 
-function StepBar({ step }) {
-  const activeIdx = STEP_BAR.findIndex(s => s.steps.includes(step));
+function StepBar({ step, candidSeal }) {
+  const bar = candidSeal === 'found' ? STEP_BAR.filter(s => s.key !== 'app-listing') : STEP_BAR;
+  const activeIdx = bar.findIndex(s => s.steps.includes(step));
   return (
     <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
-      {STEP_BAR.map((s, i) => {
+      {bar.map((s, i) => {
         const done = i < activeIdx;
         const active = i === activeIdx;
         return (
@@ -217,7 +223,7 @@ function StepBar({ step }) {
                 {s.label}
               </span>
             </span>
-            {i < STEP_BAR.length - 1 && (
+            {i < bar.length - 1 && (
               <span style={{ width: 34, height: 2, margin: '0 10px', borderRadius: 2, background: done ? TEAL : '#e2e8f0', flexShrink: 0 }} />
             )}
           </li>
@@ -280,6 +286,7 @@ export default function NpWebSignup({ onExit }) {
   const goLive = useNpGoLive();
   const [showAppModal, setShowAppModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [teamIdCopied, setTeamIdCopied] = useState(false);
 
   const {
     step, ein, setEin, einError, verifying, einDemoMode,
@@ -290,6 +297,7 @@ export default function NpWebSignup({ onExit }) {
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeError, accepted, setAccepted, showLicenseHint, showBrandingHint,
+    candidSeal, appleApproval, openBenevityPortal, confirmBenevityRegistered, deferBenevity,
     config,
   } = w;
 
@@ -313,6 +321,12 @@ export default function NpWebSignup({ onExit }) {
     setTimeout(() => setCopied(false), 2200);
   }
 
+  function copyTeamId() {
+    navigator.clipboard?.writeText?.(APPLE_TEAM_ID);
+    setTeamIdCopied(true);
+    setTimeout(() => setTeamIdCopied(false), 2200);
+  }
+
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
       {/* ── Top nav ── */}
@@ -334,7 +348,7 @@ export default function NpWebSignup({ onExit }) {
       {/* ── Step indicator ── */}
       <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: MAX_W, margin: '0 auto', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-          <StepBar step={step} />
+          <StepBar step={step} candidSeal={candidSeal} />
           {showBack && (
             <Button tone="ghost" onClick={w.back} style={{ padding: '7px 12px', fontSize: 13 }}>
               {step === 'ein' ? 'Leave setup' : '← Back'}
@@ -808,6 +822,58 @@ export default function NpWebSignup({ onExit }) {
               </div>
             )}
 
+            {/* ═══ App listing: only reached when the Candid Seal check found
+                nothing. Webpage/widget already went live at license-accept
+                time on the surface's own schedule - this step is entirely
+                about the iPhone app and never blocks anything else. ═══ */}
+            {step === 'app-listing' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gap: 26, alignItems: 'start' }}>
+                <Pane
+                  title="One last thing for the iPhone app"
+                  hint="Your PocketCache webpage and website widget go live today, no matter what happens here. This step only affects whether donors can find you inside the PocketCache iPhone app."
+                >
+                  <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+                    Apple asks every nonprofit to be verified once before it can appear inside the iPhone app.
+                    Your organization doesn&apos;t have a Candid Seal of Transparency on file, so the fastest
+                    path is to register  -  free  -  at the Benevity Causes Portal, using your organization&apos;s
+                    details and the ID below.
+                  </p>
+                  <Label>PocketCache developer ID</Label>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <code style={{ background: '#0f172a', color: '#4ade80', borderRadius: 10, padding: '10px 14px', fontSize: 13.5, fontFamily: 'ui-monospace, monospace' }}>
+                      {APPLE_TEAM_ID}
+                    </code>
+                    <Button tone="quiet" onClick={copyTeamId} style={{ padding: '8px 14px', fontSize: 13 }}>
+                      {teamIdCopied ? 'Copied ✓' : 'Copy'}
+                    </Button>
+                  </div>
+                  <Hint>Benevity will ask for this alongside your organization&apos;s own details.</Hint>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+                    <Button tone="quiet" onClick={openBenevityPortal}>Open the Benevity portal →</Button>
+                    <Button tone="teal" onClick={confirmBenevityRegistered}>I have registered →</Button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={deferBenevity}
+                    style={{ marginTop: 14, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: INK.muted }}
+                  >
+                    I&apos;ll do this later
+                  </button>
+                </Pane>
+                <Side label="Why this exists">
+                  <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                    Apple requires every nonprofit listed inside a charity-giving app to be independently
+                    verified. A Candid Seal of Transparency already satisfies that; without one, Benevity&apos;s
+                    Causes Portal is the free alternative.
+                  </p>
+                  <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                    Neither choice here blocks you from going live right now. It only decides how soon you show
+                    up inside the iPhone app.
+                  </p>
+                </Side>
+              </div>
+            )}
+
             {/* ═══ You're live ═══ */}
             {step === 'live' && (
               <div style={{ display: 'grid', gap: 22 }}>
@@ -831,6 +897,9 @@ export default function NpWebSignup({ onExit }) {
                   </div>
                 </div>
 
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#15803d' }}>
+                  Live right now
+                </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr)', gap: 20, alignItems: 'start' }}>
                   <Side label="Your donor join code">
                     <p style={{ margin: 0, fontSize: 42, fontWeight: 900, letterSpacing: '0.06em', color: '#065f46', lineHeight: 1.1 }}>{joinCode}</p>
@@ -862,6 +931,36 @@ export default function NpWebSignup({ onExit }) {
                     </div>
                   </Side>
                 </div>
+
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                  PocketCache iPhone app
+                </p>
+                <Side label={null} style={{ background: '#f8fafc' }}>
+                  {appleApproval.status === 'approved' ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <CheckCircle size={16} color="#22c55e" style={{ flexShrink: 0, marginTop: 1 }} />
+                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                        {appleApproval.method === 'candid_seal'
+                          ? 'Verified through your Candid Seal of Transparency  -  nothing to do.'
+                          : 'Approved and ready to appear in the app.'}
+                      </p>
+                    </div>
+                  ) : appleApproval.status === 'benevity_submitted' ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <span style={{ flexShrink: 0 }}>⏳</span>
+                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                        We&apos;ll list you in the iPhone app once Benevity approval comes through.
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <span style={{ flexShrink: 0 }}>⚠️</span>
+                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                        Register with Benevity when you&apos;re ready  -  it&apos;s in your dashboard.
+                      </p>
+                    </div>
+                  )}
+                </Side>
 
                 <DemoNote>
                   <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#92400e' }}>
