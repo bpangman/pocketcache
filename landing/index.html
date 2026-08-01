@@ -1147,6 +1147,17 @@
       headers: { 'Title': 'PocketCache Waitlist' }
     }).catch(() => {});
 
+    // Also send the full email straight to Blake's inbox via FormSubmit.co.
+    // This is safe to put the real address in (unlike the ntfy body above):
+    // FormSubmit is a private browser-to-inbox send, not a public/discoverable
+    // topic. Needs Blake's one-time FormSubmit activation click to deliver -
+    // fire-and-forget either way, never blocks the waitlist form.
+    fetch('https://formsubmit.co/ajax/blake@pocketcache.app', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ _subject: 'PocketCache: waitlist signup', email })
+    }).catch(() => {});
+
     // Submit to Google Form (permanent record; no-cors since Google Forms has no CORS)
     fetch(GOOGLE_FORM_URL, {
       method: 'POST',

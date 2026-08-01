@@ -20,7 +20,6 @@ import CoinMark from '../components/CoinMark';
 const PLATFORM_ADMIN_EMAIL = 'info@pocketcache.app';
 const PADMIN_KEY = 'pc_padmin';
 const NTFY_TOPIC_URL = 'https://ntfy.sh/pocketcache-wl-x7k2m9q4';
-const EVENT_LOG_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Mx1Hu3kupeKzmaU5irhBsJgPPjYXJpBtOgALn2hYVfE/edit';
 
 // ── Shared visual bits (same card language as the rest of the app: white
 //    rounded-2xl cards with card-shadow, gray-400 uppercase tracking-widest
@@ -144,6 +143,12 @@ function LiveActivityCard() {
         </button>
       }
     >
+      <p className="text-xs text-gray-400 mb-3">
+        Real signups from anyone, anywhere show up in the list below (a rolling last-12-hours
+        view) and also arrive as email alerts to blake@pocketcache.app via FormSubmit. This view
+        is not permanent storage - the permanent home for this data will come once the real
+        backend exists.
+      </p>
       {error ? (
         <p className="text-sm text-amber-700 bg-amber-50 rounded-xl p-3">{error}</p>
       ) : loading ? (
@@ -163,14 +168,6 @@ function LiveActivityCard() {
           ))}
         </div>
       )}
-      <a
-        href={EVENT_LOG_SHEET_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-3 inline-block text-sm font-semibold text-teal-700 bg-teal-50 rounded-xl px-3 py-2 hover:bg-teal-100 transition-colors"
-      >
-        Open the permanent event log (Google Sheet) →
-      </a>
     </Card>
   );
 }
@@ -414,8 +411,10 @@ function PlatformAdminConsole() {
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 text-sm text-amber-900 leading-relaxed">
           This page shows everything saved in this browser. Every visitor&apos;s account lives only in
           their own browser until the real backend exists. Real signups from anyone, anywhere show up
-          below in Live activity and in the permanent Google Sheet log - that is the one part of this
-          page that reflects visitors other than you.
+          below in Live activity (a rolling last-12-hours view) and also arrive as email alerts to
+          blake@pocketcache.app via FormSubmit - that is the one part of this page that reflects
+          visitors other than you. The live feed below is not permanent storage - the permanent home
+          for this data will come once the real backend exists.
         </div>
 
         <LiveActivityCard />
