@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { fmtMoney } from '../lib/format';
 import {
-  chargeTotal, currentMonthName, effectiveCharge, inReviewWindow, monthKey, nextChargeLabel,
-  processingCoverFor,
+  chargeTotal, effectiveCharge, inReviewWindow, monthKey, nextChargeLabel,
+  processingCoverFor, roundUpMonthName,
 } from '../lib/billing';
 import { adjustBounds } from '../lib/donorContent';
 import { Z, scrim, centered } from '../lib/overlay';
@@ -93,7 +93,11 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const total = fmtMoney(chargeTotal({
     pendingRoundUps: roundUps, monthlyCap, chargeAdjustment, feeMonths, processingCover,
   }));
-  const monthName = currentMonthName();
+  // The round-up month, not the charge month: during the review window (days
+  // 1-10) the charge date falls THIS month but the amount locked is LAST
+  // month's round-ups, so naming the popup after the charge month would tell
+  // a donor reviewing July round-ups on Aug 1 that they have an "August charge".
+  const monthName = roundUpMonthName();
   const chargeDay = nextChargeLabel();
   // The cap is doing the trimming (rather than a donor adjustment) - worth
   // saying out loud, so the struck-through figure is not read as a mistake.
@@ -115,7 +119,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
       <div style={{ textAlign: 'center', marginBottom: 10 }}>
         <div style={{ fontSize: 34 }}>🔔</div>
         <p style={{ margin: '6px 0 2px', fontWeight: 800, fontSize: 17, color: '#0f172a' }}>
-          Your {monthName} charge is ready to review
+          Your {monthName} round-ups are ready to review
         </p>
         <p style={{ margin: 0, fontSize: 12.5, color: '#64748b' }}>
           Locked on the 1st · charges {chargeDay}  -  10 full days to review or adjust

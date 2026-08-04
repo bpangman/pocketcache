@@ -108,6 +108,30 @@ export function currentMonthName(d = new Date()) {
 }
 
 /**
+ * Long name of the month whose round-ups the upcoming charge actually reflects
+ * - always one calendar month before nextChargeDate's month, built from that
+ * same date so it can never disagree with the charge date shown beside it.
+ *
+ * During the review window (days 1 to 10) the upcoming charge is THIS month's
+ * 11th, so this correctly names LAST month, whose amount already locked. From
+ * day 11 onward the upcoming charge is NEXT month's 11th, so this correctly
+ * names the month currently accruing (same answer currentMonthName() gives in
+ * that case, since nothing has locked yet).
+ *
+ * Use this - not currentMonthName() - anywhere copy frames what a donor is
+ * reviewing or being charged for. currentMonthName() is only for copy about the
+ * month currently accruing regardless of the charge/review cycle, e.g. "Skip
+ * {month}'s round-ups".
+ * @param {Date} [d] - the moment to read; defaults to now.
+ * @returns {string} e.g. 'July'
+ */
+export function roundUpMonthName(d = new Date()) {
+  const charge = nextChargeDate(d);
+  return new Date(charge.getFullYear(), charge.getMonth() - 1, 1)
+    .toLocaleDateString('en-US', { month: 'long' });
+}
+
+/**
  * The charge day BEFORE the upcoming one - i.e. the start of the cycle the
  * donor is currently inside. Needed so progress bars can measure charge-day to
  * charge-day instead of assuming a 30 day month.
