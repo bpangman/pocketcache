@@ -4,6 +4,8 @@ import { findOrgByCode } from './orgStore';
 import { IDENTITY_KEYS, migrate, loadKey, saveKey, removeKeys, clearIdentityKeys } from './identityStore';
 import { monthKey, settleCycle } from '../lib/billing';
 import { pcBeacon } from '../lib/beacon.js';
+import { fetchRoundupsMe } from '../lib/roundupsMe';
+import { fmtFreshness } from '../lib/format';
 
 // Donor-scoped keys — cleared on donor-account deletion; identity/admin keys survive.
 // 'pc_skip_next' is the retired forever-boolean: kept in the list so the wipe
@@ -156,7 +158,49 @@ export function AppProvider({ children }) {
   // Where an exit-level "back" should land after a cross-surface jump (or null).
   const [navReturn, setNavReturnState] = useState(null);
 
-  const pendingRoundUps = parseFloat((BASE_PENDING * roundUpMultiplier).toFixed(2));
+  // REAL round-up total, fetched on demand from roundups-me for a
+  // signed-in donor with a real linked bank (see src/lib/roundupsMe.js).
+  // `null` means "not checked yet or no real session" - the demo number
+  // below is used untouched, so a demo-only donor sees zero change: no
+  // loading flicker, no error banner, same figure as before this feature
+  // existed. `{ linked: false }` means a real session exists but there is
+  // no real bank to show numbers for (the common case for a donor who is
+  // still demo-exploring after signing in) - same demo fallback applies.
+  const [realRoundups, setRealRoundups] = useState(null);
+
+  // Fetch once on mount, and again whenever `hasAccount` changes - signing
+  // in mid-session (donorAuth's verifyCode -> setHasAccount) is exactly the
+  // moment a real Supabase session first becomes available to call with.
+  // fetchRoundupsMe() itself is a no-op (resolves null fast) when there is
+  // no session, so this is cheap for every demo-only visitor.
+  useEffect(() => {
+    let cancelled = false;
+    fetchRoundupsMe().then(data => {
+      if (cancelled) return;
+      if (!data) return; // no session / network hiccup - leave demo numbers as-is
+      setRealRoundups(data);
+    });
+    return () => { cancelled = true; };
+  }, [hasAccount]);
+
+  const hasRealBankLinked = !!realRoundups?.linked;
+  const simulatedPendingRoundUps = parseFloat((BASE_PENDING * roundUpMultiplier).toFixed(2));
+  // The single substitution point: once a donor has a real linked bank,
+  // pendingRoundUps below becomes the REAL total for every screen that
+  // reads it (both dashboards' hero/stat tiles, the Monthly Charge /
+  // EstimateCard math, milestones progress, etc.) - deliberately, so every
+  // downstream calculation that already depends on pendingRoundUps stays
+  // internally consistent without threading a parallel "real vs demo" value
+  // through each one individually.
+  const pendingRoundUps = hasRealBankLinked
+    ? (realRoundups.pending_total_cents ?? 0) / 100
+    : simulatedPendingRoundUps;
+  const realRoundupsRecent = hasRealBankLinked ? (realRoundups.recent ?? []) : [];
+  // Computed once per realRoundups update (response arrival), NOT on a
+  // ticking interval - see fmtFreshness's own doc comment.
+  const realRoundupsFreshness = hasRealBankLinked
+    ? (fmtFreshness(realRoundups.last_synced_at) ?? 'Live')
+    : null;
 
   const selectedNonprofit = useMemo(
     () => findOrgByCode(selectedNonprofitId),
@@ -182,6 +226,16 @@ export function AppProvider({ children }) {
   function setRoundUpMultiplier(v) {
     saveKey('pc_multiplier', v);
     setRoundUpMultiplierState(v);
+    // ALSO persist server-side, in addition to (not instead of) the
+    // localStorage write above - best-effort and silent for a demo-only
+    // donor (fetchRoundupsMe resolves null fast with no session), and for a
+    // signed-in donor it both saves the preference and refreshes the real
+    // total under the new multiplier in one round trip. Not awaited: the
+    // localStorage write already made the UI feel instant, same as before
+    // this feature existed.
+    fetchRoundupsMe({ multiplier: v }).then(data => {
+      if (data) setRealRoundups(data);
+    });
   }
 
   function boostDonation(amount) {
@@ -385,6 +439,7 @@ export function AppProvider({ children }) {
       totalDonated,
       boostDonation,
       pendingRoundUps,
+      hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness,
       signOut,
       accountStatus, setAccountStatus,
       hasAccount, setHasAccount,

@@ -35,6 +35,26 @@
 // rolled_forward cycle per donor at a time - so this naturally chains
 // forward without ever double-counting an old balance.
 //
+// MULTIPLIER (2026-08-04, part of the on-demand-sync work): a donor's 1x/2x/
+// 3x round-up multiplier (stripe_donors.multiplier) is applied HERE, once,
+// when this month's roundup_total_cents is turned into a billable total -
+// NOT stored back into `roundups` itself. Two reasons:
+//   1. `roundups` is a per-transaction audit trail of what actually
+//      happened at the register. A $0.32 round-up on a real $4.68 purchase
+//      is $0.32, full stop - inflating that row to $0.96 for a 3x donor
+//      would make the ledger lie about the purchase it is tied to, and
+//      would double-apply if the donor's multiplier changed again before
+//      this cycle locked (the row would already be "baked" at the OLD
+//      multiplier).
+//   2. Applying it once, at lock time, from the CURRENT multiplier value,
+//      means a donor can change their multiplier mid-month right up until
+//      the 1st and this job always uses what they actually chose - the
+//      same reason roundups-me (the live dashboard total) applies it at
+//      read/display time rather than writing a multiplied number anywhere.
+// `rollover_in_cents` is carried forward from a PRIOR cycle's already-
+// computed `total_cents`, so it is added AFTER multiplying this month's
+// fresh roundup_total_cents, never multiplied a second time.
+//
 // EMAIL: sends one internal summary to blake@pocketcache.app via FormSubmit
 // (same pattern as apple-secret-renewal). This is NOT a donor-facing email -
 // see PRELAUNCH.md for the real-SMTP donor amount email, which is out of
@@ -116,6 +136,22 @@ Deno.serve(async (req: Request) => {
       totalsByDonor.set(r.stripe_customer_id, (totalsByDonor.get(r.stripe_customer_id) ?? 0) + r.roundup_cents);
     }
 
+    // One batched lookup for every donor with pending round-ups this month,
+    // rather than one query per donor in the loop below. Missing from the
+    // map (should not happen - a pending roundup row only exists for a
+    // customer resolved to a donor) defaults to 1x, never a bigger number.
+    const multiplierByDonor = new Map<string, number>();
+    if (totalsByDonor.size > 0) {
+      const ids = [...totalsByDonor.keys()];
+      const donorsRes = await dbRest(
+        "GET",
+        `stripe_donors?stripe_customer_id=in.(${ids.map(encodeURIComponent).join(",")})&select=stripe_customer_id,multiplier`,
+      );
+      for (const d of (Array.isArray(donorsRes.data) ? donorsRes.data : []) as { stripe_customer_id: string; multiplier: number }[]) {
+        multiplierByDonor.set(d.stripe_customer_id, d.multiplier ?? 1);
+      }
+    }
+
     let locked = 0;
     let rolledForward = 0;
     let lockedTotalCents = 0;
@@ -134,7 +170,12 @@ Deno.serve(async (req: Request) => {
       const open = Array.isArray(openRes.data) ? (openRes.data[0] as OpenCycleRow | undefined) : undefined;
       const rolloverIn = open && open.month_key !== monthKey ? open.total_cents : 0;
 
-      const total = roundupTotal + rolloverIn;
+      // Multiplier applies to THIS month's fresh round-ups only - see the
+      // MULTIPLIER section in the file header for why rolloverIn (already a
+      // prior cycle's computed total_cents) is added after, not multiplied
+      // again.
+      const multiplier = multiplierByDonor.get(stripeCustomerId) ?? 1;
+      const total = roundupTotal * multiplier + rolloverIn;
 
       if (total < MINIMUM_CENTS) {
         const upsert = await dbRest(

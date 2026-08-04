@@ -616,7 +616,7 @@ function EstimateCard({
  * a billing explainer - Settings owns that, and the one pointer this tab needs
  * (where to download the history) is a single line at the bottom of the tax card.
  */
-function ActivityView({ pending, history, org, multiplier, onSettings }) {
+function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBankLinked, realRecent, freshness }) {
   const current = history[history.length - 1];
   const currentMonthLabel = `${current.month} ${current.year}`;
   const taxYear = new Date().getFullYear();
@@ -624,11 +624,38 @@ function ActivityView({ pending, history, org, multiplier, onSettings }) {
   const taxMonthsLabel = tax.months === 1 ? '1 completed month' : `${tax.months} completed months`;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
 
+  // Real round-up rows (mapped into ActivityTable's row shape) replace the
+  // demo TRANSACTIONS ledger for a donor with a real linked bank. The
+  // monthly chart and tax-year summary stay demo-modeled either way - both
+  // need a real MULTI-MONTH history this pass does not build (only the
+  // current month is backed by live data) - so those two keep their
+  // existing "Demo data" labeling even for a real-linked donor, and only
+  // the ledger + the caption immediately above it switch to "live".
+  const realRows = (realRecent ?? []).map((r, i) => ({
+    id: `real-${r.date}-${i}`,
+    date: r.date,
+    merchant: r.merchant || 'Purchase',
+    category: 'Bank purchase',
+    amount: r.amount_cents / 100,
+    roundUp: r.roundup_cents / 100,
+  }));
+  const showRealLedger = hasRealBankLinked && realRows.length > 0;
+  const activityRows = showRealLedger ? realRows : TRANSACTIONS;
+  // Real, BASE (pre-multiplier) figures for the month summary pill below -
+  // same "raw round-ups, multiplier shown separately" semantics the demo
+  // pill already used (see its own comment), just fed from real rows
+  // instead of the demo TRANSACTIONS/CURRENT_MONTH_PENDING constants so the
+  // pill's count and amount never visibly disagree with the real headline.
+  const monthTxnCount = showRealLedger ? realRows.length : TRANSACTIONS.length;
+  const monthBaseAmount = showRealLedger ? realRows.reduce((sum, r) => sum + r.roundUp, 0) : CURRENT_MONTH_PENDING;
+
   return (
     <>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Activity</h1>
-        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>Your giving history  -  demo data.</p>
+        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>
+          {showRealLedger ? `Your giving history  -  this month is live (${freshness}).` : 'Your giving history  -  demo data.'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr]" style={{ display: 'grid', gap: 20, alignItems: 'start' }}>
@@ -680,7 +707,7 @@ function ActivityView({ pending, history, org, multiplier, onSettings }) {
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK.primary }}>{currentMonthLabel}</span>
                 <span style={{ display: 'block', fontSize: 12, color: INK.muted }}>
-                  {fmtCount(TRANSACTIONS.length)} transactions · ${fmtMoney(CURRENT_MONTH_PENDING)} rounded up
+                  {fmtCount(monthTxnCount)} transactions · ${fmtMoney(monthBaseAmount)} rounded up
                   {multiplier > 1 && ` × ${multiplier} boost`}
                 </span>
               </span>
@@ -689,7 +716,7 @@ function ActivityView({ pending, history, org, multiplier, onSettings }) {
               <span style={{ display: 'block', fontSize: 16, fontWeight: 800, color: '#047857' }}>${fmtMoney(pending)}</span>
               {multiplier > 1 && (
                 <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>
-                  ${fmtMoney(CURRENT_MONTH_PENDING)} × {multiplier}
+                  ${fmtMoney(monthBaseAmount)} × {multiplier}
                 </span>
               )}
             </span>
@@ -698,9 +725,13 @@ function ActivityView({ pending, history, org, multiplier, onSettings }) {
           <div style={{ ...CARD, padding: 20 }}>
             <SectionTitle>All activity</SectionTitle>
             <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
-              Every purchase this cycle and the spare change it set aside
+              {showRealLedger
+                // freshness already reads "as of X ago" (see fmtFreshness) - no
+                // second "as of" prefix here.
+                ? `Every purchase this cycle and the spare change it set aside  -  ${freshness}`
+                : 'Every purchase this cycle and the spare change it set aside'}
             </p>
-            <ActivityTable rows={TRANSACTIONS} />
+            <ActivityTable rows={activityRows} />
           </div>
         </div>
 
@@ -764,6 +795,7 @@ export default function WebDashboard() {
     feeMonths, signOut, adminRole, setPage, setLastMode, hasAccount,
     monthlyCap, chargeAdjustment, setChargeAdjustment, roundUpMultiplier,
     coverProcessing,
+    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness,
   } = useApp();
   const brand = useTheme();
   const [navTab, setNavTab] = useState('overview');
@@ -934,7 +966,10 @@ export default function WebDashboard() {
                 testId="web-kpi-pending"
                 label="Pending this month"
                 value={`$${fmtMoney(pendingRoundUps)}`}
-                sub={skipNextCharge ? SKIP_TILE_SUB : `${TRANSACTIONS.length} round-ups so far`}
+                // A donor with a real linked bank sees a freshness caption
+                // here instead of the demo transaction count - same figure,
+                // real-time provenance. See AppContext's realRoundupsFreshness.
+                sub={skipNextCharge ? SKIP_TILE_SUB : (hasRealBankLinked ? realRoundupsFreshness : `${TRANSACTIONS.length} round-ups so far`)}
               />
               <Kpi
                 label="Average month"
@@ -1006,6 +1041,9 @@ export default function WebDashboard() {
             org={org}
             multiplier={roundUpMultiplier}
             onSettings={() => setNavTab('settings')}
+            hasRealBankLinked={hasRealBankLinked}
+            realRecent={realRoundupsRecent}
+            freshness={realRoundupsFreshness}
           />
         )}
 

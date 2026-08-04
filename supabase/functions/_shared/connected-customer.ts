@@ -88,6 +88,29 @@ export async function getOrCreateConnectedCustomer(
     };
   }
 
+  // CARD-CHANGE SAFEGUARD: `existing` present but stale (the re-clone
+  // branch, as opposed to no row at all) means the donor's platform card
+  // changed since we last cloned it. Detach the OLD clone from the
+  // connected account BEFORE attaching the new one, so it is never left
+  // sitting there where a bug elsewhere could still reach it. A detach
+  // failure is not fatal - an already-defunct payment method failing to
+  // detach again is not a reason to block this month's charge - but it IS
+  // safety-relevant, so it is logged loudly rather than swallowed quietly.
+  if (existing && existing.cloned_payment_method_id) {
+    const detach = await stripeCall(
+      "POST",
+      `/payment_methods/${existing.cloned_payment_method_id}/detach`,
+      undefined,
+      connectedAccount,
+    );
+    if (!detach.ok) {
+      console.error(
+        "connected-customer: SAFETY - failed to detach the old cloned payment method after a card change",
+        stripeCustomerId, connectedAccount, existing.cloned_payment_method_id, detach.status, detach.errorCode, detach.errorMessage,
+      );
+    }
+  }
+
   // Either no row yet, or the donor's platform card changed since we last
   // cloned it - (re)do the clone/create/attach dance.
   const clone = await stripeCall(
@@ -123,6 +146,25 @@ export async function getOrCreateConnectedCustomer(
   );
   if (!attach.ok) {
     return { ok: false, step: "attach_payment_method", stripeCode: attach.errorCode ?? null, message: attach.errorMessage ?? "Could not attach the payment method" };
+  }
+
+  // Belt and suspenders alongside charge-cycles-run already charging
+  // `connected.paymentMethodId` explicitly (never "whatever is attached"):
+  // also make the new clone the connected customer's default payment
+  // method, so anything on the nonprofit's side that DOES rely on the
+  // customer default (Stripe's own dashboard, an invoice, a future code
+  // path) points at the current card too, not a stale one.
+  const setDefault = await stripeCall(
+    "POST",
+    `/customers/${connectedCustomerId}`,
+    { invoice_settings: { default_payment_method: clonedPm } },
+    connectedAccount,
+  );
+  if (!setDefault.ok) {
+    console.error(
+      "connected-customer: could not set the new clone as the connected customer's default payment method",
+      stripeCustomerId, connectedAccount, clonedPm, setDefault.status, setDefault.errorCode, setDefault.errorMessage,
+    );
   }
 
   const upsert = await dbRest(

@@ -180,7 +180,10 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
 }
 
 export default function Dashboard() {
-  const { selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge, coverProcessing } = useApp();
+  const {
+    selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge, coverProcessing,
+    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness,
+  } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
@@ -386,8 +389,11 @@ export default function Dashboard() {
               value: `$${pendingRoundUps.toFixed(2)}`,
               // Accrual figure, so the raw round-ups are the honest number here -
               // but on a skipped cycle "This month" would read as "coming out this
-              // month", which is exactly what is NOT happening.
-              sub: skipNextCharge ? SKIP_TILE_SUB : 'This month',
+              // month", which is exactly what is NOT happening. For a donor with a
+              // real linked bank, "This month" becomes the freshness caption
+              // (computed once on response arrival, not a ticking clock - see
+              // fmtFreshness) so the figure reads as live, not a static demo number.
+              sub: skipNextCharge ? SKIP_TILE_SUB : (hasRealBankLinked ? realRoundupsFreshness : 'This month'),
               iconColor: brand.primary,
               textColor: '#059669',
             },
@@ -528,6 +534,39 @@ export default function Dashboard() {
             </button>
           )}
         </motion.div>
+
+        {/* Recent round-ups  -  REAL data only, for a donor with a real linked
+            bank. A demo-only donor never sees this card (hasRealBankLinked is
+            false), so the existing demo layout is untouched below and above.
+            Capped to 5 rows for a compact card even though the server can
+            return up to 10 - this is a glance-and-go list, not a ledger (the
+            Activity tab is where a fuller history would live in a later pass). */}
+        {hasRealBankLinked && realRoundupsRecent.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.22 }}
+            className="bg-white rounded-3xl p-5 card-shadow"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-gray-900 text-base">Recent round-ups</h3>
+              <span className="text-xs text-gray-400">{realRoundupsFreshness}</span>
+            </div>
+            <div className="space-y-2.5">
+              {realRoundupsRecent.slice(0, 5).map((r, i) => (
+                <div key={`${r.date}-${i}`} className="flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <p className="text-sm font-medium text-gray-900 truncate">{r.merchant || 'Purchase'}</p>
+                    <p className="text-xs text-gray-400">{r.date}</p>
+                  </div>
+                  <p className="text-sm font-bold shrink-0" style={{ color: '#059669' }}>
+                    +${(r.roundup_cents / 100).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Milestones */}
         <motion.div
