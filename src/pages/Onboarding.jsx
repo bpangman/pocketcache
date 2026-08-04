@@ -21,7 +21,8 @@ import {
   NP_BRAND_COLORS, NP_LICENSE_POINTS, widgetSnippet, joinQrValue, launchKitMailto,
   APPLE_TEAM_ID, BENEVITY_PORTAL_URL,
 } from '../lib/npSignup';
-import { loadKey, saveKey } from '../store/identityStore';
+import { loadKey, saveKey, IDENTITY_KEYS } from '../store/identityStore';
+import { useDonorAuth } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
@@ -513,7 +514,7 @@ export const US_STATES = [
   { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
 ];
 
-function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen }) {
+function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen, onIdentityVerified }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -530,6 +531,14 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
 
   const npName = nonprofit?.name ?? 'your nonprofit';
 
+  // Real donor sign-in (email code, plus Apple/Google once configured) - see
+  // src/lib/donorAuth.js for the shared logic behind both signup surfaces.
+  const donorAuth = useDonorAuth({ resumeKey: 'app' });
+  const [emailInput, setEmailInput] = useState('');
+  const [emailInputError, setEmailInputError] = useState(null);
+  const [verifiedIdentity, setVerifiedIdentity] = useState(null);
+  const [displayName, setDisplayName] = useState('');
+
   function handleSignIn() {
     if (!hasAccount) return;
     if (accountStatus === 'cancelled') { onGoToDashboard?.(); return; }
@@ -537,13 +546,55 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     setTimeout(() => onGoToDashboard?.(), 900);
   }
 
+  // Writes pc_identity the same way for every sign-in path, then continues
+  // the existing flow exactly as it already proceeded after signup.
+  function finishSignup(identity) {
+    saveKey(IDENTITY_KEYS.identity, identity);
+    onIdentityVerified?.(identity);
+    onProviderChosen?.(identity.provider);
+    saveKey('pc_comms_optin', commsOptin);
+    setChosen(identity.provider);
+    setTimeout(() => onNext(), 500);
+  }
+
+  function handleSendCode(e) {
+    e?.preventDefault?.();
+    if (hasAccount) return handleSignIn();
+    if (!canContinue) { setShowTermsHint(true); return; }
+    const addr = emailInput.trim();
+    if (!addr.includes('@') || !addr.split('@')[1]?.includes('.')) {
+      setEmailInputError('Enter a valid email address.');
+      return;
+    }
+    setEmailInputError(null);
+    donorAuth.sendCode(addr);
+  }
+
+  async function handleVerifyCode(e) {
+    e?.preventDefault?.();
+    const identity = await donorAuth.verifyCode(donorAuth.codeInput);
+    if (identity) {
+      setVerifiedIdentity(identity);
+      setDisplayName(identity.name);
+    }
+  }
+
+  function handleConfirmName(e) {
+    e?.preventDefault?.();
+    if (!canContinue) { setShowTermsHint(true); return; }
+    finishSignup({ ...verifiedIdentity, name: displayName.trim() || verifiedIdentity.name });
+  }
+
+  function handleContinueExisting() {
+    if (hasAccount) return handleSignIn();
+    if (!canContinue) { setShowTermsHint(true); return; }
+    finishSignup(donorAuth.existingSession);
+  }
+
   function handleSSO(provider) {
     if (hasAccount) return handleSignIn();
     if (!canContinue) { setShowTermsHint(true); return; }
-    onProviderChosen?.(provider);
-    setChosen(provider);
-    saveKey('pc_comms_optin', commsOptin);
-    setTimeout(() => onNext(), 700);
+    donorAuth.startOAuth(provider);
   }
 
   return (
@@ -626,15 +677,111 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             </select>
           </div>
 
-          <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} />
+          {/* Returning donor with a live sign-in already on this browser -
+              skip straight past the email/code screen. */}
+          {!donorAuth.checkingSession && donorAuth.existingSession && !verifiedIdentity && (
+            <motion.button
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleContinueExisting}
+              className="w-full flex items-center gap-2 px-3 py-3.5 rounded-2xl border text-left"
+              style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
+            >
+              <span className="text-amber-500">👋</span>
+              <span className="text-amber-800 text-sm font-semibold flex-1">
+                Continue as {donorAuth.existingSession.email} →
+              </span>
+            </motion.button>
+          )}
 
-          {/* SSO only, by design  -  PocketCache never stores a password */}
-          <p className="text-gray-400 text-xs text-center px-2 pt-1">
-            No passwords here  -  your Apple or Google account is your key, including its two-factor protection.
-          </p>
-          <p className="text-gray-400 text-xs text-center px-2">
-            Tax receipts from {nonprofit?.shortName ?? 'your nonprofit'} go to your sign-in email.
-          </p>
+          {/* Real email sign-in: address -> 6-digit code -> confirm name */}
+          {verifiedIdentity ? (
+            <form onSubmit={handleConfirmName} className="space-y-3">
+              <div className="rounded-2xl px-3 py-2.5 bg-teal-50 border border-teal-200">
+                <p className="text-xs text-teal-700 font-semibold">
+                  You&apos;re verified as {verifiedIdentity.email}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Name</label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                />
+              </div>
+              <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                className="w-full py-4 rounded-2xl font-bold text-base text-white"
+                style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)' }}>
+                Continue →
+              </motion.button>
+            </form>
+          ) : donorAuth.stage === 'code' ? (
+            <form onSubmit={handleVerifyCode} className="space-y-3">
+              <p className="text-gray-500 text-sm px-1">
+                We sent a 6-digit code to <strong className="text-gray-900">{donorAuth.email}</strong>.
+              </p>
+              <input
+                type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
+                style={{ borderColor: donorAuth.codeError ? '#ef4444' : '#e5e7eb' }}
+              />
+              {donorAuth.codeError && <p className="text-red-500 text-xs px-1">{donorAuth.codeError}</p>}
+              <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                className="w-full py-4 rounded-2xl font-bold text-base text-white"
+                style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: donorAuth.codeInput.length === 6 && !donorAuth.verifying ? 1 : 0.4 }}>
+                {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
+              </motion.button>
+              <div className="flex justify-center gap-4">
+                <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email)} className="text-sm text-gray-400 font-medium">Resend code</button>
+                <button type="button" onClick={donorAuth.resetToEmail} className="text-sm text-gray-400 font-medium">Change email</button>
+              </div>
+            </form>
+          ) : (
+            <>
+              {!(donorAuth.existingSession && !donorAuth.checkingSession) && (
+                <form onSubmit={handleSendCode} className="space-y-2">
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
+                    <input
+                      type="email"
+                      value={emailInput}
+                      onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
+                      placeholder="you@example.com"
+                      className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                      style={{ borderColor: emailInputError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
+                    />
+                    {emailInputError && <p className="text-red-500 text-xs mt-1 px-1">{emailInputError}</p>}
+                    {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
+                  </div>
+                  <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                    className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
+                    style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: canContinue && !donorAuth.sendingCode ? 1 : 0.4 }}>
+                    {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
+                  </motion.button>
+                </form>
+              )}
+
+              <div className="flex items-center gap-3 py-1">
+                <div className="flex-1 h-px bg-gray-100" />
+                <p className="text-gray-400 text-xs font-medium">or</p>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} errors={donorAuth.oauthErrors} />
+
+              <p className="text-gray-400 text-xs text-center px-2 pt-1">
+                No passwords here  -  we&apos;ll email you a one-time code, or use Apple or Google.
+              </p>
+              <p className="text-gray-400 text-xs text-center px-2">
+                Tax receipts from {nonprofit?.shortName ?? 'your nonprofit'} go to your sign-in email.
+              </p>
+            </>
+          )}
 
           {/* Already have an account? */}
           <button
@@ -2359,9 +2506,14 @@ export default function Onboarding() {
   // entry point whose "back" target is the gate itself rather than a page the
   // user came from. See enterNonprofitSignup below.
   const [npFromGate, setNpFromGate] = useState(false);
+  const [signupIdentity, setSignupIdentity] = useState(null);
   const [step, setStep] = useState(() => {
     const urlP = new URLSearchParams(window.location.search);
     if (urlP.get('npsignin') === '1') return 'admin-signin';
+    // Returning here after an Apple/Google sign-in redirect (see
+    // src/lib/donorAuth.js) - land back on the signup screen so it can pick
+    // up the completed session instead of dumping the donor at the gate.
+    if (urlP.get('authResume') === 'app') return 'signup';
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
     return loadKey('pc_cause_id') ? 'slides' : 'gate';
   }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
@@ -2515,7 +2667,11 @@ export default function Onboarding() {
     <CheckoutConfirmScreen
       onBack={() => setStep('payment-method')}
       onConfirm={() => {
-        setHasAccount({
+        // A real signup already wrote the verified identity (email code or
+        // Apple/Google) in SignUpScreen - use it here rather than overwrite it.
+        // The DEMO_USER fallback only covers the old, no-longer-reachable
+        // placeholder path so this never leaves hasAccount empty.
+        setHasAccount(signupIdentity ?? {
           name: DEMO_USER.name,
           email: DEMO_USER.email,
           provider: signupProvider || 'demo',
@@ -2557,6 +2713,7 @@ export default function Onboarding() {
     accountStatus={accountStatus}
     onGoToDashboard={resumeSession}
     onProviderChosen={p => setSignupProvider(p)}
+    onIdentityVerified={identity => setSignupIdentity(identity)}
   />;
 
   return (

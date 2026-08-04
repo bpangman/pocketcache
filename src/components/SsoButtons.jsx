@@ -19,16 +19,12 @@ const GOOGLE_ICON = (
   </svg>
 );
 
-const FACEBOOK_ICON = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-  </svg>
-);
-
+// Facebook sign-in was removed from every donor-facing screen (this is the
+// one shared component all of them render through) - Apple and Google cover
+// it, and email is the primary path regardless.
 const SSO_PROVIDERS = [
   { id: 'apple',    label: 'Continue with Apple',    bg: '#000',    color: '#fff',    icon: APPLE_ICON },
   { id: 'google',   label: 'Continue with Google',   bg: '#fff',    color: '#374151', border: '1.5px solid #e5e7eb', icon: GOOGLE_ICON },
-  { id: 'facebook', label: 'Continue with Facebook', bg: '#1877f2', color: '#fff',    icon: FACEBOOK_ICON },
 ];
 
 /**
@@ -37,34 +33,40 @@ const SSO_PROVIDERS = [
  * @param {function} onPress       - Called with provider id on tap
  * @param {string|null} chosen     - Currently-tapped provider (dims the others)
  * @param {boolean} disabled       - Visually dims all buttons (click still fires — callers handle guard logic)
- * @param {string[]} providers     - Which providers to render (default: all three)
+ * @param {string[]} providers     - Which providers to render (default: both)
+ * @param {object} errors          - Optional { [providerId]: 'friendly message' } shown under that button
  */
 export default function SsoButtons({
   onPress,
   chosen = null,
   disabled = false,
-  providers = ['apple', 'google', 'facebook'],
+  providers = ['apple', 'google'],
+  errors = {},
 }) {
   const buttons = SSO_PROVIDERS.filter(b => providers.includes(b.id));
   return (
     <div className="space-y-3">
       {buttons.map(btn => (
-        <motion.button
-          key={btn.id}
-          whileTap={{ scale: 0.97 }}
-          onClick={() => onPress(btn.id)}
-          className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-semibold text-sm transition-all"
-          style={{
-            background: chosen === btn.id ? '#e0f0ff' : btn.bg,
-            color: btn.color,
-            border: btn.border ?? 'none',
-            opacity: disabled ? 0.4 : chosen && chosen !== btn.id ? 0.5 : 1,
-            cursor: disabled ? 'default' : 'pointer',
-          }}
-        >
-          {btn.icon}
-          {btn.label}
-        </motion.button>
+        <div key={btn.id}>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => onPress(btn.id)}
+            className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-semibold text-sm transition-all"
+            style={{
+              background: chosen === btn.id ? '#e0f0ff' : btn.bg,
+              color: btn.color,
+              border: btn.border ?? 'none',
+              opacity: disabled ? 0.4 : chosen && chosen !== btn.id ? 0.5 : 1,
+              cursor: disabled ? 'default' : 'pointer',
+            }}
+          >
+            {btn.icon}
+            {btn.label}
+          </motion.button>
+          {errors[btn.id] && (
+            <p className="text-amber-600 text-xs text-center mt-1.5 px-2">{errors[btn.id]}</p>
+          )}
+        </div>
       ))}
     </div>
   );

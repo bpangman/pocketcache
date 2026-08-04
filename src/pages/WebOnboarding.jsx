@@ -5,7 +5,8 @@ import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
-import { saveKey } from '../store/identityStore';
+import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
+import { useDonorAuth } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, BANKS, PAYMENT_OPTIONS } from './Onboarding';
 import { findOrgByCode } from '../store/orgStore';
@@ -257,7 +258,13 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   // No nonprofit yet means one extra question first. Decided once, on mount: the
   // join step binds the org itself, and re-deriving this would bounce the donor
   // straight back out of the step they just completed.
-  const [step, setStep] = useState(() => (org ? 'account' : 'join'));
+  const [step, setStep] = useState(() => {
+    // Returning here after an Apple/Google sign-in redirect (see
+    // src/lib/donorAuth.js) - land back on the account step so it can pick up
+    // the completed session instead of dumping the donor at the join step.
+    if (new URLSearchParams(window.location.search).get('authResume') === 'web') return 'account';
+    return org ? 'account' : 'join';
+  });
   // Join step. A join link whose code this device cannot resolve prefills the
   // input and explains itself rather than failing silently  -  same behaviour as
   // the phone gate (Onboarding.jsx OrgGateScreen ~216).
@@ -274,6 +281,14 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   const [commsOptin, setCommsOptin] = useState(true);
   const [chosen, setChosen] = useState(null);
   const [provider, setProvider] = useState('demo');
+  // Real donor sign-in (email code, plus Apple/Google once configured) - see
+  // src/lib/donorAuth.js for the shared logic behind both signup surfaces.
+  const donorAuth = useDonorAuth({ resumeKey: 'web' });
+  const [emailInput, setEmailInput] = useState('');
+  const [emailInputError, setEmailInputError] = useState(null);
+  const [verifiedIdentity, setVerifiedIdentity] = useState(null);
+  const [displayName, setDisplayName] = useState('');
+  const [signupIdentity, setSignupIdentity] = useState(null);
   // Card step
   const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
@@ -371,10 +386,52 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   function handleSSO(p) {
     if (hasAccount) { setLastMode('giving'); setPage('home'); return; }
     if (!canContinue) return;
-    setChosen(p);
-    setProvider(p);
+    donorAuth.startOAuth(p);
+  }
+
+  // Writes pc_identity the same way for every sign-in path, then continues
+  // the existing flow exactly as it already proceeded after signup.
+  function finishSignup(identity) {
+    saveKey(IDENTITY_KEYS.identity, identity);
+    setSignupIdentity(identity);
+    setProvider(identity.provider);
+    setChosen(identity.provider);
     saveKey('pc_comms_optin', commsOptin);
-    setTimeout(() => setStep('card'), 700);
+    setTimeout(() => setStep('card'), 500);
+  }
+
+  function handleSendCode(e) {
+    e?.preventDefault?.();
+    if (hasAccount) { setLastMode('giving'); setPage('home'); return; }
+    if (!canContinue) return;
+    const addr = emailInput.trim();
+    if (!addr.includes('@') || !addr.split('@')[1]?.includes('.')) {
+      setEmailInputError('Enter a valid email address.');
+      return;
+    }
+    setEmailInputError(null);
+    donorAuth.sendCode(addr);
+  }
+
+  async function handleVerifyCode(e) {
+    e?.preventDefault?.();
+    const identity = await donorAuth.verifyCode(donorAuth.codeInput);
+    if (identity) {
+      setVerifiedIdentity(identity);
+      setDisplayName(identity.name);
+    }
+  }
+
+  function handleConfirmName(e) {
+    e?.preventDefault?.();
+    if (!canContinue) return;
+    finishSignup({ ...verifiedIdentity, name: displayName.trim() || verifiedIdentity.name });
+  }
+
+  function handleContinueExisting() {
+    if (hasAccount) { setLastMode('giving'); setPage('home'); return; }
+    if (!canContinue) return;
+    finishSignup(donorAuth.existingSession);
   }
 
   function handleBank(bank) {
@@ -387,7 +444,11 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   }
 
   function handleConfirm() {
-    setHasAccount({
+    // A real signup already wrote the verified identity (email code or
+    // Apple/Google) above - use it here rather than overwrite it. The
+    // DEMO_USER fallback only covers the old, no-longer-reachable placeholder
+    // path so this never leaves hasAccount empty.
+    setHasAccount(signupIdentity ?? {
       name: DEMO_USER.name,
       email: DEMO_USER.email,
       provider: provider || 'demo',
@@ -648,14 +709,94 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                     </Checkbox>
                   </div>
 
-                  <div style={{ opacity: canContinue || hasAccount ? 1 : 0.55, pointerEvents: chosen ? 'none' : 'auto' }}>
-                    <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue && !hasAccount} />
-                  </div>
-                  <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }}>
-                    {/* Full sentence, including the two-factor clause the app
-                        carries  -  web used to drop it. */}
-                    No passwords here  -  your Apple or Google account is your key, including its two-factor protection. Tax receipts from {npShort} go to your sign-in email.
-                  </p>
+                  {/* Returning donor with a live sign-in already on this
+                      browser - skip straight past the email/code form. */}
+                  {!donorAuth.checkingSession && donorAuth.existingSession && !verifiedIdentity && (
+                    <button
+                      onClick={handleContinueExisting}
+                      style={{ width: '100%', textAlign: 'left', marginBottom: 16, padding: '11px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: '#92400e' }}
+                    >
+                      👋 Continue as {donorAuth.existingSession.email} →
+                    </button>
+                  )}
+
+                  {/* Real email sign-in: address -> 6-digit code -> confirm name */}
+                  {verifiedIdentity ? (
+                    <form onSubmit={handleConfirmName}>
+                      <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 12, background: '#f0fdfa', border: '1px solid #99f6e4', fontSize: 13, fontWeight: 600, color: '#0f766e' }}>
+                        You&apos;re verified as {verifiedIdentity.email}
+                      </div>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                        Your name
+                      </label>
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={e => setDisplayName(e.target.value)}
+                        placeholder="Your name"
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 14, color: INK.primary, marginBottom: 14 }}
+                      />
+                      <PrimaryButton onClick={handleConfirmName}>Continue →</PrimaryButton>
+                    </form>
+                  ) : donorAuth.stage === 'code' ? (
+                    <form onSubmit={handleVerifyCode}>
+                      <p style={{ margin: '0 0 10px', fontSize: 13.5, color: INK.secondary }}>
+                        We sent a 6-digit code to <strong style={{ color: INK.primary }}>{donorAuth.email}</strong>.
+                      </p>
+                      <input
+                        type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                        onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', padding: '13px 15px', borderRadius: 12,
+                          border: `1.5px solid ${donorAuth.codeError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb',
+                          fontFamily: 'monospace', fontSize: 20, letterSpacing: '0.4em', textAlign: 'center', color: INK.primary, marginBottom: 8,
+                        }}
+                      />
+                      {donorAuth.codeError && <p style={{ margin: '0 0 10px', fontSize: 12.5, color: '#dc2626' }}>{donorAuth.codeError}</p>}
+                      <PrimaryButton onClick={handleVerifyCode} disabled={donorAuth.codeInput.length !== 6 || donorAuth.verifying}>
+                        {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
+                      </PrimaryButton>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10 }}>
+                        <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Resend code</button>
+                        <button type="button" onClick={donorAuth.resetToEmail} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Change email</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      {!(donorAuth.existingSession && !donorAuth.checkingSession) && (
+                        <form onSubmit={handleSendCode} style={{ marginBottom: 14 }}>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                            Your email
+                          </label>
+                          <input
+                            type="email"
+                            value={emailInput}
+                            onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
+                            placeholder="you@example.com"
+                            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1px solid ${emailInputError || donorAuth.sendError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb', fontSize: 14, color: INK.primary, marginBottom: 8 }}
+                          />
+                          {emailInputError && <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{emailInputError}</p>}
+                          {donorAuth.sendError && <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{donorAuth.sendError}</p>}
+                          <PrimaryButton onClick={handleSendCode} disabled={(!canContinue && !hasAccount) || donorAuth.sendingCode}>
+                            {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
+                          </PrimaryButton>
+                        </form>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
+                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                        <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted }}>or</span>
+                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                      </div>
+
+                      <div style={{ opacity: canContinue || hasAccount ? 1 : 0.55, pointerEvents: chosen ? 'none' : 'auto' }}>
+                        <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue && !hasAccount} errors={donorAuth.oauthErrors} />
+                      </div>
+                      <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }}>
+                        No passwords here  -  we&apos;ll email you a one-time code, or use Apple or Google. Tax receipts from {npShort} go to your sign-in email.
+                      </p>
+                    </>
+                  )}
                 </>
               )}
 

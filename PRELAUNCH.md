@@ -254,6 +254,12 @@ Each item notes where PocketCache stands today and what "done" looks like.
 - **Why it matters:** Must be locked before a real user's data ever touches the backend.
 - **Done when:** Every backend route requires a valid signed-in session token before returning any
   data.
+- **Donor sign-in is now real (added 2026-08-03):** donor signup runs on Supabase Auth - email
+  code is live end to end, Apple and Google buttons are wired but stay in a friendly "almost
+  ready" state until Blake configures those providers in Google Cloud Console / Apple Developer.
+  Supabase's built-in email sender is rate-limited to a handful of emails per hour (fine for this
+  testing, not for launch volume) - configure custom SMTP in the Supabase Auth settings before
+  real signup volume.
 
 ### 3. Database setup
 - **Status:** No production database exists yet. The backend is a skeleton, not deployed.
