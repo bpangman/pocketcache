@@ -3,7 +3,7 @@ import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { loadKey, saveKey } from '../store/identityStore';
-import { findOrgByCode, getCustomOrg, resolveAdminOrg } from '../store/orgStore';
+import { findOrgByCode, getCustomOrg } from '../store/orgStore';
 import { DEMO_USER, monthsGiving } from '../data/derived';
 import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
@@ -22,7 +22,8 @@ import {
   skipConfirmParagraphs, skipRowOfferSub, skipRowSub,
 } from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
-import { generateOneTimeCode } from '../lib/npSignup';
+import { useAdminAuth, getRememberedAdminEmail, rememberAdminEmail, forgetAdminEmail } from '../lib/adminAuth';
+import { orgAdminLookup } from '../lib/npApi';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import MatchBadge from '../components/MatchBadge';
@@ -264,46 +265,53 @@ function WebToast({ message, onClose }) {
 }
 
 // ─── Admin sign-in (web page)  -  passwordless work-email code ────────────────
-// The webpage version of the new admin login protocol: username = the
-// org-domain email verified at signup; a one-time code per sign-in, never a
-// password. Demo: any email works and the code auto-fills (labeled).
+// The webpage version of the admin login protocol: username = the org-domain
+// email verified at signup; a real Supabase one-time code per sign-in, never
+// a password. Resolves which org the email administers server-side
+// (org-admin-lookup) - see src/lib/adminAuth.js and src/lib/npApi.js.
 export function WebAdminSignIn() {
   const { setAdminRole, setLastMode, setPage } = useApp();
-  const { adoptOrgById } = useNp();
-  const [email, setEmail] = useState('');
+  const { adoptServerOrg } = useNp();
+  const auth = useAdminAuth();
+  const [email, setEmail] = useState(getRememberedAdminEmail);
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);
-  const [code, setCode] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState(null);
+  const [resolving, setResolving] = useState(false);
+  const remembered = !!getRememberedAdminEmail();
 
-  function send(e) {
+  async function send(e) {
     e?.preventDefault?.();
-    const domain = email.trim().toLowerCase().split('@')[1];
-    if (!domain || domain.indexOf('.') < 1) { setError('Enter a valid email address.'); return; }
+    const result = await auth.sendCode(email);
+    if (!result.ok) { setError(result.error); return; }
     setError(null);
-    const c = generateOneTimeCode();
-    setCode(c);
-    setCodeInput(c); // DEMO: auto-filled; live version emails it
+    setCodeInput('');
     setCodeError(null);
     setSent(true);
   }
 
-  function verify(e) {
+  function notYou() {
+    forgetAdminEmail();
+    setEmail('');
+    setError(null);
+  }
+
+  async function verify(e) {
     e?.preventDefault?.();
-    if (codeInput.trim() !== code) { setCodeError("That code doesn't match  -  check the email and try again."); return; }
-    // Production: the backend looks this email up and either returns the org
-    // it administers or rejects the sign-in - it never guesses. The demo does
-    // the same lookup locally (resolveAdminOrg): a KNOWN email (a custom org
-    // created on this device, or BGCA's own demo admin address) adopts THEIR
-    // org; an unknown one is refused, not silently handed the BGCA dashboard.
-    const resolved = resolveAdminOrg(email);
-    if (!resolved) {
+    const verified = await auth.verifyCode(email, codeInput.trim());
+    if (!verified.ok) { setCodeError(verified.error); return; }
+    setCodeError(null);
+    setResolving(true);
+    const lookup = await orgAdminLookup(verified.email);
+    setResolving(false);
+    if (!lookup.ok || !lookup.data?.known || !lookup.data?.org) {
       setCodeError("We don't recognize that email. Use the work email you verified during setup.");
       return;
     }
-    setAdminRole(resolved);
-    adoptOrgById(resolved.orgId);
+    rememberAdminEmail(verified.email);
+    const adopted = adoptServerOrg(lookup.data.org, verified.email);
+    setAdminRole({ orgId: adopted._orgId, joinCode: adopted.shortName });
     setLastMode('admin');
     setPage('np-dashboard');
   }
@@ -333,8 +341,11 @@ export function WebAdminSignIn() {
               <input type="email" required value={email} placeholder="you@yourorg.org"
                 onChange={e => { setEmail(e.target.value); setError(null); }}
                 style={{ ...input, borderColor: error ? '#ef4444' : '#d1d5db' }} />
+              {remembered && (
+                <button type="button" onClick={notYou} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: INK.muted, fontWeight: 600, textDecoration: 'underline', justifySelf: 'start' }}>Not you?</button>
+              )}
               {error && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{error}</p>}
-              <ActionButton disabled={!email} onClick={send}>Email me a sign-in code →</ActionButton>
+              <ActionButton disabled={!email || auth.sendingCode} onClick={send}>{auth.sendingCode ? 'Sending…' : 'Email me a sign-in code →'}</ActionButton>
               <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
                 Your admin sign-in is the work email verified when your page was created. Nothing to remember, nothing to steal.
               </p>
@@ -342,21 +353,16 @@ export function WebAdminSignIn() {
           ) : (
             <form onSubmit={verify} style={{ display: 'grid', gap: 10 }}>
               <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>
-                We sent a 6-digit code to <strong style={{ color: INK.primary }}>{email}</strong>.
+                We sent a 6-digit code to <strong style={{ color: INK.primary }}>{email}</strong>. Enter it to continue.
               </p>
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#92400e' }}>
-                  Demo: we filled the code in for you  -  the live version emails it.
-                </p>
-              </div>
               <input type="text" inputMode="numeric" maxLength={6} value={codeInput}
                 onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
                 style={{ ...input, fontFamily: 'monospace', textAlign: 'center', fontSize: 20, letterSpacing: '0.5em', borderColor: codeError ? '#ef4444' : '#d1d5db' }} />
               {codeError && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{codeError}</p>}
-              <ActionButton disabled={codeInput.length !== 6} onClick={verify}>Sign in →</ActionButton>
+              <ActionButton disabled={codeInput.length !== 6 || auth.verifying || resolving} onClick={verify}>{auth.verifying || resolving ? 'Signing in…' : 'Sign in →'}</ActionButton>
               <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
                 <button type="button" onClick={send} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted, fontWeight: 600 }}>Resend code</button>
-                <button type="button" onClick={() => { setSent(false); setCodeInput(''); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted, fontWeight: 600 }}>Change email</button>
+                <button type="button" onClick={() => { setSent(false); setCodeInput(''); setCodeError(null); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted, fontWeight: 600 }}>Change email</button>
               </div>
             </form>
           )}

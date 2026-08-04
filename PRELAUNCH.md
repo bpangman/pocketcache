@@ -26,14 +26,32 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   org's own upload (the Customize step already supports this) or a logo service.
 - **Action:** wire the live lookup with a graceful fallback so it never breaks on stage.
 
-### 2. "Connect with Stripe" — real Stripe Connect onboarding
-- **Now (demo):** the button waits ~1.5s and flips to "connected." It does nothing real.
-- **Production:** send the nonprofit to Stripe's hosted **Stripe Connect Standard** onboarding, then
-  handle the redirect back and store their connected account id (`acct_...`). Requires: (a) our
-  registered Stripe **platform** account, (b) a deployed backend endpoint to create the account/OAuth
-  link, (c) the site being more than a static page. Backend scaffold exists for charging/Plaid but
-  **not** for this Connect hand-off, and the backend is not deployed.
-- **Action:** build when the live backend + Stripe platform account are in place.
+### 2. "Connect with Stripe" - real Stripe Connect onboarding (built 2026-08-04, TEST MODE)
+- **Now:** the nonprofit signup wizard (both surfaces) sends the admin to Stripe's real hosted
+  **Connect Standard** onboarding in TEST mode (edge function `org-connect-stripe`), and handles the
+  redirect back (`?npstripe=return|refresh&org=<id>`) by checking the real account status
+  (`org-connect-status`: `details_submitted && charges_enabled`) and persisting it on the org row.
+  A clearly-labeled "practice mode" fallback keeps the wizard walkable if the function is
+  unreachable - it never silently pretends to be connected.
+- [ ] **Blake: finish one onboarding by hand.** Stripe's hosted flow shows a bot-detection CAPTCHA
+  (an image challenge in an iframe) that Playwright could not clear after two attempts - expected,
+  not a bug. Walk through `?npsignup=1` on a phone or desktop browser once, using Stripe's test-mode
+  "test account" data, to confirm the full loop (org-connect-status flips to `connected: true`) end
+  to end by hand.
+- [ ] **Swap test keys for live keys - behind this launch gate.** `STRIPE_SK` is a Supabase function
+  secret (test key); this whole flow moves to live-mode only when every item in this file clears.
+
+### 2a. Nonprofit self-serve signup + admin sign-in - real server-side (built 2026-08-04, TEST MODE)
+- **Now:** nonprofit orgs live in a real Supabase table (`public.orgs`, RLS on, no anon policies -
+  only `orgs_public`, a narrow view, is anon-readable). Work-email verification is a real Supabase
+  email OTP (free personal-mail domains rejected client- and server-side); the org row is created the
+  moment that verifies (`org-signup`, an idempotent upsert - see the ordering note in
+  `src/lib/npSignup.js` and `supabase/functions/org-signup/index.ts`) and finalized at go-live. Both
+  admin sign-in screens (phone + web) resolve the org server-side (`org-admin-lookup`) instead of
+  guessing from localStorage, and remember the admin's email per device (with a "Not you?" reset).
+- [ ] **Supabase's built-in OTP sender is rate-limited** (a handful of emails per hour) - fine for
+  Blake's own testing, but a real launch may want a custom SMTP provider configured in Supabase Auth
+  settings so nonprofit admins signing up in bulk don't hit it.
 
 ### 2b. Real card saving + monthly charge run (built 2026-08-04, TEST MODE) - remaining gates
 - **Now:** the card step on both surfaces saves a REAL card via Stripe SetupIntents (edge functions

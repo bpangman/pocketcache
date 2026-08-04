@@ -156,6 +156,44 @@ export function resolveAdminOrg(email) {
   return null;
 }
 
+// ── Real server org -> local cache bridge ─────────────────────────────────
+// Server orgs (supabase table `orgs`, via the org-* edge functions) are the
+// source of truth for id + join_code (see src/lib/npSignup.js). Everything
+// else in this file - the dashboard, the microsite, findOrgByCode - still
+// reads local custom orgs from localStorage, so a real org needs a local
+// mirror to keep working with all of that unchanged. This is the one place
+// that mirror gets written. `serverOrg` is the orgs_public shape (id, name,
+// join_code, brand_color, mission, apple_approval, stripe_connected); fields
+// the server doesn't track yet (logo, monthly minimum, EIN, address) fall
+// back to whatever this device already had cached, never to blank/defaults,
+// so re-adopting a server org never erases a prior local customization.
+export function cacheServerOrgLocally(serverOrg, adminEmail) {
+  const shortName = serverOrg.join_code;
+  const id = shortName.toLowerCase();
+  const existing = getCustomOrg(id);
+  const merged = {
+    id,
+    name: serverOrg.name,
+    shortName,
+    tagline: serverOrg.mission ? serverOrg.mission.slice(0, 80) : `Supporting ${serverOrg.name}`,
+    description: serverOrg.mission || existing?.description || '',
+    longDescription: existing?.longDescription ?? (serverOrg.mission || ''),
+    logoUrl: existing?.logoUrl ?? null,
+    monthlyMinimum: existing?.monthlyMinimum ?? 5,
+    ein: existing?.ein ?? '',
+    address: existing?.address ?? '',
+    adminEmail: adminEmail || existing?.adminEmail || '',
+    brand: computeBrandFromColor(serverOrg.brand_color || existing?.brand?.primary || '#0D9488', shortName),
+    appleApproval: serverOrg.apple_approval || existing?.appleApproval || { status: 'approved', method: 'candid_seal' },
+    stripeConnected: !!serverOrg.stripe_connected,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    _isCustom: true,
+    _serverId: serverOrg.id,
+  };
+  saveCustomOrg(merged);
+  return merged;
+}
+
 export function saveCustomOrg(org) {
   const list = listCustomOrgs();
   const idx = list.findIndex(o => o.id === org.id);
