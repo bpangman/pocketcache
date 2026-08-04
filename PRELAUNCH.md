@@ -109,7 +109,16 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
 - E&O + cyber insurance in place.
 - Nathan (lawyer) review of the Nonprofit Software License Agreement.
 - Liability caps confirmed in the license.
-- Secure the Plaid access tokens (no plaintext storage).
+- Plaid access tokens (added 2026-08-04): bank linking now runs on REAL Plaid Link, in
+  SANDBOX mode only, backed by Supabase edge functions (`supabase/functions/plaid-link-token`,
+  `supabase/functions/plaid-exchange`). Access tokens are exchanged and stored server-side only,
+  in the `plaid_items` table (Postgres, RLS enabled, zero policies - only the service role used
+  by the edge functions can read or write it; the anon/browser key has no access at all). The
+  access token itself is never returned to the browser or logged. Before real launch: (a) swap
+  the sandbox Plaid keys for production keys, which requires Plaid's production access approval
+  (a request/review process with Plaid, not just a config change), (b) have someone independently
+  review the token handling end to end (this closes out the token-security half of that review,
+  not the whole item), and (c) confirm production Plaid webhooks/error handling if added later.
 - California: confirmed blocked at signup until availability is confirmed.
 - Confirm with Apple how the $1/month app fee is treated before launch. The fee is currently charged
   to the donor outside the app, on the nonprofit's Stripe account (see lib/billing.js) - that
@@ -410,3 +419,18 @@ _2026-07-23 - public-page copy + legal-doc traceability pass:_
   Nathan. See the Nathan review queue above._
 - _Six `PENDING NATHAN REVIEW` HTML comments removed from the two shipped legal pages and
   converted into the checklist above, so nothing is lost and nothing leaks via view-source._
+
+---
+_2026-08-04 - real Plaid Link (sandbox) replaces the simulated bank list:_
+- _Donor bank linking on both signup surfaces (app `Onboarding.jsx`, web `WebOnboarding.jsx`,
+  shared through the new `src/components/PlaidBankConnect.jsx`) now opens real Plaid Link in
+  SANDBOX mode instead of a fake bank-tile timer. Backed by two new Supabase edge functions
+  (`plaid-link-token`, `plaid-exchange`) and a new RLS-locked `plaid_items` table. Verified
+  end to end: real link token issued, real Plaid Link UI opens on both surfaces, a full
+  sandbox login (`user_good` / `pass_good`) was driven through Playwright, and the resulting
+  `pc_tracked_card` and the `plaid_items` row both carry real Plaid metadata._
+- _Offline/function-down fallback keeps the old simulated bank list working (labeled "Practice
+  mode") so signup never breaks, and a small "Test mode: use user_good / pass_good" hint shows
+  next to the real Connect button._
+- _See the Plaid access-tokens item in Launch-blocking legal/ops above for what's still needed
+  before this can go live with real banks and real money._

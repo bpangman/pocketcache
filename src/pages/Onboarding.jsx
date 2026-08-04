@@ -31,6 +31,7 @@ import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRMod
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import HeroBackButton from '../components/HeroBackButton';
 import ManualCardForm from '../components/ManualCardForm';
+import PlaidBankConnect from '../components/PlaidBankConnect';
 import ApplePaySheet from '../components/ApplePaySheet';
 import AppleLogo from '../components/AppleLogo';
 import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
@@ -1135,19 +1136,8 @@ function ConnectCardScreen({ onNext, onBack }) {
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
   const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
-  const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
-
-  function handleSelect(bank) {
-    if (connected) return;
-    setConnecting(bank.id);
-    setTimeout(() => {
-      const last4 = String(Math.floor(1000 + Math.random() * 9000));
-      setConnecting(null);
-      setConnected({ ...bank, last4 });
-    }, 1200);
-  }
 
   return (
     <motion.div
@@ -1214,7 +1204,7 @@ function ConnectCardScreen({ onNext, onBack }) {
         <div className="rounded-t-3xl -mt-4" style={{ background: '#f0fdfb', minHeight: sheetMinHeight }}>
           <div className="px-4 pt-10 space-y-2.5" style={{ paddingBottom: sheetPadBottom }}>
 
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Select your card issuer</p>
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Connect your bank</p>
 
           {connected ? (
             <motion.div
@@ -1237,30 +1227,10 @@ function ConnectCardScreen({ onNext, onBack }) {
             />
           ) : (
             <>
-              {BANKS.map(bank => (
-                <motion.button
-                  key={bank.id}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => handleSelect(bank)}
-                  className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
-                  style={{ background: '#fff', border: '1.5px solid #99f6e4', opacity: connecting && connecting !== bank.id ? 0.4 : 1 }}
-                >
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-xl bg-gray-50">
-                    {bank.emoji}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-bold text-gray-900 text-sm">{bank.name}</p>
-                    <p className="text-gray-400 text-xs">{bank.sub}</p>
-                  </div>
-                  {connecting === bank.id
-                    ? <span className="text-xs text-teal-600 font-semibold">Connecting…</span>
-                    : <ArrowRight size={16} className="text-gray-300 shrink-0" />
-                  }
-                </motion.button>
-              ))}
+              <PlaidBankConnect variant="app" onConnected={card => setConnected(card)} />
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                className="w-full flex items-center gap-3 p-4 rounded-2xl text-left border-2 border-dashed border-gray-200 bg-white"
+                className="w-full flex items-center gap-3 p-4 rounded-2xl text-left border-2 border-dashed border-gray-200 bg-white mt-2.5"
                 onClick={() => setShowManualEntry(true)}
               >
                 <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-teal-50">
@@ -2680,7 +2650,16 @@ export default function Onboarding() {
         setAccountStatus('active');
         setLastMode('giving');
         if (connectedBank) {
-          setTrackedCard({ name: connectedBank.name, last4: connectedBank.last4, brand: connectedBank.name, institution: connectedBank.name });
+          // connectedBank already carries the real institution/name/mask from
+          // Plaid (or, for manual entry / the offline fallback, an equivalent
+          // shape) - use those fields as-is instead of collapsing everything
+          // down to the bank's display name.
+          setTrackedCard({
+            name: connectedBank.name,
+            last4: connectedBank.last4,
+            brand: connectedBank.brand ?? connectedBank.name,
+            institution: connectedBank.institution ?? connectedBank.name,
+          });
         }
         if (pendingPaymentMethod) {
           setPaymentMethod(pendingPaymentMethod);

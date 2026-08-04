@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ArrowRight, Building2, Lock } from 'lucide-react';
+import { CheckCircle, Lock } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
 import { useDonorAuth } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
-import { US_STATES, BANKS, PAYMENT_OPTIONS } from './Onboarding';
+import { US_STATES, PAYMENT_OPTIONS } from './Onboarding';
 import { findOrgByCode } from '../store/orgStore';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
 import StripeCardForm from '../components/StripeCardForm';
+import PlaidBankConnect from '../components/PlaidBankConnect';
 import ApplePaySheet from '../components/ApplePaySheet';
 import AppleLogo from '../components/AppleLogo';
 import { CapControl } from './WebPortalPages';
@@ -290,7 +291,6 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   const [displayName, setDisplayName] = useState('');
   const [signupIdentity, setSignupIdentity] = useState(null);
   // Card step
-  const [connecting, setConnecting] = useState(null);
   const [connected, setConnected] = useState(null);
   // Payment step
   const [paymentSel, setPaymentSel] = useState(null);
@@ -434,15 +434,6 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     finishSignup(donorAuth.existingSession);
   }
 
-  function handleBank(bank) {
-    if (connected) return;
-    setConnecting(bank.id);
-    setTimeout(() => {
-      setConnecting(null);
-      setConnected({ ...bank, last4: String(Math.floor(1000 + Math.random() * 9000)) });
-    }, 1100);
-  }
-
   function handleConfirm() {
     // A real signup already wrote the verified identity (email code or
     // Apple/Google) above - use it here rather than overwrite it. The
@@ -457,7 +448,15 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     setAccountStatus('active');
     setLastMode('giving');
     if (connected) {
-      setTrackedCard({ name: connected.name, last4: connected.last4, brand: connected.name, institution: connected.name });
+      // connected already carries the real institution/name/mask from Plaid
+      // (or an equivalent shape from the offline practice-mode fallback) -
+      // keep those fields instead of collapsing everything to the bank name.
+      setTrackedCard({
+        name: connected.name,
+        last4: connected.last4,
+        brand: connected.brand ?? connected.name,
+        institution: connected.institution ?? connected.name,
+      });
     }
     const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
     // A card's last4 comes from the Stripe result; bank/Apple Pay have none.
@@ -812,28 +811,8 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2" style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
-                      {BANKS.map(bank => (
-                        <button key={bank.id} onClick={() => handleBank(bank)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', opacity: connecting && connecting !== bank.id ? 0.4 : 1 }}>
-                          <span style={{ fontSize: 22 }}>{bank.emoji}</span>
-                          <span style={{ flex: 1 }}>
-                            <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: INK.primary }}>{bank.name}</span>
-                            <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>{bank.sub}</span>
-                          </span>
-                          {connecting === bank.id
-                            ? <span style={{ fontSize: 11.5, fontWeight: 600, color: '#0D9488' }}>Connecting…</span>
-                            : <ArrowRight size={15} color="#cbd5e1" />}
-                        </button>
-                      ))}
-                      <button onClick={() => handleBank({ id: 'other', name: 'My Bank', sub: '' })}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, border: '2px dashed #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left' }}>
-                        <Building2 size={20} color="#94a3b8" />
-                        <span style={{ flex: 1 }}>
-                          <span style={{ display: 'block', fontWeight: 600, fontSize: 13.5, color: INK.secondary }}>Search all banks &amp; cards</span>
-                          <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>12,000+ institutions supported via Plaid</span>
-                        </span>
-                      </button>
+                    <div style={{ marginBottom: 12 }}>
+                      <PlaidBankConnect variant="web" onConnected={card => setConnected(card)} />
                     </div>
                   )}
                   <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK.muted, margin: '0 0 16px' }}>
