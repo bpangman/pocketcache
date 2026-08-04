@@ -721,7 +721,15 @@ function WebExperience() {
   // Capture the entry context ONCE  -  the pretty-URL rewrite strips the params.
   const [entry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('org');
+    const npstripe = params.get('npstripe');
+    // ?npstripe=return|refresh&org=<uuid> is Stripe's hosted-onboarding
+    // redirect landing back (see src/lib/npSignup.js) - `org` there is a
+    // server org id, not a donor join code, so it must NOT be run through
+    // findOrgByCode (a localStorage-only, join-code lookup that would just
+    // fail to resolve it, harmlessly, but the intent below is clearer this
+    // way: this entry means "resume the nonprofit signup wizard", not "a
+    // donor is joining an org").
+    const code = npstripe ? null : params.get('org');
     return {
       // The raw ?org= string as well as the resolved org: a code this device
       // cannot resolve (custom orgs live in their creator's localStorage) has to
@@ -730,7 +738,7 @@ function WebExperience() {
       code,
       org: findOrgByCode(code),
       npsignin: params.get('npsignin') === '1',
-      npsignup: params.get('npsignup') === '1',
+      npsignup: params.get('npsignup') === '1' || npstripe === 'return' || npstripe === 'refresh',
     };
   });
   // Desktop nonprofit signup is its OWN page (NpWebSignup), not Onboarding's

@@ -22,9 +22,10 @@ import { copyText } from '../../lib/clipboard';
 // license is a scrollable pane with the accept control always visible.
 //
 // This file owns ZERO business logic. Step sequencing, the real ProPublica EIN
-// lookup and its BGCA fallback, the demo one-time-code flow, the simulated
-// Stripe connect, the join-code rules and the org record written at go-live all
-// come from src/lib/npSignup.js, which the phone wizard
+// lookup and its BGCA fallback, the real Supabase OTP work-email flow, the
+// real Stripe Connect hosted onboarding (test mode), the join-code rules and
+// the org record written at go-live all come from src/lib/npSignup.js, which
+// the phone wizard
 // (Onboarding.jsx → NonprofitSignupFlow) consumes too. If something here needs
 // to change behavior, change it there and both surfaces move together.
 //
@@ -293,8 +294,9 @@ export default function NpWebSignup({ onExit }) {
     step, ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
     adminEmail, workEmail, setWorkEmail, emailError,
-    codeSent, codeInput, setCodeInput, codeError, demoBypassNote, requiredDomain,
-    stripeConnecting, stripeConnected,
+    codeSent, codeInput, setCodeInput, codeError, requiredDomain,
+    sendingCode, verifyingCode,
+    stripeConnecting, stripeConnected, stripeError, practiceMode, practiceConnectStripe,
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeCustom, joinCodeError, accepted, setAccepted, showLicenseHint, showBrandingHint,
@@ -493,7 +495,7 @@ export default function NpWebSignup({ onExit }) {
               </div>
             )}
 
-            {/* ═══ Work email + DEMO one-time code ═══ */}
+            {/* ═══ Work email + real Supabase one-time code ═══ */}
             {step === 'verify-email' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gap: 26, alignItems: 'start' }}>
                 <Pane
@@ -513,7 +515,7 @@ export default function NpWebSignup({ onExit }) {
                           placeholder={requiredDomain ? `you@${requiredDomain}` : 'you@yourorg.org'}
                           style={inputStyle(emailError, { flex: 1, minWidth: 240 })}
                         />
-                        <Button type="submit" disabled={!workEmail}>Email me a code →</Button>
+                        <Button type="submit" disabled={!workEmail || sendingCode}>{sendingCode ? 'Sending…' : 'Email me a code →'}</Button>
                       </div>
                       {emailError && <Hint tone="error">{emailError}</Hint>}
                       <Hint>
@@ -537,7 +539,7 @@ export default function NpWebSignup({ onExit }) {
                           onChange={e => setCodeInput(e.target.value)}
                           style={inputStyle(codeError, { width: 190, fontFamily: 'ui-monospace, monospace', textAlign: 'center', fontSize: 20, letterSpacing: '0.4em' })}
                         />
-                        <Button type="submit" disabled={codeInput.length !== 6}>Verify &amp; continue →</Button>
+                        <Button type="submit" disabled={codeInput.length !== 6 || verifyingCode}>{verifyingCode ? 'Verifying…' : 'Verify & continue →'}</Button>
                       </div>
                       {codeError && <Hint tone="error">{codeError}</Hint>}
                       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -549,18 +551,6 @@ export default function NpWebSignup({ onExit }) {
                 </Pane>
 
                 <div style={{ display: 'grid', gap: 16 }}>
-                  {codeSent && (
-                    <DemoNote>
-                      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#92400e' }}>
-                        Demo: we filled the code in for you  -  the live version emails it to {workEmail}.
-                      </p>
-                      {demoBypassNote && (
-                        <p style={{ margin: '5px 0 0', fontSize: 12.5, lineHeight: 1.5, color: '#92400e' }}>
-                          Also demo-only: this email was accepted, but {demoBypassNote}.
-                        </p>
-                      )}
-                    </DemoNote>
-                  )}
                   <Side label="Why we ask">
                     <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
                       This address is the only credential your PocketCache admin account has. Every future sign-in
@@ -576,7 +566,7 @@ export default function NpWebSignup({ onExit }) {
               </div>
             )}
 
-            {/* ═══ Stripe (DEMO connect) ═══ */}
+            {/* ═══ Stripe (real Connect hosted onboarding, test mode) ═══ */}
             {step === 'stripe' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gap: 26, alignItems: 'start' }}>
                 <Pane
@@ -598,12 +588,23 @@ export default function NpWebSignup({ onExit }) {
                       {stripeConnecting ? 'Connecting…' : 'Connect with Stripe'}
                     </Button>
                   )}
+                  {stripeError && (
+                    <div style={{ marginTop: 14, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px' }}>
+                      <p style={{ margin: 0, fontSize: 12.5, color: '#b91c1c' }}>{stripeError}</p>
+                      <button type="button" onClick={practiceConnectStripe} style={{ marginTop: 6, border: 'none', background: 'none', padding: 0, fontSize: 12, fontWeight: 700, color: INK.muted, textDecoration: 'underline', cursor: 'pointer' }}>
+                        Continue in practice mode instead
+                      </button>
+                    </div>
+                  )}
+                  {practiceMode && stripeConnected && (
+                    <Hint tone="error">Practice mode: Stripe wasn&apos;t reachable, so this connection is simulated. Reconnect for real anytime from your dashboard.</Hint>
+                  )}
                   {stripeConnected && (
                     <div style={{ marginTop: 18 }}>
                       <Button onClick={w.stripeNext}>Continue →</Button>
                     </div>
                   )}
-                  <Hint>PocketCache never touches the money  -  it goes straight from donors into your Stripe account.</Hint>
+                  <Hint>PocketCache never touches the money  -  it goes straight from donors into your Stripe account. Test mode  -  no real money moves.</Hint>
                 </Pane>
                 <Side label="What connecting does">
                   <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
@@ -615,7 +616,8 @@ export default function NpWebSignup({ onExit }) {
                     after a 10-day review window in which donors can adjust or skip.
                   </p>
                   <p style={{ margin: '12px 0 0', fontSize: 12, fontStyle: 'italic', color: '#b45309' }}>
-                    Demo: this connect button is simulated  -  no Stripe account is contacted.
+                    Test mode: Stripe&apos;s real hosted onboarding, using test data  -  no real money or real bank
+                    account required to try it.
                   </p>
                 </Side>
               </div>

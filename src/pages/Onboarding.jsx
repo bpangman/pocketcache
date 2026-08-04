@@ -17,12 +17,14 @@ import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
-import { findOrgByCode, resolveAdminOrg, getAppleApproval } from '../store/orgStore';
+import { findOrgByCode, getAppleApproval } from '../store/orgStore';
 import {
-  useNpSignup, useNpGoLive, generateOneTimeCode,
+  useNpSignup, useNpGoLive,
   NP_BRAND_COLORS, NP_LICENSE_POINTS, widgetSnippet, joinQrValue, launchKitMailto,
   APPLE_TEAM_ID, BENEVITY_PORTAL_URL,
 } from '../lib/npSignup';
+import { useAdminAuth, getRememberedAdminEmail, rememberAdminEmail, forgetAdminEmail } from '../lib/adminAuth';
+import { orgAdminLookup } from '../lib/npApi';
 import { loadKey, saveKey, IDENTITY_KEYS } from '../store/identityStore';
 import { useDonorAuth } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
@@ -904,33 +906,47 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
 // code auto-fills (labeled); production emails it and enforces the domain.
 
 function AdminSignInScreen({ onBack, onComplete }) {
-  const [email, setEmail] = useState('');
+  const auth = useAdminAuth();
+  const [email, setEmail] = useState(getRememberedAdminEmail);
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);
-  const [code, setCode] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState(null);
+  const [resolving, setResolving] = useState(false);
+  const remembered = !!getRememberedAdminEmail();
 
-  function send(e) {
+  async function send(e) {
     e?.preventDefault?.();
-    const domain = email.trim().toLowerCase().split('@')[1];
-    if (!domain || domain.indexOf('.') < 1) { setError('Enter a valid email address.'); return; }
+    const result = await auth.sendCode(email);
+    if (!result.ok) { setError(result.error); return; }
     setError(null);
-    const c = generateOneTimeCode();
-    setCode(c);
-    setCodeInput(c); // DEMO: auto-filled; live version emails it
+    setCodeInput('');
     setCodeError(null);
     setSent(true);
   }
 
-  function verify(e) {
+  function notYou() {
+    forgetAdminEmail();
+    setEmail('');
+    setError(null);
+  }
+
+  async function verify(e) {
     e?.preventDefault?.();
-    if (codeInput.trim() !== code) { setCodeError("That code doesn't match  -  check the email and try again."); return; }
-    // onComplete resolves the org this email actually administers and returns
-    // false for an email it does not recognize - stay on this screen and say
-    // so instead of navigating into a dashboard that is not this admin's.
-    const ok = onComplete(email.trim().toLowerCase());
-    if (!ok) { setCodeError("We don't recognize that email. Use the work email you verified during setup."); return; }
+    const verified = await auth.verifyCode(email, codeInput.trim());
+    if (!verified.ok) { setCodeError(verified.error); return; }
+    setCodeError(null);
+    setResolving(true);
+    const lookup = await orgAdminLookup(verified.email);
+    setResolving(false);
+    if (!lookup.ok || !lookup.data?.known || !lookup.data?.org) {
+      setCodeError("We don't recognize that email. Use the work email you verified during setup.");
+      return;
+    }
+    rememberAdminEmail(verified.email);
+    // onComplete adopts the server org (NpContext.adoptServerOrg) and routes
+    // to the dashboard.
+    onComplete(verified.email, lookup.data.org);
   }
 
   return (
@@ -965,11 +981,14 @@ function AdminSignInScreen({ onBack, onComplete }) {
               className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
               style={{ borderColor: error ? '#ef4444' : '#e5e7eb' }}
             />
+            {remembered && (
+              <button type="button" onClick={notYou} className="text-xs text-gray-400 font-medium underline px-1">Not you?</button>
+            )}
             {error && <p className="text-red-500 text-xs px-1">{error}</p>}
-            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+            <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={!email || auth.sendingCode}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: email ? 1 : 0.4 }}>
-              Email me a sign-in code →
+              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: email && !auth.sendingCode ? 1 : 0.4 }}>
+              {auth.sendingCode ? 'Sending…' : 'Email me a sign-in code →'}
             </motion.button>
             <p className="text-gray-400 text-xs leading-relaxed px-1">
               Your admin sign-in is the work email verified when your page was created.
@@ -979,13 +998,8 @@ function AdminSignInScreen({ onBack, onComplete }) {
         ) : (
           <form onSubmit={verify} className="space-y-3">
             <p className="text-gray-500 text-sm">
-              We sent a 6-digit code to <strong className="text-gray-900">{email}</strong>.
+              We sent a 6-digit code to <strong className="text-gray-900">{email}</strong>. Enter it to continue.
             </p>
-            <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200">
-              <p className="text-xs text-amber-700 font-semibold">
-                Demo: we filled the code in for you  -  the live version emails it.
-              </p>
-            </div>
             <input
               type="text" inputMode="numeric" maxLength={6} value={codeInput}
               onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
@@ -993,14 +1007,14 @@ function AdminSignInScreen({ onBack, onComplete }) {
               style={{ borderColor: codeError ? '#ef4444' : '#e5e7eb' }}
             />
             {codeError && <p className="text-red-500 text-xs px-1">{codeError}</p>}
-            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+            <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={codeInput.length !== 6 || auth.verifying || resolving}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: codeInput.length === 6 ? 1 : 0.4 }}>
-              Sign in →
+              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: codeInput.length === 6 && !auth.verifying && !resolving ? 1 : 0.4 }}>
+              {auth.verifying || resolving ? 'Signing in…' : 'Sign in →'}
             </motion.button>
             <div className="flex justify-center gap-4">
               <button type="button" onClick={send} className="text-sm text-gray-400 font-medium">Resend code</button>
-              <button type="button" onClick={() => { setSent(false); setCodeInput(''); }} className="text-sm text-gray-400 font-medium">Change email</button>
+              <button type="button" onClick={() => { setSent(false); setCodeInput(''); setCodeError(null); }} className="text-sm text-gray-400 font-medium">Change email</button>
             </div>
           </form>
         )}
@@ -1959,8 +1973,9 @@ function NonprofitSignupFlow({ onBack }) {
     ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
     adminEmail, workEmail, setWorkEmail, emailError,
-    codeSent, codeInput, setCodeInput, codeError, demoBypassNote, requiredDomain,
-    stripeConnecting, stripeConnected,
+    codeSent, codeInput, setCodeInput, codeError, requiredDomain,
+    sendingCode, verifyingCode,
+    stripeConnecting, stripeConnected, stripeError, practiceMode, practiceConnectStripe,
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeCustom, joinCodeError, showBrandingHint,
@@ -2124,10 +2139,10 @@ function NonprofitSignupFlow({ onBack }) {
                   />
                   {emailError && <p className="text-red-500 text-xs mt-1 px-1">{emailError}</p>}
                 </div>
-                <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={!workEmail || sendingCode}
                   className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: workEmail ? 1 : 0.4 }}>
-                  Email me a verification code →
+                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: workEmail && !sendingCode ? 1 : 0.4 }}>
+                  {sendingCode ? 'Sending…' : 'Email me a verification code →'}
                 </motion.button>
                 <p className="text-gray-400 text-xs px-1 leading-relaxed">
                   Personal addresses (Gmail, Yahoo, iCloud…) can&apos;t manage a nonprofit.
@@ -2140,16 +2155,6 @@ function NonprofitSignupFlow({ onBack }) {
                 <p className="text-gray-500 text-sm">
                   We sent a 6-digit code to <strong className="text-gray-900">{workEmail}</strong>. Enter it to continue.
                 </p>
-                <div className="rounded-2xl px-3 py-2 bg-amber-50 border border-amber-200 space-y-1">
-                  <p className="text-xs text-amber-700 font-semibold">
-                    Demo: we filled the code in for you  -  the live version emails it to {workEmail}.
-                  </p>
-                  {demoBypassNote && (
-                    <p className="text-xs text-amber-700">
-                      Also demo-only: this email was accepted, but {demoBypassNote}.
-                    </p>
-                  )}
-                </div>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -2161,10 +2166,10 @@ function NonprofitSignupFlow({ onBack }) {
                   style={{ borderColor: codeError ? '#ef4444' : '#e5e7eb' }}
                 />
                 {codeError && <p className="text-red-500 text-xs px-1">{codeError}</p>}
-                <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={codeInput.length !== 6 || verifyingCode}
                   className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: codeInput.length === 6 ? 1 : 0.4 }}>
-                  Verify &amp; continue →
+                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: codeInput.length === 6 && !verifyingCode ? 1 : 0.4 }}>
+                  {verifyingCode ? 'Verifying…' : 'Verify & continue →'}
                 </motion.button>
                 <div className="flex justify-center gap-4">
                   <button type="button" onClick={sendCode} className="text-sm text-gray-400 font-medium">Resend code</button>
@@ -2186,11 +2191,24 @@ function NonprofitSignupFlow({ onBack }) {
                 <p className="text-green-700 text-xs mt-1">You are the merchant of record for all donations</p>
               </div>
             ) : (
-              <motion.button whileTap={{ scale: 0.97 }} onClick={connectStripe}
+              <motion.button whileTap={{ scale: 0.97 }} onClick={connectStripe} disabled={stripeConnecting}
                 className="w-full py-4 rounded-2xl text-white font-bold text-base"
                 style={{ background: 'linear-gradient(135deg, #635bff, #4b45c6)' }}>
                 {stripeConnecting ? 'Connecting…' : 'Connect with Stripe'}
               </motion.button>
+            )}
+            {stripeError && (
+              <div className="rounded-2xl p-3 bg-red-50 border border-red-200 space-y-2">
+                <p className="text-red-600 text-xs">{stripeError}</p>
+                <button type="button" onClick={practiceConnectStripe} className="text-xs font-semibold text-gray-500 underline">
+                  Continue in practice mode instead
+                </button>
+              </div>
+            )}
+            {practiceMode && stripeConnected && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                Practice mode: Stripe wasn&apos;t reachable, so this connection is simulated. Reconnect for real anytime from your dashboard.
+              </p>
             )}
             {stripeConnected && (
               <motion.button whileTap={{ scale: 0.97 }} onClick={stripeNext}
@@ -2199,7 +2217,7 @@ function NonprofitSignupFlow({ onBack }) {
                 Continue →
               </motion.button>
             )}
-            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches the money  -  it goes straight from donors into your Stripe account.</p>
+            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches the money  -  it goes straight from donors into your Stripe account. Test mode  -  no real money moves.</p>
           </div>
         )}
 
@@ -2518,7 +2536,7 @@ function GateWithSplash({ children }) {
 
 export default function Onboarding() {
   const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, goToOnboardingStep, returnFromOnboarding, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
-  const { adoptOrgById } = useNp();
+  const { adoptOrgById, adoptServerOrg } = useNp();
   const [slide, setSlide] = useState(0);
   const [signupProvider, setSignupProvider] = useState('demo');
   const [connectedBank, setConnectedBank] = useState(null);
@@ -2531,6 +2549,11 @@ export default function Onboarding() {
   const [step, setStep] = useState(() => {
     const urlP = new URLSearchParams(window.location.search);
     if (urlP.get('npsignin') === '1') return 'admin-signin';
+    // Returning from Stripe's hosted onboarding (real Connect, test mode) -
+    // useNpSignup itself reads ?npstripe=/&org= to resume mid-wizard at the
+    // 'stripe' step (see src/lib/npSignup.js's stripeReturnParams); this just
+    // needs to land on the wizard screen at all instead of the gate.
+    if (urlP.get('npstripe') === 'return' || urlP.get('npstripe') === 'refresh') return 'nonprofit-signup';
     // Returning here after an Apple/Google sign-in redirect (see
     // src/lib/donorAuth.js) - land back on the signup screen so it can pick
     // up the completed session instead of dumping the donor at the gate.
@@ -2600,17 +2623,15 @@ export default function Onboarding() {
     setPage('np-dashboard');
   }
 
-  // Passwordless admin sign-in complete: the verified work email is the
-  // username. Demo resolves custom orgs created on this device, and BGCA's own
-  // demo admin address; every other email is refused - production does the
-  // same lookup against a real backend. Returns false (and does nothing) for
-  // an unrecognized email so AdminSignInScreen can show an inline error
-  // instead of handing the caller a dashboard that belongs to someone else.
-  function completeAdminSignIn(email) {
-    const resolved = resolveAdminOrg(email);
-    if (!resolved) return false;
-    setAdminRole(resolved);
-    adoptOrgById(resolved.orgId);
+  // Passwordless admin sign-in complete: AdminSignInScreen already verified a
+  // real Supabase OTP and resolved the org server-side (org-admin-lookup) -
+  // `orgPublic` is that org's public row. adoptServerOrg mirrors it into the
+  // local cache the rest of the app reads (dashboard, microsite) and returns
+  // the npOrg-shaped record, whose `_orgId`/`shortName` are what setAdminRole
+  // expects (the same local id/joinCode scheme adoptOrgById uses elsewhere).
+  function completeAdminSignIn(email, orgPublic) {
+    const adopted = adoptServerOrg(orgPublic, email);
+    setAdminRole({ orgId: adopted._orgId, joinCode: adopted.shortName });
     setLastMode('admin');
     setPage('np-dashboard');
     return true;

@@ -17,17 +17,22 @@
 //   REAL:   the EIN lookup is a live GET against ProPublica's nonprofit API.
 //   DEMO:   an unreachable API / unknown EIN falls back to the BGCA sample org
 //           and sets `einDemoMode`, which both wizards must surface.
-//   DEMO:   the "we emailed you a 6-digit code" step generates the code in the
-//           browser and fills it in for you. There is no mail server. Every
-//           surface must keep saying "Demo" here - PRELAUNCH.md tracks the real
-//           backend as a launch blocker.
-//   DEMO:   Stripe Connect is a 1.5s timer, not an OAuth handshake.
+//   REAL (as of 2026-08-04): work-email verification is a real Supabase OTP
+//           (email code) - see src/lib/adminAuth.js. Free personal-mail
+//           domains are rejected before a code is even sent, both here and
+//           again server-side (org-signup edge function).
+//   REAL (as of 2026-08-04): the org row is created server-side (table
+//           `orgs`, RLS on) the moment email verification succeeds, and
+//           Stripe Connect is Stripe's real hosted onboarding in TEST mode -
+//           see connectStripe below and supabase/functions/org-connect-stripe.
+//           A "practice mode" fallback (clearly labeled, never silent) keeps
+//           the wizard walkable if the server is unreachable.
 //
 // Presentation lives in the components. Copy, when it is IDENTICAL on both
 // surfaces and legally load-bearing (the license summary, the launch-kit email,
 // the widget snippet), lives here too so the two surfaces cannot drift apart.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { buildOrgFromSignup, saveCustomOrg, generateJoinCode, isJoinCodeAvailable } from '../store/orgStore';
@@ -35,6 +40,8 @@ import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRMod
 import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import { NONPROFITS } from '../data/nonprofits';
 import { pcBeacon } from './beacon.js';
+import { useAdminAuth } from './adminAuth';
+import { orgSignup, orgConnectStripe, orgConnectStatus, fetchOrgPublicById, currentSessionEmail } from './npApi';
 
 // ─── Apple app-listing (iPhone app only - never the web) ──────────────────────
 //
@@ -250,18 +257,39 @@ export function useNpGoLive() {
   const { setPage, setAdminRole, setLastMode } = useApp();
   const { setNpOrg } = useNp();
 
-  return useCallback(function goLive(config) {
+  return useCallback(async function goLive(config) {
+    // Server org is the source of truth for id + join_code, once it exists.
+    // It was already CREATED at the end of email verification (ensureServerOrg
+    // in useNpSignup); this call is the UPDATE half of org-signup's upsert,
+    // landing the final name/mission/color/join-code/Apple-approval the admin
+    // actually chose. config.orgId is null when email verification's own
+    // org-signup call failed (server unreachable) - go-live then stays fully
+    // local, exactly like the old demo, rather than blocking the admin.
+    let serverOrg = null;
+    if (config.orgId) {
+      const res = await orgSignup({
+        name: config.name,
+        ein: config.ein,
+        mission: config.mission,
+        color: config.color,
+        joinCode: config.joinCode,
+        appleApproval: config.appleApproval,
+      });
+      if (res.ok && res.data?.org) serverOrg = res.data.org;
+      else console.error('useNpGoLive: org-signup (final) failed', res.status, res.data);
+    }
+
     const org = buildOrgFromSignup({
-      name:           config.name,
+      name:           serverOrg?.name ?? config.name,
       adminEmail:     config.adminEmail,
-      story:          config.mission,
-      color:          config.color,
+      story:          serverOrg?.mission ?? config.mission,
+      color:          serverOrg?.brand_color ?? config.color,
       logoPreview:    config.logoPreview ?? null,
       monthlyMinimum: config.monthlyMinimum,
       ein:            config.ein,
       orgAddress:     config.orgAddress,
-      joinCode:       config.joinCode,
-      appleApproval:  config.appleApproval,
+      joinCode:       serverOrg?.join_code ?? config.joinCode,
+      appleApproval:  serverOrg?.apple_approval ?? config.appleApproval,
     });
     // Stamp facts buildOrgFromSignup doesn't know about, so the platform admin
     // console (src/pages/PlatformAdmin.jsx) can show real "created" and
@@ -269,7 +297,8 @@ export function useNpGoLive() {
     // existed simply have neither field, and callers must treat that as
     // "not recorded", never as false/never-happened.
     org.createdAt = new Date().toISOString();
-    org.stripeConnected = !!config.stripeConnected;
+    org.stripeConnected = serverOrg ? !!serverOrg.stripe_connected : !!config.stripeConnected;
+    if (serverOrg?.id) org._serverId = serverOrg.id;
     saveCustomOrg(org);
 
     setNpOrg({
@@ -313,8 +342,27 @@ export function useNpGoLive() {
  * Returns `{ step, ...state, actions }`. Action handlers accept an optional
  * event and call preventDefault, so they can be dropped straight onto a form.
  */
+// A landing from Stripe's hosted onboarding (?npstripe=return|refresh&org=ID)
+// is a FULL page navigation, so it always arrives on a fresh mount with no
+// in-memory wizard state. This reads that off the URL once, synchronously,
+// so the initial step is right the very first render (no flash of 'ein').
+function stripeReturnParams() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('npstripe');
+    const orgId = params.get('org');
+    if ((mode === 'return' || mode === 'refresh') && orgId) return { mode, orgId };
+  } catch { /* no window */ }
+  return null;
+}
+
 export function useNpSignup({ onExit, defaultLogo = null } = {}) {
-  const [step, setStep] = useState('ein');
+  // Captured once via the lazy useState initializer (same pattern App.jsx
+  // uses for its own one-time URL reads) - stable across re-renders even
+  // though stripeReturnParams() itself is not memoized.
+  const [resume] = useState(stripeReturnParams);
+  const [step, setStep] = useState(() => (resume ? 'stripe' : 'ein'));
 
   // EIN / org identity
   const [ein, setEinRaw] = useState('');
@@ -329,19 +377,29 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   const [orgAddress, setOrgAddress] = useState('');
   const [org501c3, setOrg501c3] = useState(true);
 
-  // Work-email verification (DEMO code)
+  // Work-email verification: REAL Supabase OTP (see src/lib/adminAuth.js).
+  const adminAuth = useAdminAuth();
   const [adminEmail, setAdminEmail] = useState('');
   const [workEmail, setWorkEmailRaw] = useState('');
   const [emailError, setEmailError] = useState(null);
   const [codeSent, setCodeSent] = useState(false);
-  const [sentCode, setSentCode] = useState('');
   const [codeInput, setCodeInputRaw] = useState('');
   const [codeError, setCodeError] = useState(null);
-  const [demoBypassNote, setDemoBypassNote] = useState(null);
 
-  // Stripe (DEMO connect)
+  // Server org (table `orgs`, via the org-* edge functions). Created the
+  // moment email verification succeeds (see verifyCode below) - orgId is what
+  // lets the Stripe step call org-connect-stripe. Null means either "not
+  // created yet" or "the server was unreachable", which is what practiceMode
+  // distinguishes: a clearly-labeled local-only fallback so the wizard is
+  // never dead-ended by a network blip.
+  const [orgId, setOrgId] = useState(null);
+  const [orgCreateError, setOrgCreateError] = useState(null);
+  const [practiceMode, setPracticeMode] = useState(false);
+
+  // Stripe: REAL hosted Connect onboarding (test mode) via org-connect-stripe.
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
+  const [stripeError, setStripeError] = useState(null);
 
   // Apple app-listing: simulated Candid Seal lookup + the Benevity choice the
   // admin makes on the app-listing step (only reachable when no seal was found).
@@ -371,6 +429,41 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   const [showBrandingHint, setShowBrandingHint] = useState(false);
 
   const requiredDomain = requiredDomainFor(orgName);
+
+  // Resume after the Stripe hosted-onboarding redirect. The Supabase auth
+  // session survives the full-page round trip (it lives in localStorage), so
+  // the admin's email comes from the current session rather than anything in
+  // memory; the rest of the org (name, mission, color, join code) comes from
+  // orgs_public via the org id in the URL. Runs once; the URL is scrubbed on
+  // the very first render (see stripeReturnParams) so a later reload of the
+  // same tab does not replay it.
+  useEffect(() => {
+    if (!resume) return;
+    let cancelled = false;
+    (async () => {
+      const [org, email] = await Promise.all([fetchOrgPublicById(resume.orgId), currentSessionEmail()]);
+      if (cancelled) return;
+      if (!org) {
+        // Nothing to resume - stay on 'stripe' with no org context; the
+        // admin can back out and re-enter through the EIN step.
+        setStripeError("We couldn't find your organization. Please start again.");
+        return;
+      }
+      setOrgId(org.id);
+      setOrgName(org.name);
+      if (org.mission) setStory(org.mission);
+      if (org.brand_color) setColor(org.brand_color);
+      if (org.join_code) setJoinCodeCustom(org.join_code);
+      setStripeConnected(!!org.stripe_connected);
+      setEinDemoMode(false);
+      if (email) setAdminEmail(email);
+      if (resume.mode === 'return') {
+        const status = await orgConnectStatus(org.id);
+        if (!cancelled && status.ok) setStripeConnected(!!status.data?.connected);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [resume]);
 
   function setEin(raw) {
     setEinRaw(formatEIN(raw));
@@ -464,19 +557,13 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     setStep('ein');
   }
 
-  function sendCode(e) {
+  async function sendCode(e) {
     e?.preventDefault?.();
     const email = workEmail.trim().toLowerCase();
-    const domain = email.split('@')[1];
-    if (!domain || !email.includes('@') || domain.indexOf('.') < 1) {
-      setEmailError('Enter a valid email address.');
-      return;
-    }
-    setDemoBypassNote(demoBypassNoteFor(orgName, email));
+    const result = await adminAuth.sendCode(email);
+    if (!result.ok) { setEmailError(result.error); return; }
     setEmailError(null);
-    const code = generateOneTimeCode();
-    setSentCode(code);
-    setCodeInputRaw(code); // DEMO: auto-filled; live version emails it
+    setCodeInputRaw('');
     setCodeError(null);
     setCodeSent(true);
   }
@@ -484,25 +571,73 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   function changeEmail() {
     setCodeSent(false);
     setCodeInputRaw('');
+    setCodeError(null);
   }
 
-  function verifyCode(e) {
-    e?.preventDefault?.();
-    if (codeInput.trim() !== sentCode) {
-      setCodeError("That code doesn't match  -  check the email and try again.");
-      return;
+  /** Creates (or, on a retry, reuses) the server org the moment the work
+   *  email verifies - see the ordering note atop this file and in
+   *  supabase/functions/org-signup/index.ts. Never blocks go-live: if the
+   *  server is unreachable, orgId stays null and practiceMode flips on so the
+   *  Stripe step falls back to a clearly-labeled local simulation instead of
+   *  stranding the admin mid-wizard. */
+  async function ensureServerOrg() {
+    const res = await orgSignup({ name: orgName, ein: ein.replace(/\D/g, '') });
+    if (res.ok && res.data?.org?.id) {
+      setOrgId(res.data.org.id);
+      setOrgCreateError(null);
+      setPracticeMode(false);
+      return res.data.org;
     }
-    setAdminEmail(workEmail.trim().toLowerCase());
+    console.error('npSignup: org-signup failed', res.status, res.data);
+    setOrgCreateError(res.data?.error || null);
+    setPracticeMode(true);
+    return null;
+  }
+
+  async function verifyCode(e) {
+    e?.preventDefault?.();
+    const email = workEmail.trim().toLowerCase();
+    const result = await adminAuth.verifyCode(email, codeInput.trim());
+    if (!result.ok) { setCodeError(result.error); return; }
+    setCodeError(null);
+    setAdminEmail(email);
+    await ensureServerOrg();
     setStep('stripe');
   }
 
-  function connectStripe() {
+  /** REAL Stripe Connect hosted onboarding (test mode): navigates the whole
+   *  page to Stripe, which redirects back to ?npstripe=return&org=<id> (see
+   *  the resume effect above) once the admin finishes or bails. Falls back to
+   *  a clearly-labeled practice mode if org-connect-stripe can't be reached -
+   *  never a silent one: stripeError stays set so the surface can say why. */
+  async function connectStripe() {
+    setStripeError(null);
+    if (!orgId) {
+      practiceConnectStripe();
+      return;
+    }
     setStripeConnecting(true);
-    // DEMO: no OAuth handshake, just the shape of one.
+    const res = await orgConnectStripe(orgId);
+    if (!res.ok || !res.data?.url) {
+      setStripeConnecting(false);
+      console.error('npSignup: org-connect-stripe failed', res.status, res.data);
+      setStripeError(res.data?.error || "Could not reach Stripe. Try again, or continue in practice mode.");
+      return;
+    }
+    window.location.assign(res.data.url);
+  }
+
+  /** Explicit escape hatch, only ever reached after a real attempt failed
+   *  (see the stripeError branch in each surface) - the wizard never falls
+   *  into this silently. */
+  function practiceConnectStripe() {
+    setPracticeMode(true);
+    setStripeError(null);
+    setStripeConnecting(true);
     setTimeout(() => {
       setStripeConnecting(false);
       setStripeConnected(true);
-    }, 1500);
+    }, 1200);
   }
 
   function stripeNext() {
@@ -593,7 +728,10 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   ), [candidSeal, benevityChoice]);
 
   /** Everything useNpGoLive needs. A logo the admin never changed stays null so
-   *  the org falls back to its default mark rather than storing the demo asset. */
+   *  the org falls back to its default mark rather than storing the demo asset.
+   *  `orgId` tells goLive whether a server org already exists to update
+   *  (email verification succeeded) or whether it must fall back to a fully
+   *  local record (practiceMode - the server was unreachable). */
   const config = useMemo(() => ({
     name:           orgName,
     shortName:      joinCode,
@@ -607,7 +745,8 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     orgAddress,
     appleApproval,
     stripeConnected,
-  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress, appleApproval, stripeConnected]);
+    orgId,
+  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress, appleApproval, stripeConnected, orgId]);
 
   return {
     step, setStep,
@@ -616,9 +755,12 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     orgName, setOrgName, orgAddress, org501c3,
     // email
     adminEmail, workEmail, setWorkEmail, emailError,
-    codeSent, codeInput, setCodeInput, codeError, demoBypassNote, requiredDomain,
+    codeSent, codeInput, setCodeInput, codeError, requiredDomain,
+    sendingCode: adminAuth.sendingCode, verifyingCode: adminAuth.verifying,
+    // server org
+    orgId, orgCreateError, practiceMode,
     // stripe
-    stripeConnecting, stripeConnected,
+    stripeConnecting, stripeConnected, stripeError, practiceConnectStripe,
     // branding
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,

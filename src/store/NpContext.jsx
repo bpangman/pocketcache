@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState } from 'react';
-import { saveCustomOrg, getCustomOrg, saveBgcaOverrides, getBgcaOverrides, computeBrandFromColor } from './orgStore';
+import { saveCustomOrg, getCustomOrg, saveBgcaOverrides, getBgcaOverrides, computeBrandFromColor, cacheServerOrgLocally } from './orgStore';
 import { loadKey, saveKey, removeKeys } from './identityStore';
 
 // localStorage keys — all prefixed pc_np_ so they don't collide with donor keys
@@ -96,6 +96,30 @@ export function NpProvider({ children }) {
     setNpOrgState(next);
   }
 
+  // Real admin sign-in (org-admin-lookup) resolves a SERVER org, not a local
+  // one - adoptOrgById above only knows how to read localStorage. This mirrors
+  // the server row into the local cache (cacheServerOrgLocally) and then adopts
+  // it the same way adoptOrgById does for a custom org, so both paths end up
+  // in the same npOrg shape and the dashboard can't tell them apart.
+  function adoptServerOrg(serverOrg, adminEmail) {
+    const local = cacheServerOrgLocally(serverOrg, adminEmail);
+    const next = {
+      name: local.name,
+      shortName: local.shortName,
+      color: local.brand?.primary ?? '#0D9488',
+      logoPreview: local.logoUrl,
+      mission: local.description,
+      longDescription: local.longDescription ?? '',
+      monthlyMinimum: local.monthlyMinimum,
+      adminEmail: local.adminEmail,
+      joinCode: local.shortName,
+      _orgId: local.id,
+    };
+    saveKey(NP_KEYS.org, next);
+    setNpOrgState(next);
+    return next;
+  }
+
   function setNpTab(tab) {
     saveKey(NP_KEYS.tab, tab);
     setNpTabState(tab);
@@ -113,6 +137,7 @@ export function NpProvider({ children }) {
       npTab, setNpTab,
       resetNpContent,
       adoptOrgById,
+      adoptServerOrg,
     }}>
       {children}
     </NpContext.Provider>
