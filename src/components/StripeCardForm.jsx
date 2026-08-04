@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { Lock } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { STRIPE_PUBLISHABLE_KEY } from '../lib/stripeKey';
+import { saveCardWithSetupIntent, currentDonorEmail, prettyBrand } from '../lib/stripeSetup';
 
 /**
  * StripeCardForm - the ONE "Credit or Debit Card" capture form, surface-aware.
@@ -18,8 +20,8 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
  * had been collected. This component is the single form both surfaces use.
  *
  * STRIPE INITIALISATION IS DELIBERATELY THE SAME ONE-LINER THE APP ALREADY USES
- * (Onboarding.jsx:11 and Settings.jsx:21 are byte-identical):
- *   loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder')
+ * (Onboarding.jsx and Settings.jsx are byte-identical):
+ *   loadStripe(STRIPE_PUBLISHABLE_KEY)   // src/lib/stripeKey.js
  * Do NOT add a second initialisation pattern. When the two app screens adopt
  * this component they should delete their local `stripePromise`,
  * CARD_ELEMENT_OPTIONS and CARD_BRANDS and import this instead - the component
@@ -32,13 +34,13 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
  * `last4`, Settings reads `{ id, last4, brand, name }` - so neither needs to
  * change shape to adopt this.
  *
- * `last4` and `brand` come from Stripe's own response to
- * stripe.createPaymentMethod() whenever Stripe answers, which is the point of
- * this file: nobody downstream should ever fabricate a last4 again.
- * If Stripe cannot answer at all (no network, or the placeholder publishable
- * key) the form falls back to the prototype's simulated save, exactly what the
- * app screens do today, and flags it with `simulated: true` so a caller can
- * tell. Genuine card problems (declines, bad numbers) are shown to the donor
+ * `last4` and `brand` are verified SERVER-SIDE by the stripe-setup-complete
+ * edge function after a real SetupIntent save (see lib/stripeSetup.js), which
+ * is the point of this file: nobody downstream should ever fabricate a last4
+ * again. If our backend or Stripe cannot answer at all the form falls back to
+ * the prototype's simulated save, flags it with `simulated: true`, and shows
+ * the donor a practice-mode note (same pattern as the Plaid bank fallback).
+ * Genuine card problems (declines, bad numbers) are shown to the donor
  * instead of being swallowed by the fallback.
  *
  * @param {object}   props
@@ -59,7 +61,7 @@ export default function StripeCardForm(props) {
   );
 }
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 // Byte-identical to Onboarding.jsx:1302 and Settings.jsx:23.
 const CARD_ELEMENT_OPTIONS = {
@@ -78,55 +80,40 @@ const CARD_ELEMENT_OPTIONS = {
 // Fallback-only. Stripe tells us the real brand when it answers.
 const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover'];
 
-const BRAND_NAMES = {
-  visa: 'Visa',
-  mastercard: 'Mastercard',
-  amex: 'Amex',
-  discover: 'Discover',
-  diners: 'Diners Club',
-  jcb: 'JCB',
-  unionpay: 'UnionPay',
-};
-function prettyBrand(raw) {
-  if (!raw) return 'Card';
-  return BRAND_NAMES[raw] ?? raw.charAt(0).toUpperCase() + raw.slice(1);
-}
-
 const WEB_INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
 const NAVY = '#003865';
 
 /**
- * Ask Stripe to tokenise whatever is in the CardElement.
- * @returns {Promise<{card?: object, error?: string}>}
+ * Save whatever is in the CardElement for real: SetupIntent from our
+ * stripe-setup-intent edge function, confirmCardSetup in the browser (the
+ * card number goes donor -> Stripe directly), then stripe-setup-complete
+ * verifies server-side and hands back the true brand/last4.
+ *
+ * @returns {Promise<{card?: object, error?: string, practice?: boolean}>}
+ *   card.simulated / practice are true only when our backend or Stripe was
+ *   unreachable and the save fell back to the prototype's simulated path.
  */
-async function tokenizeCard(stripe, elements) {
+async function saveCard(stripe, elements) {
   const element = elements.getElement(CardElement);
   if (!element) return { error: 'Card details are not ready yet  -  try again.' };
 
-  let res = null;
   try {
-    res = await stripe.createPaymentMethod({ type: 'card', card: element });
+    const email = await currentDonorEmail();
+    const result = await saveCardWithSetupIntent(stripe, element, email);
+    if (result.error) return { error: result.error }; // decline / bad number - donor retries
+    const brand = prettyBrand(result.card.brand);
+    return { card: { ...result.card, brand, name: `My ${brand}` } };
   } catch {
-    res = null; // network/SDK failure - handled by the fallback below
+    // Backend or Stripe unreachable BEFORE the card was involved. Fall back to
+    // the prototype's simulated save so signup never dead-ends - flagged
+    // simulated, and shown to the donor as practice mode (same pattern as the
+    // Plaid bank-connect fallback).
   }
 
-  const pm = res?.paymentMethod;
-  if (pm?.card?.last4) {
-    const brand = prettyBrand(pm.card.brand);
-    return { card: { id: pm.id, last4: pm.card.last4, brand, name: `My ${brand}`, simulated: false } };
-  }
-
-  // A real problem with the card itself belongs in front of the donor.
-  const err = res?.error;
-  if (err && (err.type === 'card_error' || err.type === 'validation_error')) {
-    return { error: err.message ?? 'That card could not be saved. Check the details and try again.' };
-  }
-
-  // Stripe is unreachable or the key is the placeholder: simulate the save the
-  // way Onboarding.jsx and Settings.jsx do, so the prototype still works.
   await new Promise(r => setTimeout(r, 1200));
   const brand = CARD_BRANDS[Math.floor(Math.random() * CARD_BRANDS.length)];
   return {
+    practice: true,
     card: {
       id: Date.now(),
       last4: String(Math.floor(1000 + Math.random() * 9000)),
@@ -151,6 +138,7 @@ function CardFields({
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
+  const [practice, setPractice] = useState(false);
 
   const ready = cardComplete && !loading && !!stripe;
 
@@ -159,11 +147,20 @@ function CardFields({
     if (!stripe || !elements || !ready) return;
     setLoading(true);
     setError(null);
-    const result = await tokenizeCard(stripe, elements);
+    const result = await saveCard(stripe, elements);
     setLoading(false);
     if (result.error) { setError(result.error); return; }
+    if (result.practice) {
+      // Let the donor see the practice-mode note for a beat before advancing.
+      setPractice(true);
+      await new Promise(r => setTimeout(r, 1400));
+    }
     onSuccess?.(result.card);
   }
+
+  const practiceNote = practice
+    ? 'Practice mode  -  we could not reach the real card service right now, so this step is simulated.'
+    : null;
 
   const reassurance = (
     <>Card details secured by <span style={{ fontWeight: 700 }}>Stripe</span>. {appName} never sees your card number.</>
@@ -182,6 +179,11 @@ function CardFields({
           />
         </div>
         {error && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{error}</p>}
+        {practiceNote && (
+          <p style={{ margin: 0, fontSize: 12, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 10px' }}>
+            {practiceNote}
+          </p>
+        )}
         <p style={{ margin: 0, fontSize: 11.5, color: WEB_INK.muted, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.5 }}>
           <Lock size={12} style={{ flexShrink: 0, marginTop: 2 }} />
           <span>{reassurance}</span>
@@ -218,6 +220,11 @@ function CardFields({
       </div>
 
       {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+      {practiceNote && (
+        <p className="text-xs rounded-xl px-3 py-2" style={{ color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a' }}>
+          {practiceNote}
+        </p>
+      )}
 
       <div className="flex items-center gap-2 px-1">
         <Lock size={13} className="text-gray-400 shrink-0" />

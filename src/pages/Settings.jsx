@@ -27,8 +27,10 @@ import { MONTHLY_DATA } from '../data/transactions';
 import { DEMO_USER } from '../data/derived';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
+import { STRIPE_PUBLISHABLE_KEY } from '../lib/stripeKey';
+import { saveCardWithSetupIntent, currentDonorEmail, prettyBrand } from '../lib/stripeSetup';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 const CARD_ELEMENT_OPTIONS = {
   style: {
@@ -280,6 +282,7 @@ function AddCardForm({ onAdd, onClose, brand }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
+  const [practice, setPractice] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -287,14 +290,30 @@ function AddCardForm({ onAdd, onClose, brand }) {
     setLoading(true);
     setError(null);
 
-    // In production: call backend to create a SetupIntent, then confirmCardSetup.
-    // For the demo we simulate a successful save and generate a plausible last4.
-    await new Promise(r => setTimeout(r, 1200));
+    // The real save: SetupIntent via our stripe-setup-intent edge function,
+    // confirmCardSetup in the browser, server-side verification via
+    // stripe-setup-complete. See src/lib/stripeSetup.js.
+    try {
+      const element = elements.getElement(CardElement);
+      const email = await currentDonorEmail();
+      const result = await saveCardWithSetupIntent(stripe, element, email);
+      setLoading(false);
+      if (result.error) { setError(result.error); return; } // decline/bad number - donor retries
+      const pretty = prettyBrand(result.card.brand);
+      onAdd({ ...result.card, brand: pretty, name: `My ${pretty}` });
+      onClose();
+      return;
+    } catch {
+      // Backend or Stripe unreachable: fall back to the old simulated save so
+      // the sheet never dead-ends - shown as practice mode, like Plaid.
+    }
 
+    setPractice(true);
+    await new Promise(r => setTimeout(r, 1200));
     setLoading(false);
     const last4 = String(Math.floor(1000 + Math.random() * 9000));
     const cardBrand = CARD_BRANDS[Math.floor(Math.random() * CARD_BRANDS.length)];
-    onAdd({ id: Date.now(), last4, brand: cardBrand, name: `My ${cardBrand}` });
+    onAdd({ id: Date.now(), last4, brand: cardBrand, name: `My ${cardBrand}`, simulated: true });
     onClose();
   }
 
@@ -315,6 +334,11 @@ function AddCardForm({ onAdd, onClose, brand }) {
       </div>
 
       {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+      {practice && (
+        <p className="text-xs rounded-xl px-3 py-2" style={{ color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a' }}>
+          Practice mode  -  we could not reach the real card service right now, so this step is simulated.
+        </p>
+      )}
 
       <div className="flex items-center gap-2 px-1">
         <Lock size={13} className="text-gray-400 shrink-0" />

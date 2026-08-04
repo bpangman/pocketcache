@@ -7,8 +7,10 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 import { QRCodeSVG } from 'qrcode.react';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
 
-// In production, replace with your publishable key from environment variables
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_placeholder');
+import { STRIPE_PUBLISHABLE_KEY } from '../lib/stripeKey';
+import { saveCardWithSetupIntent, currentDonorEmail } from '../lib/stripeSetup';
+
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
 import SplashAnimation from '../components/SplashAnimation';
@@ -1519,6 +1521,7 @@ function CardEntryForm({ onSuccess }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
+  const [practice, setPractice] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -1526,14 +1529,29 @@ function CardEntryForm({ onSuccess }) {
     setLoading(true);
     setError(null);
 
-    // In production: call your backend to create a SetupIntent, then confirmCardSetup.
-    // For the prototype we simulate a successful save after a brief delay.
-    await new Promise(r => setTimeout(r, 1200));
+    // The real save: SetupIntent from our stripe-setup-intent edge function,
+    // confirmCardSetup in the browser (card number goes straight to Stripe),
+    // then stripe-setup-complete verifies server-side and returns the true
+    // brand/last4. See src/lib/stripeSetup.js.
+    try {
+      const element = elements.getElement(CardElement);
+      const email = await currentDonorEmail();
+      const result = await saveCardWithSetupIntent(stripe, element, email);
+      setLoading(false);
+      if (result.error) { setError(result.error); return; } // decline/bad number - donor retries
+      onSuccess(result.card);
+      return;
+    } catch {
+      // Backend or Stripe unreachable before the card was involved: fall back
+      // to the old simulated save so signup never dead-ends, shown as
+      // practice mode (same pattern as the Plaid bank fallback).
+    }
 
-    // Simulate success (replace with real stripe.confirmCardSetup in production)
+    setPractice(true);
+    await new Promise(r => setTimeout(r, 1200));
     setLoading(false);
     const last4 = String(Math.floor(1000 + Math.random() * 9000));
-    onSuccess({ last4 });
+    onSuccess({ last4, simulated: true });
   }
 
   return (
@@ -1553,6 +1571,11 @@ function CardEntryForm({ onSuccess }) {
       </div>
 
       {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+      {practice && (
+        <p className="text-xs rounded-xl px-3 py-2" style={{ color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a' }}>
+          Practice mode  -  we could not reach the real card service right now, so this step is simulated.
+        </p>
+      )}
 
       <div className="flex items-center gap-2 px-1">
         <Lock size={13} className="text-gray-400 shrink-0" />
@@ -2681,7 +2704,7 @@ export default function Onboarding() {
       }}
     />
   );
-  if (step === 'card-entry') return <CardEntryScreen onBack={() => setStep('payment-method')} onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null }); setStep('checkout-confirm'); }} />;
+  if (step === 'card-entry') return <CardEntryScreen onBack={() => setStep('payment-method')} onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null, ...(cardInfo?.brand ? { brand: cardInfo.brand } : {}), ...(cardInfo?.simulated ? { simulated: true } : {}) }); setStep('checkout-confirm'); }} />;
   if (step === 'payment-method') return <PaymentMethodScreen onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
   if (step === 'connect-card') return <ConnectCardScreen onBack={() => setStep('signup')} onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
   if (step === 'signup') return <SignUpScreen

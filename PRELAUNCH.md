@@ -35,6 +35,24 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   **not** for this Connect hand-off, and the backend is not deployed.
 - **Action:** build when the live backend + Stripe platform account are in place.
 
+### 2b. Real card saving + monthly charge run (built 2026-08-04, TEST MODE) - remaining gates
+- **Now:** the card step on both surfaces saves a REAL card via Stripe SetupIntents (edge functions
+  stripe-setup-intent / stripe-setup-complete, table stripe_donors), and stripe-charge-run implements
+  the 11th-of-month direct charge onto a connected account - all against Stripe TEST keys.
+- [ ] **Stripe Connect platform enablement.** The platform account is not enabled for Connect yet, so
+  the charge run stops with `{blocked: "connect_not_enabled"}` before any money moves. Once Blake
+  enables Connect (and the test connected account is linked to the platform), re-run
+  `/Users/jarvis/.config/pocketcache/retry-charge-run.sh` to prove the full loop.
+- [ ] **Charge-run scheduling.** Once Connect works, schedule stripe-charge-run for the 11th of each
+  month (Supabase pg_cron calling the function with the x-charge-key header) over every saved donor,
+  computing each donor's real round-up total. Today it is manual and single-donor by design.
+- [ ] **Fee routing - awaiting legal decision #1 (Nathan).** stripe-charge-run charges the donation
+  amount ONLY. No application fee, no $1 fee, nothing, until the fee treatment decision is in
+  writing. The code has a marked comment where it would go.
+- [ ] **Swap test keys for live keys - behind this launch gate.** The publishable key lives in
+  `src/lib/stripeKey.js` (test key, committed on purpose); the secret key lives only in Supabase
+  function secrets. Both switch to live-mode values only when every item in this file clears.
+
 ### 3. Custom app icon for anchor partners - needs a native build, not a web push
 - **Now (demo):** Settings > App Icon shows the PocketCache icon and the BGCA anchor-partner icon
   side by side. It is a PREVIEW and is labelled as one ("Preview" pill on the row, "Not available

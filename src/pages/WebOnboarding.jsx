@@ -459,8 +459,8 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
       });
     }
     const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
-    // A card's last4 comes from the Stripe result; bank/Apple Pay have none.
-    if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: opt.id === 'card' ? (cardInfo?.last4 ?? null) : null });
+    // A card's last4/brand come from the Stripe result; bank/Apple Pay have none.
+    if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: opt.id === 'card' ? (cardInfo?.last4 ?? null) : null, ...(opt.id === 'card' && cardInfo?.brand ? { brand: cardInfo.brand } : {}), ...(opt.id === 'card' && cardInfo?.simulated ? { simulated: true } : {}) });
     // pc_page flips to 'home' IMMEDIATELY - this used to stay 'onboarding'
     // until the QR modal was dismissed, so a reload before that dismiss (or a
     // donor who never dismissed it) landed back on this step, not signed in.
