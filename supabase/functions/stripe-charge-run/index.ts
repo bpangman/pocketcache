@@ -25,24 +25,19 @@
 // DECISION #1 (with Nathan). Until that lands, this function charges the
 // donation amount ONLY: no application_fee_amount, no fee PaymentIntent, no
 // transfer. Do not add any fee here without that decision in writing.
+//
+// The clone/create/attach dance (steps 2-3 below) now lives in
+// _shared/connected-customer.ts, shared with charge-cycles-run, so the
+// manual test path and the monthly automated run behave identically and a
+// donor+nonprofit pair only ever gets cloned once. See that file for the
+// "why" of the connected_customers table.
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { STRIPE_SK, dbRest, stripeCall } from "../_shared/stripe.ts";
+import { getOrCreateConnectedCustomer, isBlockedStripeCode, isConnectBlocked } from "../_shared/connected-customer.ts";
 import type { StripeResult } from "../_shared/stripe.ts";
 
 const CHARGE_RUN_KEY = Deno.env.get("CHARGE_RUN_KEY") ?? "";
 const DEFAULT_CONNECTED_ACCT = Deno.env.get("STRIPE_TEST_CONNECTED_ACCT") ?? "";
-
-// The two Stripe error codes that mean "Connect is not set up yet":
-//   platform_account_required - the account is not a Connect platform at all
-//   account_invalid           - the platform key cannot act on the target
-//                               account (it is not linked as a connected
-//                               account of this platform)
-// Both are the known pre-enablement state, not a bug in the charge itself.
-const CONNECT_BLOCKED_CODES = new Set(["platform_account_required", "account_invalid"]);
-
-function isConnectBlocked(res: StripeResult): boolean {
-  return !res.ok && CONNECT_BLOCKED_CODES.has(res.errorCode ?? "");
-}
 
 function connectBlocked(step: string, res: StripeResult) {
   return {
@@ -100,47 +95,24 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(req, { error: "No saved card for that customer" }, 404);
     }
 
-    // 2. Clone the platform payment method onto the connected account.
-    const clone = await stripeCall(
-      "POST",
-      "/payment_methods",
-      { customer: customerId, payment_method: donor.payment_method_id },
-      connectedAccount,
-    );
-    if (!clone.ok) {
-      if (isConnectBlocked(clone)) {
-        return jsonResponse(req, connectBlocked("clone_payment_method", clone));
+    // 2-3. Get (or create/re-clone as needed) the connected-account Customer
+    //    + attached PaymentMethod for this donor at this nonprofit. Shared
+    //    with charge-cycles-run so both paths clone the same way and reuse
+    //    the same connected_customers row instead of duplicating it.
+    const connected = await getOrCreateConnectedCustomer(customerId, connectedAccount, donor);
+    if (!connected.ok) {
+      if (isBlockedStripeCode(connected.stripeCode)) {
+        return jsonResponse(req, {
+          blocked: "connect_not_enabled",
+          step: connected.step,
+          stripe_code: connected.stripeCode,
+          detail: "Stripe Connect is not enabled/linked for this platform account yet. Re-run after enabling Connect and connecting the test account.",
+        });
       }
-      console.error("stripe-charge-run: clone failed", clone.status, clone.errorCode);
-      return jsonResponse(req, { error: "Could not prepare the payment method", stripe_code: clone.errorCode ?? null }, 502);
+      console.error("stripe-charge-run: connected customer setup failed", connected.step, connected.stripeCode);
+      return jsonResponse(req, { error: connected.message, stripe_code: connected.stripeCode }, 502);
     }
-    const clonedPm = clone.data.id;
-
-    // 3. A customer on the connected account to hang the clone on.
-    const connCustomer = await stripeCall(
-      "POST",
-      "/customers",
-      { ...(donor.email ? { email: donor.email } : {}), description: "PocketCache donor (round-ups)" },
-      connectedAccount,
-    );
-    if (!connCustomer.ok) {
-      if (isConnectBlocked(connCustomer)) {
-        return jsonResponse(req, connectBlocked("connected_customer", connCustomer));
-      }
-      console.error("stripe-charge-run: connected customer failed", connCustomer.status, connCustomer.errorCode);
-      return jsonResponse(req, { error: "Could not prepare the nonprofit-side customer", stripe_code: connCustomer.errorCode ?? null }, 502);
-    }
-
-    const attach = await stripeCall(
-      "POST",
-      `/payment_methods/${clonedPm}/attach`,
-      { customer: connCustomer.data.id },
-      connectedAccount,
-    );
-    if (!attach.ok) {
-      console.error("stripe-charge-run: attach failed", attach.status, attach.errorCode);
-      return jsonResponse(req, { error: "Could not attach the payment method", stripe_code: attach.errorCode ?? null }, 502);
-    }
+    const { connectedCustomerId, paymentMethodId: clonedPm } = connected;
 
     // 4. The direct charge on the connected account. Donation amount ONLY -
     //    NO application fee (open legal decision #1, see header).
@@ -150,7 +122,7 @@ Deno.serve(async (req: Request) => {
       {
         amount: amountCents,
         currency: "usd",
-        customer: connCustomer.data.id,
+        customer: connectedCustomerId,
         payment_method: clonedPm,
         off_session: "true",
         confirm: "true",

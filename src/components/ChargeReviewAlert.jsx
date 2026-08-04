@@ -93,6 +93,17 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const total = fmtMoney(chargeTotal({
     pendingRoundUps: roundUps, monthlyCap, chargeAdjustment, feeMonths, processingCover,
   }));
+  // THE $5 RULE: below the nonprofit's minimum, nothing charges this month -
+  // same gate the app Dashboard, WebDashboard, Settings and Onboarding all
+  // apply. Measured against the raw pending round-ups, same as Dashboard.jsx:
+  // a cap or adjustment only trims what WOULD be charged if there were
+  // enough to charge at all. This is the fix for the old abolished behavior
+  // of capping a below-minimum total down to a quoted (and wrong) figure -
+  // this alert used to quote "Charging on Aug 11 $2.50" with no minimum
+  // check at all, capable of asking a donor to review a charge that would
+  // never actually run.
+  const monthlyMinimum = selectedNonprofit.monthlyMinimum ?? 5;
+  const belowMinimum = roundUps < monthlyMinimum;
   // The round-up month, not the charge month: during the review window (days
   // 1-10) the charge date falls THIS month but the amount locked is LAST
   // month's round-ups, so naming the popup after the charge month would tell
@@ -117,54 +128,82 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const card = (
     <div style={{ background: '#fff', borderRadius: 24, padding: 22, width: '100%', maxWidth: 380, boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
       <div style={{ textAlign: 'center', marginBottom: 10 }}>
-        <div style={{ fontSize: 34 }}>🔔</div>
+        <div style={{ fontSize: 34 }}>{belowMinimum ? '💰' : '🔔'}</div>
         <p style={{ margin: '6px 0 2px', fontWeight: 800, fontSize: 17, color: '#0f172a' }}>
-          Your {monthName} round-ups are ready to review
+          {belowMinimum ? `Your ${monthName} round-ups aren't quite there yet` : `Your ${monthName} round-ups are ready to review`}
         </p>
         <p style={{ margin: 0, fontSize: 12.5, color: '#64748b' }}>
-          Locked on the 1st · charges {chargeDay}  -  10 full days to review or adjust
+          {belowMinimum
+            ? `Nothing is charged on ${chargeDay}  -  the balance carries forward`
+            : <>Locked on the 1st · charges {chargeDay}  -  10 full days to review or adjust</>}
         </p>
       </div>
 
-      <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 14, padding: 14, marginBottom: 12, fontSize: 13 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-          <span style={{ color: '#475569' }}>Round-ups for {npShort}</span>
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>
-            {/* Strike through the raw figure whenever ANYTHING trimmed it - a
-                cap does that just as much as a donor adjustment does. */}
-            {effective !== roundUps
-              ? <><s style={{ color: '#94a3b8', fontWeight: 400 }}>${fmtMoney(roundUps)}</s> ${fmtMoney(effective)}</>
-              : `$${fmtMoney(roundUps)}`}
-          </span>
-        </div>
-        {capTrimmed && (
-          <div style={{ padding: '2px 0', fontSize: 11.5, color: '#b45309' }}>
-            Capped at ${fmtMoney(monthlyCap)}/month  -  the rest is never charged.
+      {belowMinimum ? (
+        /* Below the nonprofit's minimum, nothing charges this month - so this
+           alert shows the rollover story instead of a total that would never
+           actually be collected. This is the fix for the old abolished
+           behavior of capping a below-minimum total down to a quoted figure:
+           there is no partial-gap quoting here, only "not yet" or the real
+           amount. Same wording as the app Dashboard's below-minimum copy. */
+        <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 14, padding: 14, marginBottom: 12, fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+            <span style={{ color: '#475569' }}>Round-ups for {npShort}</span>
+            <span style={{ fontWeight: 700, color: '#0f172a' }}>${fmtMoney(roundUps)}</span>
           </div>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#64748b' }}>
-          <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span>
-          <span>+${fmtMoney(feeMonths)}</span>
+          <p style={{ margin: '6px 0 0', fontSize: 12, lineHeight: 1.55, color: '#b45309' }}>
+            Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
+            {' '}&middot; $1/month fee rolls too  -  {feeMonths} month{feeMonths !== 1 ? 's' : ''} so far (${feeMonths})  -  itemized on your charge.
+          </p>
         </div>
-        {/* Only rendered when the donor has the cover on: a permanent "+$0.00"
-            row is noise, and the total is still correct without it because
-            `processingCover` is 0. Wording matches the signup checkout and
-            Settings - the point being that this money is part of the donation,
-            not a PocketCache charge. */}
-        {processingCover > 0 && (
+      ) : (
+        <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 14, padding: 14, marginBottom: 12, fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+            <span style={{ color: '#475569' }}>Round-ups for {npShort}</span>
+            <span style={{ fontWeight: 700, color: '#0f172a' }}>
+              {/* Strike through the raw figure whenever ANYTHING trimmed it - a
+                  cap does that just as much as a donor adjustment does. */}
+              {effective !== roundUps
+                ? <><s style={{ color: '#94a3b8', fontWeight: 400 }}>${fmtMoney(roundUps)}</s> ${fmtMoney(effective)}</>
+                : `$${fmtMoney(roundUps)}`}
+            </span>
+          </div>
+          {capTrimmed && (
+            <div style={{ padding: '2px 0', fontSize: 11.5, color: '#b45309' }}>
+              Capped at ${fmtMoney(monthlyCap)}/month  -  the rest is never charged.
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#64748b' }}>
-            <span>Processing cover (goes to {npShort})</span>
-            <span>+${fmtMoney(processingCover)}</span>
+            <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''}</span>
+            <span>+${fmtMoney(feeMonths)}</span>
           </div>
-        )}
-        <div style={{ height: 1, background: '#cbd5e1', margin: '6px 0' }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>Charging on {chargeDay}</span>
-          <span style={{ fontWeight: 800, color: '#003865' }}>${total}</span>
+          {/* Only rendered when the donor has the cover on: a permanent "+$0.00"
+              row is noise, and the total is still correct without it because
+              `processingCover` is 0. Wording matches the signup checkout and
+              Settings - the point being that this money is part of the donation,
+              not a PocketCache charge. */}
+          {processingCover > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#64748b' }}>
+              <span>Processing cover (goes to {npShort})</span>
+              <span>+${fmtMoney(processingCover)}</span>
+            </div>
+          )}
+          <div style={{ height: 1, background: '#cbd5e1', margin: '6px 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 700, color: '#0f172a' }}>Charging on {chargeDay}</span>
+            <span style={{ fontWeight: 800, color: '#003865' }}>${total}</span>
+          </div>
         </div>
-      </div>
+      )}
 
-      {adjusting ? (
+      {belowMinimum ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <button onClick={dismiss}
+            style={{ padding: '12px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #003865, #001a33)', color: '#fff', fontWeight: 700, fontSize: 14 }}>
+            Got it
+          </button>
+        </div>
+      ) : adjusting ? (
         <div style={{ marginBottom: 12 }}>
           <p style={{ textAlign: 'center', margin: '0 0 4px' }}>
             <span style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>${fmtMoney(value)}</span>

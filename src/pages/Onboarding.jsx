@@ -1706,6 +1706,13 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
   // step (WebOnboarding.jsx:219-227). Precedence lives in lib/billing.
   const accrued = pendingRoundUps ?? 4.63;
   const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap, chargeAdjustment });
+  // Below the nonprofit's minimum nothing is charged this month - the same
+  // gate the app Dashboard and Settings apply, checked here too so this
+  // preview never quotes a charge that would not actually happen. Measured
+  // against the raw accrual, same as Dashboard.jsx: a cap or adjustment only
+  // trims what WOULD be charged if there were enough to charge at all.
+  const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
+  const belowMinimum = accrued < monthlyMinimum;
   const appFee = feeMonths;
   // Processing cover follows what is actually charged, not the raw accrual  -
   // same as WebOnboarding, so the two review screens agree to the cent.
@@ -1793,49 +1800,70 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
           {/* Estimate card */}
           <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Monthly Estimate</p>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-700">Round-ups this month</span>
-              <span className="font-bold text-gray-900" data-testid="confirm-roundups">
-                {roundUps !== accrued
-                  ? <><s className="text-gray-400 font-normal">${accrued.toFixed(2)}</s> ${roundUps.toFixed(2)}</>
-                  : `$${roundUps.toFixed(2)}`}
-              </span>
-            </div>
-            {/* Same note, same wording as the web review step
-                (WebOnboarding.jsx:446-450) so the two surfaces read identically. */}
-            {capActive && !adjusted && (
-              <p className="text-xs mb-2" style={{ color: '#b45309' }} data-testid="confirm-cap-note">
-                Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
-              </p>
+            {belowMinimum ? (
+              /* Below the nonprofit's minimum, nothing charges this month - so
+                 this preview shows the rollover story instead of a total that
+                 would never actually be collected. Same wording as the app
+                 Dashboard's below-minimum copy (Dashboard.jsx). */
+              <>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-700">Round-ups this month</span>
+                  <span className="font-bold text-gray-900" data-testid="confirm-roundups">${accrued.toFixed(2)}</span>
+                </div>
+                <p className="text-xs mb-1 leading-relaxed" style={{ color: '#b45309' }} data-testid="confirm-rollover">
+                  Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
+                </p>
+                <p className="text-xs text-gray-400 mt-2 italic">
+                  This is an example  -  no real charge is made in this demo.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-700">Round-ups this month</span>
+                  <span className="font-bold text-gray-900" data-testid="confirm-roundups">
+                    {roundUps !== accrued
+                      ? <><s className="text-gray-400 font-normal">${accrued.toFixed(2)}</s> ${roundUps.toFixed(2)}</>
+                      : `$${roundUps.toFixed(2)}`}
+                  </span>
+                </div>
+                {/* Same note, same wording as the web review step
+                    (WebOnboarding.jsx:446-450) so the two surfaces read identically. */}
+                {capActive && !adjusted && (
+                  <p className="text-xs mb-2" style={{ color: '#b45309' }} data-testid="confirm-cap-note">
+                    Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
+                  </p>
+                )}
+                {adjusted && (
+                  <p className="text-xs mb-2 font-semibold" style={{ color: '#059669' }}>
+                    Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
+                  </p>
+                )}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+                  <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
+                </div>
+                {feeMonths > 1 && (
+                  <p className="text-xs text-gray-500 mb-2">
+                    {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
+                  </p>
+                )}
+                {coverProcessing && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-gray-500">Processing cover (goes to {npShort})</span>
+                    <span className="text-sm text-gray-500">+${processingCover.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="h-px bg-slate-200 my-2" />
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-gray-900">One charge from {npShort}</span>
+                  <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-2 italic">
+                  This is an example  -  no real charge is made in this demo.
+                </p>
+              </>
             )}
-            {adjusted && (
-              <p className="text-xs mb-2 font-semibold" style={{ color: '#059669' }}>
-                Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
-              </p>
-            )}
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
-              <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
-            </div>
-            {feeMonths > 1 && (
-              <p className="text-xs text-gray-500 mb-2">
-                {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
-              </p>
-            )}
-            {coverProcessing && (
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-500">Processing cover (goes to {npShort})</span>
-                <span className="text-sm text-gray-500">+${processingCover.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="h-px bg-slate-200 my-2" />
-            <div className="flex justify-between items-center">
-              <span className="font-bold text-gray-900">One charge from {npShort}</span>
-              <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
-            </div>
-            <p className="text-xs text-gray-400 mt-2 italic">
-              This is an example  -  no real charge is made in this demo.
-            </p>
           </div>
 
           {/* Processing cover toggle */}

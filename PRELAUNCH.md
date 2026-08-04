@@ -43,15 +43,44 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   the charge run stops with `{blocked: "connect_not_enabled"}` before any money moves. Once Blake
   enables Connect (and the test connected account is linked to the platform), re-run
   `/Users/jarvis/.config/pocketcache/retry-charge-run.sh` to prove the full loop.
-- [ ] **Charge-run scheduling.** Once Connect works, schedule stripe-charge-run for the 11th of each
-  month (Supabase pg_cron calling the function with the x-charge-key header) over every saved donor,
-  computing each donor's real round-up total. Today it is manual and single-donor by design.
-- [ ] **Fee routing - awaiting legal decision #1 (Nathan).** stripe-charge-run charges the donation
-  amount ONLY. No application fee, no $1 fee, nothing, until the fee treatment decision is in
-  writing. The code has a marked comment where it would go.
+- [x] **Charge-run scheduling (built 2026-08-04).** Round-up accrual, the $5-minimum lock decision,
+  and the 11th-of-month charge run are now real server-side automation, not manual/single-donor:
+  - `roundups-sync` (edge function) pulls each linked bank's Plaid transactions daily via
+    `/transactions/sync` and computes a round-up per outflow transaction into the `roundups` table.
+  - `cycle-lock` (edge function) runs on the 1st: for every donor with pending round-ups that
+    month, it applies THE $5 RULE (Blake, 2026-08-04) - under the nonprofit's $5 minimum, the whole
+    balance rolls forward to next month (`charge_cycles.status = 'rolled_forward'`) and nothing is
+    quoted or charged; at or above the minimum, the cycle locks with the real total.
+  - `charge-cycles-run` (edge function) runs on the 11th: charges every locked cycle as a direct
+    charge on the nonprofit's connected account, using the shared `connected_customers` clone-once
+    design (`supabase/functions/_shared/connected-customer.ts`) so a donor's card is cloned onto a
+    given nonprofit's Stripe account once, ever, and reused every month after that.
+  - All three are scheduled via pg_cron + pg_net (`pocketcache-roundups-sync`,
+    `pocketcache-cycle-lock`, `pocketcache-charge-cycles-run`), the same pattern as the existing
+    waitlist digest and Apple secret renewal jobs.
+  - Proven end-to-end in Stripe/Plaid TEST/SANDBOX mode: a real sandbox PaymentIntent succeeded
+    against the connected account, re-running the charge job was a no-op (no double charge, no
+    duplicate `connected_customers` row), and a below-minimum cycle correctly rolled forward and was
+    never charged.
+- [ ] **Donor-facing "here's your amount" email on the 1st.** `cycle-lock` currently sends one
+  INTERNAL summary email to blake@pocketcache.app (counts locked/rolled-forward, totals) via
+  FormSubmit - the same transactional-email path already used for the Apple secret renewal job.
+  FormSubmit is fine for that single internal recipient but is not meant for per-donor mail. The
+  donor-facing "your round-ups locked at $X, charging on the 11th" email promised by the billing
+  copy (`src/lib/donorContent.js` billingExplainer) needs real SMTP/transactional email (e.g.
+  Postmark, SES, Resend) wired into `cycle-lock` before launch. Out of scope for this build.
+- [ ] **Multi-nonprofit routing.** Every charge cycle currently resolves to the single sandbox
+  connected account (`STRIPE_TEST_CONNECTED_ACCT`, "Pretend BGCA") because PocketCache is
+  single-nonprofit in this phase. `charge_cycles.connected_account` is already a per-cycle column
+  (not hardcoded into the schema), so wiring a real donor -> nonprofit -> connected-account lookup
+  when a second nonprofit goes live needs no schema change, just that lookup.
+- [ ] **Fee routing - awaiting legal decision #1 (Nathan).** stripe-charge-run and charge-cycles-run
+  both charge the donation amount ONLY. No application fee, no $1 fee, nothing, until the fee
+  treatment decision is in writing. The code has marked comments where it would go - left as-is.
 - [ ] **Swap test keys for live keys - behind this launch gate.** The publishable key lives in
-  `src/lib/stripeKey.js` (test key, committed on purpose); the secret key lives only in Supabase
-  function secrets. Both switch to live-mode values only when every item in this file clears.
+  `src/lib/stripeKey.js` (test key, committed on purpose); the secret key, Plaid keys, and
+  CHARGE_RUN_KEY live only in Supabase function secrets. All switch to live-mode values only when
+  every item in this file clears.
 
 ### 3. Custom app icon for anchor partners - needs a native build, not a web push
 - **Now (demo):** Settings > App Icon shows the PocketCache icon and the BGCA anchor-partner icon

@@ -501,6 +501,13 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
   const chargeOn = nextChargeLabel();
   const cardReady = paymentSel !== 'card' || !!cardInfo;
+  // Below the nonprofit's minimum nothing is charged this month - same gate
+  // as the app Dashboard, WebDashboard and Onboarding's confirm step, so this
+  // preview never quotes a total that would not actually be collected. A
+  // skipped cycle already collects nothing for a different reason, so the two
+  // states do not stack.
+  const monthlyMinimum = org?.monthlyMinimum ?? 5;
+  const belowMinimum = !skipNextCharge && accrued < monthlyMinimum;
 
   return (
     <div style={{position:'relative'}}>
@@ -941,40 +948,49 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0' }}>
                       <span style={{ color: INK.secondary }}>Round-ups this month</span>
                       <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-confirm-roundups">
-                        {!skipNextCharge && roundUps !== accrued
+                        {!skipNextCharge && !belowMinimum && roundUps !== accrued
                           ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${fmtMoney(accrued)}</s> ${fmtMoney(roundUps)}</>
                           : `$${fmtMoney(accrued)}`}
                       </span>
                     </div>
+                    {/* Below the nonprofit's minimum, nothing charges this month -
+                        so this preview shows the rollover story instead of an
+                        itemized total that would never actually be collected.
+                        Same wording as the app Dashboard's below-minimum copy. */}
+                    {belowMinimum && (
+                      <p style={{ margin: '2px 0 0', fontSize: 11.5, lineHeight: 1.55, color: '#b45309' }} data-testid="web-confirm-rollover">
+                        Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
+                      </p>
+                    )}
                     {/* Same notes, same wording and same precedence as the app's
                         confirm step (Onboarding.jsx ~1589-1607). A cap or an
-                        adjustment is moot on a skipped cycle - nothing is capped
-                        out of a charge that never happens. */}
-                    {!skipNextCharge && capActive && !adjusted && (
+                        adjustment is moot on a skipped or below-minimum cycle -
+                        nothing is capped out of a charge that never happens. */}
+                    {!skipNextCharge && !belowMinimum && capActive && !adjusted && (
                       <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#b45309' }} data-testid="web-confirm-cap-note">
                         Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
                       </p>
                     )}
-                    {!skipNextCharge && adjusted && (
+                    {!skipNextCharge && !belowMinimum && adjusted && (
                       <p style={{ margin: '2px 0 0', fontSize: 11.5, fontWeight: 600, color: '#059669' }} data-testid="web-confirm-adjust-note">
                         Adjusted to ${fmtMoney(chargeAdjustment)} for this month.
                       </p>
                     )}
-                    {/* The $1 fee and the processing cover are not on a skipped
-                        charge either - the fee rolls forward (the banner names
-                        where it lands) and there is no card charge to cover. */}
-                    {!skipNextCharge && (
+                    {/* The $1 fee and the processing cover are not on a skipped or
+                        below-minimum charge either - the fee still rolls forward
+                        with the balance, and there is no card charge to cover. */}
+                    {!skipNextCharge && !belowMinimum && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
                         <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
                         <span>+${fmtMoney(feeMonths)}</span>
                       </div>
                     )}
-                    {!skipNextCharge && feeMonths > 1 && (
+                    {!skipNextCharge && !belowMinimum && feeMonths > 1 && (
                       <p style={{ margin: '2px 0 0', fontSize: 11.5, color: INK.secondary }}>
                         {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
                       </p>
                     )}
-                    {!skipNextCharge && coverProcessing && (
+                    {!skipNextCharge && !belowMinimum && coverProcessing && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }} data-testid="web-confirm-cover">
                         <span>Processing cover (goes to {npShort})</span>
                         <span>+${fmtMoney(processingCover)}</span>
@@ -983,10 +999,10 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                     <div style={{ height: 1, background: '#cbd5e1', margin: '8px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: 13.5, color: INK.primary }}>
-                        {skipNextCharge ? SKIP_COLLECT_LABEL : `One charge from ${npShort}`}
+                        {skipNextCharge ? SKIP_COLLECT_LABEL : belowMinimum ? 'Nothing charged yet' : `One charge from ${npShort}`}
                       </span>
-                      <span style={{ fontWeight: 800, fontSize: 18, color: skipNextCharge ? '#b45309' : NAVY }} data-testid="web-confirm-total">
-                        {skipNextCharge ? SKIP_COLLECT_AMOUNT : `$${fmtMoney(total)}`}
+                      <span style={{ fontWeight: 800, fontSize: 18, color: (skipNextCharge || belowMinimum) ? '#b45309' : NAVY }} data-testid="web-confirm-total">
+                        {skipNextCharge ? SKIP_COLLECT_AMOUNT : belowMinimum ? `$${fmtMoney(accrued)} so far` : `$${fmtMoney(total)}`}
                       </span>
                     </div>
                     <p style={{ margin: '8px 0 0', fontSize: 11.5, fontStyle: 'italic', color: INK.muted }}>This is an example  -  no real charge is made in this demo.</p>
@@ -1012,11 +1028,11 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                         Cover {npShort}&apos;s card-processing costs too, so 100% of my round-ups reach them.
                       </span>
                       <span style={{ display: 'block', fontSize: 12, color: INK.secondary, marginTop: 2 }}>
-                        {/* On a skipped cycle there is no charge to add the cover
-                            to, so quoting "~$0.61 goes directly to BGCA" here
-                            would be money that never moves. The preference still
-                            applies to the charges that do run. */}
-                        {skipNextCharge
+                        {/* On a skipped or below-minimum cycle there is no charge
+                            to add the cover to, so quoting "~$0.61 goes directly
+                            to BGCA" here would be money that never moves. The
+                            preference still applies to the charges that do run. */}
+                        {skipNextCharge || belowMinimum
                           ? `Applies from your next charge  -  nothing is collected this month.`
                           : coverProcessing
                             ? `The ~$${fmtMoney(processingCover)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
