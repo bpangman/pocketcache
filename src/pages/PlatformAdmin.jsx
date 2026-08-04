@@ -21,6 +21,13 @@ const PLATFORM_ADMIN_EMAIL = 'info@pocketcache.app';
 const PADMIN_KEY = 'pc_padmin';
 const NTFY_TOPIC_URL = 'https://ntfy.sh/pocketcache-wl-x7k2m9q4';
 
+// Supabase events table - the permanent, PII-free activity log this console
+// reads directly from the browser. The anon key is public by design (meant
+// to ship in client-side source) and is scoped by row-level security on the
+// events table to insert + select only.
+const SUPABASE_EVENTS_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/events?select=*&order=created_at.desc&limit=100';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
+
 // ── Shared visual bits (same card language as the rest of the app: white
 //    rounded-2xl cards with card-shadow, gray-400 uppercase tracking-widest
 //    labels) ───────────────────────────────────────────────────────────────
@@ -106,6 +113,23 @@ function parseNdjson(text) {
   return out;
 }
 
+function formatSupabaseDetail(detail) {
+  if (!detail || typeof detail !== 'object') return '';
+  return Object.entries(detail)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(', ');
+}
+
+function normalizeSupabaseRows(rows) {
+  return (rows || []).map(row => ({
+    id: row.id,
+    time: row.created_at ? new Date(row.created_at).getTime() / 1000 : null,
+    title: row.event,
+    message: formatSupabaseDetail(row.detail) || row.source || '',
+  }));
+}
+
 function LiveActivityCard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -115,15 +139,30 @@ function LiveActivityCard() {
     setLoading(true);
     setError(null);
     try {
-      // Always attempted, on every hostname including localhost - this is the
-      // ntfy READ endpoint, not the beacon's write side, so it does not need
-      // the production-only restriction that lib/beacon.js uses for posting.
-      const res = await fetch(`${NTFY_TOPIC_URL}/json?poll=1&since=12h`);
+      // Primary source: the permanent events table in Supabase. Reads happen
+      // on every hostname including localhost - this is not the prod-only
+      // restriction that lib/beacon.js uses for posting.
+      const res = await fetch(SUPABASE_EVENTS_URL, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
       if (!res.ok) throw new Error(`status ${res.status}`);
-      const text = await res.text();
-      setEvents(parseNdjson(text));
+      const rows = await res.json();
+      setEvents(normalizeSupabaseRows(rows));
     } catch {
-      setError("Couldn't load live activity right now - try Refresh in a moment.");
+      // Silent fallback: if the Supabase read fails for any reason (network
+      // error, non-2xx, etc), fall back to the old ntfy 12-hour poll rather
+      // than show an error.
+      try {
+        const res = await fetch(`${NTFY_TOPIC_URL}/json?poll=1&since=12h`);
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const text = await res.text();
+        setEvents(parseNdjson(text));
+      } catch {
+        setError("Couldn't load live activity right now - try Refresh in a moment.");
+      }
     } finally {
       setLoading(false);
     }
@@ -133,7 +172,7 @@ function LiveActivityCard() {
 
   return (
     <Card
-      title="Live activity (all visitors, last 12 hours)"
+      title="Live activity (all visitors)"
       right={
         <button
           onClick={load}
@@ -144,17 +183,16 @@ function LiveActivityCard() {
       }
     >
       <p className="text-xs text-gray-400 mb-3">
-        Real signups from anyone, anywhere show up in the list below (a rolling last-12-hours
-        view) and also arrive as email alerts to blake@pocketcache.app via FormSubmit. This view
-        is not permanent storage - the permanent home for this data will come once the real
-        backend exists.
+        Real signups from anyone, anywhere show up in the list below - the newest 100, held as a
+        permanent server-side record in PocketCache's database, not a short rolling window - and
+        also arrive as email alerts to blake@pocketcache.app.
       </p>
       {error ? (
         <p className="text-sm text-amber-700 bg-amber-50 rounded-xl p-3">{error}</p>
       ) : loading ? (
         <p className="text-sm text-gray-400">Loading…</p>
       ) : events.length === 0 ? (
-        <p className="text-sm text-gray-400">No events in the last 12 hours</p>
+        <p className="text-sm text-gray-400">No events yet</p>
       ) : (
         <div className="space-y-2">
           {events.map((ev, i) => (
@@ -409,12 +447,11 @@ function PlatformAdminConsole() {
 
       <div style={{ maxWidth: 820, margin: '0 auto' }} className="px-4 sm:px-6 py-5">
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 text-sm text-amber-900 leading-relaxed">
-          This page shows everything saved in this browser. Every visitor&apos;s account lives only in
-          their own browser until the real backend exists. Real signups from anyone, anywhere show up
-          below in Live activity (a rolling last-12-hours view) and also arrive as email alerts to
-          blake@pocketcache.app via FormSubmit - that is the one part of this page that reflects
-          visitors other than you. The live feed below is not permanent storage - the permanent home
-          for this data will come once the real backend exists.
+          This page shows everything saved in this browser, plus real signups from anyone, anywhere
+          in Live activity below - a permanent, server-side record in PocketCache&apos;s database, not a
+          short rolling window - and email alerts to blake@pocketcache.app. That is the one part of
+          this page that reflects visitors other than you. Donor and nonprofit accounts still live
+          only in each visitor&apos;s own browser until the rest of the real backend exists.
         </div>
 
         <LiveActivityCard />

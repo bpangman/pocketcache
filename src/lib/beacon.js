@@ -28,6 +28,15 @@ const NTFY_URL = 'https://ntfy.sh/pocketcache-wl-x7k2m9q4';
 // Blake after he activates) without changing anything else in this file.
 const FORMSUBMIT_URL = 'https://formsubmit.co/ajax/blake@pocketcache.app';
 
+// Supabase events table - a permanent, PII-free activity log that the
+// platform admin console reads back directly from the browser. The anon key
+// below is public by design (Supabase's anon key is meant to be shipped in
+// client-side source, same trust level as the ntfy topic name above) - it is
+// scoped by row-level security policies on the events table to insert and
+// select only, and that table never stores donor/user PII.
+const SUPABASE_EVENTS_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/events';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
+
 /** Only fire on the real production host - stay silent on localhost, preview
  *  deploys, and any test/SSR runner where window/document don't exist. */
 function isProdBrowser() {
@@ -73,6 +82,16 @@ export function pcBeacon(event, detail) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ _subject: `PocketCache: ${event}`, event, ...detail }),
+    }).catch(() => {});
+
+    fetch(SUPABASE_EVENTS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ event, detail: detail || {} }),
     }).catch(() => {});
   } catch {
     // Never let a beacon failure touch the caller.

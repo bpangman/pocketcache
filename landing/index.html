@@ -1129,6 +1129,12 @@
   const GOOGLE_FORM_ENTRY = 'entry.943864096';
   const APPS_SCRIPT_API = 'https://script.google.com/macros/s/AKfycbw2xVEu7uWaTS0B41DBNDYU_4myWIwjbV_7PvcJsUtCTpGbWaH8NQrFpere4U6PR6Bh/exec';
 
+  // Supabase waitlist table - the permanent record. The anon key is public by
+  // design (meant to ship in client-side source) and is scoped by row-level
+  // security to insert-only on this table - nobody can read emails back with it.
+  const SUPABASE_WAITLIST_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/waitlist';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
+
   document.getElementById('waitlist-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const email = document.getElementById('waitlist-email').value.trim();
@@ -1156,6 +1162,19 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ _subject: 'PocketCache: waitlist signup', email })
+    }).catch(() => {});
+
+    // Insert into the permanent Supabase waitlist table. Insert-only for the
+    // anon key - not even this browser can read the row back afterward.
+    fetch(SUPABASE_WAITLIST_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ email, source: 'landing' })
     }).catch(() => {});
 
     // Submit to Google Form (permanent record; no-cors since Google Forms has no CORS)
