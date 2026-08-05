@@ -6,7 +6,7 @@ import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
-import { useDonorAuth } from '../lib/donorAuth';
+import { useDonorAuth, nativeSSOAvailable } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, PAYMENT_OPTIONS } from './Onboarding';
 import { findOrgByCode } from '../store/orgStore';
@@ -394,8 +394,11 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   async function handleSignInSSO(p) {
     if (ssoChosen) return;
     setSsoChosen(p);
-    await donorAuth.startOAuth(p); // navigates away on success
-    setSsoChosen(null); // only reached if it failed (see donorAuth.oauthErrors)
+    // Native resolves with the identity (in-app browser round trip); web
+    // navigates away on success, so past this line = failure or sheet closed.
+    const identity = await donorAuth.startOAuth(p);
+    if (identity) return finishSignIn(identity);
+    setSsoChosen(null);
   }
 
   // Demo-only shortcut, carried over from the phone's sign-in empty state, so a
@@ -408,10 +411,16 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     setPage('np-dashboard');
   }
 
-  function handleSSO(p) {
+  async function handleSSO(p) {
     if (hasAccount) { setLastMode('giving'); setPage('home'); return; }
     if (!canContinue) return;
-    donorAuth.startOAuth(p);
+    if (chosen) return; // prevent double-tap while a native sheet is up
+    setChosen(p);
+    // Native resolves with the identity (in-app browser round trip); web
+    // navigates away on success, so past this line = failure or sheet closed.
+    const identity = await donorAuth.startOAuth(p);
+    if (identity) return finishSignup(identity);
+    setChosen(null);
   }
 
   // Writes pc_identity the same way for every sign-in path, then continues
@@ -705,12 +714,12 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                     </form>
                   )}
 
-                  {/* Native interim rule: WebOnboarding only ever renders on
-                      desktop (App.jsx routes Capacitor to the mobile shell), so
-                      isNative() is not expected to be true here in practice -
-                      gated anyway since this screen shares useDonorAuth with the
-                      phone screen and must not drift from the same rule. */}
-                  {!isNative() && (
+                  {/* Same SSO rule as the phone screens: web always, native
+                      only when the shell can run the in-app OAuth flow (see
+                      nativeSSOAvailable). WebOnboarding only ever renders on
+                      desktop in practice - gated anyway so this screen cannot
+                      drift from the phone screens' rule. */}
+                  {(!isNative() || nativeSSOAvailable()) && (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
                         <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
@@ -872,13 +881,12 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                         </form>
                       )}
 
-                      {/* Native interim rule (see Onboarding.jsx's SignUpScreen for
-                          the full reasoning): WebOnboarding only ever renders on
-                          desktop (App.jsx routes Capacitor to the mobile shell), so
-                          isNative() is not expected to be true here in practice -
-                          gated anyway since this screen shares useDonorAuth with the
-                          phone screen and must not drift from the same rule. */}
-                      {!isNative() && (
+                      {/* Same SSO rule as Onboarding.jsx's SignUpScreen: web
+                          always, native only when the shell can run the in-app
+                          OAuth flow (see nativeSSOAvailable). WebOnboarding only
+                          ever renders on desktop in practice - gated anyway so
+                          this screen cannot drift from the phone screens' rule. */}
+                      {(!isNative() || nativeSSOAvailable()) && (
                         <>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
                             <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
@@ -892,7 +900,7 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                         </>
                       )}
                       <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }}>
-                        {isNative()
+                        {isNative() && !nativeSSOAvailable()
                           ? `Sign in with your email  -  we'll send you a 6-digit code, no password needed. Tax receipts from ${npShort} go to your sign-in email.`
                           : `No passwords here  -  we'll email you a one-time code, or use Apple or Google. Tax receipts from ${npShort} go to your sign-in email.`}
                       </p>

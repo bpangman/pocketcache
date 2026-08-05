@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import { initNativeAuthListener } from './lib/donorAuth'
 
 // TESTING MODE - wipe all persisted state on every native cold launch
 // so Blake can test from the fresh welcome screen each time.
@@ -17,6 +18,13 @@ if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
     }
   } catch { /* ignore */ }
 }
+
+// Native in-app SSO return trip: iOS hands app.pocketcache://auth-callback#…
+// to the shell, the App plugin fires appUrlOpen, and this listener turns the
+// tokens into a Supabase session (see lib/donorAuth.js). Registered once at
+// bootstrap - before any screen mounts. No-op on the web and on old shells
+// without the Browser/App plugins.
+initNativeAuthListener();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

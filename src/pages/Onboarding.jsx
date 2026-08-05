@@ -26,7 +26,7 @@ import {
 import { useAdminAuth, getRememberedAdminEmail, rememberAdminEmail, forgetAdminEmail } from '../lib/adminAuth';
 import { orgAdminLookup } from '../lib/npApi';
 import { loadKey, saveKey, IDENTITY_KEYS } from '../store/identityStore';
-import { useDonorAuth } from '../lib/donorAuth';
+import { useDonorAuth, nativeSSOAvailable } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
@@ -639,10 +639,18 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     finishSignup(donorAuth.existingSession);
   }
 
-  function handleSSO(provider) {
+  async function handleSSO(provider) {
     if (hasAccount) return handleSignIn();
     if (!canContinue) { setShowTermsHint(true); return; }
-    donorAuth.startOAuth(provider);
+    if (chosen) return; // prevent double-tap while a native sheet is up
+    setChosen(provider);
+    // Native (new shells): resolves with the identity once the in-app
+    // browser round trip completes - adopt it exactly like an email verify.
+    // Web: navigates the whole page away on success, so anything after this
+    // line only runs on failure or when the donor closed the native sheet.
+    const identity = await donorAuth.startOAuth(provider);
+    if (identity) return finishSignup(identity);
+    setChosen(null);
   }
 
   return (
@@ -816,14 +824,13 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
                 </form>
               )}
 
-              {/* Native interim rule: inside the Capacitor app, Google/Apple
-                  sign-in always bounces to external Safari for the OAuth hop
-                  (the webview cannot host Google's own sign-in page) - that
-                  round trip is exactly what stranded a donor in the wrong
-                  shell (see App.jsx's appEntry/useIsMobile fix). Until that
-                  hop is rebuilt as an in-app flow, native donors get email
-                  code only - it never leaves the app. Web keeps all three. */}
-              {!isNative() && (
+              {/* SSO shows on the web AND on native shells that can run the
+                  in-app OAuth flow (Browser + App plugins present - see
+                  nativeSSOAvailable in lib/donorAuth.js; the plugin check IS
+                  the shell-version gate). Old shells, where the OAuth hop
+                  would bounce to external Safari and strand the donor there,
+                  keep email code only. */}
+              {(!isNative() || nativeSSOAvailable()) && (
                 <>
                   <div className="flex items-center gap-3 py-1">
                     <div className="flex-1 h-px bg-gray-100" />
@@ -836,7 +843,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
               )}
 
               <p className="text-gray-400 text-xs text-center px-2 pt-1">
-                {isNative()
+                {isNative() && !nativeSSOAvailable()
                   ? "Sign in with your email  -  we'll send you a 6-digit code, no password needed."
                   : "No passwords here  -  we'll email you a one-time code, or use Apple or Google."}
               </p>
@@ -1137,9 +1144,10 @@ function AdminSignInScreen({ onBack, onComplete }) {
 // ─── Gate Sign-In Screen (universal "already have an account?" path) ─────────
 // Shown when a returning user taps "Already have an account? Sign in" from the
 // gate. Real Supabase sign-in, shared with SignUpScreen via useDonorAuth:
-//   • Email code (primary, native-safe - no redirect hop).
-//   • Apple / Google, web only (native hides these - see SignUpScreen's
-//     isNative() note; the Capacitor OAuth redirect leaves the app).
+//   • Email code (primary, works everywhere - no redirect hop).
+//   • Apple / Google: web, plus native shells that can run the in-app OAuth
+//     flow (see nativeSSOAvailable in lib/donorAuth.js). Old shells hide
+//     these - their OAuth redirect would leave the app.
 //   • A live Supabase session already on this device surfaces as "Continue as".
 // On success: onIdentityVerified adopts the identity (pc_identity + app-level
 // hasAccount), then onSignIn() routes by role - donor-only → giving,
@@ -1176,8 +1184,13 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
   async function handleSSO(provider) {
     if (chosen) return; // prevent double-tap
     setChosen(provider);
-    await donorAuth.startOAuth(provider); // navigates away on success
-    setChosen(null); // only reached if it failed (see donorAuth.oauthErrors)
+    // Native (new shells): resolves with the identity once the in-app
+    // browser round trip completes - a real sign-in, route to the dashboard.
+    // Web: navigates the whole page away on success, so anything after this
+    // line only runs on failure or when the donor closed the native sheet.
+    const identity = await donorAuth.startOAuth(provider);
+    if (identity) return finishSignIn(identity);
+    setChosen(null);
   }
 
   return (
@@ -1261,10 +1274,9 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
           </form>
         )}
 
-        {/* Native interim rule: same as SignUpScreen - the Apple/Google OAuth
-            hop bounces to external Safari inside the Capacitor webview, so
-            native donors get email code only. */}
-        {!isNative() && (
+        {/* Same SSO rule as SignUpScreen: web always, native only when the
+            shell can run the in-app OAuth flow (see nativeSSOAvailable). */}
+        {(!isNative() || nativeSSOAvailable()) && (
           <>
             <div className="flex items-center gap-3 py-1">
               <div className="flex-1 h-px bg-gray-100" />
@@ -1275,7 +1287,7 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
           </>
         )}
         <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
-          {isNative()
+          {isNative() && !nativeSSOAvailable()
             ? "Sign in with your email  -  we'll send you a 6-digit code, no password needed."
             : 'No passwords here  -  we\'ll email you a one-time code, or use Apple or Google.'}
         </p>
