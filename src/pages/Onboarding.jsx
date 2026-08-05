@@ -543,6 +543,13 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   const [emailInputError, setEmailInputError] = useState(null);
   const [verifiedIdentity, setVerifiedIdentity] = useState(null);
   const [displayName, setDisplayName] = useState('');
+  // "Already have an account? Sign in" (below): a real email/OTP sign-in,
+  // independent of the terms/state gate above it - a returning donor is not
+  // making a new round-up commitment, so they should not have to re-agree to
+  // terms or re-pick a state just to sign back in.
+  const [signInMode, setSignInMode] = useState(false);
+  const [signInEmail, setSignInEmail] = useState(() => hasAccount?.email || '');
+  const [signInEmailError, setSignInEmailError] = useState(null);
 
   function handleSignIn() {
     if (!hasAccount) return;
@@ -560,6 +567,42 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     saveKey('pc_comms_optin', commsOptin);
     setChosen(identity.provider);
     setTimeout(() => onNext(), 500);
+  }
+
+  // Same identity write as finishSignup (see above) - a real sign-in just
+  // routes to the donor's existing dashboard instead of continuing the
+  // signup wizard (connect card / payment method / checkout), since the
+  // account, card, and payment method already exist server-side.
+  function finishSignIn(identity) {
+    saveKey(IDENTITY_KEYS.identity, identity);
+    onIdentityVerified?.(identity);
+    onProviderChosen?.(identity.provider);
+    setTimeout(() => onGoToDashboard?.(), 500);
+  }
+
+  function handleSendSignInCode(e) {
+    e?.preventDefault?.();
+    const addr = signInEmail.trim();
+    if (!addr.includes('@') || !addr.split('@')[1]?.includes('.')) {
+      setSignInEmailError('Enter a valid email address.');
+      return;
+    }
+    setSignInEmailError(null);
+    // shouldCreateUser: false - this is a SIGN-IN, not a signup. An unknown
+    // or mistyped email should say so, not quietly create a new donor.
+    donorAuth.sendCode(addr, { shouldCreateUser: false });
+  }
+
+  async function handleVerifySignInCode(e) {
+    e?.preventDefault?.();
+    const identity = await donorAuth.verifyCode(donorAuth.codeInput);
+    if (identity) finishSignIn(identity);
+  }
+
+  function exitSignInMode() {
+    setSignInMode(false);
+    setSignInEmailError(null);
+    donorAuth.resetToEmail();
   }
 
   function handleSendCode(e) {
@@ -700,8 +743,10 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             </motion.button>
           )}
 
-          {/* Real email sign-in: address -> 6-digit code -> confirm name */}
-          {verifiedIdentity ? (
+          {/* Real email sign-in: address -> 6-digit code -> confirm name.
+              Hidden while signInMode is active (below) so a returning donor
+              sees one focused prompt, not two stacked email forms. */}
+          {!signInMode && (verifiedIdentity ? (
             <form onSubmit={handleConfirmName} className="space-y-3">
               <div className="rounded-2xl px-3 py-2.5 bg-teal-50 border border-teal-200">
                 <p className="text-xs text-teal-700 font-semibold">
@@ -799,16 +844,69 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
                 Tax receipts from {nonprofit?.shortName ?? 'your nonprofit'} go to your sign-in email.
               </p>
             </>
-          )}
+          ))}
 
-          {/* Already have an account? */}
-          <button
-            onClick={handleSignIn}
-            className="w-full text-center py-2"
-          >
-            <span className="text-gray-400 text-sm">Already have an account? </span>
-            <span className="text-sm font-semibold underline" style={{ color: '#003865' }}>Sign in</span>
-          </button>
+          {/* Already have an account? - real email/OTP sign-in, not gated on
+              terms/state above (see signInMode state + finishSignIn). */}
+          {signInMode ? (
+            <div className="space-y-3 pt-1">
+              {donorAuth.stage === 'code' ? (
+                <form onSubmit={handleVerifySignInCode} className="space-y-3">
+                  <p className="text-gray-500 text-sm px-1">
+                    We sent a 6-digit code to <strong className="text-gray-900">{donorAuth.email}</strong>.
+                  </p>
+                  <input
+                    type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                    onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
+                    style={{ borderColor: donorAuth.codeError ? '#ef4444' : '#e5e7eb' }}
+                  />
+                  {donorAuth.codeError && <p className="text-red-500 text-xs px-1">{donorAuth.codeError}</p>}
+                  <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                    className="w-full py-4 rounded-2xl font-bold text-base text-white"
+                    style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: donorAuth.codeInput.length === 6 && !donorAuth.verifying ? 1 : 0.4 }}>
+                    {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
+                  </motion.button>
+                  <div className="flex justify-center gap-4">
+                    <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email, { shouldCreateUser: false })} className="text-sm text-gray-400 font-medium">Resend code</button>
+                    <button type="button" onClick={() => donorAuth.resetToEmail()} className="text-sm text-gray-400 font-medium">Change email</button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleSendSignInCode} className="space-y-2">
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
+                    <input
+                      type="email"
+                      value={signInEmail}
+                      onChange={e => { setSignInEmail(e.target.value); setSignInEmailError(null); }}
+                      placeholder="you@example.com"
+                      className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                      style={{ borderColor: signInEmailError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
+                    />
+                    {signInEmailError && <p className="text-red-500 text-xs mt-1 px-1">{signInEmailError}</p>}
+                    {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
+                  </div>
+                  <motion.button whileTap={{ scale: 0.97 }} type="submit"
+                    className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
+                    style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: signInEmail.trim() && !donorAuth.sendingCode ? 1 : 0.4 }}>
+                    {donorAuth.sendingCode ? 'Sending…' : 'Email me a sign-in code →'}
+                  </motion.button>
+                </form>
+              )}
+              <button onClick={exitSignInMode} className="w-full text-center py-2 text-sm text-gray-400">
+                ← Back
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setSignInMode(true)}
+              className="w-full text-center py-2"
+            >
+              <span className="text-gray-400 text-sm">Already have an account? </span>
+              <span className="text-sm font-semibold underline" style={{ color: '#003865' }}>Sign in</span>
+            </button>
+          )}
           </div>
         </div>
         <ScrollFadeEdge show={showFade} rgb="255,255,255" />
@@ -1037,80 +1135,49 @@ function AdminSignInScreen({ onBack, onComplete }) {
 }
 
 // ─── Gate Sign-In Screen (universal "already have an account?" path) ─────────
-// Shown when a returning user taps "Already have an account? Sign in" from the gate.
-// Three demo outcomes after an SSO tap:
-//   • Local identity found + active   → onSignIn() → resumeSession() → last-used mode
-//   • Local identity found + cancelled → onSignIn() → resumeSession() → home (reactivate overlay)
-//   • No local identity (fresh device) → empty state shown inline
-//   Production: the backend looks up the account by SSO token, not local storage.
-
-function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin, onAdminSignIn }) {
+// Shown when a returning user taps "Already have an account? Sign in" from the
+// gate. Real Supabase sign-in, shared with SignUpScreen via useDonorAuth:
+//   • Email code (primary, native-safe - no redirect hop).
+//   • Apple / Google, web only (native hides these - see SignUpScreen's
+//     isNative() note; the Capacitor OAuth redirect leaves the app).
+//   • A live Supabase session already on this device surfaces as "Continue as".
+// On success: onIdentityVerified adopts the identity (pc_identity + app-level
+// hasAccount), then onSignIn() routes by role - donor-only → giving,
+// admin-only → dashboard, both → last-used mode.
+function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, onAdminSignIn }) {
+  const donorAuth = useDonorAuth({ resumeKey: 'app' });
   const [chosen, setChosen] = useState(null);
-  const [emptyState, setEmptyState] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState(null);
 
-  function handleSSO(provider) {
-    if (chosen) return; // prevent double-tap
-    setChosen(provider);
-    setTimeout(() => {
-      if (!hasAccount && !adminRole) {
-        // Production: backend identity lookup by SSO token finds the account anywhere.
-        // Demo: no account found on this device  -  show the empty state.
-        setEmptyState(true);
-        setChosen(null);
-        return;
-      }
-      // One door for everyone: onSignIn routes by the identity's roles  - 
-      // donor-only → giving, admin-only → dashboard, both → last-used mode.
-      // Cancelled donors see the Reactivate overlay on home.
-      onSignIn();
-    }, 800);
+  function finishSignIn(identity) {
+    onIdentityVerified?.(identity);
+    setTimeout(() => onSignIn?.(), 500);
   }
 
-  if (emptyState) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, x: 30 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3 }}
-        className="flex flex-col h-full overflow-hidden"
-      >
-        <div
-          className="flex flex-col justify-end px-8 pb-8 shrink-0"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
-        >
-          <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
-            <ArrowLeft size={14} /> Back
-          </motion.button>
-          <div className="text-4xl mb-4">🔍</div>
-          <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
-            No Account{'\n'}Found
-          </h1>
-          <p className="text-white/70 text-xs mt-2 leading-relaxed">
-            We couldn&apos;t find an account on this device.
-          </p>
-        </div>
-        <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col justify-center px-6 pb-10">
-          <p className="text-gray-500 text-sm text-center leading-relaxed mb-6 px-2">
-            In the real app, signing in with Apple or Google finds your account anywhere  -  no device lock-in.
-          </p>
-          <motion.button
-            whileTap={{ scale: 0.9, opacity: 0.6 }}
-            onClick={onBack}
-            className="w-full py-4 rounded-2xl font-semibold text-sm"
-            style={{ background: '#f0f4f8', color: '#0B2A4A' }}
-          >
-            ← Back to gate
-          </motion.button>
-          {/* Demo-only shortcut so prospects can see the admin side without creating an org */}
-          <button
-            onClick={onDemoAdmin}
-            className="w-full text-center py-3 mt-2 text-xs text-gray-400"
-          >
-            Demo: preview the BGCA admin dashboard →
-          </button>
-        </div>
-      </motion.div>
-    );
+  function handleSendCode(e) {
+    e?.preventDefault?.();
+    const addr = email.trim();
+    if (!addr.includes('@') || !addr.split('@')[1]?.includes('.')) {
+      setEmailError('Enter a valid email address.');
+      return;
+    }
+    setEmailError(null);
+    // shouldCreateUser: false - this is a sign-in door, not a signup form.
+    donorAuth.sendCode(addr, { shouldCreateUser: false });
+  }
+
+  async function handleVerifyCode(e) {
+    e?.preventDefault?.();
+    const identity = await donorAuth.verifyCode(donorAuth.codeInput);
+    if (identity) finishSignIn(identity);
+  }
+
+  async function handleSSO(provider) {
+    if (chosen) return; // prevent double-tap
+    setChosen(provider);
+    await donorAuth.startOAuth(provider); // navigates away on success
+    setChosen(null); // only reached if it failed (see donorAuth.oauthErrors)
   }
 
   return (
@@ -1135,15 +1202,95 @@ function GateSignInScreen({ onBack, hasAccount, adminRole, onSignIn, onDemoAdmin
         </p>
       </div>
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10 gap-4">
-        <SsoButtons onPress={handleSSO} chosen={chosen} />
+        {!donorAuth.checkingSession && donorAuth.existingSession && (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => finishSignIn(donorAuth.existingSession)}
+            className="w-full flex items-center gap-2 px-3 py-3 rounded-2xl border text-left"
+            style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
+          >
+            <span className="text-amber-500">👋</span>
+            <span className="text-amber-800 text-sm font-semibold flex-1">
+              Continue as {donorAuth.existingSession.email} →
+            </span>
+          </motion.button>
+        )}
+
+        {donorAuth.stage === 'code' ? (
+          <form onSubmit={handleVerifyCode} className="space-y-3">
+            <p className="text-gray-500 text-sm px-1">
+              We sent a 6-digit code to <strong className="text-gray-900">{donorAuth.email}</strong>.
+            </p>
+            <input
+              type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+              onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
+              style={{ borderColor: donorAuth.codeError ? '#ef4444' : '#e5e7eb' }}
+            />
+            {donorAuth.codeError && <p className="text-red-500 text-xs px-1">{donorAuth.codeError}</p>}
+            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+              className="w-full py-4 rounded-2xl font-bold text-base text-white"
+              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: donorAuth.codeInput.length === 6 && !donorAuth.verifying ? 1 : 0.4 }}>
+              {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
+            </motion.button>
+            <div className="flex justify-center gap-4">
+              <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email, { shouldCreateUser: false })} className="text-sm text-gray-400 font-medium">Resend code</button>
+              <button type="button" onClick={() => donorAuth.resetToEmail()} className="text-sm text-gray-400 font-medium">Change email</button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSendCode} className="space-y-2">
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setEmailError(null); }}
+                placeholder="you@example.com"
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                style={{ borderColor: emailError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
+              />
+              {emailError && <p className="text-red-500 text-xs mt-1 px-1">{emailError}</p>}
+              {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
+            </div>
+            <motion.button whileTap={{ scale: 0.97 }} type="submit"
+              className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
+              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: email.trim() && !donorAuth.sendingCode ? 1 : 0.4 }}>
+              {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
+            </motion.button>
+          </form>
+        )}
+
+        {/* Native interim rule: same as SignUpScreen - the Apple/Google OAuth
+            hop bounces to external Safari inside the Capacitor webview, so
+            native donors get email code only. */}
+        {!isNative() && (
+          <>
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-gray-100" />
+              <p className="text-gray-400 text-xs font-medium">or</p>
+              <div className="flex-1 h-px bg-gray-100" />
+            </div>
+            <SsoButtons onPress={handleSSO} chosen={chosen} errors={donorAuth.oauthErrors} />
+          </>
+        )}
         <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
-          No passwords here  -  your Apple or Google account is your key, including its two-factor protection.
+          {isNative()
+            ? "Sign in with your email  -  we'll send you a 6-digit code, no password needed."
+            : 'No passwords here  -  we\'ll email you a one-time code, or use Apple or Google.'}
         </p>
         {onAdminSignIn && (
           <button onClick={onAdminSignIn} className="text-sm text-gray-400 text-center py-1">
             Nonprofit admin? <span className="font-semibold underline" style={{ color: '#003865' }}>Sign in with your work email</span>
           </button>
         )}
+        {/* Demo-only shortcut so prospects can see the admin side without creating an org */}
+        <button
+          onClick={onDemoAdmin}
+          className="w-full text-center pb-1 text-xs text-gray-400"
+        >
+          Demo: preview the BGCA admin dashboard →
+        </button>
       </div>
     </motion.div>
   );
@@ -2706,9 +2853,8 @@ export default function Onboarding() {
   if (step === 'gate-signin') return (
     <GateSignInScreen
       onBack={() => setStep('gate')}
-      hasAccount={hasAccount}
-      adminRole={adminRole}
       onSignIn={resumeSession}
+      onIdentityVerified={identity => { setHasAccount(identity); setAccountStatus('active'); }}
       onDemoAdmin={handleNpSignIn}
       onAdminSignIn={() => setStep('admin-signin')}
     />

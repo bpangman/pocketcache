@@ -275,7 +275,8 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   ));
   // Sign-in step
   const [ssoChosen, setSsoChosen] = useState(null);
-  const [noAccount, setNoAccount] = useState(false);
+  const [signInEmail, setSignInEmail] = useState('');
+  const [signInEmailError, setSignInEmailError] = useState(null);
   // Account step
   const [selectedState, setSelectedState] = useState('');
   const [agreedTerms, setAgreedTerms] = useState(false);
@@ -362,15 +363,39 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     setPage('home');
   }
 
-  function handleSignInSSO(p) {
+  // Real sign-in, shared with the 'account' step's donorAuth instance (only
+  // one step is mounted at a time, so sharing donorAuth.stage/email/codeInput
+  // across them is safe - same pattern as the phone's GateSignInScreen).
+  function finishSignIn(identity) {
+    saveKey(IDENTITY_KEYS.identity, identity);
+    setHasAccount(identity);
+    setAccountStatus('active');
+    setTimeout(() => resumeSession(), 500);
+  }
+
+  function handleSendSignInCode(e) {
+    e?.preventDefault?.();
+    const addr = signInEmail.trim();
+    if (!addr.includes('@') || !addr.split('@')[1]?.includes('.')) {
+      setSignInEmailError('Enter a valid email address.');
+      return;
+    }
+    setSignInEmailError(null);
+    // shouldCreateUser: false - this is a sign-in door, not a signup form.
+    donorAuth.sendCode(addr, { shouldCreateUser: false });
+  }
+
+  async function handleVerifySignInCode(e) {
+    e?.preventDefault?.();
+    const identity = await donorAuth.verifyCode(donorAuth.codeInput);
+    if (identity) finishSignIn(identity);
+  }
+
+  async function handleSignInSSO(p) {
     if (ssoChosen) return;
     setSsoChosen(p);
-    setTimeout(() => {
-      // Production: the backend looks the identity up by SSO token and finds the
-      // account anywhere. Demo: nothing on this device, so say so plainly.
-      if (!hasAccount && !adminRole) { setNoAccount(true); setSsoChosen(null); return; }
-      resumeSession();
-    }, 800);
+    await donorAuth.startOAuth(p); // navigates away on success
+    setSsoChosen(null); // only reached if it failed (see donorAuth.oauthErrors)
   }
 
   // Demo-only shortcut, carried over from the phone's sign-in empty state, so a
@@ -624,46 +649,104 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                   The gate's universal door (Onboarding.jsx GateSignInScreen):
                   one identity, whichever roles it holds. */}
               {step === 'signin' && (
-                noAccount ? (
-                  <>
-                    <PanelTitle title="No account found" sub="We could not find an account on this device." />
-                    <p style={{ margin: '0 0 18px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
-                      In the real app, signing in with Apple or Google finds your account
-                      anywhere  -  no device lock-in, nothing to remember.
-                    </p>
-                    <PrimaryButton onClick={() => { setNoAccount(false); setStep('join'); }}>← Back to the code</PrimaryButton>
+                <>
+                  <PanelTitle title="Welcome back" sub="Sign in with the account you used before." />
+
+                  {!donorAuth.checkingSession && donorAuth.existingSession && (
                     <button
-                      onClick={previewAdminDashboard}
-                      style={{ width: '100%', marginTop: 10, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: INK.muted }}
+                      onClick={() => finishSignIn(donorAuth.existingSession)}
+                      style={{ width: '100%', textAlign: 'left', marginBottom: 14, padding: '12px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: '#92400e' }}
                     >
-                      Demo: preview the BGCA admin dashboard →
+                      👋 Continue as {donorAuth.existingSession.email} →
                     </button>
-                  </>
-                ) : (
-                  <>
-                    <PanelTitle title="Welcome back" sub="Sign in with the account you used before." />
-                    <SsoButtons onPress={handleSignInSSO} chosen={ssoChosen} />
-                    <p style={{ margin: '12px 0 0', fontSize: 12, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
-                      No passwords here  -  your Apple or Google account is your key, including its two-factor protection.
-                    </p>
-                    {onAdminSignIn && (
-                      <button
-                        onClick={onAdminSignIn}
-                        data-testid="web-signin-admin"
-                        style={{ width: '100%', marginTop: 14, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: INK.muted }}
-                      >
-                        Nonprofit admin? <span style={{ fontWeight: 700, textDecoration: 'underline', color: NAVY }}>Sign in with your work email</span>
-                      </button>
-                    )}
+                  )}
+
+                  {donorAuth.stage === 'code' ? (
+                    <form onSubmit={handleVerifySignInCode}>
+                      <p style={{ margin: '0 0 10px', fontSize: 13.5, color: INK.secondary }}>
+                        We sent a 6-digit code to <strong style={{ color: INK.primary }}>{donorAuth.email}</strong>.
+                      </p>
+                      <input
+                        type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                        onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', padding: '13px 15px', borderRadius: 12,
+                          border: `1.5px solid ${donorAuth.codeError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb',
+                          fontFamily: 'monospace', fontSize: 20, letterSpacing: '0.4em', textAlign: 'center', color: INK.primary, marginBottom: 8,
+                        }}
+                      />
+                      {donorAuth.codeError && <p style={{ margin: '0 0 10px', fontSize: 12.5, color: '#dc2626' }}>{donorAuth.codeError}</p>}
+                      <PrimaryButton onClick={handleVerifySignInCode} disabled={donorAuth.codeInput.length !== 6 || donorAuth.verifying}>
+                        {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
+                      </PrimaryButton>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10 }}>
+                        <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email, { shouldCreateUser: false })} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Resend code</button>
+                        <button type="button" onClick={donorAuth.resetToEmail} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Change email</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleSendSignInCode} style={{ marginBottom: 14 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                        Your email
+                      </label>
+                      <input
+                        type="email"
+                        value={signInEmail}
+                        onChange={e => { setSignInEmail(e.target.value); setSignInEmailError(null); }}
+                        placeholder="you@example.com"
+                        data-testid="web-signin-email"
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1px solid ${signInEmailError || donorAuth.sendError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb', fontSize: 14, color: INK.primary, marginBottom: 8 }}
+                      />
+                      {signInEmailError && <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{signInEmailError}</p>}
+                      {donorAuth.sendError && <p data-testid="web-signin-error" style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{donorAuth.sendError}</p>}
+                      <PrimaryButton onClick={handleSendSignInCode} disabled={!signInEmail.trim() || donorAuth.sendingCode}>
+                        {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
+                      </PrimaryButton>
+                    </form>
+                  )}
+
+                  {/* Native interim rule: WebOnboarding only ever renders on
+                      desktop (App.jsx routes Capacitor to the mobile shell), so
+                      isNative() is not expected to be true here in practice -
+                      gated anyway since this screen shares useDonorAuth with the
+                      phone screen and must not drift from the same rule. */}
+                  {!isNative() && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
+                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                        <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted }}>or</span>
+                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                      </div>
+                      <SsoButtons onPress={handleSignInSSO} chosen={ssoChosen} errors={donorAuth.oauthErrors} />
+                    </>
+                  )}
+                  <p style={{ margin: '12px 0 0', fontSize: 12, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
+                    No passwords here  -  we&apos;ll email you a one-time code, or use Apple or Google.
+                  </p>
+                  {onAdminSignIn && (
                     <button
-                      onClick={() => setStep('join')}
-                      data-testid="web-signin-back"
-                      style={{ width: '100%', marginTop: 4, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: INK.muted }}
+                      onClick={onAdminSignIn}
+                      data-testid="web-signin-admin"
+                      style={{ width: '100%', marginTop: 14, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: INK.muted }}
                     >
-                      ← Back
+                      Nonprofit admin? <span style={{ fontWeight: 700, textDecoration: 'underline', color: NAVY }}>Sign in with your work email</span>
                     </button>
-                  </>
-                )
+                  )}
+                  {/* Demo-only shortcut so prospects can see the admin side without creating an org */}
+                  <button
+                    onClick={previewAdminDashboard}
+                    style={{ width: '100%', marginTop: 2, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: INK.muted }}
+                  >
+                    Demo: preview the BGCA admin dashboard →
+                  </button>
+                  <button
+                    onClick={() => { setStep('join'); donorAuth.resetToEmail(); }}
+                    data-testid="web-signin-back"
+                    style={{ width: '100%', marginTop: 4, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: INK.muted }}
+                  >
+                    ← Back
+                  </button>
+                </>
               )}
 
               {step === 'account' && (

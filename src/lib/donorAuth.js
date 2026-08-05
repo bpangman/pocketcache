@@ -71,6 +71,13 @@ function identityFromSession(session) {
 // donor should never see a raw error message.
 function friendlySendError(err) {
   const msg = (err?.message || '').toLowerCase();
+  // shouldCreateUser: false against an email with no account: Supabase answers
+  // 422 error_code "otp_disabled", msg "Signups not allowed for otp" (verified
+  // live against the project's /auth/v1/otp endpoint). A sign-in affordance
+  // wants this to read as "no account", not a generic send failure.
+  if (err?.code === 'otp_disabled' || msg.includes('signups not allowed')) {
+    return 'We could not find an account with that email.';
+  }
   if (err?.status === 429 || msg.includes('rate limit') || msg.includes('email_send_rate_limit')) {
     return 'Email sign-in is busy right now - try again in a few minutes.';
   }
@@ -142,13 +149,18 @@ export function useDonorAuth({ resumeKey }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sendCode = useCallback(async (addr) => {
+  // shouldCreateUser: true is right for a SIGNUP surface (new donor, no
+  // account yet - the whole point is to create one). A SIGN-IN affordance
+  // ("Already have an account?") should pass shouldCreateUser: false instead,
+  // so a typo'd or unknown email surfaces as "we couldn't find an account"
+  // (see friendlySendError) instead of silently creating a duplicate donor.
+  const sendCode = useCallback(async (addr, { shouldCreateUser = true } = {}) => {
     const supabase = getSupabase();
     setSendError(null);
     setSendingCode(true);
     const { error } = await supabase.auth.signInWithOtp({
       email: addr,
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser },
     });
     setSendingCode(false);
     if (error) {
@@ -218,6 +230,7 @@ export function useDonorAuth({ resumeKey }) {
     setStage('email');
     setCodeInput('');
     setCodeError(null);
+    setSendError(null);
   }
 
   return {
