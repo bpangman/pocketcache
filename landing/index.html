@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+// Root fallback: a Supabase OAuth return that landed here instead of /demo/
+// (uri_allow_list miss, a stale bookmark, etc.) still carries real tokens -
+// forward them on before this static marketing page renders. The flag guards
+// against a redirect loop if /demo/ ever bounces back here for any reason.
+if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_token=') !== -1 || location.search.indexOf('code=') !== -1)) {
+  sessionStorage.setItem('pc-authfwd', '1');
+  location.replace('/demo/' + location.search + location.hash);
+}
+</script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>PocketCache | Round-up giving your nonprofit owns</title>

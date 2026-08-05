@@ -6,6 +6,7 @@ import { monthKey, settleCycle } from '../lib/billing';
 import { pcBeacon } from '../lib/beacon.js';
 import { fetchRoundupsMe } from '../lib/roundupsMe';
 import { fmtFreshness } from '../lib/format';
+import { getSupabase } from '../lib/supa';
 
 // Donor-scoped keys — cleared on donor-account deletion; identity/admin keys survive.
 // 'pc_skip_next' is the retired forever-boolean: kept in the list so the wipe
@@ -427,6 +428,14 @@ export function AppProvider({ children }) {
     setAdminRoleState(null);
     setLastModeState(null);
     setPageState('onboarding');
+    // Also drop the real Supabase session (email code / Apple / Google), not
+    // just this app's local pc_ keys. Fire-and-forget: App.jsx's appEntry
+    // check reads localStorage directly for a lingering sb-*-auth-token, so a
+    // sign-out that left the token behind would send the very next page load
+    // straight back into the app instead of the gate this function just set.
+    // Not awaited - the local state above already reflects "signed out"
+    // instantly, same as before this call existed.
+    getSupabase().auth.signOut().catch(() => { /* best-effort */ });
   }
 
   return (

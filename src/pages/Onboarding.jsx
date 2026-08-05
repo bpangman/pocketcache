@@ -771,16 +771,29 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
                 </form>
               )}
 
-              <div className="flex items-center gap-3 py-1">
-                <div className="flex-1 h-px bg-gray-100" />
-                <p className="text-gray-400 text-xs font-medium">or</p>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>
+              {/* Native interim rule: inside the Capacitor app, Google/Apple
+                  sign-in always bounces to external Safari for the OAuth hop
+                  (the webview cannot host Google's own sign-in page) - that
+                  round trip is exactly what stranded a donor in the wrong
+                  shell (see App.jsx's appEntry/useIsMobile fix). Until that
+                  hop is rebuilt as an in-app flow, native donors get email
+                  code only - it never leaves the app. Web keeps all three. */}
+              {!isNative() && (
+                <>
+                  <div className="flex items-center gap-3 py-1">
+                    <div className="flex-1 h-px bg-gray-100" />
+                    <p className="text-gray-400 text-xs font-medium">or</p>
+                    <div className="flex-1 h-px bg-gray-100" />
+                  </div>
 
-              <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} errors={donorAuth.oauthErrors} />
+                  <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} errors={donorAuth.oauthErrors} />
+                </>
+              )}
 
               <p className="text-gray-400 text-xs text-center px-2 pt-1">
-                No passwords here  -  we&apos;ll email you a one-time code, or use Apple or Google.
+                {isNative()
+                  ? "Sign in with your email  -  we'll send you a 6-digit code, no password needed."
+                  : "No passwords here  -  we'll email you a one-time code, or use Apple or Google."}
               </p>
               <p className="text-gray-400 text-xs text-center px-2">
                 Tax receipts from {nonprofit?.shortName ?? 'your nonprofit'} go to your sign-in email.

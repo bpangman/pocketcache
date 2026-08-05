@@ -566,14 +566,77 @@ function PhoneFrame({ children, compact = false }) {
   );
 }
 
+// A real phone's user agent, even when the layout viewport lies. innerWidth
+// alone was the whole check here for a long time, and it failed exactly once
+// where it mattered most: a donor tapping "Continue with Google" gets bounced
+// to iOS Safari for the OAuth hop (Capacitor's Browser plugin always does
+// this - the app webview cannot host Google's own sign-in page), and iOS
+// Safari remembers a per-site "Request Desktop Website" preference. If that
+// preference is on for this domain - toggled once, on purpose or by
+// accident, at any point in the past - Safari reports a desktop-width layout
+// viewport (commonly 980px) on an otherwise perfectly normal iPhone. On that
+// return trip innerWidth said "desktop" while the device was a phone the
+// whole time, and the donor landed in the marketing PhoneFrame's desktop
+// DevicePicker instead of their own app. A phone UA is not spoofed by that
+// Safari setting, so it is the fallback that still tells the truth.
+const MOBILE_UA_RE = /iPhone|iPod|Android.*Mobile|Windows Phone|BlackBerry|IEMobile/i;
+
+function isMobileUserAgent() {
+  return MOBILE_UA_RE.test(window.navigator?.userAgent || '');
+}
+
+function computeIsMobile() {
+  return window.innerWidth < MOBILE_BP || isMobileUserAgent();
+}
+
 function useIsMobile() {
-  const [mobile, setMobile] = useState(() => window.innerWidth < MOBILE_BP);
+  const [mobile, setMobile] = useState(computeIsMobile);
   useEffect(() => {
-    const check = () => setMobile(window.innerWidth < MOBILE_BP);
+    const check = () => setMobile(computeIsMobile());
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
   return mobile;
+}
+
+// A fresh Supabase auth return, recognized synchronously (before the SPA's
+// own async supabase.auth.getSession() has had a chance to run), two ways:
+//
+//   1. The URL still carries the OAuth callback markers - donorAuth.js's own
+//      ?authResume= marker, Supabase's PKCE ?code=, or an implicit-flow
+//      #access_token= hash. This is the moment right after the redirect back
+//      from Google/Apple, before supabase-js has written anything to storage.
+//   2. A supabase-js session token is already sitting in localStorage - a
+//      plain reload (bookmark, reopened tab, PWA icon) on a device that
+//      signed in before, same rule `hasAccount`/`adminRole` already get below.
+//
+// Either one means "this is a signed-in donor or admin," which is the real
+// app, never the marketing PhoneFrame demo shell - regardless of whether
+// pc_identity has been written yet (it has not, on the very first render of a
+// fresh OAuth return; useDonorAuth inside the real screen is what writes it).
+function hasOAuthReturnMarkers() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('authResume')) return true;
+  if (params.get('code')) return true; // Supabase PKCE callback
+  if (window.location.hash.includes('access_token=')) return true; // implicit flow
+  return false;
+}
+
+function hasStoredSupabaseSession() {
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed?.access_token) return true;
+    }
+  } catch {
+    // Malformed/blocked storage - fall through to "no session found", the
+    // same as before this check existed.
+  }
+  return false;
 }
 
 // The phone-shaped desktop column (WebPortal) lived here and is gone.
@@ -600,6 +663,13 @@ function ThemedApp() {
   // AppProvider's useState initializers have already read localStorage
   // synchronously by the time this runs, so `hasAccount`/`adminRole` here are
   // NOT stale.
+  //
+  // hasOAuthReturnMarkers() / hasStoredSupabaseSession() close the one gap
+  // `hasAccount`/`adminRole` cannot: a donor who just finished a Google/Apple
+  // sign-in (or already has a live Supabase session from one) but has not
+  // reached the screen that writes pc_identity yet. Without this, that donor
+  // hit this exact bug - landed back on bare /demo/ with a real session and
+  // no pc_ keys, and got the marketing PhoneFrame instead of the app.
   const [appEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return Boolean(
@@ -609,7 +679,9 @@ function ThemedApp() {
       params.get('app') === '1' ||
       window.Capacitor?.isNativePlatform?.() ||
       hasAccount ||
-      adminRole
+      adminRole ||
+      hasOAuthReturnMarkers() ||
+      hasStoredSupabaseSession()
     );
   });
 

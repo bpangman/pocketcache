@@ -789,17 +789,29 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                         </form>
                       )}
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
-                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                        <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted }}>or</span>
-                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                      </div>
+                      {/* Native interim rule (see Onboarding.jsx's SignUpScreen for
+                          the full reasoning): WebOnboarding only ever renders on
+                          desktop (App.jsx routes Capacitor to the mobile shell), so
+                          isNative() is not expected to be true here in practice -
+                          gated anyway since this screen shares useDonorAuth with the
+                          phone screen and must not drift from the same rule. */}
+                      {!isNative() && (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
+                            <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                            <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted }}>or</span>
+                            <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                          </div>
 
-                      <div style={{ opacity: canContinue || hasAccount ? 1 : 0.55, pointerEvents: chosen ? 'none' : 'auto' }}>
-                        <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue && !hasAccount} errors={donorAuth.oauthErrors} />
-                      </div>
+                          <div style={{ opacity: canContinue || hasAccount ? 1 : 0.55, pointerEvents: chosen ? 'none' : 'auto' }}>
+                            <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue && !hasAccount} errors={donorAuth.oauthErrors} />
+                          </div>
+                        </>
+                      )}
                       <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }}>
-                        No passwords here  -  we&apos;ll email you a one-time code, or use Apple or Google. Tax receipts from {npShort} go to your sign-in email.
+                        {isNative()
+                          ? `Sign in with your email  -  we'll send you a 6-digit code, no password needed. Tax receipts from ${npShort} go to your sign-in email.`
+                          : `No passwords here  -  we'll email you a one-time code, or use Apple or Google. Tax receipts from ${npShort} go to your sign-in email.`}
                       </p>
                     </>
                   )}

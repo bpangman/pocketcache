@@ -12,16 +12,20 @@
 //   the web - this is exactly why email is the default, native-safe path on
 //   both screens.
 //
-//   Apple / Google (buttons stay visible, wired for real): supabase.auth.
-//   signInWithOAuth(). These providers are NOT configured in Supabase yet -
-//   Blake still needs to create credentials in Google Cloud Console and Apple
-//   Developer separately. Until then, tapping either button gets a "provider
-//   not enabled" style error back from Supabase, which this file turns into a
-//   friendly on-screen message instead of a dead button or a crash. Once the
-//   providers ARE configured, the OAuth redirect happens inside the
-//   Capacitor webview (the iPhone TestFlight app) and leaves the page
-//   entirely - that round trip cannot be verified from a local dev server and
-//   needs a real on-device TestFlight test.
+//   Apple / Google: supabase.auth.signInWithOAuth(). Both providers are
+//   configured in Supabase (confirmed via the Management API - external_
+//   google_enabled and external_apple_enabled are both true) and Google
+//   sign-in has been observed completing for real on Blake's iPhone. The
+//   friendly "provider not enabled" message below still exists as a safety
+//   net for the day either credential set is revoked or expires, not because
+//   either is expected to be off.
+//
+//   The redirect never happens inside the Capacitor webview itself - the
+//   Browser plugin always hands the OAuth hop to external Safari (the app
+//   webview cannot host Google's own sign-in page), and Safari lands back on
+//   ${origin}${BASE_URL}?authResume=<resumeKey> once it is done. See
+//   App.jsx's appEntry / useIsMobile for how that return trip is routed to
+//   the right shell instead of the marketing PhoneFrame demo.
 
 import { useCallback, useEffect, useState } from 'react';
 import { getSupabase } from './supa';
