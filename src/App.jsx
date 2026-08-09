@@ -9,7 +9,7 @@ import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/Devi
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLogo from './components/OrgLogo';
 import AppleLogo from './components/AppleLogo';
-import { findOrgByCode, resolveOrgByCode } from './store/orgStore';
+import { findOrgByCode, resolveOrgByCode, isOrgPending } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
 import ChargeReviewAlert from './components/ChargeReviewAlert';
 import { WebPortalPrompt } from './components/WebPortalLinkModal';
@@ -352,7 +352,7 @@ function Toast({ message, nearSheet }) {
 }
 
 function AppContent() {
-  const { page, accountStatus, reactivateAccount, setPage, toast, trackedCard, paymentMethod, setTab, setPendingSettingsAction } = useApp();
+  const { page, accountStatus, reactivateAccount, setPage, toast, trackedCard, paymentMethod, setTab, setPendingSettingsAction, selectedNonprofit } = useApp();
   const [showReactivateCheckin, setShowReactivateCheckin] = useState(false);
   const bioGate = useBiometricGate();
   const bioOffer = useBiometricOffer();
@@ -380,6 +380,15 @@ function AppContent() {
   if (page === 'onboarding') return <LazySurface surface="splash"><Onboarding /></LazySurface>;
   // Face ID / Touch ID gate  -  everything past sign-in is behind it once enrolled
   if (bioGate.locked) return <AppLockScreen gate={bioGate} />;
+  // BLANK-APP GUARD: every donor tab renders null without a bound nonprofit
+  // (Dashboard/Activity/MyCause all early-return on !selectedNonprofit), so a
+  // sign-in that adopted an identity without a cause binding used to land on
+  // page 'home' and paint NOTHING at all. Whatever got the state here, the
+  // honest destination is the gate - it greets the signed-in donor and asks
+  // for the one thing that is missing, their nonprofit's code.
+  if (page !== 'np-dashboard' && !selectedNonprofit) {
+    return <LazySurface surface="splash"><Onboarding /></LazySurface>;
+  }
   if (page === 'np-dashboard') return (
     <div className="w-full h-full relative">
       <LazySurface surface="npApp"><NpShell /></LazySurface>
@@ -648,7 +657,7 @@ function hasStoredSupabaseSession() {
 
 function ThemedApp() {
   const isMobile = useIsMobile();
-  const { goToOnboardingStep, page, setPage, hasAccount, adminRole, lastMode, accountStatus } = useApp();
+  const { goToOnboardingStep, page, setPage, hasAccount, adminRole, lastMode, accountStatus, selectedNonprofit } = useApp();
   // Donors arriving through an org's join link (?org=CODE)  -  or admins signing
   // in from their micro-site (?npsignin=1) or listing their org (?npsignup=1)  -
   // get the real app experience: full-bleed on phones, a real webpage in a
@@ -739,7 +748,12 @@ function ThemedApp() {
     if (accountStatus === 'cancelled') return;
     const donorOnly = hasAccount && !adminRole;
     const adminOnly = adminRole && !hasAccount;
-    const target = adminOnly ? 'np-dashboard' : donorOnly ? 'home' : (lastMode === 'admin' ? 'np-dashboard' : 'home');
+    let target = adminOnly ? 'np-dashboard' : donorOnly ? 'home' : (lastMode === 'admin' ? 'np-dashboard' : 'home');
+    // A donor 'home' with no bound nonprofit has nothing to show (every tab
+    // early-returns on !selectedNonprofit), so the correction must not steer
+    // into a blank app - the gate greets the signed-in donor and collects the
+    // missing cause binding instead.
+    if (target === 'home' && !selectedNonprofit) target = 'onboarding';
     if (page !== target) setPage(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -821,13 +835,17 @@ function WebExperience() {
     // way: this entry means "resume the nonprofit signup wizard", not "a
     // donor is joining an org").
     const code = npstripe ? null : params.get('org');
+    // A pending org (still awaiting the platform owner's approval) must not
+    // auto-bind - leaving entry.org null keeps the code on the join step,
+    // where handleJoin explains "almost ready" on submit.
+    const localOrg = findOrgByCode(code);
     return {
       // The raw ?org= string as well as the resolved org: a code this device
       // cannot resolve locally yet (see the resolveOrgByCode effect just below)
       // still has to reach the join step so it can be prefilled and explained,
       // exactly as the phone gate does, rather than vanishing.
       code,
-      org: findOrgByCode(code),
+      org: localOrg && !isOrgPending(localOrg) ? localOrg : null,
       npsignin: params.get('npsignin') === '1',
       npsignup: params.get('npsignup') === '1' || npstripe === 'return' || npstripe === 'refresh',
       // ?signin=1 / ?join=1: the marketing site's device-aware entry params.
@@ -847,7 +865,9 @@ function WebExperience() {
     if (!entry.code || entry.org) return;
     let cancelled = false;
     resolveOrgByCode(entry.code).then(org => {
-      if (!cancelled && org) setEntry(prev => ({ ...prev, org }));
+      // Same pending hold as the sync lookup above: never auto-bind an org
+      // the platform owner hasn't approved yet.
+      if (!cancelled && org && !isOrgPending(org)) setEntry(prev => ({ ...prev, org }));
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

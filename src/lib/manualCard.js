@@ -84,3 +84,41 @@ export function isValidCardNumber(value) {
 export function last4(value) {
   return cardDigits(value).slice(-4);
 }
+
+/**
+ * Expiry input formatter: digits only, auto-inserts the slash after the month.
+ *   '1'    -> '1'
+ *   '12'   -> '12/'? no - only once a year digit follows: '12' stays '12'
+ *   '123'  -> '12/3'
+ *   '1226' -> '12/26'
+ * Format-only, like formatCardNumber - validity is isValidExpiry's job.
+ */
+export function formatExpiry(raw) {
+  const digits = String(raw ?? '').replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+/**
+ * Demo-grade expiry check, same spirit as isValidCardNumber (see the header):
+ * MM between 01 and 12, two-digit year, and not already in the past. Nothing
+ * is verified against an issuer.
+ */
+export function isValidExpiry(value, now = new Date()) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  if (digits.length !== 4) return false;
+  const month = parseInt(digits.slice(0, 2), 10);
+  const year = 2000 + parseInt(digits.slice(2), 10);
+  if (month < 1 || month > 12) return false;
+  const thisMonth = now.getFullYear() * 12 + now.getMonth(); // 0-based month index
+  const expMonth = year * 12 + (month - 1);
+  return expMonth >= thisMonth;
+}
+
+/**
+ * Demo-grade CVV check: 3 or 4 digits typed. Never sent anywhere, never
+ * stored - see the header.
+ */
+export function isValidCvv(value) {
+  return /^\d{3,4}$/.test(String(value ?? '').trim());
+}

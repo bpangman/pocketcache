@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle, HelpCircle, SkipForward, Receipt, X } from 'lucide-react';
+import { CreditCard, Bell, Shield, ChevronRight, Zap, Trash2, Fingerprint, FileText, ExternalLink, Eye, Lock, CheckCircle, HelpCircle, SkipForward, Receipt, X, Mail, Sparkles } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import Sheet from '../components/Sheet';
@@ -13,7 +13,7 @@ import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
 import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
-import { resolveOrgByCode } from '../store/orgStore';
+import { resolveOrgByCode, isOrgPending, ORG_PENDING_MESSAGE } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import {
   CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeTotal,
@@ -26,9 +26,9 @@ import { safeBottomAtLeast } from '../lib/safeArea';
 import { MONTHLY_DATA } from '../data/transactions';
 import { DEMO_USER } from '../data/derived';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
-import bgcaLogoUrl from '../assets/bgca-logo.png';
 import { STRIPE_PUBLISHABLE_KEY } from '../lib/stripeKey';
 import { saveCardWithSetupIntent, currentDonorEmail, prettyBrand } from '../lib/stripeSetup';
+import { requestEmailChange, pollConfirmed, syncServerEmail, hasRealSession, isValidEmail } from '../lib/emailChange';
 
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
@@ -555,6 +555,11 @@ function SwitchOrgSheet({ show, onClose, brand, onBind }) {
       setError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
     }
+    if (isOrgPending(np)) {
+      // Still awaiting the platform owner's approval - held back from donors.
+      setError(ORG_PENDING_MESSAGE);
+      return;
+    }
     onBind(np);
     onClose();
     setCode('');
@@ -614,7 +619,10 @@ function SwitchOrgSheet({ show, onClose, brand, onBind }) {
  * selectable, nothing claims to have changed, and the current icon is labelled
  * as the current icon. See PRELAUNCH.md for what shipping it for real needs.
  */
-function AppIconSheet({ show, onClose, brand }) {
+function AppIconSheet({ show, onClose, brand, nonprofit }) {
+  // The anchor-partner icon is the donor's OWN bound nonprofit, not a hardcoded
+  // BGCA - "Preview the BGCA icon" is wrong for a donor bound to any other org.
+  const orgName = nonprofit?.shortName ?? nonprofit?.name ?? 'your nonprofit';
   return (
     <Sheet show={show} onClose={onClose} title="App Icon">
       {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
@@ -635,8 +643,8 @@ function AppIconSheet({ show, onClose, brand }) {
 
         <div className="space-y-3">
           {[
-            { id: 'pocketcache', label: 'PocketCache icon', sub: 'Your icon today', logoImg: null, badge: 'Current', badgeStyle: { color: '#0D9488', background: '#f0fdfa' } },
-            { id: 'bgca', label: 'BGCA icon', sub: 'Anchor partner perk', logoImg: bgcaLogoUrl, badge: 'Coming soon', badgeStyle: { color: '#92400e', background: '#fef3c7' } },
+            { id: 'pocketcache', label: 'PocketCache icon', sub: 'Your icon today', partner: false, badge: 'Current', badgeStyle: { color: '#0D9488', background: '#f0fdfa' } },
+            { id: 'partner', label: `${orgName} icon`, sub: 'Anchor partner perk', partner: true, badge: 'Coming soon', badgeStyle: { color: '#92400e', background: '#fef3c7' } },
           ].map(opt => (
             <div
               key={opt.id}
@@ -645,10 +653,10 @@ function AppIconSheet({ show, onClose, brand }) {
                 ? { borderColor: brand.primary, background: brand.accentLight }
                 : { borderColor: '#f3f4f6', background: '#f9fafb' }}
             >
-              {opt.logoImg ? (
+              {opt.partner && nonprofit ? (
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm overflow-hidden"
                   style={{ background: '#fff', border: '2px solid #e5e7eb', opacity: 0.55 }}>
-                  <img src={opt.logoImg} alt="" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+                  <OrgLogo nonprofit={nonprofit} size={12} rounded="2xl" />
                 </div>
               ) : (
                 // The real app icon: navy tile with the official coin (gold + teal block arrow)
@@ -733,24 +741,24 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
         {result === 'donated' ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">💚</div>
-            <p className="font-bold text-gray-900 text-lg">Donated! Your subscription has been cancelled.</p>
+            <p className="font-bold text-gray-900 text-lg">Donated! Your account is closed.</p>
             <p className="text-gray-500 text-sm mt-2">
-              Thank you for your final donation to {nonprofit?.shortName ?? 'your cause'}.
+              Thank you for your final donation to {nonprofit?.shortName ?? 'your cause'}. Round-ups have stopped and your linked card is removed - nothing further is charged.
             </p>
           </div>
         ) : result === 'cancelled' ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">👋</div>
-            <p className="font-bold text-gray-900 text-lg">Subscription Cancelled</p>
+            <p className="font-bold text-gray-900 text-lg">Account closed</p>
             <p className="text-gray-500 text-sm mt-2">
-              This month&apos;s round-ups won&apos;t be charged  -  as if the month never happened.
+              This month&apos;s round-ups won&apos;t be charged  -  as if the month never happened. Your linked card is removed and nothing further is charged.
             </p>
           </div>
         ) : (
           <>
             <p className="text-gray-700 text-sm mb-2 leading-relaxed">
               You&apos;ve rounded up <strong>${amountStr}</strong> for {nonprofit?.shortName ?? 'your cause'} this month.
-              Would you like to make this month&apos;s donation before cancelling?
+              Would you like to make this month&apos;s donation before closing your account?
             </p>
             {/* Settle-up estimate */}
             <div className="rounded-2xl p-4 mb-3" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
@@ -813,16 +821,16 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
               className="w-full py-4 rounded-2xl text-white font-bold text-base mb-3"
               style={{ background: brand.gradient }}
             >
-              Send ${finalTotal} &amp; cancel
+              Send ${finalTotal} &amp; close account
             </motion.button>
             <p className="text-gray-400 text-xs text-center mb-3">
-              One last charge (your round-ups + flat $1 app fee), then nothing ever again. There&apos;s never a fee for leaving.
+              One last charge (your round-ups + flat $1 app fee), then nothing ever again. Closing stops round-ups and removes your linked card. There&apos;s never a fee for leaving.
             </p>
             <button
               onClick={handleCancelOnly}
               className="w-full py-3.5 rounded-2xl font-semibold text-sm text-gray-500 border border-gray-200 bg-gray-50 mb-3"
             >
-              Cancel without donating
+              Close without donating
             </button>
             {/* CANCELLING, not skip-a-month. Cancelling really does waive the
                 unpaid app fee (Terms section 12); skipping a month does not
@@ -833,7 +841,7 @@ function CancelSheet({ show, onClose, pendingRoundUps, brand, nonprofit, onDonat
                 rather than "all fees this month", because a rolled-forward fee
                 from an earlier month is waived here too. */}
             <p className="text-gray-400 text-xs text-center">
-              Cancel without donating and your round-ups and any unpaid app fees are simply waived  -  like the month never happened. Never a fee for leaving.
+              Close without donating and your round-ups and any unpaid app fees are simply waived  -  like the month never happened. Your linked card is removed and never a fee for leaving.
             </p>
           </>
         )}
@@ -1090,6 +1098,122 @@ function ChangePaymentSheet({ show, onClose, brand, onMethodChanged, nonprofit }
   );
 }
 
+/**
+ * Change the donor's sign-in email - a REAL Supabase auth email change, not a
+ * cosmetic field edit. See src/lib/emailChange.js for exactly what Supabase
+ * does: updateUser({ email }) emails a confirmation LINK (this project has
+ * secure/double email change on, so a link goes to BOTH the new and the
+ * current address) and the change only lands once the link is opened. So this
+ * sheet is honest about it: enter the new address, we send the link, and we
+ * poll getUser() until the address actually flips - there is no fake "code
+ * accepted" screen for a step the donor completes in their own inbox. On
+ * confirmation we update pc_identity (via onChanged -> setHasAccount) and the
+ * email-keyed server row (stripe_donors) via the update-donor-email function.
+ */
+function ChangeEmailSheet({ show, onClose, brand, currentEmail, onChanged }) {
+  const [stage, setStage] = useState('enter'); // 'enter' | 'nosession' | 'sent' | 'done'
+  const [newEmail, setNewEmail] = useState('');
+  const [error, setError] = useState(null);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!show) return;
+    const id = setTimeout(() => { setStage('enter'); setNewEmail(''); setError(null); setSending(false); }, 0);
+    return () => clearTimeout(id);
+  }, [show]);
+
+  // Poll for confirmation while the "check your inbox" state is showing. When
+  // getUser()'s email flips to the new address the donor has clicked the link.
+  useEffect(() => {
+    if (stage !== 'sent') return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      const { email } = await pollConfirmed();
+      if (cancelled) return;
+      if (email && email.toLowerCase() === newEmail.trim().toLowerCase()) {
+        clearInterval(id);
+        await syncServerEmail({ role: 'donor', oldEmail: currentEmail });
+        if (cancelled) return;
+        onChanged?.(newEmail.trim());
+        setStage('done');
+      }
+    }, 4000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [stage, newEmail, currentEmail, onChanged]);
+
+  async function handleSend(e) {
+    e?.preventDefault?.();
+    const addr = newEmail.trim();
+    if (!isValidEmail(addr)) { setError('Enter a valid email address.'); return; }
+    if (addr.toLowerCase() === (currentEmail || '').toLowerCase()) { setError('That is already your email address.'); return; }
+    setSending(true); setError(null);
+    if (!(await hasRealSession())) { setSending(false); setStage('nosession'); return; }
+    const res = await requestEmailChange(addr);
+    setSending(false);
+    if (!res.ok) { setError(res.error); return; }
+    setStage('sent');
+  }
+
+  return (
+    <Sheet show={show} onClose={onClose} title="Change email address">
+      {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
+      <div className="px-6 pt-4">
+        {stage === 'done' ? (
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">✅</div>
+            <p className="font-bold text-gray-900 text-lg">Email updated</p>
+            <p className="text-gray-500 text-sm mt-2">You now sign in with <strong>{newEmail.trim()}</strong>.</p>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={onClose}
+              className="w-full py-3.5 rounded-2xl font-bold text-white text-sm mt-5" style={{ background: brand.primary }}>
+              Done
+            </motion.button>
+          </div>
+        ) : stage === 'nosession' ? (
+          <div className="text-center py-6">
+            <div className="text-4xl mb-3">🔑</div>
+            <p className="font-bold text-gray-900">Sign in first</p>
+            <p className="text-gray-500 text-sm mt-2">You need to sign in again before changing your email. Sign out and back in, then try again.</p>
+            <button onClick={onClose} className="w-full py-3.5 rounded-2xl font-semibold text-sm text-gray-500 border border-gray-200 bg-gray-50 mt-5">Got it</button>
+          </div>
+        ) : stage === 'sent' ? (
+          <div className="py-4" data-testid="change-email-sent">
+            <div className="rounded-2xl px-4 py-4 mb-4" style={{ background: brand.accentLight, border: `1.5px solid ${brand.primary}33` }}>
+              <p className="font-bold text-gray-900 text-sm mb-1">Check your inbox</p>
+              <p className="text-gray-600 text-xs leading-relaxed">
+                We sent a confirmation link to <strong>{newEmail.trim()}</strong> and to your current address ({currentEmail}). Open the link in each email, then come back here - we&apos;ll update automatically.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 justify-center text-gray-400 text-xs mb-4">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin" />
+              Waiting for you to confirm…
+            </div>
+            <button onClick={onClose} className="w-full py-3.5 rounded-2xl font-semibold text-sm text-gray-500 border border-gray-200 bg-gray-50">Close - I&apos;ll finish later</button>
+          </div>
+        ) : (
+          <form onSubmit={handleSend} className="space-y-3">
+            <p className="text-gray-500 text-sm mb-1">Your sign-in email is <strong>{currentEmail}</strong>. Enter the new address you want to use.</p>
+            <input
+              type="email" inputMode="email" autoComplete="email" placeholder="you@example.com"
+              value={newEmail}
+              onChange={e => { setNewEmail(e.target.value); setError(null); }}
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors"
+              style={{ borderColor: error ? '#ef4444' : newEmail ? brand.primary : '#e5e7eb' }}
+            />
+            {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+            <motion.button
+              whileTap={{ scale: 0.97 }} type="submit" disabled={sending}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: newEmail && !sending ? brand.gradient : 'linear-gradient(135deg, #d1d5db, #9ca3af)', cursor: newEmail && !sending ? 'pointer' : 'default' }}>
+              {sending ? 'Sending…' : 'Send confirmation link'}
+            </motion.button>
+            <p className="text-gray-400 text-xs text-center px-2">We&apos;ll email a link to confirm it&apos;s really you. Nothing changes until you open it.</p>
+          </form>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 export default function Settings() {
   const {
     linkedCards, selectedNonprofit, roundUpMultiplier,
@@ -1099,7 +1223,8 @@ export default function Settings() {
     pendingSettingsAction, clearPendingSettingsAction, showToast,
     monthlyCap, setMonthlyCap, chargeAdjustment,
     coverProcessing, setCoverProcessing,
-    skipNextCharge, setSkipNextCharge, feeMonths, hasAccount,
+    skipNextCharge, setSkipNextCharge, feeMonths, hasAccount, setHasAccount,
+    demoMode, setDemoMode,
   } = useApp();
   const brand = useTheme();
 
@@ -1141,6 +1266,7 @@ export default function Settings() {
   const [showChangePayment, setShowChangePayment] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [showBilling, setShowBilling] = useState(false);
+  const [showChangeEmail, setShowChangeEmail] = useState(false);
 
   // Dates come from lib/billing, never from local math: during the review
   // window (days 1-10) the upcoming charge is THIS month's 11th, so a local
@@ -1292,6 +1418,35 @@ export default function Settings() {
             <p className="text-gray-400" style={{ fontSize: 11 }}>Member since</p>
             <p className="text-gray-900 font-bold text-sm">{memberSince}</p>
           </div>
+        </motion.div>
+
+        {/* Account - sign-in email + demo mode. "Change email address" is a REAL
+            Supabase auth email change (ChangeEmailSheet); "Demo mode" flips the
+            app to sample numbers for a demo without touching real data. */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
+          className="bg-white rounded-3xl overflow-hidden card-shadow">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Account</p>
+          </div>
+          <SettingRow
+            icon={<Mail size={18} />}
+            label="Change email address"
+            sub={`Sign in with a different email · ${userEmail}`}
+            color={brand.primary}
+            onPress={() => setShowChangeEmail(true)}
+            right={<ChevronRight size={16} className="text-gray-300 shrink-0" />}
+          />
+          <div className="h-px bg-gray-50 mx-4" />
+          {/* Demo mode: wired to the AppContext demoMode contract (setDemoMode).
+              Optional-chained so it stays a safe no-op until that contract
+              merges from the other agent's work. */}
+          <SettingRow
+            icon={<Sparkles size={18} />}
+            label="Demo mode"
+            sub="Show sample numbers for demos. Your real account data is untouched. Shaking the phone also toggles it."
+            color={brand.secondary}
+            right={<Toggle value={!!demoMode} onChange={v => setDemoMode?.(v)} color={brand.primary} />}
+          />
         </motion.div>
 
         {/* Round-up settings */}
@@ -1556,7 +1711,7 @@ export default function Settings() {
           <SettingRow
             icon={<span className="text-base">🖼️</span>}
             label="App Icon"
-            sub="Preview the BGCA anchor-partner icon, coming with the App Store version"
+            sub={`Preview the ${orgShort} anchor-partner icon, coming with the App Store version`}
             color={brand.secondary}
             onPress={() => setShowAppIcon(true)}
             right={
@@ -1603,13 +1758,15 @@ export default function Settings() {
           </p>
         </motion.div>
 
-        {/* Cancel subscription */}
+        {/* Close account (NOT a subscription - PocketCache is an account, not a
+            recurring plan). Closing stops round-ups and removes the linked card;
+            nothing further is charged. Settle-up mechanics are unchanged. */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}>
           <button
             onClick={() => setShowCancel(true)}
             className="w-full py-3.5 rounded-2xl text-sm font-semibold text-red-500 bg-gray-100 active:bg-gray-200 transition-colors"
           >
-            Cancel Subscription
+            Close my account
           </button>
         </motion.div>
 
@@ -1702,6 +1859,7 @@ export default function Settings() {
         show={showAppIcon}
         onClose={() => setShowAppIcon(false)}
         brand={brand}
+        nonprofit={selectedNonprofit}
       />
 
       {/* Cancel sheet */}
@@ -1730,6 +1888,21 @@ export default function Settings() {
         monthName={skipMonthName}
         paragraphs={skipConfirmParagraphs({ monthName: skipMonthName, feeMonths })}
         brand={brand}
+      />
+
+      {/* Change email address - real Supabase auth email change */}
+      <ChangeEmailSheet
+        show={showChangeEmail}
+        onClose={() => setShowChangeEmail(false)}
+        brand={brand}
+        currentEmail={userEmail}
+        onChanged={(email) => {
+          // Update the local identity so every screen reads the new address.
+          // setHasAccount with an already-real identity does NOT reset progress
+          // (its reset branch is `stub && !hasAccount` only).
+          if (hasAccount) setHasAccount({ ...hasAccount, email });
+          showToast('Email updated.');
+        }}
       />
     </div>
   );

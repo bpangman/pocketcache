@@ -32,16 +32,36 @@ function formatDate(dateStr) {
 }
 
 export default function Activity() {
-  const { pendingRoundUps, roundUpMultiplier, selectedNonprofit, setTab } = useApp();
+  const {
+    pendingRoundUps, roundUpMultiplier, selectedNonprofit, setTab,
+    demoActive, realRoundupsRecent, realRoundupsFreshness,
+  } = useApp();
   const brand = useTheme();
-  const grouped = groupByDate(TRANSACTIONS);
-  // Raw sum of round-ups before any multiplier  -  the exported constant, not a
-  // second local reduce over TRANSACTIONS.
-  const rawRoundUps = CURRENT_MONTH_PENDING;
+  // REAL account, demo mode off (item 12): the ledger binds to the server's
+  // real round-up rows (roundups-me) - a brand-new account has none, so it
+  // renders the friendly empty state instead of the prefilled demo feed.
+  // The demo TRANSACTIONS dataset only ever renders while demoActive.
+  const realRows = (realRoundupsRecent ?? []).map((r, i) => ({
+    id: `real-${r.date}-${i}`,
+    date: r.date,
+    merchant: r.merchant || 'Purchase',
+    category: 'Bank purchase',
+    amount: (r.amount_cents ?? 0) / 100,
+    roundUp: (r.roundup_cents ?? 0) / 100,
+  }));
+  const rows = demoActive ? TRANSACTIONS : realRows;
+  const grouped = groupByDate(rows);
+  // Raw sum of round-ups before any multiplier  -  the exported constant for
+  // the demo dataset, the real rows' own sum for a real account.
+  const rawRoundUps = demoActive
+    ? CURRENT_MONTH_PENDING
+    : parseFloat(realRows.reduce((s, r) => s + r.roundUp, 0).toFixed(2));
 
   // The chart MUST plot the same numbers the headlines show: monthlyHistory()
   // swaps the in-progress month for the live multiplied figure. Plotting raw
   // MONTHLY_DATA is what made "This Month $9.26" sit above a $4.63 bar at 2x.
+  // Demo dataset only: a real account has no multi-month history to chart yet,
+  // so the chart itself is demo-gated below.
   const history = monthlyHistory(pendingRoundUps);
 
   // Current month label derived from the history data  -  never hardcoded
@@ -50,12 +70,17 @@ export default function Activity() {
 
   // Calendar-year giving summary (completed months only  -  this month is not
   // charged yet, so counting it would overstate what a donor can substantiate).
+  // A real account has ZERO completed months of charge history - honest zeros,
+  // never the demo dataset's totals.
   const taxYear = new Date().getFullYear();
-  const tax = taxYearSummary(pendingRoundUps, taxYear);
+  const tax = demoActive
+    ? taxYearSummary(pendingRoundUps, taxYear)
+    : { donated: 0, months: 0, feeMonths: 0 };
   const taxMonthsLabel = tax.months === 1 ? '1 completed month' : `${tax.months} completed months`;
 
-  // MoM display (real computed value from derived.js)
-  const momDisplay = momChange === null
+  // MoM display (computed from the demo dataset - meaningless for a fresh
+  // real account, so it only renders while demoActive)
+  const momDisplay = !demoActive || momChange === null
     ? null
     : `${momChange >= 0 ? '↑' : '↓'} ${Math.abs(momChange).toFixed(0)}% vs last month`;
 
@@ -102,24 +127,34 @@ export default function Activity() {
               </span>
             )}
           </div>
-          <div className="h-24">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={history}>
-                <defs>
-                  <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={brand.primary} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={brand.primary} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" axisLine={false} tickLine={false}
-                  tick={{ fill: '#9ca3af', fontSize: 10 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="donated" stroke={brand.primary} strokeWidth={2.5}
-                  fill="url(#areaGradient)" dot={false}
-                  activeDot={{ r: 4, fill: brand.primary, strokeWidth: 0 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {/* Monthly chart: demo dataset only. A real account has no
+              multi-month history yet - its story is this month, live. */}
+          {demoActive ? (
+            <div className="h-24">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history}>
+                  <defs>
+                    <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={brand.primary} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={brand.primary} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false}
+                    tick={{ fill: '#9ca3af', fontSize: 10 }} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" dataKey="donated" stroke={brand.primary} strokeWidth={2.5}
+                    fill="url(#areaGradient)" dot={false}
+                    activeDot={{ r: 4, fill: brand.primary, strokeWidth: 0 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-gray-400 text-xs pt-1">
+              {realRoundupsFreshness
+                ? `Live from your linked card · ${realRoundupsFreshness}`
+                : 'Counting from the day you joined  -  your monthly chart builds as months complete.'}
+            </p>
+          )}
         </div>
 
         {/* Tax-year summary. Sits between the month headline and the month list
@@ -143,9 +178,11 @@ export default function Activity() {
                 {' · '}{currentMonthLabel} still in progress
               </p>
             </div>
-            <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
-              Demo data
-            </span>
+            {demoActive && (
+              <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
+                Demo data
+              </span>
+            )}
           </div>
           <p className="text-gray-500 text-xs leading-relaxed mt-3 pt-3 border-t border-gray-50">
             Your round-ups are tax-deductible. The $1 monthly app fee is not (${fmtMoney(tax.feeMonths)} so far
@@ -172,7 +209,7 @@ export default function Activity() {
             <div>
               <p className="text-gray-900 font-semibold text-sm">{currentMonthLabel}</p>
               <p className="text-gray-400 text-xs">
-                {TRANSACTIONS.length} transactions · ${fmtMoney(rawRoundUps)} rounded up
+                {rows.length} transaction{rows.length !== 1 ? 's' : ''} · ${fmtMoney(rawRoundUps)} rounded up
                 {roundUpMultiplier > 1 && ` × ${roundUpMultiplier} boost`}
               </p>
             </div>
@@ -192,6 +229,18 @@ export default function Activity() {
             </div>
           )}
         </div>
+
+        {/* Friendly empty state - a brand-new real account has no activity
+            yet, and that is the honest story (item 12). */}
+        {!demoActive && rows.length === 0 && (
+          <div className="bg-white rounded-3xl p-6 card-shadow text-center" data-testid="activity-empty-state">
+            <div className="text-4xl mb-2">🪙</div>
+            <p className="font-bold text-gray-900 text-sm mb-1">No round-ups yet</p>
+            <p className="text-gray-500 text-xs leading-relaxed">
+              Your round-ups will appear here once your card starts making purchases. Every purchase rounds up to the next dollar  -  the spare change lands on this page.
+            </p>
+          </div>
+        )}
 
         {/* Transaction groups */}
         {grouped.map(([date, txs], groupIdx) => (

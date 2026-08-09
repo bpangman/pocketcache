@@ -56,20 +56,20 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     background: rgba(94,234,212,0.14); color: var(--teal-logo);
     border: 1px solid rgba(94,234,212,0.28);
     padding: 7px 15px; border-radius: 999px;
-    font-size: 13px; font-weight: 700; margin-bottom: 20px;
+    font-size: 14px; font-weight: 700; margin-bottom: 20px;
   }
   .hero h1 {
-    font-size: clamp(34px, 5vw, 56px);
+    font-size: clamp(35px, 5.1vw, 58px);
     font-weight: 800; line-height: 1.08;
     letter-spacing: -1.6px; color: #fff;
   }
   .hero h1 .accent { color: var(--teal-logo); }
   .hero-sub {
-    font-size: 17.5px; color: rgba(255,255,255,0.76);
+    font-size: 18.5px; color: rgba(255,255,255,0.76);
     line-height: 1.7; margin-top: 20px; max-width: 480px;
   }
   .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 32px; }
-  .hero-note { margin-top: 22px; font-size: 13px; color: rgba(255,255,255,0.5); }
+  .hero-note { margin-top: 22px; font-size: 14px; color: rgba(255,255,255,0.5); }
 
   /* ── Receipt card visual ── */
   .receipt-wrap { display: flex; justify-content: center; }
@@ -80,15 +80,15 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     font-family: 'Poppins', sans-serif;
   }
   .receipt-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
-  .receipt-store { font-weight: 800; color: var(--navy); font-size: 15px; }
-  .receipt-date { font-size: 12px; color: var(--slate-400); }
-  .receipt-row { display: flex; justify-content: space-between; font-size: 14px; color: var(--slate); padding: 7px 0; }
+  .receipt-store { font-weight: 800; color: var(--navy); font-size: 16px; }
+  .receipt-date { font-size: 12.5px; color: var(--slate-400); }
+  .receipt-row { display: flex; justify-content: space-between; font-size: 15px; color: var(--slate); padding: 7px 0; }
   .receipt-row.up { color: var(--teal-700); font-weight: 600; }
   .receipt-divider { border-top: 1px dashed var(--line); margin: 8px 0; }
-  .receipt-row.highlight { font-size: 17px; font-weight: 800; color: var(--green); padding: 10px 0 4px; }
+  .receipt-row.highlight { font-size: 18px; font-weight: 800; color: var(--green); padding: 10px 0 4px; }
   .receipt-foot {
     margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
-    font-size: 11.5px; color: var(--slate-400); line-height: 1.6; text-align: center;
+    font-size: 12.5px; color: var(--slate-400); line-height: 1.6; text-align: center;
   }
   .receipt-badge {
     position: absolute; top: -14px; right: -14px;
@@ -239,12 +239,22 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
       <p style="margin-top:24px;"><a href="/nonprofits/" class="btn btn-navy">See what nonprofits get &rarr;</a></p>
     </div>
     <div class="reveal">
-      <div class="browser-frame">
-        <div class="browser-bar">
+      <div class="browser-frame" role="img" aria-label="Example of a nonprofit's branded public giving page, with a hero section and a Start giving button">
+        <div class="browser-bar" aria-hidden="true">
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
           <span class="url">pocketcache.app/yourcode</span>
         </div>
-        <img src="/assets/app-microsite.png" alt="Example of a nonprofit's branded public giving page, with a hero section and a Start giving button" width="1280" height="840"/>
+        <div class="mock-browser-hero" aria-hidden="true">
+          <div class="mock-browser-logo">C</div>
+          <div class="mock-browser-bar"></div>
+          <div class="mock-browser-bar sub"></div>
+          <span class="mock-browser-btn">Start giving &rarr;</span>
+        </div>
+        <div class="mock-browser-body" aria-hidden="true">
+          <div class="mock-browser-stat"><b>$12,480</b><span>Raised</span></div>
+          <div class="mock-browser-stat"><b>1,206</b><span>Donors</span></div>
+          <div class="mock-browser-stat"><b>$0</b><span>We ever charge</span></div>
+        </div>
       </div>
     </div>
   </div>

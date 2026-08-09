@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { Lock } from 'lucide-react';
-import { formatCardNumber, cardDigits, isValidCardNumber, last4 } from '../lib/manualCard';
+import { formatCardNumber, cardDigits, isValidCardNumber, last4, formatExpiry, isValidExpiry, isValidCvv } from '../lib/manualCard';
 
 /**
  * ManualCardForm - the "type your card number" form, once instead of three times.
@@ -110,8 +110,17 @@ export default function ManualCardForm({
   const internal = useManualCardEntry();
   const entry = entryProp ?? internal;
   const { name, setName, number, setNumber, connecting, setConnecting } = entry;
+  // Expiry + CVV: newer fields, so an older caller-provided `entry` object
+  // without them still works (internal state covers the gap).
+  const expiry = entry.expiry ?? internal.expiry;
+  const setExpiry = entry.setExpiry ?? internal.setExpiry;
+  const cvv = entry.cvv ?? internal.cvv;
+  const setCvv = entry.setCvv ?? internal.setCvv;
 
-  const valid = isValidCardNumber(number);
+  // All three fields must look plausible. Still simulated end to end: the
+  // number, expiry and CVV never leave this component - only the last4 goes
+  // into the payload below.
+  const valid = isValidCardNumber(number) && isValidExpiry(expiry) && isValidCvv(cvv);
   const ready = valid && !connecting;
 
   function handleConnect() {
@@ -142,7 +151,9 @@ export default function ManualCardForm({
   if (variant === 'web') {
     return (
       <div style={{ display: 'grid', gap: 12 }}>
-        <p style={{ margin: 0, fontSize: 13, color: WEB_INK.secondary }}>Enter your card details  -  read-only, encrypted via Plaid.</p>
+        <p style={{ margin: 0, fontSize: 13, color: WEB_INK.secondary }}>
+          This is the card we <strong>watch</strong> for round-ups  -  it is never charged. Read-only, encrypted via Plaid.
+        </p>
         <div>
           <label style={WEB_LABEL}>Cardholder name</label>
           <input
@@ -163,6 +174,32 @@ export default function ManualCardForm({
             onChange={e => setNumber(formatCardNumber(e.target.value))}
             style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', letterSpacing: '0.1em', outline: 'none', background: '#f9fafb' }}
           />
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={WEB_LABEL}>Expiration</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="MM/YY"
+              maxLength={5}
+              value={expiry}
+              onChange={e => setExpiry(formatExpiry(e.target.value))}
+              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', outline: 'none', background: '#f9fafb' }}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={WEB_LABEL}>CVV</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="123"
+              maxLength={4}
+              value={cvv}
+              onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', outline: 'none', background: '#f9fafb' }}
+            />
+          </div>
         </div>
         <p style={{ margin: 0, fontSize: 11.5, color: WEB_INK.muted, display: 'flex', alignItems: 'center', gap: 6 }}>
           🔒 {REASSURANCE}
@@ -197,6 +234,7 @@ export default function ManualCardForm({
       style={{ background: '#fff', border: '1.5px solid #99f6e4' }}
     >
       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Enter card details</p>
+      <p className="text-xs text-gray-500">This is the card we <strong>watch</strong> for round-ups  -  it is never charged.</p>
       <div>
         <label className="text-xs text-gray-400 font-semibold mb-1 block">Cardholder name</label>
         <input
@@ -217,6 +255,32 @@ export default function ManualCardForm({
           onChange={e => setNumber(formatCardNumber(e.target.value))}
           className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono tracking-wider"
         />
+      </div>
+      <div className="flex gap-2.5">
+        <div className="flex-1">
+          <label className="text-xs text-gray-400 font-semibold mb-1 block">Expiration</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="MM/YY"
+            maxLength={5}
+            value={expiry}
+            onChange={e => setExpiry(formatExpiry(e.target.value))}
+            className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-xs text-gray-400 font-semibold mb-1 block">CVV</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="123"
+            maxLength={4}
+            value={cvv}
+            onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono"
+          />
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <Lock size={12} className="text-gray-400 shrink-0" />
@@ -290,20 +354,26 @@ const WEB_LABEL = {
 export function useManualCardEntry() {
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
   const [connecting, setConnecting] = useState(false);
 
   function reset() {
     setName('');
     setNumber('');
+    setExpiry('');
+    setCvv('');
     setConnecting(false);
   }
 
   return {
     name, setName,
     number, setNumber,
+    expiry, setExpiry,
+    cvv, setCvv,
     connecting, setConnecting,
     digits: cardDigits(number),
-    valid: isValidCardNumber(number),
+    valid: isValidCardNumber(number) && isValidExpiry(expiry) && isValidCvv(cvv),
     last4: last4(number),
     reset,
   };

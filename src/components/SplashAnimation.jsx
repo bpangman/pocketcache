@@ -28,12 +28,15 @@ export default function SplashAnimation({ onDone }) {
     let dead = false;
 
     (async () => {
-      // -- Phase 1: roll in from off-screen left to screen center (~1.1s) --
+      // -- Phase 1: roll in from off-screen left to screen center (~0.85s) --
       // translateX and rotate share the same ease, so rotation stays exactly
       // proportional to travel at every frame (no-slip rolling physics).
+      // 0.85s, down from 1.1s: the easeOutQuint tail read as a dead pause
+      // between the roll landing and the coin-up hop (owner feedback), so the
+      // whole roll is ~23% tighter and the hop follows almost immediately.
       await animateCoin(coinScope.current,
         { x: 0, rotate: TOTAL_ROT },
-        { duration: 1.1, ease: ROLL_EASE }
+        { duration: 0.85, ease: ROLL_EASE }
       );
       if (dead) return;
 
@@ -70,8 +73,9 @@ export default function SplashAnimation({ onDone }) {
       );
       if (dead) return;
 
-      // -- Phase 3: hold at center (750ms) --
-      await new Promise(r => setTimeout(r, 750));
+      // -- Phase 3: hold at center (500ms - was 750ms; the post-landing pause
+      // read slightly too long, so it is ~33% tighter per owner feedback) --
+      await new Promise(r => setTimeout(r, 500));
       if (dead) return;
 
       // -- Phase 4: reveal - coin flies up + fades; background dissolves --

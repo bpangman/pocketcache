@@ -91,6 +91,7 @@ export function NpProvider({ children }) {
       adminEmail: org.adminEmail,
       joinCode: org.shortName,
       _orgId: org.id,
+      status: org.status,
     };
     saveKey(NP_KEYS.org, next);
     setNpOrgState(next);
@@ -114,6 +115,7 @@ export function NpProvider({ children }) {
       adminEmail: local.adminEmail,
       joinCode: local.shortName,
       _orgId: local.id,
+      status: local.status,
     };
     saveKey(NP_KEYS.org, next);
     setNpOrgState(next);

@@ -8,6 +8,7 @@ import NpTabBar from './NpTabBar';
 import { npTabDef } from './npTabs';
 import { useNpAdminActions } from './useNpAdminActions';
 import { NpLayoutProvider, NpOrgMark } from './NpLayout';
+import PendingReviewBanner from './PendingReviewBanner';
 import CoinMark from '../../components/CoinMark';
 
 // ─── The phone / native nonprofit-admin shell ────────────────────────────────
@@ -88,6 +89,7 @@ export default function NpShell() {
     <NpLayoutProvider web={false}>
       <div className="w-full h-full relative flex flex-col overflow-hidden" style={{ background: '#f8fafc' }}>
         <NpHeader npOrg={npOrg} />
+        <PendingReviewBanner />
 
         {/* Page content */}
         <div className="flex-1 relative overflow-hidden">

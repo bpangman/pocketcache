@@ -55,6 +55,31 @@
 // computed `total_cents`, so it is added AFTER multiplying this month's
 // fresh roundup_total_cents, never multiplied a second time.
 //
+// GIVE EXTRAS (2026-08-08): a donor's still-'pending' "Give Extra" pledges
+// (public.give_extras - see supabase/give_extras.sql) JOIN THE MONTHLY FLOW
+// here. For every donor with pending pledges (even one with NO round-ups
+// this month), the pledge sum is added to the cycle total AFTER the
+// multiplier and AFTER rollover - a pledge is an exact dollar amount the
+// donor typed, never scaled or re-multiplied. The $5 floor then applies to
+// the COMBINED total, which is the natural rule: a month whose round-ups
+// alone would roll forward still LOCKS if a pledge pushes it over $5.
+//   - LOCKED: the pledges that fed the total get cycle_month stamped (status
+//     stays 'pending'; charge-cycles-run flips them to 'charged' on the 11th
+//     alongside the round-ups). Only cycle_month-null pledges are ever
+//     summed, so a stamped pledge can never be locked twice.
+//   - ROLLED FORWARD: the pledges are left completely untouched (status
+//     'pending', cycle_month null) and the stored total_cents deliberately
+//     EXCLUDES them - the pledge row itself is the carry mechanism, and
+//     baking it into rollover_in_cents as well would double-count it the
+//     next month when it is summed again.
+//
+// CONSUMED ROLLOVER ROWS: once a prior open 'rolled_forward' cycle's balance
+// is absorbed into this month's row (either branch), that prior row is
+// closed (status 'rolled_over') so it can never be picked up as "the open
+// rollover" again. A re-run for the SAME month_key reuses the existing row's
+// own rollover_in_cents instead of re-reading (and re-adding, or losing) the
+// prior cycle - which keeps re-runs idempotent.
+//
 // EMAIL: sends one internal summary to blake@pocketcache.app via FormSubmit
 // (same pattern as apple-secret-renewal). This is NOT a donor-facing email -
 // see PRELAUNCH.md for the real-SMTP donor amount email, which is out of
@@ -81,37 +106,115 @@ function monthName(monthKey: string): string {
   return new Date(Date.UTC(y, (m || 1) - 1, 1)).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
 }
 
-/** Plain-text donor email sent once a cycle is locked (or rolled forward)
- *  for them - see _shared/gmail.ts for why this goes through the Gmail API
- *  rather than raw SMTP, and PRELAUNCH.md for why Gmail is pilot-scale only,
- *  not the production sending path. Errors are caught by the caller so a
- *  single failed send never breaks the rest of the run. */
-async function sendDonorEmail(to: string, subject: string, text: string): Promise<void> {
-  await sendGmail(to, subject, text);
+/** Donor amount email sent once a cycle is locked (or rolled forward) for
+ *  them - see _shared/gmail.ts for why this goes through the Gmail API rather
+ *  than raw SMTP, and PRELAUNCH.md for why Gmail is pilot-scale only, not the
+ *  production sending path. Sends multipart/alternative (plain-text fallback
+ *  plus the styled HTML body). Errors are caught by the caller so a single
+ *  failed send never breaks the rest of the run. */
+async function sendDonorEmail(to: string, subject: string, body: { text: string; html: string }): Promise<void> {
+  await sendGmail(to, subject, body.text, body.html);
+}
+
+/** Escape a dynamic string for safe interpolation into the HTML body. ORG_NAME
+ *  in particular contains an ampersand ("Boys & Girls Clubs of America") that
+ *  must become &amp; for the markup to be valid. */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// System font stack + a 560px column, styled with inline attributes only so
+// it renders consistently across email clients (which strip <style> blocks and
+// external CSS). Real <p> margins carry the paragraph spacing - no baked-in
+// hard line breaks mid-sentence, so it reflows cleanly on a phone.
+const EMAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const NAVY = "#0B2A4A";
+
+function emailShell(headingHtml: string, bodyHtml: string): string {
+  return (
+    `<!DOCTYPE html>` +
+    `<html lang="en"><head><meta charset="utf-8"/>` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1"/></head>` +
+    `<body style="margin:0;padding:0;background:#f4f6f8;">` +
+    `<div style="max-width:560px;margin:0 auto;padding:28px 22px;font-family:${EMAIL_FONT};` +
+    `font-size:16px;line-height:1.6;color:#1f2937;background:#ffffff;">` +
+    `<div style="font-size:18px;font-weight:700;color:${NAVY};margin:0 0 22px;">PocketCache</div>` +
+    `<h1 style="font-size:21px;line-height:1.3;font-weight:700;color:${NAVY};margin:0 0 18px;">${headingHtml}</h1>` +
+    bodyHtml +
+    `<div style="margin-top:30px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.6;color:#6b7280;">` +
+    `PocketCache turns your spare change into everyday giving. You are receiving this because you set up round-up giving in the PocketCache app.` +
+    `</div>` +
+    `</div></body></html>`
+  );
+}
+
+function para(html: string): string {
+  return `<p style="margin:0 0 16px;">${html}</p>`;
 }
 
 /** Variant A (normal locked cycle) vs variant B (roll-forward, under the $5
- *  minimum) - see the file header's THE $5 RULE section. */
-function donorEmailBody(opts: { rolledForward: boolean; totalCents: number; monthKey: string }): string {
+ *  minimum) - see the file header's THE $5 RULE section. Returns both a
+ *  plain-text fallback and the styled HTML body. `giveExtraCents` (the "Give
+ *  Extra" pledges folded into this cycle - see the GIVE EXTRAS header
+ *  section) adds an itemizing sentence so the amount email honestly reflects
+ *  where the number came from. */
+function donorEmailBody(opts: { rolledForward: boolean; totalCents: number; monthKey: string; giveExtraCents?: number }): { text: string; html: string } {
   const month = monthName(opts.monthKey);
+  const orgHtml = esc(ORG_NAME);
+  const extraCents = opts.giveExtraCents ?? 0;
+  const extraAmount = `$${(extraCents / 100).toFixed(2)}`;
   if (opts.rolledForward) {
-    return (
+    // A rolled-forward month leaves any pledge 'pending' too (see GIVE
+    // EXTRAS in the header), so "your balance carries forward" already
+    // covers it - one extra sentence names it so the donor is not left
+    // wondering where their gift went.
+    const extraTextLine = extraCents > 0
+      ? `That includes the extra ${extraAmount} you added - it carries forward with the rest.\n\n`
+      : "";
+    const text =
       `Hi,\n\n` +
-      `Your round-ups for ${month} came in under ${ORG_NAME}'s $5 monthly minimum, ` +
-      `so nothing will be charged this month. Your balance carries forward automatically ` +
-      `and will combine with next month's round-ups.\n\n` +
-      `No action is needed from you.\n\n` +
-      `- PocketCache`
+      `Your round-ups for ${month} came in under ${ORG_NAME}'s $5 monthly minimum, so nothing will be charged this month.\n\n` +
+      extraTextLine +
+      `Your balance carries forward automatically and will combine with next month's round-ups. No action is needed from you.\n\n` +
+      `- PocketCache`;
+    const html = emailShell(
+      `Your ${month} round-ups are carrying forward`,
+      para(`Your round-ups for ${month} came in under ${orgHtml}'s $5 monthly minimum, so nothing will be charged this month.`) +
+        (extraCents > 0 ? para(`That includes the extra ${extraAmount} you added - it carries forward with the rest.`) : "") +
+        para(`Your balance carries forward automatically and combines with next month's round-ups. There is nothing you need to do.`) +
+        para(`You can view your balance anytime in the PocketCache app.`),
     );
+    return { text, html };
   }
   const amount = `$${(opts.totalCents / 100).toFixed(2)}`;
-  return (
+  const extraTextLine = extraCents > 0
+    ? `That includes the extra ${extraAmount} you added on top of your round-ups.\n\n`
+    : "";
+  const text =
     `Hi,\n\n` +
-    `Your PocketCache round-ups for ${month} totaled ${amount}, going to ${ORG_NAME}. ` +
-    `This amount will be charged to your card on the 11th.\n\n` +
-    `Questions or want to skip a month? You can manage this anytime from your PocketCache app.\n\n` +
-    `- PocketCache`
+    `Your PocketCache round-ups for ${month} totaled ${amount}, all going to ${ORG_NAME}.\n\n` +
+    extraTextLine +
+    `We will charge that amount to your card on the 11th. There is nothing you need to do.\n\n` +
+    `Want to skip a month or change your round-ups? You can manage everything anytime in your PocketCache app.\n\n` +
+    `- PocketCache`;
+  const amountBox =
+    `<div style="margin:0 0 18px;padding:16px 18px;background:#f4f6f8;border-radius:12px;">` +
+    `<div style="font-size:13px;font-weight:600;color:#6b7280;margin:0 0 4px;">Your ${month} donation</div>` +
+    `<div style="font-size:26px;font-weight:800;color:${NAVY};">${amount}</div>` +
+    `</div>`;
+  const html = emailShell(
+    `Your ${month} round-ups are ready`,
+    para(`Your PocketCache round-ups for ${month} totaled the amount below, all going to ${orgHtml}.`) +
+      amountBox +
+      (extraCents > 0 ? para(`That includes the extra ${extraAmount} you added on top of your round-ups.`) : "") +
+      para(`We will charge that amount to your card on the 11th. There is nothing you need to do.`) +
+      para(`Want to skip a month or change your round-ups? You can manage everything anytime in your PocketCache app.`),
   );
+  return { text, html };
 }
 
 const FORMSUBMIT_URL = "https://formsubmit.co/ajax/blake@pocketcache.app";
@@ -147,9 +250,17 @@ interface PendingRow {
 }
 
 interface OpenCycleRow {
+  id: number;
   stripe_customer_id: string;
   total_cents: number;
+  rollover_in_cents: number;
   month_key: string;
+}
+
+interface PendingExtraRow {
+  id: number;
+  stripe_customer_id: string;
+  amount_cents: number;
 }
 
 Deno.serve(async (req: Request) => {
@@ -179,6 +290,29 @@ Deno.serve(async (req: Request) => {
     const totalsByDonor = new Map<string, number>();
     for (const r of pending) {
       totalsByDonor.set(r.stripe_customer_id, (totalsByDonor.get(r.stripe_customer_id) ?? 0) + r.roundup_cents);
+    }
+
+    // GIVE EXTRAS (see the header section): every still-'pending' pledge that
+    // has never been locked into a cycle (cycle_month null - a stamped pledge
+    // can never be summed twice). Grouped per donor, keeping the row ids so
+    // the locked branch can stamp exactly the rows it consumed.
+    const extrasRes = await dbRest(
+      "GET",
+      "give_extras?status=eq.pending&cycle_month=is.null&select=id,stripe_customer_id,amount_cents",
+    );
+    const extraRows = Array.isArray(extrasRes.data) ? (extrasRes.data as PendingExtraRow[]) : [];
+    const extrasByDonor = new Map<string, { ids: number[]; cents: number }>();
+    for (const e of extraRows) {
+      const entry = extrasByDonor.get(e.stripe_customer_id) ?? { ids: [], cents: 0 };
+      entry.ids.push(e.id);
+      entry.cents += e.amount_cents;
+      extrasByDonor.set(e.stripe_customer_id, entry);
+    }
+    // A donor with pledges but NO round-ups this month still gets a cycle -
+    // their pledge alone can cross the $5 floor. Zero round-up total; the
+    // loop below adds the pledge sum on top.
+    for (const id of extrasByDonor.keys()) {
+      if (!totalsByDonor.has(id)) totalsByDonor.set(id, 0);
     }
 
     // One batched lookup for every donor with pending round-ups this month,
@@ -216,6 +350,7 @@ Deno.serve(async (req: Request) => {
       stripeCustomerId: string,
       rolledForwardCycle: boolean,
       totalCents: number,
+      giveExtraCents: number,
     ): Promise<void> {
       if (!row || row.emailed_at) return;
       const to = emailByDonor.get(stripeCustomerId);
@@ -224,9 +359,9 @@ Deno.serve(async (req: Request) => {
         return;
       }
       const subject = `Your PocketCache donation for ${monthName(monthKey)}`;
-      const text = donorEmailBody({ rolledForward: rolledForwardCycle, totalCents, monthKey });
+      const body = donorEmailBody({ rolledForward: rolledForwardCycle, totalCents, monthKey, giveExtraCents });
       try {
-        await sendDonorEmail(to, subject, text);
+        await sendDonorEmail(to, subject, body);
       } catch (err) {
         console.error("cycle-lock: donor email send failed", stripeCustomerId, err);
         return;
@@ -246,23 +381,59 @@ Deno.serve(async (req: Request) => {
 
     for (const [stripeCustomerId, roundupTotal] of totalsByDonor) {
       // Pull forward any balance still sitting in an open rolled_forward
-      // cycle for this donor. Only ever at most one, per the chaining note
-      // above, but order by month_key desc + limit 1 defensively either way.
+      // cycle for this donor. Only ever at most one PRIOR one, per the
+      // chaining note above - limit 2 so a re-run for the same month_key can
+      // see both its own row and (defensively) a still-open prior row.
       const openRes = await dbRest(
         "GET",
-        `charge_cycles?stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}&status=eq.rolled_forward&order=month_key.desc&limit=1&select=stripe_customer_id,total_cents,month_key`,
+        `charge_cycles?stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}&status=eq.rolled_forward&order=month_key.desc&limit=2&select=id,stripe_customer_id,total_cents,rollover_in_cents,month_key`,
       );
-      const open = Array.isArray(openRes.data) ? (openRes.data[0] as OpenCycleRow | undefined) : undefined;
-      const rolloverIn = open && open.month_key !== monthKey ? open.total_cents : 0;
+      const openRows = Array.isArray(openRes.data) ? (openRes.data as OpenCycleRow[]) : [];
+      // Re-run for the SAME month_key: reuse the existing row's own
+      // rollover_in_cents (see CONSUMED ROLLOVER ROWS in the header) rather
+      // than re-reading a prior cycle that may already be closed - keeps
+      // re-runs idempotent. First run: absorb the prior open cycle's balance
+      // and close that row below once the upsert lands.
+      const selfRow = openRows.find((r) => r.month_key === monthKey);
+      const priorRow = openRows.find((r) => r.month_key !== monthKey);
+      let rolloverIn = 0;
+      let consumedPriorId: number | null = null;
+      if (selfRow) {
+        rolloverIn = selfRow.rollover_in_cents ?? 0;
+      } else if (priorRow) {
+        rolloverIn = priorRow.total_cents;
+        consumedPriorId = priorRow.id;
+      }
 
       // Multiplier applies to THIS month's fresh round-ups only - see the
       // MULTIPLIER section in the file header for why rolloverIn (already a
       // prior cycle's computed total_cents) is added after, not multiplied
       // again.
       const multiplier = multiplierByDonor.get(stripeCustomerId) ?? 1;
-      const total = roundupTotal * multiplier + rolloverIn;
+      // baseTotal is round-ups + rollover only; pledges are added AFTER (see
+      // GIVE EXTRAS in the header - never multiplied) and the $5 floor tests
+      // the COMBINED figure.
+      const baseTotal = roundupTotal * multiplier + rolloverIn;
+      const extras = extrasByDonor.get(stripeCustomerId);
+      const extrasCents = extras?.cents ?? 0;
+      const total = baseTotal + extrasCents;
+
+      /** Close a consumed prior open rollover row so it can never be picked
+       *  up as "the open rollover" again - called only after this month's
+       *  upsert has safely landed. */
+      async function closeConsumedPrior(): Promise<void> {
+        if (consumedPriorId === null) return;
+        const close = await dbRest("PATCH", `charge_cycles?id=eq.${consumedPriorId}`, { status: "rolled_over" });
+        if (!close.ok) {
+          console.error("cycle-lock: closing consumed rollover row failed", stripeCustomerId, close.status);
+        }
+      }
 
       if (total < MINIMUM_CENTS) {
+        // Stored total_cents deliberately EXCLUDES the pledges (baseTotal,
+        // not total): a still-pending, cycle_month-null pledge row is its own
+        // carry mechanism and will be summed again next month - baking it in
+        // here too would double-count it (see GIVE EXTRAS in the header).
         const upsert = await dbRest(
           "POST",
           "charge_cycles?on_conflict=stripe_customer_id,month_key",
@@ -271,7 +442,7 @@ Deno.serve(async (req: Request) => {
             month_key: monthKey,
             roundup_total_cents: roundupTotal,
             rollover_in_cents: rolloverIn,
-            total_cents: total,
+            total_cents: baseTotal,
             status: "rolled_forward",
           },
           { Prefer: "resolution=merge-duplicates,return=representation" },
@@ -280,12 +451,14 @@ Deno.serve(async (req: Request) => {
           console.error("cycle-lock: rolled_forward upsert failed", stripeCustomerId, upsert.status, JSON.stringify(upsert.data));
           continue;
         }
+        await closeConsumedPrior();
         rolledForward++;
-        rolledTotalCents += total;
+        rolledTotalCents += baseTotal;
         rolledDonors.push(stripeCustomerId);
-        // Roundups stay 'pending' - nothing charged, nothing locked.
+        // Roundups stay 'pending', pledges stay 'pending' with cycle_month
+        // null - nothing charged, nothing locked, nothing stamped.
         const rolledRow = Array.isArray(upsert.data) ? upsert.data[0] : upsert.data;
-        await maybeEmailDonor(rolledRow, stripeCustomerId, true, total);
+        await maybeEmailDonor(rolledRow, stripeCustomerId, true, baseTotal, extrasCents);
       } else {
         const now = new Date().toISOString();
         const upsert = await dbRest(
@@ -307,6 +480,7 @@ Deno.serve(async (req: Request) => {
           console.error("cycle-lock: locked upsert failed", stripeCustomerId, upsert.status, JSON.stringify(upsert.data));
           continue;
         }
+        await closeConsumedPrior();
         const markLocked = await dbRest(
           "PATCH",
           `roundups?month_key=eq.${encodeURIComponent(monthKey)}&status=eq.pending&stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}`,
@@ -315,11 +489,26 @@ Deno.serve(async (req: Request) => {
         if (!markLocked.ok) {
           console.error("cycle-lock: marking roundups locked failed", stripeCustomerId, markLocked.status);
         }
+        // Stamp exactly the pledge rows this total consumed with cycle_month
+        // (status stays 'pending' - charge-cycles-run flips them to 'charged'
+        // on the 11th alongside the round-ups). A stamped pledge is excluded
+        // by the cycle_month=is.null select above, so it can never be locked
+        // into a second cycle.
+        if (extras && extras.ids.length > 0) {
+          const stamp = await dbRest(
+            "PATCH",
+            `give_extras?id=in.(${extras.ids.join(",")})`,
+            { cycle_month: monthKey },
+          );
+          if (!stamp.ok) {
+            console.error("cycle-lock: stamping give_extras failed", stripeCustomerId, stamp.status, JSON.stringify(stamp.data));
+          }
+        }
         locked++;
         lockedTotalCents += total;
         lockedDonors.push(stripeCustomerId);
         const lockedRow = Array.isArray(upsert.data) ? upsert.data[0] : upsert.data;
-        await maybeEmailDonor(lockedRow, stripeCustomerId, false, total);
+        await maybeEmailDonor(lockedRow, stripeCustomerId, false, total, extrasCents);
       }
     }
 

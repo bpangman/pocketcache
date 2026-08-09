@@ -17,7 +17,7 @@ import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
-import { findOrgByCode, resolveOrgByCode, getAppleApproval } from '../store/orgStore';
+import { findOrgByCode, resolveOrgByCode, getAppleApproval, isOrgPending, ORG_PENDING_MESSAGE } from '../store/orgStore';
 import {
   useNpSignup, useNpGoLive,
   NP_BRAND_COLORS, NP_LICENSE_POINTS, widgetSnippet, joinQrValue, launchKitMailto,
@@ -38,7 +38,8 @@ import ManualCardForm from '../components/ManualCardForm';
 import PlaidBankConnect from '../components/PlaidBankConnect';
 import ApplePaySheet from '../components/ApplePaySheet';
 import AppleLogo from '../components/AppleLogo';
-import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
+import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, nextChargeLabel, processingCoverFor } from '../lib/billing';
+import { EXAMPLE_MONTH_ROUNDUPS, EXAMPLE_DISCLAIMER } from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { pcBeacon } from '../lib/beacon.js';
@@ -242,7 +243,13 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
     let cancelled = false;
     resolveOrgByCode(autoBindOrg).then(np => {
       if (cancelled) return;
-      if (np) {
+      if (np && isOrgPending(np)) {
+        // The org exists but is still awaiting the platform owner's approval -
+        // held back from donors, so a QR/link scan lands here with a message
+        // instead of silently binding to a page that is not live yet.
+        setCode(autoBindOrg);
+        setError(ORG_PENDING_MESSAGE);
+      } else if (np) {
         setAutoBound(true);
         setBoundNp(np);
         setTimeout(() => onBind(np), 800);
@@ -260,6 +267,10 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
     const np = await resolveOrgByCode(code);
     if (!np) {
       setError('Code not found. Ask your nonprofit for their PocketCache code.');
+      return;
+    }
+    if (isOrgPending(np)) {
+      setError(ORG_PENDING_MESSAGE);
       return;
     }
     onBind(np);
@@ -543,7 +554,9 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   const [showTermsHint, setShowTermsHint] = useState(false);
   const [welcomeBack, setWelcomeBack] = useState(false);
   const isCA = selectedState === 'CA';
-  const canContinue = agreedTerms && selectedState !== '' && !isCA;
+  // The full gate (owner punch-list item 4): BOTH checkboxes AND a state
+  // selection before "Email me a code" or any SSO button does anything.
+  const canContinue = agreedTerms && commsOptin && selectedState !== '' && !isCA;
   // "Code sent" feedback for the Resend code buttons below - both forms on
   // this screen share the one donorAuth instance/stage, so one flag covers
   // whichever form is actually mounted. Auto-clears; donorAuth.sendingCode
@@ -565,10 +578,6 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   const donorAuth = useDonorAuth({ resumeKey: 'app' });
   const [emailInput, setEmailInput] = useState('');
   const [emailInputError, setEmailInputError] = useState(null);
-  const [verifiedIdentity, setVerifiedIdentity] = useState(null);
-  // Restored so a remount after the OTP verifies (but before "Continue" is
-  // pressed) does not clear a name the donor already saw pre-filled.
-  const [displayName, setDisplayName] = useState(() => draft?.displayName ?? '');
 
   // Persist the typed-in fields to the shared draft on every meaningful
   // change, so the mobile/desktop breakpoint remount (see
@@ -576,8 +585,8 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   // step: 'account' is this screen's half of the mapping the outer
   // Onboarding() component reads back in (WEB_STEP_TO_APP_STEP).
   useEffect(() => {
-    saveDonorDraft({ step: 'account', selectedState, agreedTerms, commsOptin, displayName });
-  }, [selectedState, agreedTerms, commsOptin, displayName]);
+    saveDonorDraft({ step: 'account', selectedState, agreedTerms, commsOptin });
+  }, [selectedState, agreedTerms, commsOptin]);
   // "Already have an account? Sign in" (below): a real email/OTP sign-in,
   // independent of the terms/state gate above it - a returning donor is not
   // making a new round-up commitment, so they should not have to re-agree to
@@ -653,26 +662,32 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     donorAuth.sendCode(addr);
   }
 
+  // A successful verify advances IMMEDIATELY (owner punch-list item 4): no
+  // confirm-your-name stop, no re-showing of SSO buttons - the account
+  // exists, so the flow moves straight to the next step. The display name
+  // starts as the friendly guess from the email (nameFromEmail) and can be
+  // edited later in Settings.
   async function handleVerifyCode(e) {
     e?.preventDefault?.();
     const identity = await donorAuth.verifyCode(donorAuth.codeInput);
-    if (identity) {
-      setVerifiedIdentity(identity);
-      setDisplayName(identity.name);
-    }
+    if (identity) finishSignup(identity);
   }
 
-  function handleConfirmName(e) {
-    e?.preventDefault?.();
-    if (!canContinue) { setShowTermsHint(true); return; }
-    finishSignup({ ...verifiedIdentity, name: displayName.trim() || verifiedIdentity.name });
-  }
-
-  function handleContinueExisting() {
-    if (hasAccount) return handleSignIn();
-    if (!canContinue) { setShowTermsHint(true); return; }
+  // Signed-in users BYPASS this screen entirely (item 4): a live Supabase
+  // session found on mount - including the SSO redirect return trip - adopts
+  // the identity and advances automatically. No "Continue as {email}" button
+  // exists any more, so a long address can never wrap one. `hasAccount`
+  // (app-level identity already adopted) routes to the dashboard instead,
+  // through the same welcome-back overlay the old tap produced.
+  const [autoAdvanced, setAutoAdvanced] = useState(false);
+  useEffect(() => {
+    if (autoAdvanced || signInMode) return;
+    if (hasAccount) { setAutoAdvanced(true); handleSignIn(); return; }
+    if (donorAuth.checkingSession || !donorAuth.existingSession) return;
+    setAutoAdvanced(true);
     finishSignup(donorAuth.existingSession);
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [donorAuth.checkingSession, donorAuth.existingSession, hasAccount, autoAdvanced]);
 
   async function handleSSO(provider) {
     if (hasAccount) return handleSignIn();
@@ -768,50 +783,19 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             </select>
           </div>
 
-          {/* Returning donor with a live sign-in already on this browser -
-              skip straight past the email/code screen. */}
-          {!donorAuth.checkingSession && donorAuth.existingSession && !verifiedIdentity && (
-            <motion.button
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleContinueExisting}
-              className="w-full flex items-center gap-2 px-3 py-3.5 rounded-2xl border text-left"
-              style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
-            >
-              <span className="text-amber-500">👋</span>
-              <span className="text-amber-800 text-sm font-semibold flex-1">
-                Continue as {donorAuth.existingSession.email} →
-              </span>
-            </motion.button>
-          )}
-
-          {/* Real email sign-in: address -> 6-digit code -> confirm name.
-              Hidden while signInMode is active (below) so a returning donor
-              sees one focused prompt, not two stacked email forms. */}
-          {!signInMode && (verifiedIdentity ? (
-            <form onSubmit={handleConfirmName} className="space-y-3">
-              <div className="rounded-2xl px-3 py-2.5 bg-teal-50 border border-teal-200">
-                <p className="text-xs text-teal-700 font-semibold">
-                  You&apos;re verified as {verifiedIdentity.email}
-                </p>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Name</label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
-                />
-              </div>
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                className="w-full py-4 rounded-2xl font-bold text-base text-white"
-                style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)' }}>
-                Continue →
-              </motion.button>
-            </form>
+          {/* Signed-in users never see this section again: the auto-advance
+              effect above adopts a live session and moves on, so there is no
+              "Continue as {email}" button here any more (item 4). While the
+              session check is in flight, a quiet placeholder holds the space
+              so the SSO buttons cannot flash before a bypass. */}
+          {!signInMode && (donorAuth.checkingSession || autoAdvanced ? (
+            <div className="flex items-center justify-center py-8" data-testid="signup-session-check">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }}
+                className="w-6 h-6 rounded-full border-2 border-gray-200 border-t-gray-500"
+              />
+            </div>
           ) : donorAuth.stage === 'code' ? (
             <form onSubmit={handleVerifyCode} className="space-y-3">
               <p className="text-gray-500 text-sm px-1">
@@ -841,28 +825,30 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             </form>
           ) : (
             <>
-              {!(donorAuth.existingSession && !donorAuth.checkingSession) && (
-                <form onSubmit={handleSendCode} className="space-y-2">
-                  <div>
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
-                    <input
-                      type="email"
-                      value={emailInput}
-                      onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
-                      placeholder="you@example.com"
-                      className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
-                      style={{ borderColor: emailInputError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
-                    />
-                    {emailInputError && <p className="text-red-500 text-xs mt-1 px-1">{emailInputError}</p>}
-                    {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
-                  </div>
-                  <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                    className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
-                    style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: canContinue && !donorAuth.sendingCode ? 1 : 0.4 }}>
-                    {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
-                  </motion.button>
-                </form>
-              )}
+              <form onSubmit={handleSendCode} className="space-y-2">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
+                    placeholder="you@example.com"
+                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                    style={{ borderColor: emailInputError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
+                  />
+                  {emailInputError && <p className="text-red-500 text-xs mt-1 px-1">{emailInputError}</p>}
+                  {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
+                </div>
+                {/* Dimmed until the state + both consent boxes below are done
+                    (item 4); tapping it early only surfaces the subtle hint. */}
+                <motion.button whileTap={canContinue ? { scale: 0.97 } : {}} type="submit"
+                  data-testid="signup-email-code-button"
+                  aria-disabled={!canContinue || donorAuth.sendingCode}
+                  className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
+                  style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: canContinue && !donorAuth.sendingCode ? 1 : 0.4, cursor: canContinue ? 'pointer' : 'default' }}>
+                  {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
+                </motion.button>
+              </form>
 
               {/* SSO shows on the web AND on native shells that can run the
                   in-app OAuth flow (Browser + App plugins present - see
@@ -1024,23 +1010,29 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
               {commsOptin && <CheckCircle size={12} className="text-white" />}
             </div>
             <span className="text-xs text-gray-500 leading-relaxed">
-              PocketCache and {nonprofit?.shortName ?? 'your nonprofit'} may contact me with account and giving updates  -  details in our{' '}
+              {/* Tokenized to the joined nonprofit's FULL name (item 9a) -
+                  never a hardcoded org, and a graceful fallback before one
+                  is bound. */}
+              PocketCache and {nonprofit?.name ?? 'your chosen nonprofit partner'} may contact me with account and giving updates  -  details in our{' '}
               <a href="/legal/terms/#communications" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Terms</a>.
             </span>
           </label>
-          {selectedState === '' && (
-            <p className="text-xs text-center text-gray-400">Select your state above to continue</p>
+          {/* Subtle always-on hint about what still gates the buttons above
+              (item 4): state first, then whichever box is still unchecked. */}
+          {!canContinue && !isCA && (
+            <p className="text-xs text-center text-gray-400" data-testid="signup-gate-hint">
+              {selectedState === ''
+                ? 'Select your state above to continue'
+                : 'Check both boxes above to continue'}
+            </p>
           )}
-          {selectedState !== '' && !agreedTerms && (
-            <p className="text-xs text-center text-gray-400">Check the box above to continue</p>
-          )}
-          {showTermsHint && !agreedTerms && (
+          {showTermsHint && !canContinue && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               className="text-xs text-amber-600 font-medium text-center"
             >
-              Please confirm this to continue
+              Please complete this to continue
             </motion.p>
           )}
       </div>
@@ -1290,7 +1282,10 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
             style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
           >
             <span className="text-amber-500">👋</span>
-            <span className="text-amber-800 text-sm font-semibold flex-1">
+            {/* truncate: a long email must never wrap this button onto three
+                awkward lines - the middle of the address is the part that can
+                go missing without losing meaning. */}
+            <span className="text-amber-800 text-sm font-semibold flex-1 min-w-0 truncate">
               Continue as {donorAuth.existingSession.email} →
             </span>
           </motion.button>
@@ -1947,45 +1942,30 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
   } = useHeroCollapse();
   const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
   const {
-    selectedNonprofit, pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment,
+    selectedNonprofit, feeMonths, monthlyCap,
     coverProcessing, setCoverProcessing,
   } = useApp();
   // The tick box below is the donor's standing answer, not a one-screen toggle.
-  // It used to be local `useState(true)` that was thrown away when onboarding
-  // finished, so a pre-checked promise ("100% of my round-ups reach them") never
-  // reached a single monthly charge and the nonprofit quietly ate the card fee.
-  // It now reads and writes the persisted `coverProcessing` in AppContext
+  // It reads and writes the persisted `coverProcessing` in AppContext
   // (pc_cover_processing), which is the same value the dashboard, the charge
   // review alert and Settings bill from.
   //
-  // The cap the donor just ticked on PaymentMethodScreen is live state, so this
-  // screen has to honour it: without monthlyCap in the math, the same stored
-  // state produced an uncapped total here and a capped one in the web review
-  // step (WebOnboarding.jsx:219-227). Precedence lives in lib/billing.
-  const accrued = pendingRoundUps ?? 4.63;
-  const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap, chargeAdjustment });
-  // Below the nonprofit's minimum nothing is charged this month - the same
-  // gate the app Dashboard and Settings apply, checked here too so this
-  // preview never quotes a charge that would not actually happen. Measured
-  // against the raw accrual, same as Dashboard.jsx: a cap or adjustment only
-  // trims what WOULD be charged if there were enough to charge at all.
-  const monthlyMinimum = selectedNonprofit?.monthlyMinimum ?? 5;
-  const belowMinimum = accrued < monthlyMinimum;
+  // ILLUSTRATIVE EXAMPLE, NOT AN ESTIMATE (owner punch-list item 11). A
+  // brand-new account has accrued NOTHING, so this step must never present a
+  // "monthly estimate" as if round-ups already existed. It walks the donor
+  // through how a month COULD look, using the shared obviously-sample figure
+  // (EXAMPLE_MONTH_ROUNDUPS), labeled as an example everywhere - and says in
+  // as many words that the donor's own count starts at $0.00 today. The fee
+  // and cover math still comes from lib/billing so the example adds up the
+  // same way a real charge will.
+  const exampleRoundUps = EXAMPLE_MONTH_ROUNDUPS;
   const appFee = feeMonths;
-  // Processing cover follows what is actually charged, not the raw accrual  -
-  // same as WebOnboarding, so the two review screens agree to the cent.
-  const processingCover = processingCoverFor(roundUps);
-  // Amounts and dates both come from lib/billing  -  this screen must never do
-  // its own charge math or assume "next month's 11th".
+  const processingCover = processingCoverFor(exampleRoundUps);
   const total = chargeTotal({
-    pendingRoundUps: accrued,
-    monthlyCap,
-    chargeAdjustment,
+    pendingRoundUps: exampleRoundUps,
     feeMonths,
     processingCover: coverProcessing ? processingCover : 0,
   });
-  const capActive = monthlyCap !== null && monthlyCap !== undefined && accrued > monthlyCap;
-  const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
   const chargeOn = nextChargeLabel();
 
   // Commit the answer on the way out, even when the donor never touched the box.
@@ -2055,73 +2035,46 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
         <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
           <div className="px-5 pt-8 space-y-4" style={{ paddingBottom: sheetPadBottom }}>
 
-          {/* Estimate card */}
+          {/* Example card - an ILLUSTRATION, never the donor's own total.
+              Same framing, same sample figure and same disclaimer as the web
+              review step (lib/donorContent EXAMPLE_*). */}
           <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Monthly Estimate</p>
-            {belowMinimum ? (
-              /* Below the nonprofit's minimum, nothing charges this month - so
-                 this preview shows the rollover story instead of a total that
-                 would never actually be collected. Same wording as the app
-                 Dashboard's below-minimum copy (Dashboard.jsx). */
-              <>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-700">Round-ups this month</span>
-                  <span className="font-bold text-gray-900" data-testid="confirm-roundups">${accrued.toFixed(2)}</span>
-                </div>
-                <p className="text-xs mb-1 leading-relaxed" style={{ color: '#b45309' }} data-testid="confirm-rollover">
-                  Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
-                </p>
-                <p className="text-xs text-gray-400 mt-2 italic">
-                  This is an example  -  no real charge is made in this demo.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-700">Round-ups this month</span>
-                  <span className="font-bold text-gray-900" data-testid="confirm-roundups">
-                    {roundUps !== accrued
-                      ? <><s className="text-gray-400 font-normal">${accrued.toFixed(2)}</s> ${roundUps.toFixed(2)}</>
-                      : `$${roundUps.toFixed(2)}`}
-                  </span>
-                </div>
-                {/* Same note, same wording as the web review step
-                    (WebOnboarding.jsx:446-450) so the two surfaces read identically. */}
-                {capActive && !adjusted && (
-                  <p className="text-xs mb-2" style={{ color: '#b45309' }} data-testid="confirm-cap-note">
-                    Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
-                  </p>
-                )}
-                {adjusted && (
-                  <p className="text-xs mb-2 font-semibold" style={{ color: '#059669' }}>
-                    Adjusted to ${chargeAdjustment.toFixed(2)} for this month.
-                  </p>
-                )}
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
-                  <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
-                </div>
-                {feeMonths > 1 && (
-                  <p className="text-xs text-gray-500 mb-2">
-                    {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
-                  </p>
-                )}
-                {coverProcessing && (
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-500">Processing cover (goes to {npShort})</span>
-                    <span className="text-sm text-gray-500">+${processingCover.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="h-px bg-slate-200 my-2" />
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-gray-900">One charge from {npShort}</span>
-                  <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
-                </div>
-                <p className="text-xs text-gray-400 mt-2 italic">
-                  This is an example  -  no real charge is made in this demo.
-                </p>
-              </>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Here is how a month could look</p>
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">Example</span>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-700">Round-ups in a sample month</span>
+              <span className="font-bold text-gray-900" data-testid="confirm-roundups">${exampleRoundUps.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+              <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
+            </div>
+            {feeMonths > 1 && (
+              <p className="text-xs text-gray-500 mb-2">
+                {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
+              </p>
             )}
+            {coverProcessing && (
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-gray-500">Processing cover (goes to {npShort})</span>
+                <span className="text-sm text-gray-500">+${processingCover.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="h-px bg-slate-200 my-2" />
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-gray-900">One charge from {npShort}</span>
+              <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
+            </div>
+            {monthlyCap !== null && monthlyCap !== undefined && (
+              <p className="text-xs mt-2" style={{ color: '#b45309' }} data-testid="confirm-cap-note">
+                Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-2 italic" data-testid="confirm-example-note">
+              {EXAMPLE_DISCLAIMER}
+            </p>
           </div>
 
           {/* Processing cover toggle */}
@@ -2143,7 +2096,7 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
               </span>
               <p className="text-xs text-gray-500 mt-0.5">
                 {coverProcessing
-                  ? `The ~$${processingCover.toFixed(2)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
+                  ? `The ~$${processingCover.toFixed(2)} in the example goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation and scales with your actual round-ups.`
                   : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
               </p>
             </div>
@@ -2216,6 +2169,7 @@ function NonprofitSignupFlow({ onBack }) {
     step,
     ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
+    seededOrg, pendingReview,
     adminEmail, workEmail, setWorkEmail, emailError,
     codeSent, codeInput, setCodeInput, codeError, requiredDomain,
     sendingCode, verifyingCode,
@@ -2282,10 +2236,12 @@ function NonprofitSignupFlow({ onBack }) {
           <CoinMark size={40} />
         </motion.div>
         <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
-          {NP_SIGNUP_HEADER[step]?.title}
+          {step === 'live' && pendingReview ? 'Almost\nThere!' : NP_SIGNUP_HEADER[step]?.title}
         </h1>
         <p className="text-white/80 text-xs mt-2 leading-relaxed">
-          {NP_SIGNUP_HEADER[step]?.sub}
+          {step === 'live' && pendingReview
+            ? "Your organization is in review. Your launch kit arrives by email the moment you're approved."
+            : NP_SIGNUP_HEADER[step]?.sub}
         </p>
       </div>
 
@@ -2336,7 +2292,12 @@ function NonprofitSignupFlow({ onBack }) {
             <div className="rounded-2xl p-5 bg-gray-50 border border-gray-200 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-white flex items-center justify-center border border-gray-100">
-                  <img src={bgcaLogoUrl} alt="Org" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+                  {/* Only a genuinely seeded org (BGCA's real EIN) may show a
+                      real logo here - an unknown or unverifiable EIN gets the
+                      neutral PocketCache mark, never another org's branding. */}
+                  {seededOrg?.logoUrl
+                    ? <img src={seededOrg.logoUrl} alt="Org" className="w-full h-full object-contain p-1.5" style={{ display: 'block' }} />
+                    : <CoinMark size={28} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   {einNameEditable ? (
@@ -2556,7 +2517,12 @@ function NonprofitSignupFlow({ onBack }) {
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logo</label>
               <div className="flex items-center gap-3 mb-2">
-                <img src={logoPreview} alt="Logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
+                {/* logoPreview is null for an unknown org that hasn't uploaded
+                    one yet (see displayLogoPreview in lib/npSignup.js) - show
+                    the neutral PocketCache mark, never another org's logo. */}
+                {logoPreview
+                  ? <img src={logoPreview} alt="Logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
+                  : <div className="h-10 w-14 rounded-lg bg-gray-100 flex items-center justify-center"><CoinMark size={24} /></div>}
                 <span className="text-xs text-gray-500">Preview: your uploaded logo becomes the app mark for donors.</span>
               </div>
               <input
@@ -2710,7 +2676,45 @@ function NonprofitSignupFlow({ onBack }) {
           </div>
         )}
 
-        {step === 'live' && (
+        {/* Completion, pending review: a real server org starts held back
+            until the platform owner approves it (org-approve). No join code,
+            QR, or widget yet - those arrive in the launch-kit email at
+            approval, and handing them out early would only produce printed
+            QR codes that point at a held-back page. */}
+        {step === 'live' && pendingReview && (
+          <div className="space-y-4">
+            <div className="rounded-2xl p-5 text-center" style={{ background: '#fffbeb', border: '2px solid #fde68a' }}>
+              <p className="text-3xl mb-1" aria-hidden>⏳</p>
+              <p className="font-bold text-base mb-1" style={{ color: '#92400e' }}>Almost there - awaiting review</p>
+              <p className="text-sm leading-relaxed" style={{ color: '#b45309' }}>
+                {orgName || 'Your organization'} is set up and PocketCache is reviewing your signup.
+                You&apos;ll get your launch kit by email once approved.
+              </p>
+            </div>
+            <div className="rounded-2xl p-4 bg-gray-50 border border-gray-100">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">What happens next</p>
+              <ul className="text-gray-600 text-sm space-y-2">
+                <li>1. PocketCache reviews your organization - usually quick.</li>
+                <li>2. Your launch kit lands at {adminEmail || 'your verified admin email'}: your page link, donor join code, QR code, and website widget.</li>
+                <li>3. Your page goes live and donors can start rounding up.</li>
+              </ul>
+            </div>
+            <p className="text-gray-400 text-xs px-1">
+              Your dashboard is ready now - donor tools unlock automatically the moment you&apos;re approved.
+              Nothing else is needed from you.
+            </p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={async () => { await goLive(config); clearDraft(); }}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
+            >
+              Open your dashboard →
+            </motion.button>
+          </div>
+        )}
+
+        {step === 'live' && !pendingReview && (
           <div className="space-y-4">
             <p className="text-xs font-bold text-teal-700 uppercase tracking-widest">Live right now</p>
             <div className="rounded-2xl p-4 bg-green-50 border border-green-200 text-center">
@@ -2807,15 +2811,21 @@ function NonprofitSignupFlow({ onBack }) {
   );
 }
 
-// ─── Splash wrapper - plays the rolling coin entrance on every fresh gate mount ─
+// ─── Splash wrapper - plays the rolling coin entrance ONCE per cold open ─────
+// Module-level flag, not component state: navigating away from the gate and
+// back (intro slides -> back, sign-in -> back, wizard exit) remounts
+// GateWithSplash, and replaying the whole coin roll on every one of those
+// hops read as a bug. A true cold app open starts a fresh JS context, which
+// resets the flag - so the splash still greets every real launch exactly once.
+let splashPlayedThisLaunch = false;
 
 function GateWithSplash({ children }) {
-  const [splashDone, setSplashDone] = useState(false);
+  const [splashDone, setSplashDone] = useState(() => splashPlayedThisLaunch);
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {children}
       {!splashDone && (
-        <SplashAnimation onDone={() => setSplashDone(true)} />
+        <SplashAnimation onDone={() => { splashPlayedThisLaunch = true; setSplashDone(true); }} />
       )}
     </div>
   );
@@ -2902,6 +2912,15 @@ export default function Onboarding() {
     if (!returnFromOnboarding()) setStep('gate');
   }
 
+  // Back from the step after account creation must NEVER land on the account
+  // step once the account exists (owner punch-list item 4): it skips over it
+  // to the intro slides, the screen that precedes signup. Only a donor who
+  // has not created an account yet backs into the signup form itself.
+  function backFromConnectCard() {
+    if (signupIdentity || hasAccount) { setSlide(2); setStep('slides'); return; }
+    setStep('signup');
+  }
+
   // Hardware/browser back for this wizard's OWN step transitions - mirrors
   // exactly what each screen's own onBack prop already does below, so this is
   // never a new "back" meaning, only the same one reachable through hardware
@@ -2918,7 +2937,7 @@ export default function Onboarding() {
       case 'checkout-confirm': setStep('payment-method'); break;
       case 'card-entry': setStep('payment-method'); break;
       case 'payment-method': setStep('connect-card'); break;
-      case 'connect-card': setStep('signup'); break;
+      case 'connect-card': backFromConnectCard(); break;
       case 'signup': clearDonorDraft(); setSlide(2); setStep('slides'); break;
       // The intro carousel has no in-UI back control of its own (only Next /
       // dot navigation) - 'gate' is exactly where it came from, whether by
@@ -2943,6 +2962,10 @@ export default function Onboarding() {
       setStep('native-app-gate');
       return;
     }
+    // A donor who already has an account (signed in, cause was just missing on
+    // this device) is not re-signing up - binding the code is the last missing
+    // piece, so they go straight to their dashboard.
+    if (hasAccount) { setLastMode('giving'); setPage('home'); return; }
     setStep('slides');
   }
 
@@ -2972,12 +2995,24 @@ export default function Onboarding() {
 
   // One sign-in for every role: donor-only → giving, admin-only → dashboard,
   // both roles → last-used mode (the profile menus toggle between them).
+  //
+  // WITH ONE GUARD the web surface already had and this one did not: the donor
+  // dashboard is per-nonprofit, and every donor tab renders NOTHING without a
+  // bound cause (the "sign in then every page is blank" bug). An identity that
+  // resolves with no cause on this device comes back to the gate - which
+  // greets them by name and asks for the one thing missing, their nonprofit's
+  // code - instead of being handed an empty app.
   function resumeSession() {
     const donorOnly = hasAccount && !adminRole;
     const adminOnly = adminRole && !hasAccount;
     if (adminOnly) { setLastMode('admin'); setPage('np-dashboard'); return; }
-    if (donorOnly) { setLastMode('giving'); setPage('home'); return; }
-    setPage(lastMode === 'admin' && adminRole ? 'np-dashboard' : 'home');
+    if (donorOnly) {
+      if (!selectedNonprofit) { setStep('gate'); return; }
+      setLastMode('giving'); setPage('home'); return;
+    }
+    if (lastMode === 'admin' && adminRole) { setPage('np-dashboard'); return; }
+    if (!selectedNonprofit) { setStep('gate'); return; }
+    setPage('home');
   }
 
   const current = SLIDES[slide];
@@ -3090,7 +3125,7 @@ export default function Onboarding() {
   );
   if (step === 'card-entry') return <CardEntryScreen onBack={() => setStep('payment-method')} onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null, ...(cardInfo?.brand ? { brand: cardInfo.brand } : {}), ...(cardInfo?.simulated ? { simulated: true } : {}) }); setStep('checkout-confirm'); }} />;
   if (step === 'payment-method') return <PaymentMethodScreen onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
-  if (step === 'connect-card') return <ConnectCardScreen onBack={() => setStep('signup')} onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
+  if (step === 'connect-card') return <ConnectCardScreen onBack={backFromConnectCard} onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
   if (step === 'signup') return <SignUpScreen
     onBack={() => { clearDonorDraft(); setSlide(2); setStep('slides'); }}
     onNext={() => setStep('connect-card')}
@@ -3139,7 +3174,20 @@ export default function Onboarding() {
 
           {/* Text */}
           <div className="mt-4 text-center">
-            {current.title ? (
+            {/* Slide 0 is the QR / join-link landing: it greets the donor with
+                the nonprofit they just scanned, by name - never generic
+                "Your App, Your Cause" copy (owner punch-list item 2). The org
+                is always resolved by the time slides render (the gate's
+                auto-bind and manual entry both go through resolveOrgByCode,
+                the server-first lookup), so the fallback line below only
+                covers a state that should not occur. */}
+            {slide === 0 ? (
+              <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
+                {selectedNonprofit
+                  ? `Welcome to the\n${selectedNonprofit.name}\nround-up app`
+                  : 'Welcome to your\nround-up app'}
+              </h1>
+            ) : current.title ? (
               <h1 className="text-white font-bold text-4xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
                 {current.title}
               </h1>

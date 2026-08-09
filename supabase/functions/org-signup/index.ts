@@ -30,7 +30,50 @@ import { dbRest, resolveUser } from "../_shared/stripe.ts";
 import {
   emailDomain, isFreeMail, isValidJoinCodeShape, normalizeJoinCode,
   generateUniqueJoinCode, joinCodeAvailableFor, isJoinCodeFree, getOrgByAdminEmail,
+  officialDomainFor, approveToken, approveKeyConfigured,
 } from "../_shared/org.ts";
+import type { OrgRow } from "../_shared/org.ts";
+import { sendGmail } from "../_shared/gmail.ts";
+import { OWNER_ALERT_EMAIL, buildOwnerApprovalAlert } from "../_shared/orgEmails.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+
+// The signup wizard calls this function twice (see the ORDERING DECISION
+// below): once when email verification succeeds, and once at wizard
+// completion with the full payload (which always carries appleApproval).
+// That second call is the moment the org is "waiting for review", so it is
+// when the owner's approval-alert email goes out - exactly once, guarded by
+// approve_alert_sent_at.
+async function maybeSendOwnerAlert(org: OrgRow | null | undefined): Promise<void> {
+  if (!org?.id) return;
+  if (org.status !== "pending_review") return;
+  if (org.approve_alert_sent_at) return;
+  if (!approveKeyConfigured()) {
+    console.error("org-signup: ORG_APPROVE_KEY not set - cannot build approve link");
+    return;
+  }
+  // Claim the alert BEFORE sending (idempotency guard against the wizard's
+  // repeated upserts): only the request that successfully flips
+  // approve_alert_sent_at from null sends the email.
+  const claimed = await dbRest(
+    "PATCH",
+    `orgs?id=eq.${org.id}&approve_alert_sent_at=is.null`,
+    { approve_alert_sent_at: new Date().toISOString() },
+    { Prefer: "return=representation" },
+  );
+  const row = Array.isArray(claimed.data) ? claimed.data[0] : null;
+  if (!claimed.ok || !row) return; // someone else already claimed it
+  try {
+    const token = await approveToken(org.id);
+    const approveUrl = `${SUPABASE_URL}/functions/v1/org-approve?org_id=${encodeURIComponent(org.id)}&token=${token}`;
+    const mail = buildOwnerApprovalAlert(org, approveUrl);
+    await sendGmail(OWNER_ALERT_EMAIL, mail.subject, mail.text, mail.html);
+  } catch (err) {
+    console.error("org-signup: owner approval alert failed", err);
+    // Roll the claim back so a later completion call can retry the email.
+    await dbRest("PATCH", `orgs?id=eq.${org.id}`, { approve_alert_sent_at: null }).catch(() => {});
+  }
+}
 
 Deno.serve(async (req: Request) => {
   const preflight = handleOptions(req);
@@ -65,6 +108,18 @@ Deno.serve(async (req: Request) => {
 
     const existing = await getOrgByAdminEmail(email);
 
+    // Known-org claim gate: a signup claiming a seeded org (matched by EIN or
+    // by exact name - BGCA today) must verify on that org's official domain.
+    // Unknown orgs keep the existing rule: any non-personal domain, which then
+    // becomes the org's own admin_domain. Checked on both the create and the
+    // update path so a rename mid-wizard can't sidestep it.
+    const known = officialDomainFor(ein ?? existing?.ein ?? undefined, body?.name !== undefined ? name : existing?.name);
+    if (known && domain !== known.domain) {
+      return jsonResponse(req, {
+        error: `To claim ${known.org}, use an email at @${known.domain}.`,
+      }, 403);
+    }
+
     if (existing) {
       // deno-lint-ignore no-explicit-any
       const patch: Record<string, any> = {};
@@ -84,6 +139,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (Object.keys(patch).length === 0) {
+        if (appleApproval !== undefined) await maybeSendOwnerAlert(existing);
         return jsonResponse(req, { org: existing, created: false, joinCodeTaken });
       }
 
@@ -98,6 +154,9 @@ Deno.serve(async (req: Request) => {
         return jsonResponse(req, { error: "Could not save your organization. Try again." }, 502);
       }
       const row = Array.isArray(updated.data) ? updated.data[0] : updated.data;
+      // The completion call (the only one that carries appleApproval) is the
+      // moment the org is officially waiting for review - alert the owner.
+      if (appleApproval !== undefined) await maybeSendOwnerAlert(row);
       return jsonResponse(req, { org: row, created: false, joinCodeTaken });
     }
 
@@ -139,6 +198,10 @@ Deno.serve(async (req: Request) => {
       event: "nonprofit signup server-side",
       detail: { org: name, joinCode: row?.join_code },
     }).catch((err) => console.error("org-signup: events insert failed", err));
+
+    // Normally the alert waits for the completion call (see above), but a
+    // fresh insert that already carries the full payload IS the completion.
+    if (appleApproval !== undefined) await maybeSendOwnerAlert(row);
 
     return jsonResponse(req, { org: row, created: true, joinCodeTaken });
   } catch (err) {

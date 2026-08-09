@@ -188,6 +188,10 @@ export function cacheServerOrgLocally(serverOrg, adminEmail) {
     appleApproval: serverOrg.apple_approval || existing?.appleApproval || { status: 'approved', method: 'candid_seal' },
     stripeConnected: !!serverOrg.stripe_connected,
     createdAt: existing?.createdAt || new Date().toISOString(),
+    // Approval gate (orgs.status): 'pending_review' until the platform owner
+    // approves the org, 'approved' after. Server rows predating the gate and
+    // rows from an older cached shape read as approved via the fallback.
+    status: serverOrg.status ?? 'approved',
     _isCustom: true,
     _serverId: serverOrg.id,
   };
@@ -262,6 +266,23 @@ export function setOrgAppleApproval(orgId, appleApproval) {
   const record = getCustomOrg(orgId);
   if (record) saveCustomOrg({ ...record, appleApproval });
 }
+
+// ── Approval gate ─────────────────────────────────────────────────────────────
+
+/**
+ * Is this org still waiting for the platform owner's approval (orgs.status =
+ * 'pending_review')? Donor-facing surfaces (join gates, the microsite, the
+ * switch-org sheets) hold a pending org back - "This nonprofit's page is
+ * almost ready" - instead of binding to it. Seeded orgs (BGCA) and records
+ * that predate the gate have no status field at all and read as approved,
+ * never as pending.
+ */
+export function isOrgPending(org) {
+  return org?.status === 'pending_review';
+}
+
+/** The donor-facing hold message for a pending org - one string, every gate. */
+export const ORG_PENDING_MESSAGE = "This nonprofit's page is almost ready - they're finishing setup with PocketCache. Check back soon.";
 
 // ── Unified org lookup ────────────────────────────────────────────────────────
 // Used by both donor gate (code entry) and AppContext (selectedNonprofit resolution).

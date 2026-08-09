@@ -1,7 +1,8 @@
 // roundups-me
 //
 // POST { multiplier? } -> { ok, linked, month_key, pending_total_cents,
-//   txn_count, last_synced_at, recent, multiplier }
+//   txn_count, last_synced_at, recent, multiplier,
+//   give_extras: { pending_cents, lifetime_cents } }
 //
 // The on-demand path a signed-in donor's dashboard calls (both the app and
 // the web portal) to show a REAL pending round-up total next to the
@@ -47,6 +48,20 @@
 // updates stripe_donors.multiplier for this donor before computing the
 // total, so a single call can both save a multiplier change and return the
 // freshly-multiplied total.
+//
+// GIVE EXTRAS: every donor-found response also carries the donor's "Give
+// Extra" pledge totals (see supabase/give_extras.sql) so the dashboards get
+// both figures in the ONE round trip they already make:
+//   give_extras.pending_cents  - still-'pending' pledges, i.e. what joins
+//     the donor's NEXT monthly charge (dashboards add it to "total this
+//     month").
+//   give_extras.lifetime_cents - all pledges ever (pending + charged), the
+//     donor's honest lifetime give-extra figure.
+// The multiplier NEVER applies to these - a pledge is an exact dollar
+// amount the donor typed, not a round-up to scale. Included even when
+// linked=false: a real donor can pledge before ever linking a bank, and the
+// donor-not-found branch returns the same zeroed shape so account
+// enumeration stays impossible.
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { dbRest, resolveUser } from "../_shared/stripe.ts";
 import { syncItemRoundups } from "../_shared/roundups-engine.ts";
@@ -131,6 +146,24 @@ interface RoundupRow {
   roundup_cents: number;
 }
 
+/** The donor's give-extra pledge totals - one small select, summed here. */
+async function giveExtraTotals(stripeCustomerId: string): Promise<{ pending_cents: number; lifetime_cents: number }> {
+  const res = await dbRest(
+    "GET",
+    `give_extras?stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}&select=amount_cents,status`,
+  );
+  const rows = Array.isArray(res.data) ? (res.data as { amount_cents: number; status: string }[]) : [];
+  let pending = 0;
+  let lifetime = 0;
+  for (const r of rows) {
+    lifetime += r.amount_cents;
+    if (r.status === "pending") pending += r.amount_cents;
+  }
+  return { pending_cents: pending, lifetime_cents: lifetime };
+}
+
+const ZERO_GIVE_EXTRAS = { pending_cents: 0, lifetime_cents: 0 };
+
 Deno.serve(async (req: Request) => {
   const preflight = handleOptions(req);
   if (preflight) return preflight;
@@ -148,7 +181,7 @@ Deno.serve(async (req: Request) => {
       // who has never started a card save. Same shape as "linked: false"
       // below so this branch is not distinguishable from "found but no
       // bank" (see file header on enumeration).
-      return jsonResponse(req, { ok: true, linked: false, multiplier: 1 });
+      return jsonResponse(req, { ok: true, linked: false, multiplier: 1, give_extras: ZERO_GIVE_EXTRAS });
     }
 
     // Optional multiplier update, persisted before computing the total so a
@@ -168,16 +201,20 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Pledges exist independently of a linked bank, so compute them before
+    // the linked/unlinked fork - every donor-found branch carries them.
+    const giveExtras = await giveExtraTotals(donor.stripe_customer_id);
+
     const items = await findDonorPlaidItems(donor);
     if (items.length === 0) {
-      return jsonResponse(req, { ok: true, linked: false, multiplier });
+      return jsonResponse(req, { ok: true, linked: false, multiplier, give_extras: giveExtras });
     }
 
     if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
       console.error("roundups-me: missing PLAID_CLIENT_ID or PLAID_SECRET secret");
       // Configuration problem, not "no bank" - but still fail soft into the
       // demo fallback rather than surfacing a scary error to a donor.
-      return jsonResponse(req, { ok: true, linked: false, multiplier });
+      return jsonResponse(req, { ok: true, linked: false, multiplier, give_extras: giveExtras });
     }
 
     let latestSync: string | null = null;
@@ -229,6 +266,7 @@ Deno.serve(async (req: Request) => {
       last_synced_at: latestSync,
       recent,
       multiplier,
+      give_extras: giveExtras,
     });
   } catch (err) {
     console.error("roundups-me: unexpected error", err);

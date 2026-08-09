@@ -66,6 +66,48 @@ function buildSteps() {
   ];
 }
 
+// The Grow assets (join code, QR, website widget) belong to an APPROVED org -
+// a pending org's page, QR link, and widget do not resolve for donors yet, so
+// handing out the assets early would only produce printed QR codes and pasted
+// widgets that point at a held-back page. This replaces the whole tab while
+// orgs.status is 'pending_review'; the shells' PendingReviewBanner notices
+// server-side approval and flips status, which unlocks this automatically.
+function GrowPending({ web, accent }) {
+  const locked = [
+    ['Your donor join code', 'What donors type into PocketCache to find you.'],
+    ['Your QR code', 'For posters, newsletters, and event tables.'],
+    ['Your website widget', 'The one-line embed for your own site.'],
+  ];
+  return (
+    <NpPage gap={5} cols={2}>
+      <NpBlock span="full">
+        <>
+          {!web && <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Grow your donor base</p>}
+          <div className="rounded-3xl p-6" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+            <p className="font-bold text-base" style={{ color: '#92400e' }}>🔒 Your growth assets unlock at approval</p>
+            <p className="text-sm mt-1.5 leading-relaxed" style={{ color: '#b45309' }}>
+              PocketCache is reviewing your organization. The assets below go live - and arrive in
+              your launch-kit email - the moment you are approved. Until then your page is held
+              back, so donors cannot join yet.
+            </p>
+          </div>
+        </>
+      </NpBlock>
+      {locked.map(([title, body]) => (
+        <NpBlock key={title}>
+          <div className="bg-white rounded-3xl p-5 card-shadow" style={{ opacity: 0.75 }}>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{title}</p>
+            <div className="rounded-2xl flex items-center justify-center" style={{ height: 90, background: `${accent}0d`, border: `1px dashed ${accent}55` }}>
+              <span className="text-2xl" aria-hidden>🔒</span>
+            </div>
+            <p className="text-gray-400 text-xs mt-3">{body}</p>
+          </div>
+        </NpBlock>
+      ))}
+    </NpPage>
+  );
+}
+
 export default function Grow() {
   const { npOrg, setNpOrg } = useNp();
   const { adminRole, setAdminRole, showToast } = useApp();
@@ -123,6 +165,10 @@ export default function Grow() {
     + (widgetWidth !== 340 ? ` data-width="${widgetWidth}"` : '')
     + (widgetLabel !== 'Start giving →' ? ` data-label="${widgetLabel}"` : '')
     + `></script>`;
+
+  // After every hook above (rules of hooks) - a pending org sees the locked
+  // version of this tab instead of assets that do not resolve for donors yet.
+  if (npOrg.status === 'pending_review') return <GrowPending web={web} accent={accent} />;
 
   return (
     <NpPage gap={5} cols={2}>

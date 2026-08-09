@@ -11,6 +11,7 @@ import VolunteerSheet from '../components/sheets/VolunteerSheet';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
 import MatchDetailsSheet from '../components/sheets/MatchDetailsSheet';
 import { getOrgStats } from '../lib/orgStats';
+import { submitGiveExtra } from '../lib/engagement';
 import { fmtMoneyCompact } from '../lib/format';
 // impactTier used to be a verbatim duplicate of the one in WebPortalPages.jsx.
 // Both surfaces now read the single implementation in lib/donorContent.
@@ -25,7 +26,7 @@ import { impactTier } from '../lib/donorContent';
 const TEAL_INK = '#0f766e';
 
 export default function MyCause() {
-  const { selectedNonprofit, boostDonation, totalDonated } = useApp();
+  const { selectedNonprofit, boostDonation, totalDonated, demoActive, hasAccount, refreshRealRoundups } = useApp();
   const brand = useTheme();
   const [showBoost, setShowBoost] = useState(false);
   const [showVolunteer, setShowVolunteer] = useState(false);
@@ -48,6 +49,22 @@ export default function MyCause() {
     toastTimerRef.current = setTimeout(() => setBoostToast(null), 3500);
   }
 
+  // REAL pledge path (demoActive false): posts to the give-extra edge
+  // function, then refreshes the roundups-me snapshot so the dashboards'
+  // month and lifetime figures include the new pledge immediately.
+  // Deliberately NOT boostDonation: the lifetime total already folds in the
+  // server-side give-extra lifetime figure (see AppContext), so bumping the
+  // local total too would double-count. The sheet owns the success view.
+  async function handleRealGiveExtra(amount) {
+    const res = await submitGiveExtra({
+      amountCents: Math.round(amount * 100),
+      orgCode: selectedNonprofit?.shortName,
+      email: hasAccount?.email,
+    });
+    if (res?.ok) refreshRealRoundups();
+    return res;
+  }
+
   const np = selectedNonprofit;
   const match = np.corporateMatch;
 
@@ -67,6 +84,8 @@ export default function MyCause() {
         onConfirm={handleBoostConfirm}
         nonprofit={np}
         brand={brand}
+        demoActive={demoActive}
+        onSubmitReal={handleRealGiveExtra}
       />
       {/* "Suggest a Match Sponsor" (CorporateMatchSheet) used to mount here.
           Removed 2026-07: two adjacent buttons that both said "match sponsor"

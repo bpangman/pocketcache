@@ -32,6 +32,7 @@ const HERO_FRACTION = 0.38; // hero rests at 38% of the screen — same as the s
 export function useHeroCollapse() {
   const [progress, setProgress] = useState(0);
   const [frameHeight, setFrameHeight] = useState(0);
+  const [scrollHeight, setScrollHeight] = useState(0);
   const rafId = useRef(null);
   const frameRef = useRef(null);  // the screen's outer column
   const scrollRef = useRef(null); // the scrollable div
@@ -40,14 +41,21 @@ export function useHeroCollapse() {
   // The hero's rest height is 38% of the SCREEN — not of the scroll area,
   // which is shorter when a footer is pinned below it — so it matches the
   // original static layout exactly. Re-measures when the device preset or
-  // text size changes.
+  // text size changes. The scroll area is measured too: sheetMinHeight below
+  // needs the scrollport height, which is shorter than the frame whenever a
+  // footer is pinned under it.
   useLayoutEffect(() => {
     const frame = frameRef.current;
+    const scroll = scrollRef.current;
     if (!frame) return;
-    const measure = () => setFrameHeight(frame.clientHeight);
+    const measure = () => {
+      setFrameHeight(frame.clientHeight);
+      if (scroll) setScrollHeight(scroll.clientHeight);
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(frame);
+    if (scroll) ro.observe(scroll);
     return () => ro.disconnect();
   }, []);
 
@@ -77,9 +85,17 @@ export function useHeroCollapse() {
     // …and the compact title fades in late, fully opaque before the sheet's
     // rounded corners slide under the docked bar.
     heroCompactOpacity: Math.min(1, Math.max(0, (progress - 0.5) / 0.35)),
-    // Minimum sheet height so every screen can fully collapse with NO dead
-    // scroll space: hero(38%) + sheet(100% − 48px) − 16px overlap covers the
-    // viewport plus exactly the (hero − bar) of scroll range the collapse needs.
-    sheetMinHeight: 'calc(100% - 48px)',
+    // Minimum sheet height: exactly enough to fill the scrollport below the
+    // hero (plus the 16px -mt-4 overlap the sheet sits under), and not one
+    // pixel more. The old value ('calc(100% - 48px)') reserved almost a full
+    // extra viewport of sheet so the hero could ALWAYS fully collapse - which
+    // is precisely the huge empty region below short screens' content that
+    // the owner flagged on every setup step. Short content now fills the
+    // screen with zero dead scroll space; the collapse still works on any
+    // screen whose content genuinely overflows, because minHeight never caps
+    // real content. Undefined only for the pre-measure paint.
+    sheetMinHeight: frameHeight && scrollHeight
+      ? Math.max(0, scrollHeight - Math.round(frameHeight * HERO_FRACTION) + 16)
+      : undefined,
   };
 }

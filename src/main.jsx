@@ -4,20 +4,12 @@ import './index.css'
 import App from './App.jsx'
 import { initNativeAuthListener } from './lib/donorAuth'
 
-// TESTING MODE - wipe all persisted state on every native cold launch
-// so Blake can test from the fresh welcome screen each time.
-// REMOVE THIS BLOCK BEFORE OFFICIAL LAUNCH - see PRELAUNCH.md and app/APPSTORE.md.
-if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
-  try { localStorage.clear(); } catch { /* ignore */ }
-  try { sessionStorage.clear(); } catch { /* ignore */ }
-  try {
-    if (indexedDB && typeof indexedDB.databases === 'function') {
-      indexedDB.databases().then(dbs => {
-        dbs.forEach(db => { try { if (db.name) indexedDB.deleteDatabase(db.name); } catch { /* ignore */ } });
-      }).catch(() => { /* ignore */ });
-    }
-  } catch { /* ignore */ }
-}
+// The old TESTING-MODE cold-launch wipe lived here (localStorage/sessionStorage/
+// indexedDB cleared on every native launch). It is GONE on purpose: the app now
+// remembers the signed-in account across cold launches - a cold open with a
+// persisted Supabase session goes straight to the dashboard, no sign-in prompt.
+// Fresh-start testing is still available via the ?reset=1 / ?fresh=1 links
+// (see src/store/AppContext.jsx).
 
 // Native in-app SSO return trip: iOS hands app.pocketcache://auth-callback#…
 // to the shell, the App plugin fires appUrlOpen, and this listener turns the

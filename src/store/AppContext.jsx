@@ -17,7 +17,7 @@ const DONOR_KEYS = [
   'pc_has_account', 'pc_donor_role', 'pc_tracked_card', 'pc_payment_method',
   'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment', 'pc_fee_months',
   'pc_bio', 'pc_bio_prompt_dismissed', 'pc_skip_next', 'pc_review_ack',
-  'pc_skip_month', 'pc_last_cycle', 'pc_cover_processing',
+  'pc_skip_month', 'pc_last_cycle', 'pc_cover_processing', 'pc_demo_mode',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
 const RESET_KEYS = [...DONOR_KEYS, 'pc_identity', 'pc_admin_role', 'pc_last_mode'];
@@ -148,6 +148,28 @@ export function AppProvider({ children }) {
   // Non-persisted: triggers Settings to auto-open a sheet (e.g. from reactivation check-in)
   const [pendingSettingsAction, setPendingSettingsActionState] = useState(null);
 
+  // ─── DEMO MODE ─────────────────────────────────────────────────────────────
+  // The one switch that swaps every dashboard / activity / review figure to
+  // the rich fake dataset (src/data/transactions.js) so the app can be shown
+  // off, and back to the account's real data when off. Persisted under
+  // pc_demo_mode so it survives reloads.
+  //
+  // HOW TO FLIP IT
+  //   - setDemoMode(true|false) - the documented public setter. The Settings
+  //     screen renders the visible toggle and calls this.
+  //   - Shaking the phone - AppShell wires lib/shake.js to the same setter.
+  //
+  // HOW SCREENS SHOULD CONSUME IT
+  //   Read `demoActive` (below), not demoMode directly: a visitor with NO real
+  //   account is always on the demo dataset (that is the prototype experience),
+  //   so demoActive = demoMode || !hasAccount. Screens label demo figures with
+  //   a small "Demo" pill whenever demoActive is true.
+  const [demoMode, setDemoModeState] = useState(() => loadKey('pc_demo_mode', false));
+  function setDemoMode(v) {
+    saveKey('pc_demo_mode', !!v);
+    setDemoModeState(!!v);
+  }
+
   // A REAL account (a real Supabase identity - see `hasAccount` below) has no
   // real charge-history data source wired up yet (no billing-history sync
   // exists server-side for a signed-in donor - see PRELAUNCH.md). Showing it
@@ -209,24 +231,59 @@ export function AppProvider({ children }) {
     return () => { cancelled = true; };
   }, [hasAccount]);
 
-  const hasRealBankLinked = !!realRoundups?.linked;
+  // demoActive: the flag every screen keys its real-vs-demo choice on.
+  // A visitor with no real account is always the demo prototype experience;
+  // a real account is on real data unless the donor flipped demo mode on.
+  const demoActive = demoMode || !hasAccount;
+
+  const bankLinked = !!realRoundups?.linked;
+  // Demo mode overrides even a real linked bank: the whole point of the
+  // toggle is "swap EVERY figure to the rich fake dataset".
+  const hasRealBankLinked = bankLinked && !demoMode;
   const simulatedPendingRoundUps = parseFloat((BASE_PENDING * roundUpMultiplier).toFixed(2));
-  // The single substitution point: once a donor has a real linked bank,
-  // pendingRoundUps below becomes the REAL total for every screen that
-  // reads it (both dashboards' hero/stat tiles, the Monthly Charge /
-  // EstimateCard math, milestones progress, etc.) - deliberately, so every
-  // downstream calculation that already depends on pendingRoundUps stays
-  // internally consistent without threading a parallel "real vs demo" value
-  // through each one individually.
-  const pendingRoundUps = hasRealBankLinked
-    ? (realRoundups.pending_total_cents ?? 0) / 100
-    : simulatedPendingRoundUps;
+  // The single substitution point for the pending figure, in priority order:
+  //   1. demoActive          -> the simulated demo number (rich fake dataset).
+  //   2. real linked bank    -> the REAL total from roundups-me.
+  //   3. real account, no bank yet -> an honest $0.00. A fresh real account
+  //      must never see the fake $4.63 - round-ups only count from account
+  //      creation onward, and there is nothing yet.
+  // Every screen that reads pendingRoundUps (both dashboards' stat tiles, the
+  // Monthly Charge / EstimateCard math, milestones progress, etc.) therefore
+  // stays internally consistent without threading a parallel value through
+  // each one individually.
+  const pendingRoundUps = demoActive
+    ? simulatedPendingRoundUps
+    : hasRealBankLinked ? (realRoundups.pending_total_cents ?? 0) / 100 : 0;
   const realRoundupsRecent = hasRealBankLinked ? (realRoundups.recent ?? []) : [];
+  // Real round-up COUNT for the stat tiles - 0 for a fresh real account.
+  const realRoundupsCount = hasRealBankLinked ? (realRoundups.txn_count ?? 0) : 0;
   // Computed once per realRoundups update (response arrival), NOT on a
   // ticking interval - see fmtFreshness's own doc comment.
   const realRoundupsFreshness = hasRealBankLinked
     ? (fmtFreshness(realRoundups.last_synced_at) ?? 'Live')
     : null;
+  // REAL "Give Extra" pledge totals, carried on the same roundups-me response
+  // (give_extras: { pending_cents, lifetime_cents } - present on every
+  // donor-found branch, even linked:false, because a real donor can pledge
+  // before ever linking a bank). Zero while demoActive: demo mode's flashy
+  // simulated Give Extra flow tracks its own numbers through boostDonation,
+  // and mixing a real pledge into demo figures (or vice versa) would make
+  // both dishonest.
+  //   giveExtraPending  - still-'pending' pledges, i.e. what joins the NEXT
+  //     monthly charge; dashboards add it to their month figure.
+  //   giveExtraLifetime - every pledge ever (pending + charged); folded into
+  //     the lifetime total below.
+  const giveExtraPending = !demoActive ? (realRoundups?.give_extras?.pending_cents ?? 0) / 100 : 0;
+  const giveExtraLifetime = !demoActive ? (realRoundups?.give_extras?.lifetime_cents ?? 0) / 100 : 0;
+  // What the dashboards display as the lifetime total: the demo dataset's
+  // rich figure while demo mode is on for a REAL account (their honest total
+  // is preserved untouched underneath), otherwise the account's own total
+  // plus their real give-extra pledges (server-side truth, so the figure is
+  // right across devices - the real Give Extra flow deliberately does NOT
+  // call boostDonation, which would double-count against this).
+  const displayTotalDonated = (demoMode && hasAccount)
+    ? PRIOR_MONTHS_SUM
+    : parseFloat((totalDonated + giveExtraLifetime).toFixed(2));
 
   const selectedNonprofit = useMemo(
     () => findOrgByCode(selectedNonprofitId),
@@ -261,6 +318,17 @@ export function AppProvider({ children }) {
     // this feature existed.
     fetchRoundupsMe({ multiplier: v }).then(data => {
       if (data) setRealRoundups(data);
+    });
+  }
+
+  // Re-pull the real roundups-me snapshot on demand - the real Give Extra
+  // flow calls this right after a successful pledge so the dashboards' month
+  // and lifetime figures include it without waiting for the next mount.
+  // Best-effort like the mount fetch: a null response leaves state as-is.
+  function refreshRealRoundups() {
+    return fetchRoundupsMe().then(data => {
+      if (data) setRealRoundups(data);
+      return data;
     });
   }
 
@@ -485,10 +553,12 @@ export function AppProvider({ children }) {
       selectedNonprofit, setSelectedNonprofit,
       roundUpMultiplier, setRoundUpMultiplier,
       linkedCards, setLinkedCards,
-      totalDonated,
+      totalDonated: displayTotalDonated,
       boostDonation,
       pendingRoundUps,
-      hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness,
+      demoMode, setDemoMode, demoActive,
+      hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount,
+      giveExtraPending, giveExtraLifetime, refreshRealRoundups,
       signOut,
       accountStatus, setAccountStatus,
       hasAccount, setHasAccount,

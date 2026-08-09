@@ -315,6 +315,7 @@ export default function NpWebSignup({ onExit }) {
   const {
     step, ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
+    pendingReview,
     adminEmail, workEmail, setWorkEmail, emailError,
     codeSent, codeInput, setCodeInput, codeError, requiredDomain,
     sendingCode, verifyingCode,
@@ -943,8 +944,50 @@ export default function NpWebSignup({ onExit }) {
               </div>
             )}
 
+            {/* ═══ Completion, pending review: a real server org is held back
+                 until the platform owner approves it (org-approve). No join
+                 code, QR, or widget yet - those arrive in the launch-kit email
+                 at approval. ═══ */}
+            {step === 'live' && pendingReview && (
+              <div style={{ display: 'grid', gap: 22 }}>
+                <div style={{ ...PANEL, padding: 26, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 24, alignItems: 'center' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#b45309' }}>
+                      Almost there ⏳
+                    </p>
+                    <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 800, letterSpacing: '-0.4px', color: INK.primary }}>
+                      {orgName} is awaiting review
+                    </h2>
+                    <p style={{ margin: '8px 0 0', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+                      Your signup is complete and PocketCache is reviewing your organization.
+                      You&apos;ll get your launch kit by email once approved.
+                    </p>
+                  </div>
+                  <Button tone="teal" onClick={async () => { await goLive(config); clearDraft(); }}>Open your dashboard →</Button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
+                  <Side label="What happens next">
+                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7, color: INK.secondary, listStyleType: 'decimal' }}>
+                      <li>PocketCache reviews your organization - usually quick.</li>
+                      <li>Your launch kit lands at {adminEmail || 'your verified admin email'}: your page link, donor join code, QR code, and website widget.</li>
+                      <li>Your page goes live and donors can start rounding up.</li>
+                    </ol>
+                  </Side>
+                  <Side label="Until then">
+                    <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                      Your page, QR code, and widget stay held back so nothing gets printed or
+                      embedded before it works. Your dashboard is ready now - the donor-facing
+                      tools unlock automatically the moment you&apos;re approved. Nothing else is
+                      needed from you.
+                    </p>
+                  </Side>
+                </div>
+              </div>
+            )}
+
             {/* ═══ You're live ═══ */}
-            {step === 'live' && (
+            {step === 'live' && !pendingReview && (
               <div style={{ display: 'grid', gap: 22 }}>
                 <div style={{ ...PANEL, padding: 26, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 24, alignItems: 'center' }}>
                   <div style={{ minWidth: 0 }}>

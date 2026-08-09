@@ -186,6 +186,15 @@ Deno.serve(async (req: Request) => {
         `roundups?month_key=eq.${encodeURIComponent(cycle.month_key)}&status=eq.locked&stripe_customer_id=eq.${encodeURIComponent(cycle.stripe_customer_id)}`,
         { status: "charged" },
       );
+      // "Give Extra" pledges cycle-lock folded into this cycle's total (it
+      // stamped cycle_month on exactly the rows it consumed - see
+      // supabase/give_extras.sql) were just billed as part of this
+      // PaymentIntent, so flip them to 'charged' alongside the round-ups.
+      await dbRest(
+        "PATCH",
+        `give_extras?cycle_month=eq.${encodeURIComponent(cycle.month_key)}&status=eq.pending&stripe_customer_id=eq.${encodeURIComponent(cycle.stripe_customer_id)}`,
+        { status: "charged" },
+      );
       await logEvent("charge_cycle_charged", {
         cycle_id: cycle.id,
         stripe_customer_id: cycle.stripe_customer_id,

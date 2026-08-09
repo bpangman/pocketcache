@@ -21,8 +21,11 @@ export function corsHeaders(req: Request): HeadersInit {
   const origin = req.headers.get("origin") ?? "";
   const allowed = ALLOWED_ORIGIN_EXACT.has(origin) || isLocalhost(origin);
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    // GET is for org-approve's emailed one-click link (a top-level navigation,
+    // but harmless to allow here); x-approve-key is the platform admin
+    // console's pasted approval key (org-approve POST).
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-approve-key",
   };
   if (allowed) {
     headers["Access-Control-Allow-Origin"] = origin;

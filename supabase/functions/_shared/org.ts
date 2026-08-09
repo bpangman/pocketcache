@@ -16,6 +16,82 @@ export function emailDomain(email: string): string {
   return (email.split("@")[1] || "").toLowerCase();
 }
 
+// ─── Known orgs (seeded) ─────────────────────────────────────────────────────
+// Mirror of src/data/nonprofits.js (BGCA today). When a signup claims one of
+// these orgs - matched by EIN or by name - the verified admin email MUST be on
+// the org's official domain, or anyone with any work email could claim BGCA.
+// Kept in sync by hand, same as FREE_MAIL above.
+export const KNOWN_ORGS = [
+  {
+    name: "Boys & Girls Clubs of America",
+    einDigits: "135562976",
+    domain: "bgca.org",
+  },
+];
+
+/** The official domain a signup claiming this org must verify on, or null when
+ *  the org is unknown (unknown orgs: the verified domain becomes theirs). */
+export function officialDomainFor(ein: string | undefined, name: string | undefined): { org: string; domain: string } | null {
+  const einDigits = (ein ?? "").replace(/\D/g, "");
+  const lowerName = (name ?? "").trim().toLowerCase();
+  for (const known of KNOWN_ORGS) {
+    if ((einDigits && einDigits === known.einDigits) || (lowerName && lowerName === known.name.toLowerCase())) {
+      return { org: known.name, domain: known.domain };
+    }
+  }
+  return null;
+}
+
+// ─── Approval-link token ─────────────────────────────────────────────────────
+// The one-click approve link emailed to the platform owner carries
+// {org_id, token} where token = HMAC-SHA256(org_id) keyed by the
+// ORG_APPROVE_KEY function secret. Verified by org-approve.
+
+const ORG_APPROVE_KEY = Deno.env.get("ORG_APPROVE_KEY") ?? "";
+
+export function approveKeyConfigured(): boolean {
+  return ORG_APPROVE_KEY.length > 0;
+}
+
+/** Constant-time-ish check of a pasted console key against the secret. */
+export function approveKeyMatches(candidate: string): boolean {
+  if (!ORG_APPROVE_KEY || !candidate) return false;
+  if (candidate.length !== ORG_APPROVE_KEY.length) return false;
+  let diff = 0;
+  for (let i = 0; i < candidate.length; i++) {
+    diff |= candidate.charCodeAt(i) ^ ORG_APPROVE_KEY.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+export async function approveToken(orgId: string): Promise<string> {
+  if (!ORG_APPROVE_KEY) throw new Error("ORG_APPROVE_KEY not set");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(ORG_APPROVE_KEY),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(orgId));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function approveTokenValid(orgId: string, token: string): Promise<boolean> {
+  if (!orgId || !token) return false;
+  try {
+    const expected = await approveToken(orgId);
+    if (token.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < token.length; i++) {
+      diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
+    }
+    return diff === 0;
+  } catch {
+    return false;
+  }
+}
+
 export function isFreeMail(domain: string): boolean {
   return FREE_MAIL.has(domain);
 }
@@ -96,6 +172,10 @@ export interface OrgRow {
   stripe_account_id: string | null;
   stripe_connected: boolean;
   source: string;
+  // 'pending_review' until the platform owner approves the org (org-approve);
+  // 'approved' after. Donor-facing surfaces hold pending orgs back.
+  status: string;
+  approve_alert_sent_at: string | null;
 }
 
 export async function getOrgById(id: string): Promise<OrgRow | null> {

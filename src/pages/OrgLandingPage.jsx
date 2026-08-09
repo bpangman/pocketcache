@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { findOrgByCode, resolveOrgByCode } from '../store/orgStore';
+import { findOrgByCode, resolveOrgByCode, isOrgPending } from '../store/orgStore';
 import { fmtMoney, fmtCount } from '../lib/format';
 import { getOrgStats } from '../lib/orgStats';
 import CoinMark from '../components/CoinMark';
@@ -52,6 +52,27 @@ export default function OrgLandingPage({ code }) {
             We couldn&apos;t find &ldquo;{code}&rdquo;. Double-check the link or{' '}
             <a href="/" style={{ color: '#FBBF24', fontWeight: 600 }}>go to PocketCache</a>.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // The org exists but is still awaiting the platform owner's approval
+  // (orgs.status = 'pending_review') - the microsite is held back so nothing
+  // printed or shared early lands donors on a page that cannot enroll them.
+  if (isOrgPending(org)) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B2A4A', color: '#fff', textAlign: 'center', padding: '2rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
+        <div style={{ maxWidth: 420 }}>
+          <div style={{ fontSize: '2.4rem', marginBottom: '0.75rem' }} aria-hidden>⏳</div>
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>This nonprofit&apos;s page is almost ready</h1>
+          <p style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+            {org.name} is finishing setup with PocketCache. Check back soon - donations open the
+            moment their page is approved.
+          </p>
+          <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#FBBF24', fontWeight: 600, textDecoration: 'none' }}>
+            <CoinMark size={18} /> Go to PocketCache
+          </a>
         </div>
       </div>
     );
@@ -122,7 +143,7 @@ export default function OrgLandingPage({ code }) {
             {org.name}
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1rem', lineHeight: 1.6, margin: '0 auto', maxWidth: 480 }}>
-            {org.tagline || org.brand?.tagline || org.description}
+            Welcome to the {org.name} round-up microsite
           </p>
         </div>
       </div>

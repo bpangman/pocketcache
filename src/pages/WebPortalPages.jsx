@@ -3,7 +3,7 @@ import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { loadKey, saveKey } from '../store/identityStore';
-import { resolveOrgByCode, getCustomOrg } from '../store/orgStore';
+import { resolveOrgByCode, getCustomOrg, isOrgPending, ORG_PENDING_MESSAGE } from '../store/orgStore';
 import { DEMO_USER, monthsGiving, FIRST_MONTH_LABEL } from '../data/derived';
 import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
@@ -32,6 +32,8 @@ import StripeCardForm from '../components/StripeCardForm';
 import ApplePaySheet from '../components/ApplePaySheet';
 import AppleLogo from '../components/AppleLogo';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
+import { requestEmailChange, pollConfirmed, syncServerEmail, hasRealSession, isValidEmail } from '../lib/emailChange';
+import { submitGiveExtra, submitOrgContact } from '../lib/engagement';
 
 // ─── Web-native My Cause / Share / Settings + shared modals ──────────────────
 // True webpage versions of the app's tabs  -  same store, same account, web
@@ -383,9 +385,17 @@ export function WebAdminSignIn() {
 // ─── Give Extra  -  multi-step: amount → review → (confirm) → done ────────────
 const BOOST_PRESETS = [1, 5, 10, 25];
 
+// REAL vs DEMO (web twin of the app's GiveExtraSheet split): demoActive keeps
+// the original simulated multi-step flow untouched. A real account posts the
+// pledge to the give-extra edge function - it is NOT charged today, it joins
+// the donor's next monthly round-up charge (locked on the 1st, billed on the
+// 11th) - so the real path drops the "Total today" fee table for one honest
+// sentence and its done step reads "Added to your next monthly charge".
 export function GiveExtraModal({ show, onClose }) {
-  const { selectedNonprofit, boostDonation } = useApp();
+  const { selectedNonprofit, boostDonation, demoActive, hasAccount, refreshRealRoundups } = useApp();
   const [step, setStep] = useState('amount'); // amount | review | confirm | done
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
   const [selected, setSelected] = useState(5);
   const [custom, setCustom] = useState('');
   // DELIBERATELY LOCAL, and not the persisted `coverProcessing` preference.
@@ -406,21 +416,51 @@ export function GiveExtraModal({ show, onClose }) {
 
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setStep('amount'); setSelected(5); setCustom(''); setCoverProcessing(true); }, 0);
+    const id = setTimeout(() => { setStep('amount'); setSelected(5); setCustom(''); setCoverProcessing(true); setSending(false); setError(null); }, 0);
     return () => clearTimeout(id);
   }, [show]);
+
+  // Real pledge path - same rules as the app sheets' handleRealGiveExtra: on
+  // success refresh the roundups-me snapshot (so the portal's month and
+  // lifetime figures include the pledge) and never call boostDonation, which
+  // would double-count against the server-side lifetime figure.
+  async function submitReal() {
+    if (sending) return;
+    setError(null);
+    setSending(true);
+    const res = await submitGiveExtra({
+      amountCents: Math.round(amount * 100),
+      orgCode: selectedNonprofit?.shortName,
+      email: hasAccount?.email,
+    });
+    setSending(false);
+    if (res?.ok) {
+      refreshRealRoundups();
+      setStep('done');
+    } else {
+      setError(res?.error || 'Could not save your gift right now. Please try again.');
+    }
+  }
 
   // The app's GiveExtraSheet interposes a "Just to confirm…" step for large
   // gifts before onConfirm fires; web now does the same.
   function confirm() {
     if (isLarge) { setStep('confirm'); return; }
-    boostDonation(amount);
-    setStep('done');
+    if (demoActive) {
+      boostDonation(amount);
+      setStep('done');
+      return;
+    }
+    submitReal();
   }
 
   function confirmLarge() {
-    boostDonation(amount);
-    setStep('done');
+    if (demoActive) {
+      boostDonation(amount);
+      setStep('done');
+      return;
+    }
+    submitReal();
   }
 
   return (
@@ -450,7 +490,15 @@ export function GiveExtraModal({ show, onClose }) {
               style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: INK.primary, background: 'transparent' }}
             />
           </div>
-          {valid && (
+          {/* Fee table is DEMO ONLY - a real pledge stores just the gift
+              amount and joins the next monthly charge, so "Total today"
+              would be a lie there (see the component note above). */}
+          {valid && !demoActive && (
+            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+              Your ${fmtMoney(amount)} gift joins your next monthly round-up charge - nothing is charged today.
+            </div>
+          )}
+          {valid && demoActive && (
             <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                 <span style={{ color: INK.secondary }}>Gift to {npShort}</span>
@@ -484,12 +532,23 @@ export function GiveExtraModal({ show, onClose }) {
               to <strong style={{ color: INK.primary }}>{selectedNonprofit?.name ?? npShort}</strong>
             </p>
           </div>
-          <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 12.5, color: INK.secondary, lineHeight: 1.6 }}>
-            Total charge today: <strong style={{ color: INK.primary }}>${fmtMoney(total)}</strong>  -  your ${fmtMoney(amount)} gift, the $1 app fee{coverProcessing ? `, and ~$${fmtMoney(processingFee)} processing cover (goes to ${npShort})` : ''}.
-            Charged to your saved payment method. {npShort} sends your receipt. <em>Demo  -  no real charge is made.</em>
-          </div>
+          {demoActive ? (
+            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 12.5, color: INK.secondary, lineHeight: 1.6 }}>
+              Total charge today: <strong style={{ color: INK.primary }}>${fmtMoney(total)}</strong>  -  your ${fmtMoney(amount)} gift, the $1 app fee{coverProcessing ? `, and ~$${fmtMoney(processingFee)} processing cover (goes to ${npShort})` : ''}.
+              Charged to your saved payment method. {npShort} sends your receipt. <em>Demo  -  no real charge is made.</em>
+            </div>
+          ) : (
+            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 12.5, color: INK.secondary, lineHeight: 1.6 }}>
+              Your ${fmtMoney(amount)} gift joins your next monthly round-up charge - it will be billed with your round-ups on the 11th, not today.
+            </div>
+          )}
+          {error && (
+            <div data-testid="web-give-extra-error" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#dc2626' }}>
+              {error}
+            </div>
+          )}
           <div style={{ display: 'grid', gap: 8 }}>
-            <ActionButton onClick={confirm}>Confirm  -  give ${fmtMoney(amount)}</ActionButton>
+            <ActionButton disabled={sending} onClick={confirm}>{sending ? 'Adding your gift…' : `Confirm  -  give $${fmtMoney(amount)}`}</ActionButton>
             <ActionButton tone="quiet" onClick={() => setStep('amount')}>← Go back</ActionButton>
           </div>
         </>
@@ -501,20 +560,36 @@ export function GiveExtraModal({ show, onClose }) {
           <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: '#92400e' }}>
             You&apos;re about to donate <strong>${fmtMoney(amount)}</strong> to {npShort}. Was that intentional?
           </p>
+          {error && (
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', margin: '0 0 12px', fontSize: 13, color: '#dc2626' }}>
+              {error}
+            </div>
+          )}
           <div style={{ display: 'grid', gap: 8 }}>
-            <ActionButton onClick={confirmLarge}>Yes, give ${fmtMoney(amount)}</ActionButton>
+            <ActionButton disabled={sending} onClick={confirmLarge}>{sending ? 'Adding your gift…' : `Yes, give $${fmtMoney(amount)}`}</ActionButton>
             <ActionButton tone="quiet" onClick={() => setStep('amount')}>Go back</ActionButton>
           </div>
         </div>
       )}
 
       {step === 'done' && (
-        <div style={{ textAlign: 'center', padding: '18px 0 8px' }}>
+        <div style={{ textAlign: 'center', padding: '18px 0 8px' }} data-testid="web-give-extra-done">
           <div style={{ fontSize: 44, marginBottom: 8 }}>💚</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Thank you!</p>
-          <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>
-            Your extra ${fmtMoney(amount)} is on its way to {npShort}.
-          </p>
+          {demoActive ? (
+            <>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Thank you!</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>
+                Your extra ${fmtMoney(amount)} is on its way to {npShort}.
+              </p>
+            </>
+          ) : (
+            <>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Added to your next monthly charge</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>
+                Your ${fmtMoney(amount)} gift to {npShort} will be included when your round-ups are charged on the 11th.
+              </p>
+            </>
+          )}
           <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
         </div>
       )}
@@ -825,17 +900,57 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
 // equivalency on the phone and in the browser. It is now imported from
 // lib/donorContent and there is exactly one wording.
 
+// REAL vs DEMO (web twin of the app's VolunteerSheet / BecomeMatchSponsorSheet
+// split): demoActive keeps the simulated submit and its done copy. A real
+// account POSTs the org-contact edge function, which resolves the org's admin
+// email server-side by join code and forwards the form as one email - so the
+// real volunteer form also collects the donor's name and email (prefilled from
+// their account; the sponsor form already collects a contact + email), and the
+// done copy is the honest "Sent to {org name}. They will reach out to you
+// directly."
 function InvolvementModal({ kind, show, onClose, npShort }) {
+  const { demoActive, hasAccount, selectedNonprofit } = useApp();
   const [fields, setFields] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [sentOrgName, setSentOrgName] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setFields({}); setSubmitted(false); }, 0);
+    const id = setTimeout(() => {
+      // Prefill the real path's contact fields from the signed-in identity -
+      // the donor can still edit them before sending.
+      setFields(demoActive ? {} : { name: hasAccount?.name ?? '', email: hasAccount?.email ?? '' });
+      setSubmitted(false);
+      setSentOrgName(null);
+      setSending(false);
+      setError(null);
+    }, 0);
     return () => clearTimeout(id);
-  }, [show]);
+  }, [show, demoActive, hasAccount]);
 
-  function submit() {
-    setSubmitted(true);
+  async function submit() {
+    if (demoActive) {
+      setSubmitted(true);
+      return;
+    }
+    if (sending) return;
+    setError(null);
+    setSending(true);
+    const res = await submitOrgContact({
+      orgCode: selectedNonprofit?.shortName,
+      kind: kind === 'sponsor' ? 'match_sponsor' : 'volunteer',
+      fields: kind === 'sponsor'
+        ? { name: fields.contact, email: fields.email, company: fields.company, budget: fields.budget }
+        : { name: fields.name, email: fields.email, message: fields.interest },
+    });
+    setSending(false);
+    if (res?.ok) {
+      setSentOrgName(res.org_name || selectedNonprofit?.name || npShort);
+      setSubmitted(true);
+    } else {
+      setError(res?.error || 'Could not send your message right now. Please try again.');
+    }
   }
 
   // 'suggest' (Suggest a Match Sponsor) is GONE, on both surfaces, and this is
@@ -851,7 +966,15 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
       title: 'Volunteer Opportunities',
       intro: `Express your interest in volunteering with ${npShort}.`,
       done: { emoji: '🙌', head: 'Interest Noted!', body: `${npShort} will reach out about volunteer opportunities near you.` },
-      inputs: [{ key: 'interest', placeholder: "Tell us how you'd like to help…", textarea: true, required: true }],
+      inputs: [
+        // Real mode forwards the form to the nonprofit by email, so it needs
+        // the donor's own contact details; the demo flow never did.
+        ...(demoActive ? [] : [
+          { key: 'name', placeholder: 'Your name', required: true },
+          { key: 'email', placeholder: 'Your email', required: true, type: 'email' },
+        ]),
+        { key: 'interest', placeholder: "Tell us how you'd like to help…", textarea: true, required: true },
+      ],
       cta: 'Express Interest',
     },
     sponsor: {
@@ -874,10 +997,19 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
   return (
     <Modal show={show} onClose={onClose} title={COPY.title}>
       {submitted ? (
-        <div style={{ textAlign: 'center', padding: '18px 0 8px' }}>
+        <div style={{ textAlign: 'center', padding: '18px 0 8px' }} data-testid="web-involve-done">
           <div style={{ fontSize: 44, marginBottom: 8 }}>{COPY.done.emoji}</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>{COPY.done.head}</p>
-          <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>{COPY.done.body}</p>
+          {demoActive ? (
+            <>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>{COPY.done.head}</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>{COPY.done.body}</p>
+            </>
+          ) : (
+            <>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Sent to {sentOrgName}.</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>They will reach out to you directly.</p>
+            </>
+          )}
           <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
         </div>
       ) : (
@@ -894,7 +1026,12 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
                 style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 13.5 }} />
             ))}
           </div>
-          <ActionButton disabled={!requiredOk} onClick={submit}>{COPY.cta}</ActionButton>
+          {error && (
+            <div data-testid="web-involve-error" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#dc2626' }}>
+              {error}
+            </div>
+          )}
+          <ActionButton disabled={!requiredOk || sending} onClick={submit}>{sending ? 'Sending…' : COPY.cta}</ActionButton>
         </>
       )}
     </Modal>
@@ -1196,8 +1333,9 @@ export function WebSettings() {
     totalDonated, pendingRoundUps, boostDonation, cancelAccount, adminRole, deleteAccount,
     trackedCard, setTrackedCard, paymentMethod, setPaymentMethod, linkedCards,
     pendingSettingsAction, clearPendingSettingsAction,
-    monthlyCap, setMonthlyCap, skipNextCharge, setSkipNextCharge, hasAccount, feeMonths,
+    monthlyCap, setMonthlyCap, skipNextCharge, setSkipNextCharge, hasAccount, setHasAccount, feeMonths,
     chargeAdjustment, coverProcessing, setCoverProcessing,
+    demoMode, setDemoMode,
   } = useApp();
   const { message: toast, showToast, clearToast } = useWebToast();
 
@@ -1210,7 +1348,7 @@ export function WebSettings() {
   const [commsOptin, setCommsOptinState] = useState(() => loadKey('pc_comms_optin', true));
   function updateCommsOptin(v) { setCommsOptinState(v); saveKey('pc_comms_optin', v); }
 
-  const [modal, setModal] = useState(null); // 'card' | 'payment' | 'switch' | 'privacy' | 'cancel' | 'skip' | 'billing'
+  const [modal, setModal] = useState(null); // 'card' | 'payment' | 'switch' | 'privacy' | 'cancel' | 'skip' | 'billing' | 'changeEmail'
 
   // Dates come from lib/billing - the old local `new Date(y, m + 1, 11)` was
   // wrong for days 1 to 10, when the upcoming charge is THIS month's 11th.
@@ -1463,6 +1601,14 @@ export function WebSettings() {
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Privacy & security" sub="Data, analytics, delete account" onPress={() => setModal('privacy')}
               right={<span style={{ color: INK.muted }}>›</span>} />
+            <div style={{ height: 1, background: '#f1f5f9' }} />
+            <Row label="Change email address" sub={`Sign in with a different email · ${hasAccount?.email ?? DEMO_USER.email}`} onPress={() => setModal('changeEmail')}
+              right={<span style={{ color: INK.muted }}>›</span>} />
+            <div style={{ height: 1, background: '#f1f5f9' }} />
+            {/* Demo mode: wired to the AppContext demoMode contract (setDemoMode).
+                Optional-chained so it stays a safe no-op until that contract merges. */}
+            <Row label="Demo mode" sub="Show sample numbers for demos. Your real account data is untouched. Shaking the phone also toggles it."
+              right={<WebToggle value={!!demoMode} onChange={v => setDemoMode?.(v)} />} />
           </SectionCard>
 
           {/* Terms and Privacy are in the global portal footer on every view, so the
@@ -1477,11 +1623,14 @@ export function WebSettings() {
               onPress={() => { window.location.href = 'mailto:support@pocketcache.app'; }} right={<span style={{ color: INK.muted }}>↗</span>} />
           </SectionCard>
 
-          <SectionCard label="Subscription">
+          {/* Account, NOT a subscription - PocketCache is an account, not a
+              recurring plan. Closing stops round-ups and removes the linked card;
+              nothing further is charged. Settle-up mechanics are unchanged. */}
+          <SectionCard label="Account">
             <p style={{ margin: '0 0 12px', fontSize: 12.5, color: INK.muted, lineHeight: 1.6 }}>
-              Cancelling never costs anything  -  you choose whether this month&apos;s round-ups become a final donation or are simply never charged.
+              Closing your account never costs anything  -  you choose whether this month&apos;s round-ups become a final donation or are simply never charged. Closing stops round-ups and removes your linked card; nothing further is charged.
             </p>
-            <ActionButton tone="danger" onClick={() => setModal('cancel')}>Cancel my giving subscription</ActionButton>
+            <ActionButton tone="danger" onClick={() => setModal('cancel')}>Close my account</ActionButton>
           </SectionCard>
         </div>
       </div>
@@ -1517,6 +1666,14 @@ export function WebSettings() {
         pendingRoundUps={pendingRoundUps} feeMonths={feeMonths} nonprofit={np}
         monthlyCap={monthlyCap} chargeAdjustment={chargeAdjustment}
         onDonate={boostDonation} onCancelled={cancelAccount} />
+      <WebChangeEmailModal show={modal === 'changeEmail'} onClose={() => setModal(null)}
+        currentEmail={hasAccount?.email ?? DEMO_USER.email}
+        onChanged={(email) => {
+          // Update the local identity so every surface reads the new address.
+          // setHasAccount with an already-real identity does NOT reset progress.
+          if (hasAccount) setHasAccount({ ...hasAccount, email });
+          showToast('Email updated.');
+        }} />
       {/* Mirror of the app's SkipConfirmModal (Settings.jsx ~121-176), sentence
           for sentence - literally, because both render the same
           skipConfirmParagraphs() array from lib/donorContent rather than two
@@ -1783,6 +1940,8 @@ function SwitchOrgModal({ show, onClose, onBind }) {
     e.preventDefault();
     const np = await resolveOrgByCode(code);
     if (!np) { setError('Code not found. Ask the nonprofit for their PocketCache code.'); return; }
+    // Still awaiting the platform owner's approval - held back from donors.
+    if (isOrgPending(np)) { setError(ORG_PENDING_MESSAGE); return; }
     onBind(np);
     onClose();
   }
@@ -1884,6 +2043,101 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
   );
 }
 
+/**
+ * WebChangeEmailModal - the web twin of Settings.jsx ChangeEmailSheet, same
+ * honest flow (see src/lib/emailChange.js): a REAL Supabase auth email change
+ * that sends a confirmation LINK, so we say so and poll getUser() until the
+ * address flips rather than faking a code step the donor finishes in an inbox.
+ */
+function WebChangeEmailModal({ show, onClose, currentEmail, onChanged }) {
+  const [stage, setStage] = useState('enter'); // 'enter' | 'nosession' | 'sent' | 'done'
+  const [newEmail, setNewEmail] = useState('');
+  const [error, setError] = useState(null);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!show) return;
+    const id = setTimeout(() => { setStage('enter'); setNewEmail(''); setError(null); setSending(false); }, 0);
+    return () => clearTimeout(id);
+  }, [show]);
+
+  useEffect(() => {
+    if (stage !== 'sent') return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      const { email } = await pollConfirmed();
+      if (cancelled) return;
+      if (email && email.toLowerCase() === newEmail.trim().toLowerCase()) {
+        clearInterval(id);
+        await syncServerEmail({ role: 'donor', oldEmail: currentEmail });
+        if (cancelled) return;
+        onChanged?.(newEmail.trim());
+        setStage('done');
+      }
+    }, 4000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [stage, newEmail, currentEmail, onChanged]);
+
+  async function handleSend(e) {
+    e?.preventDefault?.();
+    const addr = newEmail.trim();
+    if (!isValidEmail(addr)) { setError('Enter a valid email address.'); return; }
+    if (addr.toLowerCase() === (currentEmail || '').toLowerCase()) { setError('That is already your email address.'); return; }
+    setSending(true); setError(null);
+    if (!(await hasRealSession())) { setSending(false); setStage('nosession'); return; }
+    const res = await requestEmailChange(addr);
+    setSending(false);
+    if (!res.ok) { setError(res.error); return; }
+    setStage('sent');
+  }
+
+  return (
+    <Modal show={show} onClose={onClose} title="Change email address">
+      {stage === 'done' ? (
+        <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="web-change-email-done">
+          <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>Email updated</p>
+          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>You now sign in with <strong>{newEmail.trim()}</strong>.</p>
+          <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
+        </div>
+      ) : stage === 'nosession' ? (
+        <div style={{ textAlign: 'center', padding: '10px 0 6px' }}>
+          <div style={{ fontSize: 34, marginBottom: 8 }}>🔑</div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: INK.primary }}>Sign in first</p>
+          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>You need to sign in again before changing your email. Sign out and back in, then try again.</p>
+          <ActionButton tone="quiet" onClick={onClose}>Got it</ActionButton>
+        </div>
+      ) : stage === 'sent' ? (
+        <div data-testid="web-change-email-sent">
+          <div style={{ background: '#eef4fa', border: `1.5px solid ${NAVY}33`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 14, color: INK.primary }}>Check your inbox</p>
+            <p style={{ margin: 0, fontSize: 12.5, color: INK.secondary, lineHeight: 1.55 }}>
+              We sent a confirmation link to <strong>{newEmail.trim()}</strong> and to your current address ({currentEmail}). Open the link in each email, then come back here  -  we&apos;ll update automatically.
+            </p>
+          </div>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: INK.muted, textAlign: 'center' }}>Waiting for you to confirm…</p>
+          <ActionButton tone="quiet" onClick={onClose}>Close  -  I&apos;ll finish later</ActionButton>
+        </div>
+      ) : (
+        <form onSubmit={handleSend}>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary }}>Your sign-in email is <strong>{currentEmail}</strong>. Enter the new address you want to use.</p>
+          <input
+            type="email" inputMode="email" autoComplete="email" placeholder="you@example.com"
+            value={newEmail}
+            onChange={e => { setNewEmail(e.target.value); setError(null); }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${error ? '#ef4444' : '#d1d5db'}`, fontSize: 14, marginBottom: 8 }}
+          />
+          {error && <p style={{ margin: '0 0 8px', fontSize: 12, color: '#dc2626' }}>{error}</p>}
+          <ActionButton disabled={!newEmail.trim() || sending} onClick={handleSend}>
+            {sending ? 'Sending…' : 'Send confirmation link'}
+          </ActionButton>
+          <p style={{ margin: '10px 0 0', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>We&apos;ll email a link to confirm it&apos;s really you. Nothing changes until you open it.</p>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
 function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, monthlyCap, chargeAdjustment, onDonate, onCancelled }) {
   const { coverProcessing: coverPref } = useApp();
   // Seeded from the donor's STANDING preference, not a hardcoded true: someone
@@ -1902,7 +2156,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
 
   // Auto-commit once the donor has chosen an outcome, same as the app's
   // CancelSheet (Settings.jsx ~665-670). Without this the confirmation screen
-  // below claims "Subscription Cancelled" while accountStatus is still
+  // below claims "Account closed" while accountStatus is still
   // 'active' underneath it - true only once the "Done" button is clicked, so
   // closing the modal any other way (the header ×, navigating away) left the
   // account never actually cancelled despite what the donor was just told.
@@ -1951,12 +2205,12 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
         <div style={{ textAlign: 'center', padding: '14px 0 6px' }}>
           <div style={{ fontSize: 44, marginBottom: 8 }}>{result === 'donated' ? '💚' : '👋'}</div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>
-            {result === 'donated' ? 'Donated! Your subscription has been cancelled.' : 'Subscription Cancelled'}
+            {result === 'donated' ? 'Donated! Your account is closed.' : 'Account closed'}
           </p>
           <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
             {result === 'donated'
-              ? `Thank you for your final donation to ${npShort}.`
-              : "This month's round-ups won't be charged  -  as if the month never happened."}
+              ? `Thank you for your final donation to ${npShort}. Round-ups have stopped and your linked card is removed - nothing further is charged.`
+              : "This month's round-ups won't be charged  -  as if the month never happened. Your linked card is removed and nothing further is charged."}
           </p>
           <ActionButton tone="quiet" onClick={() => { onClose(); onCancelled(); }}>Done</ActionButton>
         </div>
@@ -1964,7 +2218,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13.5, color: INK.secondary, lineHeight: 1.6 }}>
             You&apos;ve rounded up <strong style={{ color: INK.primary }}>${fmtMoney(raw)}</strong> for {npShort} this month.
-            Would you like to make this month&apos;s donation before cancelling?
+            Would you like to make this month&apos;s donation before closing your account?
           </p>
           <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 12, padding: 14, marginBottom: 10, fontSize: 13 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
@@ -2010,8 +2264,8 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
           <div style={{ display: 'grid', gap: 8 }}>
             {/* "Send", matching the app's CancelSheet CTA - the two settle-up
                 buttons carried different verbs for the same action. */}
-            <ActionButton onClick={donateAndCancel}>Send ${fmtMoney(total)} &amp; cancel</ActionButton>
-            <ActionButton tone="danger" onClick={() => setResult('cancelled')}>Cancel without donating</ActionButton>
+            <ActionButton onClick={donateAndCancel}>Send ${fmtMoney(total)} &amp; close account</ActionButton>
+            <ActionButton tone="danger" onClick={() => setResult('cancelled')}>Close without donating</ActionButton>
             <ActionButton tone="quiet" onClick={onClose}>Never mind  -  keep giving</ActionButton>
           </div>
         </>

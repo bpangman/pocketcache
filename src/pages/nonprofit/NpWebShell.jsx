@@ -4,6 +4,7 @@ import { useNp } from '../../store/NpContext';
 import CoinMark from '../../components/CoinMark';
 import { NP_TABS, npTabDef } from './npTabs';
 import { useNpAdminActions } from './useNpAdminActions';
+import PendingReviewBanner from './PendingReviewBanner';
 import { NpLayoutProvider, NpOrgMark, NP_WEB_MAX_W } from './NpLayout';
 
 // ─── The browser-native nonprofit-admin portal ───────────────────────────────
@@ -127,6 +128,8 @@ export default function NpWebShell() {
           </div>
         </div>
       </header>
+
+      <PendingReviewBanner web />
 
       {/* ── Body ── */}
       <main style={{ maxWidth: NP_WEB_MAX_W, margin: '0 auto', padding: '28px 24px 40px' }}>

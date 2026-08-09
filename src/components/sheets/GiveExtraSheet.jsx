@@ -8,10 +8,26 @@ import { CheckCircle } from 'lucide-react';
 
 const BOOST_PRESETS = [1, 5, 10, 25];
 
-export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, brand }) {
+/**
+ * REAL vs DEMO (see the demoActive doc in store/AppContext.jsx): with
+ * `demoActive` true this sheet keeps the original flashy simulated flow -
+ * instant confirm, BoostToast, fee-breakdown table with "Total charged".
+ * With it false, `onSubmitReal(amount)` (async, resolves { ok } or
+ * { ok:false, error }) posts a REAL pledge to the give-extra edge function.
+ * A real pledge is NOT charged on the spot - it joins the donor's next
+ * monthly round-up charge (locked on the 1st, billed on the 11th) - so the
+ * real flow's success copy is "Added to your next monthly charge" and the
+ * demo fee table (whose "Total charged" today framing would be a lie here)
+ * is replaced by that plain sentence.
+ */
+export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, brand, demoActive = true, onSubmitReal }) {
   const [selected, setSelected] = useState(5);
   const [custom, setCustom] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
+  // Real-path lifecycle: 'idle' | 'sending' | 'done', plus a friendly error
+  // sentence when the pledge could not be saved. Demo never leaves 'idle'.
+  const [phase, setPhase] = useState('idle');
+  const [error, setError] = useState(null);
   // DELIBERATELY LOCAL, and deliberately NOT seeded from the donor's persisted
   // `coverProcessing` setting in AppContext. That setting is a standing consent
   // about the recurring monthly round-up charge; a one-off "give extra" gift is
@@ -37,21 +53,43 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
       setCustom('');
       setShowConfirm(false);
       setCoverProcessing(true);
+      setPhase('idle');
+      setError(null);
     }, 0);
     return () => clearTimeout(id);
   }, [show]);
 
+  async function submitReal() {
+    setError(null);
+    setPhase('sending');
+    const res = await onSubmitReal(amount);
+    if (res?.ok) {
+      setPhase('done');
+    } else {
+      setPhase('idle');
+      setError(res?.error || 'Could not save your gift right now. Please try again.');
+    }
+  }
+
   function handlePrimaryTap() {
-    if (!valid) return;
+    if (!valid || phase === 'sending') return;
     if (isLarge) { setShowConfirm(true); return; }
-    onConfirm(amount);
-    onClose();
+    if (demoActive) {
+      onConfirm(amount);
+      onClose();
+      return;
+    }
+    submitReal();
   }
 
   function handleConfirmedLarge() {
-    onConfirm(amount);
     setShowConfirm(false);
-    onClose();
+    if (demoActive) {
+      onConfirm(amount);
+      onClose();
+      return;
+    }
+    submitReal();
   }
 
   const displayAmount = valid
@@ -59,6 +97,32 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
     : '--';
 
   const orgShort = nonprofit?.shortName ?? 'the nonprofit';
+
+  if (phase === 'done') {
+    return (
+      <Sheet show={show} onClose={onClose} title="Give Extra Now">
+        <div className="px-6 pt-5">
+          <div className="text-center py-8" data-testid="give-extra-real-done">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: '#ecfdf5' }}>
+              <CheckCircle size={30} style={{ color: '#059669' }} />
+            </div>
+            <p className="font-bold text-gray-900 text-lg">Added to your next monthly charge</p>
+            <p className="text-gray-500 text-sm mt-2">
+              Your ${displayAmount} gift to {orgShort} will be included when your round-ups are charged on the 11th.
+            </p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onClose}
+              className="mt-6 w-full py-4 rounded-2xl text-white font-bold text-base"
+              style={{ background: brand.gradient }}
+            >
+              Done
+            </motion.button>
+          </div>
+        </div>
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet show={show} onClose={onClose} title="Give Extra Now">
@@ -104,8 +168,19 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
           />
         </div>
 
-        {/* Fee breakdown */}
-        {valid && (
+        {/* Fee breakdown - DEMO ONLY. The simulated flow "charges" the total
+            today, so it itemizes the $1 fee and the processing cover. A real
+            pledge stores just the gift amount and joins the next monthly
+            charge, so the honest real-mode version is the one sentence
+            below, not a "Total charged today" table. */}
+        {valid && !demoActive && (
+          <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 mb-4">
+            <p className="text-gray-600 text-sm leading-relaxed">
+              Your ${displayAmount} gift joins your next monthly round-up charge - nothing is charged today.
+            </p>
+          </div>
+        )}
+        {valid && demoActive && (
           <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 mb-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-700">Gift to {orgShort}</span>
@@ -138,13 +213,19 @@ export default function GiveExtraSheet({ show, onClose, onConfirm, nonprofit, br
           </div>
         )}
 
+        {error && (
+          <div className="rounded-2xl bg-red-50 border border-red-100 px-4 py-3 mb-4" data-testid="give-extra-error">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
+
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={handlePrimaryTap}
           className="w-full py-4 rounded-2xl text-white font-bold text-base"
-          style={{ background: brand.gradient, opacity: valid ? 1 : 0.4 }}
+          style={{ background: brand.gradient, opacity: valid && phase !== 'sending' ? 1 : 0.4 }}
         >
-          Give ${displayAmount} Now
+          {phase === 'sending' ? 'Adding your gift…' : `Give $${displayAmount} Now`}
         </motion.button>
 
         <AnimatePresence>

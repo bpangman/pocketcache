@@ -16,6 +16,7 @@ import MyCause from '../pages/MyCause';
 import Activity from '../pages/Activity';
 import Share from '../pages/Share';
 import Settings from '../pages/Settings';
+import { useShakeDetector } from '../lib/shake';
 
 const SUPPORT_EMAIL = 'support@pocketcache.app';
 
@@ -43,12 +44,23 @@ const PAGES = {
 };
 
 export default function AppShell() {
-  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep, hasAccount } = useApp();
+  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep, hasAccount, demoMode, setDemoMode, showToast } = useApp();
   const { resetNpContent } = useNp();
   const brand = useTheme();
   const [showProfile, setShowProfile] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const Page = PAGES[tab] || Dashboard;
+
+  // Shake-to-toggle demo mode, wired ONCE at the shell level so it works on
+  // every donor tab. lib/shake.js owns detection and the iOS motion
+  // permission dance (requested on the first tap, gracefully absent when
+  // denied - the Settings toggle remains the fallback). The toast is the
+  // only visible confirmation besides the small "Demo" pill in the header.
+  useShakeDetector(() => {
+    const next = !demoMode;
+    setDemoMode(next);
+    showToast(next ? 'Demo mode on - sample data' : 'Demo mode off - your real data');
+  });
 
   // Identity comes from the signed-in account, exactly as Settings.jsx reads
   // it; DEMO_USER is the fallback only, for a device with no account yet.

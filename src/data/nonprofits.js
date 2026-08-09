@@ -22,6 +22,10 @@ export const NONPROFITS = [
     impact: '4.3M youth served at 5,000+ club locations',
     description: "Boys & Girls Clubs of America provides after-school programs, mentoring, and safe spaces for young people ages 6-18, helping them build the skills and confidence to succeed.",
     ein: '13-5562976',
+    // Claiming this org through nonprofit signup requires a verified admin
+    // email on this domain (enforced client-side in lib/npSignup.js and
+    // server-side in the org-signup edge function).
+    officialDomain: 'bgca.org',
     featured: true,
     monthlyMinimum: 5,
     // BGCA holds a Candid Seal of Transparency, so it is already covered for

@@ -10,7 +10,7 @@ import { fmtMoney } from '../lib/format';
 import { copyText } from '../lib/clipboard';
 
 export default function Share() {
-  const { selectedNonprofit, totalDonated, showToast, hasAccount } = useApp();
+  const { selectedNonprofit, totalDonated, showToast, demoActive } = useApp();
   const brand = useTheme();
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -139,7 +139,7 @@ export default function Share() {
                   "first month" framing the dashboards use, with no streak
                   badge; demo mode keeps the streak, clearly labeled, exactly
                   like everywhere else the same demo total shows up. */}
-              {hasAccount ? (
+              {!demoActive ? (
                 <p className="text-white/70 text-xs mt-3">{FIRST_MONTH_LABEL}</p>
               ) : (
                 <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">

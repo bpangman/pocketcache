@@ -101,19 +101,49 @@ async function getAccessToken(): Promise<string> {
   return data.access_token as string;
 }
 
-/** Sends a plain-text email as info@pocketcache.app via the Gmail API.
- *  Throws on any failure - callers decide whether/how to swallow it. */
-export async function sendGmail(to: string, subject: string, text: string): Promise<void> {
+/** Sends an email as info@pocketcache.app via the Gmail API.
+ *  Pass `html` to send a multipart/alternative message (a plain-text part
+ *  for text-only clients plus a styled HTML part for everything else); omit
+ *  it for a plain-text-only message. `text` is always required and is the
+ *  fallback body, so a client that cannot render HTML still gets readable
+ *  content. Throws on any failure - callers decide whether/how to swallow it. */
+export async function sendGmail(to: string, subject: string, text: string, html?: string): Promise<void> {
   const token = await getAccessToken();
-  const raw = [
+  const headerLines = [
     `From: PocketCache <${GMAIL_USER}>`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset=UTF-8`,
-    ``,
-    text,
-  ].join("\r\n");
+  ];
+  let raw: string;
+  if (html) {
+    // multipart/alternative: text part first, HTML part second - per RFC 2046
+    // the LAST part is the most-preferred, so HTML wins wherever it renders.
+    const boundary = `pc_${crypto.randomUUID().replace(/-/g, "")}`;
+    raw = [
+      ...headerLines,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset=UTF-8`,
+      ``,
+      text,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/html; charset=UTF-8`,
+      ``,
+      html,
+      ``,
+      `--${boundary}--`,
+    ].join("\r\n");
+  } else {
+    raw = [
+      ...headerLines,
+      `Content-Type: text/plain; charset=UTF-8`,
+      ``,
+      text,
+    ].join("\r\n");
+  }
   const res = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(GMAIL_USER)}/messages/send`,
     {

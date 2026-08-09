@@ -1,16 +1,131 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 // eslint-disable-next-line no-unused-vars
-import { motion } from 'framer-motion';
-import { ExternalLink, CheckCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ExternalLink, CheckCircle, Mail, X } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
 import CoinMark from '../../../components/CoinMark';
 import { AdminVerifyModal, SaveBar } from '../AdminVerify';
 import { NpPage, NpBlock, useNpLayout } from '../NpLayout';
+import { requestEmailChange, pollConfirmed, syncServerEmail, hasRealSession, isValidEmail, emailDomain } from '../../../lib/emailChange';
 
 const PRESET_COLORS = [
   '#003865', '#0D9488', '#059669', '#2563EB', '#4F46E5',
   '#7C3AED', '#DB2777', '#DC2626', '#EA580C', '#F59E0B',
 ];
+
+/**
+ * ChangeAdminEmailModal - the admin twin of the donor change-email flow, with
+ * one added rule: a nonprofit admin's new sign-in email MUST stay on the org's
+ * admin domain. That is enforced BOTH here (fast client fail) and server-side
+ * in the update-donor-email edge function against orgs.admin_domain. Same
+ * honest Supabase mechanics as the donor flow (see src/lib/emailChange.js):
+ * a real confirmation link, and we poll getUser() until the address flips.
+ */
+function ChangeAdminEmailModal({ show, onClose, currentEmail, orgId, onChanged }) {
+  const [stage, setStage] = useState('enter'); // 'enter' | 'nosession' | 'sent' | 'done'
+  const [newEmail, setNewEmail] = useState('');
+  const [error, setError] = useState(null);
+  const [sending, setSending] = useState(false);
+  const requiredDomain = emailDomain(currentEmail);
+
+  useEffect(() => {
+    if (!show) return;
+    const id = setTimeout(() => { setStage('enter'); setNewEmail(''); setError(null); setSending(false); }, 0);
+    return () => clearTimeout(id);
+  }, [show]);
+
+  useEffect(() => {
+    if (stage !== 'sent') return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      const { email } = await pollConfirmed();
+      if (cancelled) return;
+      if (email && email.toLowerCase() === newEmail.trim().toLowerCase()) {
+        clearInterval(id);
+        await syncServerEmail({ role: 'admin', oldEmail: currentEmail, orgId });
+        if (cancelled) return;
+        onChanged?.(newEmail.trim());
+        setStage('done');
+      }
+    }, 4000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [stage, newEmail, currentEmail, orgId, onChanged]);
+
+  async function handleSend(e) {
+    e?.preventDefault?.();
+    const addr = newEmail.trim();
+    if (!isValidEmail(addr)) { setError('Enter a valid email address.'); return; }
+    if (addr.toLowerCase() === (currentEmail || '').toLowerCase()) { setError('That is already your sign-in email.'); return; }
+    // CLIENT domain check. The server enforces the same rule against
+    // orgs.admin_domain, so this is a fast courtesy fail, not the boundary.
+    if (emailDomain(addr) !== requiredDomain) { setError(`Your admin email must be on the @${requiredDomain} domain.`); return; }
+    setSending(true); setError(null);
+    if (!(await hasRealSession())) { setSending(false); setStage('nosession'); return; }
+    const res = await requestEmailChange(addr);
+    setSending(false);
+    if (!res.ok) { setError(res.error); return; }
+    setStage('sent');
+  }
+
+  if (!show) return null;
+  return (
+    <AnimatePresence>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <motion.div initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.94, opacity: 0 }}
+          onClick={e => e.stopPropagation()}
+          style={{ width: 'min(420px,100%)', background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.25)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Mail size={18} style={{ color: '#0D9488' }} />
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Change sign-in email</h3>
+            </div>
+            <button onClick={onClose} aria-label="Close" style={{ border: 'none', background: '#f1f5f9', width: 30, height: 30, borderRadius: 999, cursor: 'pointer' }}><X size={15} /></button>
+          </div>
+          {stage === 'done' ? (
+            <div style={{ textAlign: 'center', padding: '10px 0' }} data-testid="admin-change-email-done">
+              <div style={{ fontSize: 40 }}>✅</div>
+              <p style={{ fontWeight: 800, color: '#0f172a', margin: '8px 0 4px' }}>Email updated</p>
+              <p style={{ fontSize: 13, color: '#475569', margin: '0 0 14px' }}>You now sign in with <strong>{newEmail.trim()}</strong>.</p>
+              <button onClick={onClose} style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', background: '#f1f5f9', fontWeight: 700, cursor: 'pointer' }}>Done</button>
+            </div>
+          ) : stage === 'nosession' ? (
+            <div style={{ textAlign: 'center', padding: '6px 0' }}>
+              <div style={{ fontSize: 32 }}>🔑</div>
+              <p style={{ fontWeight: 800, color: '#0f172a', margin: '8px 0 4px' }}>Sign in first</p>
+              <p style={{ fontSize: 13, color: '#475569', margin: '0 0 14px' }}>You need to sign in again before changing your email. Sign out and back in, then try again.</p>
+              <button onClick={onClose} style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', background: '#f1f5f9', fontWeight: 700, cursor: 'pointer' }}>Got it</button>
+            </div>
+          ) : stage === 'sent' ? (
+            <div data-testid="admin-change-email-sent">
+              <div style={{ background: '#f0fdfa', border: '1.5px solid #99f6e4', borderRadius: 12, padding: 14, marginBottom: 12 }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 14, color: '#0f172a' }}>Check your inbox</p>
+                <p style={{ margin: 0, fontSize: 12.5, color: '#475569', lineHeight: 1.55 }}>We sent a confirmation link to <strong>{newEmail.trim()}</strong> and to your current address ({currentEmail}). Open the link in each, then come back  -  we&apos;ll update automatically.</p>
+              </div>
+              <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>Waiting for you to confirm…</p>
+              <button onClick={onClose} style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', background: '#f1f5f9', fontWeight: 700, cursor: 'pointer' }}>Close  -  I&apos;ll finish later</button>
+            </div>
+          ) : (
+            <form onSubmit={handleSend}>
+              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#475569' }}>Your sign-in email is <strong>{currentEmail}</strong>. Your new email must be on the <strong>@{requiredDomain}</strong> domain.</p>
+              <input type="email" inputMode="email" autoComplete="email" placeholder={`you@${requiredDomain}`}
+                value={newEmail} onChange={e => { setNewEmail(e.target.value); setError(null); }}
+                data-testid="admin-change-email-input"
+                style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${error ? '#ef4444' : '#d1d5db'}`, fontSize: 14, marginBottom: 8 }} />
+              {error && <p data-testid="admin-change-email-error" style={{ margin: '0 0 8px', fontSize: 12, color: '#dc2626' }}>{error}</p>}
+              <button type="submit" disabled={!newEmail.trim() || sending}
+                style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', cursor: (!newEmail.trim() || sending) ? 'default' : 'pointer', fontWeight: 700, color: '#fff', opacity: (!newEmail.trim() || sending) ? 0.5 : 1, background: 'linear-gradient(135deg,#0d9488,#003865)' }}>
+                {sending ? 'Sending…' : 'Send confirmation link'}
+              </button>
+              <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#94a3b8', textAlign: 'center' }}>We&apos;ll email a link to confirm it&apos;s really you. Nothing changes until you open it.</p>
+            </form>
+          )}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 export default function NpSettings() {
   const { npOrg, setNpOrg } = useNp();
@@ -26,6 +141,7 @@ export default function NpSettings() {
   const [longDesc, setLongDesc] = useState(npOrg.longDescription ?? '');
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const [logoUrlError, setLogoUrlError] = useState(null);
+  const [showChangeEmail, setShowChangeEmail] = useState(false);
   const fileInputRef = useRef(null);
 
   // Unsaved-change detection → pinned SaveBar → email verification → commit.
@@ -87,6 +203,13 @@ export default function NpSettings() {
             adminEmail={npOrg.adminEmail || 'your admin email'}
             onConfirm={commitSave}
             onCancel={() => setVerifying(false)}
+          />
+          <ChangeAdminEmailModal
+            show={showChangeEmail}
+            onClose={() => setShowChangeEmail(false)}
+            currentEmail={npOrg.adminEmail}
+            orgId={npOrg._orgId}
+            onChanged={(newAddr) => { setEmail(newAddr); setNpOrg({ ...npOrg, adminEmail: newAddr }); }}
           />
           {/* Eyebrow only on the phone  -  the desktop shell prints a real <h1>. */}
           {!web && <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Settings</p>}
@@ -201,6 +324,17 @@ export default function NpSettings() {
               required
               className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
             />
+            {/* The field above edits the org's public admin CONTACT record. To
+                change the actual SIGN-IN email (a real Supabase auth change,
+                domain-locked to the org), use this. */}
+            <button
+              type="button"
+              onClick={() => setShowChangeEmail(true)}
+              data-testid="admin-change-email-open"
+              className="mt-2 text-sm font-semibold text-teal-600 flex items-center gap-1.5"
+            >
+              <Mail size={14} /> Change sign-in email address
+            </button>
           </div>
 
           <div>

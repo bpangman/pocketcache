@@ -403,7 +403,7 @@ function MatchLine({ match, onOpen }) {
  * The two round-up COUNTS are Home's own facts (the app's third stat tile), so
  * they live here rather than on Activity, which owns the transactions themselves.
  */
-function ActivityLinkCard({ onOpen }) {
+function ActivityLinkCard({ onOpen, demoActive, realCount = 0 }) {
   const figure = { margin: 0, fontSize: 20, fontWeight: 800, color: INK.primary, letterSpacing: '-0.3px' };
   const cap = { margin: '2px 0 0', fontSize: 11.5, color: INK.muted };
   return (
@@ -417,14 +417,16 @@ function ActivityLinkCard({ onOpen }) {
       >
         Round-ups
       </SectionTitle>
+      {/* Real accounts read the server's real count (0 until the card starts
+          purchasing - item 12); the estimates are demo-dataset-only. */}
       <div style={{ display: 'flex', gap: 32, marginTop: 12 }}>
         <div>
-          <p style={figure}>{fmtCount(TRANSACTIONS.length)}</p>
+          <p style={figure}>{demoActive ? fmtCount(TRANSACTIONS.length) : fmtCount(realCount)}</p>
           <p style={cap}>This cycle</p>
         </div>
         <div>
-          <p style={figure}>{fmtCount(totalRoundupsCount)}</p>
-          <p style={cap}>All time (est.)</p>
+          <p style={figure}>{demoActive ? fmtCount(totalRoundupsCount) : fmtCount(realCount)}</p>
+          <p style={cap}>{demoActive ? 'All time (est.)' : 'Since you joined'}</p>
         </div>
       </div>
     </div>
@@ -625,45 +627,52 @@ function EstimateCard({
  * a billing explainer - Settings owns that, and the one pointer this tab needs
  * (where to download the history) is a single line at the bottom of the tax card.
  */
-function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBankLinked, realRecent, freshness }) {
+function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBankLinked, realRecent, freshness, demoActive }) {
   const current = history[history.length - 1];
   const currentMonthLabel = `${current.month} ${current.year}`;
+  // Tax-year summary: honest zeros for a real account - it has ZERO completed
+  // months of charge history. The demo dataset's totals only appear while
+  // demoActive (item 12).
   const taxYear = new Date().getFullYear();
-  const tax = taxYearSummary(pending, taxYear);
+  const tax = demoActive
+    ? taxYearSummary(pending, taxYear)
+    : { donated: 0, months: 0, feeMonths: 0 };
   const taxMonthsLabel = tax.months === 1 ? '1 completed month' : `${tax.months} completed months`;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
 
-  // Real round-up rows (mapped into ActivityTable's row shape) replace the
-  // demo TRANSACTIONS ledger for a donor with a real linked bank. The
-  // monthly chart and tax-year summary stay demo-modeled either way - both
-  // need a real MULTI-MONTH history this pass does not build (only the
-  // current month is backed by live data) - so those two keep their
-  // existing "Demo data" labeling even for a real-linked donor, and only
-  // the ledger + the caption immediately above it switch to "live".
+  // Real round-up rows (mapped into ActivityTable's row shape). For a real
+  // account (demo mode off) the ledger is ALWAYS real data (item 12): the
+  // server's rows when a bank is linked, and the friendly empty state below
+  // when there is nothing yet. The prefilled demo TRANSACTIONS feed renders
+  // only while demoActive.
   const realRows = (realRecent ?? []).map((r, i) => ({
     id: `real-${r.date}-${i}`,
     date: r.date,
     merchant: r.merchant || 'Purchase',
     category: 'Bank purchase',
-    amount: r.amount_cents / 100,
-    roundUp: r.roundup_cents / 100,
+    amount: (r.amount_cents ?? 0) / 100,
+    roundUp: (r.roundup_cents ?? 0) / 100,
   }));
   const showRealLedger = hasRealBankLinked && realRows.length > 0;
-  const activityRows = showRealLedger ? realRows : TRANSACTIONS;
-  // Real, BASE (pre-multiplier) figures for the month summary pill below -
-  // same "raw round-ups, multiplier shown separately" semantics the demo
-  // pill already used (see its own comment), just fed from real rows
-  // instead of the demo TRANSACTIONS/CURRENT_MONTH_PENDING constants so the
-  // pill's count and amount never visibly disagree with the real headline.
-  const monthTxnCount = showRealLedger ? realRows.length : TRANSACTIONS.length;
-  const monthBaseAmount = showRealLedger ? realRows.reduce((sum, r) => sum + r.roundUp, 0) : CURRENT_MONTH_PENDING;
+  const activityRows = demoActive ? TRANSACTIONS : realRows;
+  // BASE (pre-multiplier) figures for the month summary pill below - same
+  // "raw round-ups, multiplier shown separately" semantics the demo pill
+  // already used, fed from whichever dataset is actually showing.
+  const monthTxnCount = activityRows.length;
+  const monthBaseAmount = demoActive
+    ? CURRENT_MONTH_PENDING
+    : realRows.reduce((sum, r) => sum + r.roundUp, 0);
 
   return (
     <>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Activity</h1>
         <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>
-          {showRealLedger ? `Your giving history  -  this month is live (${freshness}).` : 'Your giving history  -  demo data.'}
+          {demoActive
+            ? 'Your giving history  -  demo data.'
+            : showRealLedger
+              ? `Your giving history  -  this month is live (${freshness}).`
+              : 'Your giving history  -  building from your first purchase.'}
         </p>
       </div>
 
@@ -700,12 +709,22 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
                 </span>
               )}
             </div>
-            <div style={{ height: 1, background: '#f1f5f9', margin: '16px 0 12px' }} />
-            <SectionTitle>Giving by month</SectionTitle>
-            <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
-              Monthly round-up totals · {currentMonthLabel} still in progress
-            </p>
-            <GivingChart data={history} />
+            {/* Monthly chart: demo dataset only. A real account has no
+                multi-month history to chart yet (item 12). */}
+            {demoActive ? (
+              <>
+                <div style={{ height: 1, background: '#f1f5f9', margin: '16px 0 12px' }} />
+                <SectionTitle>Giving by month</SectionTitle>
+                <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
+                  Monthly round-up totals · {currentMonthLabel} still in progress
+                </p>
+                <GivingChart data={history} />
+              </>
+            ) : (
+              <p style={{ margin: '14px 0 0', paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 12.5, color: INK.muted }}>
+                Your monthly chart builds as months complete  -  round-ups only count from the day you joined.
+              </p>
+            )}
           </div>
 
           {/* Month summary pill  -  raw round-ups and the boost shown separately so
@@ -740,7 +759,19 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
                 ? `Every purchase this cycle and the spare change it set aside  -  ${freshness}`
                 : 'Every purchase this cycle and the spare change it set aside'}
             </p>
-            <ActivityTable rows={activityRows} />
+            {activityRows.length > 0 ? (
+              <ActivityTable rows={activityRows} />
+            ) : (
+              /* Friendly empty state - a brand-new real account has no
+                 activity yet, and that is the honest story (item 12). */
+              <div style={{ textAlign: 'center', padding: '28px 16px' }} data-testid="web-activity-empty-state">
+                <div style={{ fontSize: 30, marginBottom: 8 }}>🪙</div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: INK.primary }}>No round-ups yet</p>
+                <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                  Your round-ups will appear here once your card starts making purchases. Every purchase rounds up to the next dollar  -  the spare change lands on this page.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -758,9 +789,11 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
                   ${fmtMoney(tax.donated)}
                 </p>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
-                Demo data
-              </span>
+              {demoActive && (
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+                  Demo data
+                </span>
+              )}
             </div>
             <p style={{ margin: '6px 0 0', fontSize: 12.5, color: INK.muted }} data-testid="web-taxyear-months">
               {tax.months === 0 ? 'No completed months yet this year' : `Donated across ${taxMonthsLabel}`}
@@ -805,7 +838,9 @@ export default function WebDashboard() {
     goToOnboardingStep,
     monthlyCap, chargeAdjustment, setChargeAdjustment, roundUpMultiplier,
     coverProcessing,
-    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness,
+    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount,
+    demoActive, demoMode,
+    giveExtraPending,
   } = useApp();
   const brand = useTheme();
   const [navTab, setNavTab] = useState('overview');
@@ -880,6 +915,12 @@ export default function WebDashboard() {
             <div style={{ lineHeight: 1.15, minWidth: 0 }}>
               <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {brand.appName ?? `${npShort} Round-Up`}
+                {/* The subtle demo-mode marker (Settings toggle / phone shake). */}
+                {demoMode && (
+                  <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
+                    Demo
+                  </span>
+                )}
               </p>
               {/* "powered by PocketCache" was here AND in the footer on every
                   single view. The footer keeps it (Settings owns the attribution
@@ -994,25 +1035,39 @@ export default function WebDashboard() {
                 hero
                 label="Total donated"
                 value={`$${fmtMoney(totalDonated)}`}
-                sub={hasAccount ? `${FIRST_MONTH_LABEL} · all time` : `${sinceLabel} · all time`}
-                pill={hasAccount ? null : `🔥 ${monthsGiving}-month giving streak · Demo data`}
+                sub={demoActive ? `${sinceLabel} · all time` : `${FIRST_MONTH_LABEL} · all time`}
+                pill={demoActive ? `🔥 ${monthsGiving}-month giving streak · Demo data` : null}
               />
               {/* Accrual tile: raw round-ups are the honest figure, but on a
                   skipped cycle the sub-label has to say they are never collected
-                  (same string the app's Pending tile uses). */}
+                  (same string the app's Pending tile uses). Real accounts
+                  (item 12) read the REAL count - 0 for a fresh account - or
+                  the live freshness caption once a bank is linked. */}
               <Kpi
                 testId="web-kpi-pending"
                 label="Pending this month"
-                value={`$${fmtMoney(pendingRoundUps)}`}
-                // A donor with a real linked bank sees a freshness caption
-                // here instead of the demo transaction count - same figure,
-                // real-time provenance. See AppContext's realRoundupsFreshness.
-                sub={skipNextCharge ? SKIP_TILE_SUB : (hasRealBankLinked ? realRoundupsFreshness : `${TRANSACTIONS.length} round-ups so far`)}
+                // Round-ups accrued PLUS any real "Give Extra" pledges still
+                // pending - they join the same monthly charge. Zero while
+                // demoActive (see AppContext), so the demo figure is
+                // untouched; the sub names the pledge portion when there is
+                // one, exactly as the app's Pending tile does.
+                value={`$${fmtMoney(pendingRoundUps + giveExtraPending)}`}
+                sub={skipNextCharge
+                  ? SKIP_TILE_SUB
+                  : giveExtraPending > 0
+                    ? `Incl. $${fmtMoney(giveExtraPending)} extra gift`
+                    : hasRealBankLinked
+                      ? realRoundupsFreshness
+                      : demoActive
+                        ? `${TRANSACTIONS.length} round-ups so far`
+                        : `${realRoundupsCount} round-ups so far`}
               />
               <Kpi
                 label="Average month"
-                value={`$${fmtMoney(avgPerMonth)}`}
-                sub={momChange != null ? `${momChange >= 0 ? '▲' : '▼'} ${Math.abs(momChange)}% vs. prior month` : 'across completed months'}
+                value={demoActive ? `$${fmtMoney(avgPerMonth)}` : '--'}
+                sub={demoActive
+                  ? (momChange != null ? `${momChange >= 0 ? '▲' : '▼'} ${Math.abs(momChange)}% vs. prior month` : 'across completed months')
+                  : 'no completed months yet'}
               />
               <Kpi
                 testId="web-kpi-next-charge"
@@ -1046,12 +1101,12 @@ export default function WebDashboard() {
                 "just delete the two cards" pass produced. */}
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr]" style={{ gap: 20, display: 'grid', alignItems: 'start' }}>
               <div style={{ display: 'grid', gap: 20 }}>
-                <MilestonesCard total={totalDonated} demo={!hasAccount} />
+                <MilestonesCard total={totalDonated} demo={demoActive} />
                 {org && <CauseRow org={org} onOpen={() => setNavTab('mycause')} />}
                 {org?.corporateMatch?.active && (
                   <MatchLine match={org.corporateMatch} onOpen={() => setNavTab('mycause')} />
                 )}
-                <ActivityLinkCard onOpen={() => setNavTab('activity')} />
+                <ActivityLinkCard onOpen={() => setNavTab('activity')} demoActive={demoActive} realCount={realRoundupsCount} />
               </div>
 
               <div style={{ display: 'grid', gap: 20 }}>
@@ -1082,6 +1137,7 @@ export default function WebDashboard() {
             hasRealBankLinked={hasRealBankLinked}
             realRecent={realRoundupsRecent}
             freshness={realRoundupsFreshness}
+            demoActive={demoActive}
           />
         )}
 

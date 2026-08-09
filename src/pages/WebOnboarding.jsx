@@ -9,32 +9,27 @@ import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
 import { useDonorAuth, nativeSSOAvailable } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, PAYMENT_OPTIONS } from './Onboarding';
-import { findOrgByCode, resolveOrgByCode } from '../store/orgStore';
+import { findOrgByCode, resolveOrgByCode, isOrgPending, ORG_PENDING_MESSAGE } from '../store/orgStore';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
 import StripeCardForm from '../components/StripeCardForm';
 import PlaidBankConnect from '../components/PlaidBankConnect';
+import ManualCardForm from '../components/ManualCardForm';
 import ApplePaySheet from '../components/ApplePaySheet';
 import AppleLogo from '../components/AppleLogo';
 import { CapControl } from './WebPortalPages';
 import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRModal';
 import { fmtMoney } from '../lib/format';
 import { pcBeacon } from '../lib/beacon.js';
-import { chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
+import { chargeTotal, nextChargeLabel, processingCoverFor } from '../lib/billing';
+import { EXAMPLE_MONTH_ROUNDUPS, EXAMPLE_DISCLAIMER } from '../lib/donorContent';
 import { useStepHistory } from '../lib/stepHistory';
 // Draft persistence (survives the mobile/desktop breakpoint remount) and the
 // Settings-deep-link step map - shared with Onboarding.jsx via this one
 // module so the two surfaces cannot drift out of sync on which step means
 // what. See src/lib/donorDraft.js for the full rationale.
 import { loadDonorDraft, saveDonorDraft, clearDonorDraft, DEEP_LINK_MAP } from '../lib/donorDraft';
-// A donor can reach this wizard with the current month already skipped (Settings
-// deep-links land here, and the skip survives), so the review step needs the same
-// skipped-cycle copy the two dashboards use - imported, never re-typed.
-import {
-  SKIP_COLLECT_AMOUNT, SKIP_COLLECT_LABEL, SKIP_RESUME_LINE, SKIP_UNDO_LINE,
-  skipAccruedLine, skipFeeLine, skipStatusLine,
-} from './Dashboard';
 
 // ─── Web-native account creation ─────────────────────────────────────────────
 // The signup journey as a real webpage. Left rail carries the pitch + step
@@ -113,8 +108,13 @@ function StepRail({ current, org }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
         {org && <OrgLogo nonprofit={org} size={12} rounded="xl" />}
         <div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary, lineHeight: 1.25 }}>{org?.name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>has its own giving program  -  and you&apos;re in.</p>
+          {/* The QR / join-link landing greeting (owner punch-list item 2):
+              this surface is the nonprofit's round-up MICROSITE, named for
+              the org the donor just scanned - never generic app-first copy. */}
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary, lineHeight: 1.25 }} data-testid="web-rail-welcome">
+            Welcome to the {org?.name ?? 'your nonprofit'} round-up microsite
+          </p>
+          <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>Their own giving program  -  and you&apos;re in.</p>
         </div>
       </div>
       <p style={{ margin: '0 0 20px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
@@ -258,8 +258,8 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   const {
     selectedNonprofit, setSelectedNonprofit, hasAccount, accountStatus,
     setHasAccount, setAccountStatus, setLastMode, setTrackedCard, setPaymentMethod,
-    setPage, pendingRoundUps, feeMonths, monthlyCap, setMonthlyCap, chargeAdjustment,
-    initialOnboardingStep, clearInitialOnboardingStep, skipNextCharge, goToOnboardingStep,
+    setPage, feeMonths, monthlyCap, setMonthlyCap,
+    initialOnboardingStep, clearInitialOnboardingStep, goToOnboardingStep,
     coverProcessing, setCoverProcessing, adminRole, setAdminRole, lastMode,
   } = useApp();
   const { adoptOrgById } = useNp();
@@ -315,14 +315,16 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   const donorAuth = useDonorAuth({ resumeKey: 'web' });
   const [emailInput, setEmailInput] = useState('');
   const [emailInputError, setEmailInputError] = useState(null);
-  const [verifiedIdentity, setVerifiedIdentity] = useState(null);
-  const [displayName, setDisplayName] = useState(() => draft?.displayName ?? '');
   // Restored so a remount past the account step (signup already verified, but
   // AppContext's hasAccount is not set until handleConfirm on the review step)
   // does not strand the donor on 'card'/'payment'/'review' with no identity.
   const [signupIdentity, setSignupIdentity] = useState(() => draft?.signupIdentity ?? null);
   // Card step
   const [connected, setConnected] = useState(() => draft?.connected ?? null);
+  // Manual "type your card" entry, the same simulated tracking-card form the
+  // app's connect-card step has (item 10a). Toggled open under the Plaid
+  // button; never restored from draft (it holds nothing worth keeping).
+  const [manualEntry, setManualEntry] = useState(false);
   // Payment step
   const [paymentSel, setPaymentSel] = useState(() => draft?.paymentSel ?? null);
   const [showApplePay, setShowApplePay] = useState(false);
@@ -353,7 +355,9 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   // so the consent survives signup and both dashboards bill it.
 
   const isCA = selectedState === 'CA';
-  const canContinue = agreedTerms && selectedState !== '' && !isCA;
+  // The full gate (owner punch-list item 4): BOTH checkboxes AND a state
+  // selection before "Email me a code" or any SSO button is usable.
+  const canContinue = agreedTerms && commsOptin && selectedState !== '' && !isCA;
 
   // Persist a draft of wizard progress to sessionStorage on every meaningful
   // change, so the mobile/desktop breakpoint remount (see DONOR_DRAFT_KEY
@@ -361,10 +365,10 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   useEffect(() => {
     saveDonorDraft({
       step, code, selectedState, agreedTerms, commsOptin, provider,
-      displayName, signupIdentity, connected, paymentSel, cardInfo,
+      signupIdentity, connected, paymentSel, cardInfo,
     });
   }, [step, code, selectedState, agreedTerms, commsOptin, provider,
-    displayName, signupIdentity, connected, paymentSel, cardInfo]);
+    signupIdentity, connected, paymentSel, cardInfo]);
 
   // Hardware/browser back for this wizard's OWN step transitions - mirrors
   // exactly what already moves the donor backward on this surface: the
@@ -375,7 +379,11 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   // wizard's own landing screen, same as Onboarding.jsx's 'gate'.
   function stepBack() {
     if (step === 'signin') { setStep('join'); donorAuth.resetToEmail(); return; }
-    const prev = PREV_STEP[step];
+    let prev = PREV_STEP[step];
+    // Once the account exists, back from the card step must NEVER return to
+    // the account step (owner punch-list item 4) - it skips over it to the
+    // join screen, the step that precedes account creation on this surface.
+    if (prev === 'account' && (signupIdentity || hasAccount)) prev = null;
     // 'account' (PREV_STEP['account'] is null) has nothing before it in the
     // four-step sequence - back from here leaves the wizard for the join
     // screen, same landing spot 'signin' backs out to, and is an explicit
@@ -395,7 +403,6 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   useEffect(() => {
     if (initialOnboardingStep) {
       const mapped = DEEP_LINK_MAP[initialOnboardingStep];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (mapped) setStep(mapped);
       clearInitialOnboardingStep();
     }
@@ -412,8 +419,25 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
       setCodeError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
     }
+    if (isOrgPending(np)) {
+      // The org exists but is still awaiting the platform owner's approval -
+      // held back from donors until it flips to approved (org-approve).
+      setCodeError(ORG_PENDING_MESSAGE);
+      return;
+    }
     setCodeError(null);
     setSelectedNonprofit(np);
+    // A signed-in donor who was only missing the cause binding (the state a
+    // fresh sign-in on a new browser lands in) is done the moment the code
+    // resolves - straight to the dashboard, never back through signup.
+    if (hasAccount && accountStatus === 'active') {
+      setLastMode('giving');
+      setPage('home');
+      return;
+    }
+    // Mid-wizard identity already created (e.g. the donor backed out to the
+    // join step after verifying) - the account step is done, skip it.
+    if (signupIdentity) { setStep('card'); return; }
     setStep('account');
   }
 
@@ -522,26 +546,34 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
     donorAuth.sendCode(addr);
   }
 
+  // A successful verify advances IMMEDIATELY (owner punch-list item 4): no
+  // confirm-your-name stop, no second look at the SSO buttons - the account
+  // exists, so the wizard moves straight to the card step. The display name
+  // starts as the friendly guess from the email and is editable in Settings.
   async function handleVerifyCode(e) {
     e?.preventDefault?.();
     const identity = await donorAuth.verifyCode(donorAuth.codeInput);
-    if (identity) {
-      setVerifiedIdentity(identity);
-      setDisplayName(identity.name);
-    }
+    if (identity) finishSignup(identity);
   }
 
-  function handleConfirmName(e) {
-    e?.preventDefault?.();
-    if (!canContinue) return;
-    finishSignup({ ...verifiedIdentity, name: displayName.trim() || verifiedIdentity.name });
-  }
-
-  function handleContinueExisting() {
-    if (hasAccount) { setLastMode('giving'); setPage('home'); return; }
-    if (!canContinue) return;
+  // Signed-in users BYPASS the account step entirely (item 4): a live
+  // Supabase session found while this step is showing - including the
+  // Apple/Google redirect return trip (?authResume=web lands here) - adopts
+  // the identity and advances automatically to the card step. No
+  // "Continue as {email}" button exists any more, so a long address can
+  // never wrap one. An app-level account routes to its dashboard instead.
+  const [autoAdvanced, setAutoAdvanced] = useState(false);
+  useEffect(() => {
+    if (step !== 'account' || autoAdvanced) return;
+    if (hasAccount && accountStatus === 'active') { setAutoAdvanced(true); setLastMode('giving'); setPage('home'); return; }
+    // An identity created earlier in this wizard run means the account step is
+    // simply done - advance without re-adopting.
+    if (signupIdentity) { setAutoAdvanced(true); setStep('card'); return; }
+    if (donorAuth.checkingSession || !donorAuth.existingSession) return;
+    setAutoAdvanced(true);
     finishSignup(donorAuth.existingSession);
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, donorAuth.checkingSession, donorAuth.existingSession, hasAccount, autoAdvanced]);
 
   function handleConfirm() {
     // A real signup already wrote the verified identity (email code or
@@ -585,41 +617,22 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
     clearDonorDraft();
   }
 
-  // The review estimate has to respect the cap the donor may have just set on
-  // the previous step, so it goes through lib/billing like every other charge
-  // figure. (It used to add raw round-ups, so a $10 cap and $22 of round-ups
-  // showed $22 here and $10 in the app.)
-  //
-  // `chargeAdjustment` is in the precedence too: a returning donor who set a
-  // one-time adjustment and then walked back through the wizard (Settings
-  // deep-links land here) saw the capped figure on web and the adjusted figure in
-  // the app. Mirrors the app's confirm step (Onboarding.jsx ~1499-1516).
-  const accrued = pendingRoundUps ?? 4.63;
-  const roundUps = effectiveCharge({ pendingRoundUps: accrued, monthlyCap, chargeAdjustment });
-  // Computed on the EFFECTIVE round-ups (after cap / adjustment), never the raw
-  // accrual: the processor only takes its cut of what is actually collected, so
-  // basing the cover on the accrual would overcharge a capped donor. The rate
-  // itself lives in lib/billing - this used to be a hand-rolled
-  // `roundUps * 0.022 + 0.30`, one of six copies of the same formula.
-  const processingCover = processingCoverFor(roundUps);
+  // ILLUSTRATIVE EXAMPLE, NOT AN ESTIMATE (owner punch-list item 11). A
+  // brand-new account has accrued NOTHING, so this step never presents a
+  // figure as the donor's own current total - it walks through "here is how
+  // a month could look" using the shared obviously-sample figure. Same
+  // constants as the app's CheckoutConfirmScreen so the two surfaces cannot
+  // drift. The fee and cover math still comes from lib/billing so the example
+  // adds up exactly the way a real charge will.
+  const exampleRoundUps = EXAMPLE_MONTH_ROUNDUPS;
+  const processingCover = processingCoverFor(exampleRoundUps);
   const total = chargeTotal({
-    pendingRoundUps: accrued,
-    monthlyCap,
-    chargeAdjustment,
+    pendingRoundUps: exampleRoundUps,
     feeMonths,
     processingCover: coverProcessing ? processingCover : 0,
   });
-  const capActive = monthlyCap !== null && monthlyCap !== undefined && accrued > monthlyCap;
-  const adjusted = chargeAdjustment !== null && chargeAdjustment !== undefined;
   const chargeOn = nextChargeLabel();
   const cardReady = paymentSel !== 'card' || !!cardInfo;
-  // Below the nonprofit's minimum nothing is charged this month - same gate
-  // as the app Dashboard, WebDashboard and Onboarding's confirm step, so this
-  // preview never quotes a total that would not actually be collected. A
-  // skipped cycle already collects nothing for a different reason, so the two
-  // states do not stack.
-  const monthlyMinimum = org?.monthlyMinimum ?? 5;
-  const belowMinimum = !skipNextCharge && accrued < monthlyMinimum;
 
   return (
     <div style={{position:'relative'}}>
@@ -852,14 +865,6 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       had nothing. Same order, same words, web chrome. */}
                   <NonprofitCta onSignup={() => goToOnboardingStep('nonprofit-signup')} />
                   <PanelTitle title="Create your account" sub="Sign up in seconds. No payment required yet." />
-                  {hasAccount && accountStatus === 'active' && (
-                    <button
-                      onClick={() => { setLastMode('giving'); setPage('home'); }}
-                      style={{ width: '100%', textAlign: 'left', marginBottom: 16, padding: '11px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: '#92400e' }}
-                    >
-                      👋 Welcome back  -  continue as {hasAccount.name} →
-                    </button>
-                  )}
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
                     Your state
                   </label>
@@ -885,40 +890,23 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Privacy Policy</a>.
                     </Checkbox>
                     <Checkbox checked={commsOptin} onChange={setCommsOptin}>
-                      PocketCache and {npShort} may contact me with account and giving updates  -  details in our{' '}
+                      {/* Tokenized to the joined nonprofit's FULL name (item
+                          9a) - never a hardcoded org, graceful fallback
+                          before one is bound. */}
+                      PocketCache and {org?.name ?? 'your chosen nonprofit partner'} may contact me with account and giving updates  -  details in our{' '}
                       <a href="/legal/terms/#communications" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Terms</a>.
                     </Checkbox>
                   </div>
 
-                  {/* Returning donor with a live sign-in already on this
-                      browser - skip straight past the email/code form. */}
-                  {!donorAuth.checkingSession && donorAuth.existingSession && !verifiedIdentity && (
-                    <button
-                      onClick={handleContinueExisting}
-                      style={{ width: '100%', textAlign: 'left', marginBottom: 16, padding: '11px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: '#92400e' }}
-                    >
-                      👋 Continue as {donorAuth.existingSession.email} →
-                    </button>
-                  )}
-
-                  {/* Real email sign-in: address -> 6-digit code -> confirm name */}
-                  {verifiedIdentity ? (
-                    <form onSubmit={handleConfirmName}>
-                      <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 12, background: '#f0fdfa', border: '1px solid #99f6e4', fontSize: 13, fontWeight: 600, color: '#0f766e' }}>
-                        You&apos;re verified as {verifiedIdentity.email}
-                      </div>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
-                        Your name
-                      </label>
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={e => setDisplayName(e.target.value)}
-                        placeholder="Your name"
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 14, color: INK.primary, marginBottom: 14 }}
-                      />
-                      <PrimaryButton onClick={handleConfirmName}>Continue →</PrimaryButton>
-                    </form>
+                  {/* Signed-in users never see the forms below again: the
+                      auto-advance effect adopts a live session and moves to
+                      the card step, so there is no "Continue as {email}"
+                      button any more (item 4). The placeholder keeps the SSO
+                      buttons from flashing while the session check runs. */}
+                  {donorAuth.checkingSession || autoAdvanced ? (
+                    <div data-testid="web-account-session-check" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 0', color: INK.muted, fontSize: 13 }}>
+                      One moment…
+                    </div>
                   ) : donorAuth.stage === 'code' ? (
                     <form onSubmit={handleVerifyCode}>
                       <p style={{ margin: '0 0 10px', fontSize: 13.5, color: INK.secondary }}>
@@ -949,25 +937,27 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     </form>
                   ) : (
                     <>
-                      {!(donorAuth.existingSession && !donorAuth.checkingSession) && (
-                        <form onSubmit={handleSendCode} style={{ marginBottom: 14 }}>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
-                            Your email
-                          </label>
-                          <input
-                            type="email"
-                            value={emailInput}
-                            onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
-                            placeholder="you@example.com"
-                            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1px solid ${emailInputError || donorAuth.sendError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb', fontSize: 14, color: INK.primary, marginBottom: 8 }}
-                          />
-                          {emailInputError && <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{emailInputError}</p>}
-                          {donorAuth.sendError && <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{donorAuth.sendError}</p>}
-                          <PrimaryButton onClick={handleSendCode} disabled={(!canContinue && !hasAccount) || donorAuth.sendingCode}>
-                            {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
-                          </PrimaryButton>
-                        </form>
-                      )}
+                      <form onSubmit={handleSendCode} style={{ marginBottom: 14 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                          Your email
+                        </label>
+                        <input
+                          type="email"
+                          value={emailInput}
+                          onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
+                          placeholder="you@example.com"
+                          data-testid="web-account-email"
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1px solid ${emailInputError || donorAuth.sendError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb', fontSize: 14, color: INK.primary, marginBottom: 8 }}
+                        />
+                        {emailInputError && <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{emailInputError}</p>}
+                        {donorAuth.sendError && <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#dc2626' }}>{donorAuth.sendError}</p>}
+                        {/* Disabled until the state + BOTH consent boxes above
+                            are complete (item 4) - the hint below says which
+                            part is still missing. */}
+                        <PrimaryButton onClick={handleSendCode} disabled={!canContinue || donorAuth.sendingCode}>
+                          {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
+                        </PrimaryButton>
+                      </form>
 
                       {/* Same SSO rule as Onboarding.jsx's SignUpScreen: web
                           always, native only when the shell can run the in-app
@@ -982,10 +972,17 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                             <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
                           </div>
 
-                          <div style={{ opacity: canContinue || hasAccount ? 1 : 0.55, pointerEvents: chosen ? 'none' : 'auto' }}>
-                            <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue && !hasAccount} errors={donorAuth.oauthErrors} />
+                          <div style={{ opacity: canContinue ? 1 : 0.55, pointerEvents: chosen ? 'none' : 'auto' }}>
+                            <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} errors={donorAuth.oauthErrors} />
                           </div>
                         </>
+                      )}
+                      {!canContinue && !isCA && (
+                        <p style={{ margin: '10px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }} data-testid="web-account-gate-hint">
+                          {selectedState === ''
+                            ? 'Select your state above to continue'
+                            : 'Check both boxes above to continue'}
+                        </p>
                       )}
                       <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.muted, textAlign: 'center' }}>
                         {isNative() && !nativeSSOAvailable()
@@ -1008,9 +1005,38 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                         <p style={{ margin: 0, fontSize: 12.5, color: '#0f766e' }}>Card ending ····{connected.last4}  -  we&apos;ll track purchases and tally round-ups as they happen.</p>
                       </div>
                     </div>
+                  ) : manualEntry ? (
+                    <div style={{ border: '1.5px solid #99f6e4', borderRadius: 14, padding: 16, marginBottom: 12 }}>
+                      <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: INK.muted }}>
+                        Enter your card manually
+                      </p>
+                      <ManualCardForm
+                        variant="web"
+                        onCancel={() => setManualEntry(false)}
+                        onConnect={card => { setConnected(card); setManualEntry(false); }}
+                      />
+                    </div>
                   ) : (
                     <div style={{ marginBottom: 12 }}>
                       <PlaidBankConnect variant="web" onConnected={card => setConnected(card)} />
+                      {/* Manual entry - the same simulated tracking-card form
+                          the app has (item 10a): clearly the WATCHED card,
+                          raw numbers never sent anywhere. */}
+                      <button
+                        onClick={() => setManualEntry(true)}
+                        data-testid="web-manual-card-entry"
+                        style={{
+                          width: '100%', marginTop: 10, padding: '13px 16px', borderRadius: 14, cursor: 'pointer',
+                          border: '2px dashed #d1d5db', background: '#fff', textAlign: 'left',
+                          display: 'flex', alignItems: 'center', gap: 10,
+                        }}
+                      >
+                        <Lock size={16} color="#0d9488" />
+                        <span>
+                          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: INK.primary }}>Enter your card manually</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>Type the card we should watch  -  encrypted via Plaid, never charged</span>
+                        </span>
+                      </button>
                     </div>
                   )}
                   <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK.muted, margin: '0 0 16px' }}>
@@ -1129,62 +1155,28 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
               {step === 'review' && (
                 <>
                   <PanelTitle title="Review & confirm" sub={`Your round-ups are collected monthly by ${org?.name ?? 'your nonprofit'}.`} />
+                  {/* Example card - an ILLUSTRATION, never the donor's own
+                      total (item 11). Same framing, sample figure and
+                      disclaimer as the app's confirm step. */}
                   <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 14, padding: 16, marginBottom: 14 }}>
-                    <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b' }}>Monthly estimate</p>
-                    {/* Reachable with the current month already skipped: the box
-                        used to itemize round-ups + fee + processing cover and quote
-                        a real total for a cycle that collects nothing at all. */}
-                    {skipNextCharge && (
-                      <p style={{ margin: '0 0 10px', fontSize: 12.5, lineHeight: 1.55, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }} data-testid="web-confirm-skipped">
-                        {skipStatusLine()}{' '}{skipAccruedLine(accrued)}{' '}{skipFeeLine(feeMonths)}{' '}{SKIP_RESUME_LINE}{' '}{SKIP_UNDO_LINE}
-                      </p>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0' }}>
-                      <span style={{ color: INK.secondary }}>Round-ups this month</span>
-                      <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-confirm-roundups">
-                        {!skipNextCharge && !belowMinimum && roundUps !== accrued
-                          ? <><s style={{ color: INK.muted, fontWeight: 400 }}>${fmtMoney(accrued)}</s> ${fmtMoney(roundUps)}</>
-                          : `$${fmtMoney(accrued)}`}
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b' }}>Here is how a month could look</p>
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '2px 8px', flexShrink: 0 }}>Example</span>
                     </div>
-                    {/* Below the nonprofit's minimum, nothing charges this month -
-                        so this preview shows the rollover story instead of an
-                        itemized total that would never actually be collected.
-                        Same wording as the app Dashboard's below-minimum copy. */}
-                    {belowMinimum && (
-                      <p style={{ margin: '2px 0 0', fontSize: 11.5, lineHeight: 1.55, color: '#b45309' }} data-testid="web-confirm-rollover">
-                        Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
-                      </p>
-                    )}
-                    {/* Same notes, same wording and same precedence as the app's
-                        confirm step (Onboarding.jsx ~1589-1607). A cap or an
-                        adjustment is moot on a skipped or below-minimum cycle -
-                        nothing is capped out of a charge that never happens. */}
-                    {!skipNextCharge && !belowMinimum && capActive && !adjusted && (
-                      <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#b45309' }} data-testid="web-confirm-cap-note">
-                        Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
-                      </p>
-                    )}
-                    {!skipNextCharge && !belowMinimum && adjusted && (
-                      <p style={{ margin: '2px 0 0', fontSize: 11.5, fontWeight: 600, color: '#059669' }} data-testid="web-confirm-adjust-note">
-                        Adjusted to ${fmtMoney(chargeAdjustment)} for this month.
-                      </p>
-                    )}
-                    {/* The $1 fee and the processing cover are not on a skipped or
-                        below-minimum charge either - the fee still rolls forward
-                        with the balance, and there is no card charge to cover. */}
-                    {!skipNextCharge && !belowMinimum && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
-                        <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
-                        <span>+${fmtMoney(feeMonths)}</span>
-                      </div>
-                    )}
-                    {!skipNextCharge && !belowMinimum && feeMonths > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0' }}>
+                      <span style={{ color: INK.secondary }}>Round-ups in a sample month</span>
+                      <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-confirm-roundups">${fmtMoney(exampleRoundUps)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }}>
+                      <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+                      <span>+${fmtMoney(feeMonths)}</span>
+                    </div>
+                    {feeMonths > 1 && (
                       <p style={{ margin: '2px 0 0', fontSize: 11.5, color: INK.secondary }}>
                         {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
                       </p>
                     )}
-                    {!skipNextCharge && !belowMinimum && coverProcessing && (
+                    {coverProcessing && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: INK.secondary }} data-testid="web-confirm-cover">
                         <span>Processing cover (goes to {npShort})</span>
                         <span>+${fmtMoney(processingCover)}</span>
@@ -1192,14 +1184,15 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     )}
                     <div style={{ height: 1, background: '#cbd5e1', margin: '8px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 13.5, color: INK.primary }}>
-                        {skipNextCharge ? SKIP_COLLECT_LABEL : belowMinimum ? 'Nothing charged yet' : `One charge from ${npShort}`}
-                      </span>
-                      <span style={{ fontWeight: 800, fontSize: 18, color: (skipNextCharge || belowMinimum) ? '#b45309' : NAVY }} data-testid="web-confirm-total">
-                        {skipNextCharge ? SKIP_COLLECT_AMOUNT : belowMinimum ? `$${fmtMoney(accrued)} so far` : `$${fmtMoney(total)}`}
-                      </span>
+                      <span style={{ fontWeight: 700, fontSize: 13.5, color: INK.primary }}>One charge from {npShort}</span>
+                      <span style={{ fontWeight: 800, fontSize: 18, color: NAVY }} data-testid="web-confirm-total">${fmtMoney(total)}</span>
                     </div>
-                    <p style={{ margin: '8px 0 0', fontSize: 11.5, fontStyle: 'italic', color: INK.muted }}>This is an example  -  no real charge is made in this demo.</p>
+                    {monthlyCap !== null && monthlyCap !== undefined && (
+                      <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#b45309' }} data-testid="web-confirm-cap-note">
+                        Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
+                      </p>
+                    )}
+                    <p style={{ margin: '8px 0 0', fontSize: 11.5, fontStyle: 'italic', color: INK.muted }} data-testid="web-confirm-example-note">{EXAMPLE_DISCLAIMER}</p>
                   </div>
 
                   {/* Writes straight through to the persisted preference (the
@@ -1222,15 +1215,9 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                         Cover {npShort}&apos;s card-processing costs too, so 100% of my round-ups reach them.
                       </span>
                       <span style={{ display: 'block', fontSize: 12, color: INK.secondary, marginTop: 2 }}>
-                        {/* On a skipped or below-minimum cycle there is no charge
-                            to add the cover to, so quoting "~$0.61 goes directly
-                            to BGCA" here would be money that never moves. The
-                            preference still applies to the charges that do run. */}
-                        {skipNextCharge || belowMinimum
-                          ? `Applies from your next charge  -  nothing is collected this month.`
-                          : coverProcessing
-                            ? `The ~$${fmtMoney(processingCover)} goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation.`
-                            : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
+                        {coverProcessing
+                          ? `The ~$${fmtMoney(processingCover)} in the example goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation and scales with your actual round-ups.`
+                          : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
                       </span>
                     </span>
                   </div>
@@ -1239,16 +1226,9 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     Once a month, {org?.name ?? 'your nonprofit'} bundles your round-ups into one charge  -  you&apos;ll see
                     &ldquo;{npShort}&rdquo; on your statement, not PocketCache, and they send your tax receipt. Months under
                     ${org?.monthlyMinimum ?? 5} roll forward (we settle up within 3 months).{' '}
-                    {/* The 1st / 11th promise is exactly what a skipped cycle does
-                        not do, so a skipped donor gets the shared resume sentence
-                        instead of a charge date that will pass with no charge. */}
-                    {skipNextCharge ? SKIP_RESUME_LINE : (
-                      <>
-                        Tracking starts now; your round-ups total through the last day of the month, we email your{' '}
-                        <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the{' '}
-                        <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
-                      </>
-                    )}
+                    Tracking starts now; your round-ups total through the last day of the month, we email your{' '}
+                    <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the{' '}
+                    <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
                   </p>
 
                   <PrimaryButton onClick={handleConfirm}>Start Giving to {npShort}</PrimaryButton>

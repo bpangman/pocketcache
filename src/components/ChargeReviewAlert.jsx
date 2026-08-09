@@ -55,7 +55,7 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   const {
     hasAccount, accountStatus, skipNextCharge, selectedNonprofit,
     pendingRoundUps, feeMonths, monthlyCap, chargeAdjustment, setChargeAdjustment,
-    coverProcessing,
+    coverProcessing, demoMode,
   } = useApp();
   const [dismissed, setDismissed] = useState(() => loadKey(ACK_KEY) === monthKey());
   // ?review=1 preview flag  -  captured ONCE at mount (the pretty-URL rewrite
@@ -75,8 +75,17 @@ export default function ChargeReviewAlert({ surface = 'app' }) {
   );
 
   const acknowledged = closedNow || (dismissed && preview !== 'force');
+  // roundUps > 0: a brand-new real account has accrued NOTHING, so there is
+  // no amount to review and no threshold to be under - popping "your round-ups
+  // aren't quite there yet" at $0.00 right after signup was both confusing and
+  // wrong. The alert only exists once real money has actually accrued.
+  //
+  // !demoMode: with demo mode on, pendingRoundUps is the fake dataset - this
+  // alert is about the donor's REAL upcoming charge, so quoting demo figures
+  // in it would misinform. It comes back the moment demo mode is off.
   const show = !acknowledged && hasAccount && accountStatus === 'active'
-    && !skipNextCharge && selectedNonprofit && (!!preview || inReviewWindow());
+    && !skipNextCharge && selectedNonprofit && roundUps > 0 && !demoMode
+    && (!!preview || inReviewWindow());
   if (!show) return null;
 
   const npShort = selectedNonprofit.shortName ?? selectedNonprofit.name;

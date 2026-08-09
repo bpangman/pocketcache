@@ -210,6 +210,173 @@ function LiveActivityCard() {
   );
 }
 
+// ── Section 2.5: Nonprofits awaiting approval ───────────────────────────────
+// Real server-side pending list (orgs_public, status = 'pending_review') with
+// a working Approve action. Approving here does exactly what the emailed
+// one-click link does: POST to the org-approve edge function, which flips the
+// org live and emails the nonprofit their launch kit. The function checks the
+// pasted approval key (x-approve-key) against its ORG_APPROVE_KEY secret -
+// the key is asked for once and kept in sessionStorage only, so it survives
+// tab navigation but never lands in localStorage or the exported raw data.
+
+const SUPABASE_FUNCTIONS_BASE = 'https://yeptifozaytoglfwxksz.supabase.co/functions/v1';
+const SUPABASE_PENDING_ORGS_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/orgs_public?status=eq.pending_review&select=*&order=name.asc';
+const APPROVE_KEY_SESSION_KEY = 'pc_approve_key';
+
+function loadApproveKey() {
+  try { return sessionStorage.getItem(APPROVE_KEY_SESSION_KEY) ?? ''; } catch { return ''; }
+}
+
+function saveApproveKey(key) {
+  try { sessionStorage.setItem(APPROVE_KEY_SESSION_KEY, key); } catch { /* ignore */ }
+}
+
+function PendingApprovalsCard() {
+  const [pending, setPending] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [approveKey, setApproveKey] = useState(loadApproveKey);
+  const [keyDraft, setKeyDraft] = useState('');
+  const [busyId, setBusyId] = useState(null);
+  const [rowMsg, setRowMsg] = useState({}); // org id -> result / error string
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch(SUPABASE_PENDING_ORGS_URL, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      setPending(await res.json());
+    } catch {
+      setLoadError("Couldn't load the pending list right now - try Refresh in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function saveKey(e) {
+    e?.preventDefault?.();
+    const key = keyDraft.trim();
+    if (!key) return;
+    saveApproveKey(key);
+    setApproveKey(key);
+    setKeyDraft('');
+  }
+
+  async function approve(org) {
+    setBusyId(org.id);
+    setRowMsg(m => ({ ...m, [org.id]: null }));
+    try {
+      const res = await fetch(`${SUPABASE_FUNCTIONS_BASE}/org-approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'x-approve-key': approveKey,
+        },
+        body: JSON.stringify({ org_id: org.id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (res.status === 403) {
+          // Wrong key: clear it so the paste field comes back.
+          saveApproveKey('');
+          setApproveKey('');
+        }
+        setRowMsg(m => ({ ...m, [org.id]: data?.error || `Approval failed (status ${res.status}).` }));
+        return;
+      }
+      setRowMsg(m => ({
+        ...m,
+        [org.id]: data?.alreadyApproved
+          ? 'Already approved - nothing changed.'
+          : data?.launchKitSent
+            ? `Approved - launch kit emailed. ✓`
+            : 'Approved, but the launch kit email failed - check the function logs.',
+      }));
+      // Drop the row after a beat so the confirmation is readable.
+      setTimeout(() => { setPending(list => list.filter(o => o.id !== org.id)); }, 2500);
+    } catch {
+      setRowMsg(m => ({ ...m, [org.id]: "Couldn't reach the approval service - try again." }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Card
+      title="Nonprofits awaiting approval"
+      right={
+        <button
+          onClick={load}
+          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      }
+    >
+      <p className="text-xs text-gray-400 mb-3">
+        Every new nonprofit signup waits here (and in an email to blake@pocketcache.app with a
+        one-click approve link) until you approve it. Approving flips their page live for donors
+        and emails them their launch kit.
+      </p>
+      {!approveKey && (
+        <form onSubmit={saveKey} className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
+          <p className="text-xs text-amber-900 mb-2 font-medium">
+            Paste the approval key once to enable the Approve buttons (kept only for this tab session).
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={keyDraft}
+              onChange={e => setKeyDraft(e.target.value)}
+              placeholder="Approval key"
+              className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-500 bg-white"
+            />
+            <button type="submit" className="text-xs font-semibold px-3 py-2 rounded-xl bg-gray-900 text-white">
+              Save key
+            </button>
+          </div>
+        </form>
+      )}
+      {loadError ? (
+        <p className="text-sm text-amber-700 bg-amber-50 rounded-xl p-3">{loadError}</p>
+      ) : loading ? (
+        <p className="text-sm text-gray-400">Loading…</p>
+      ) : pending.length === 0 ? (
+        <p className="text-sm text-gray-400">Nothing waiting - every signed-up nonprofit is approved.</p>
+      ) : (
+        pending.map(org => (
+          <div key={org.id} className="border border-gray-100 rounded-xl p-3 mb-2 last:mb-0">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 text-sm truncate">{org.name}</p>
+                <p className="text-xs text-gray-500">Join code {org.join_code} · awaiting review</p>
+              </div>
+              <button
+                onClick={() => approve(org)}
+                disabled={!approveKey || busyId === org.id}
+                className="text-xs font-bold px-4 py-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-40"
+                title={approveKey ? undefined : 'Paste the approval key above first'}
+              >
+                {busyId === org.id ? 'Approving…' : 'Approve'}
+              </button>
+            </div>
+            {rowMsg[org.id] && (
+              <p className="text-xs mt-2 font-medium text-gray-700">{rowMsg[org.id]}</p>
+            )}
+          </div>
+        ))
+      )}
+    </Card>
+  );
+}
+
 // ── Section 3: Nonprofits on this device ────────────────────────────────────
 
 function resolveBgcaAdminEmail() {
@@ -455,6 +622,7 @@ function PlatformAdminConsole() {
         </div>
 
         <LiveActivityCard />
+        <PendingApprovalsCard />
         <NonprofitsCard />
         <DonorCard />
         <HowTheMoneyRunsCard />

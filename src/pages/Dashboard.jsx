@@ -19,6 +19,7 @@ import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, D
 import OrgLogo from '../components/OrgLogo';
 import Sheet from '../components/Sheet';
 import GiveExtraSheet from '../components/sheets/GiveExtraSheet';
+import { submitGiveExtra } from '../lib/engagement';
 import BoostToast from '../components/sheets/BoostToast';
 import BecomeMatchSponsorSheet from '../components/sheets/BecomeMatchSponsorSheet';
 
@@ -182,7 +183,9 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
 export default function Dashboard() {
   const {
     selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge, coverProcessing,
-    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, hasAccount,
+    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount, hasAccount,
+    demoActive, demoMode,
+    giveExtraPending, refreshRealRoundups,
   } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
@@ -261,6 +264,18 @@ export default function Dashboard() {
     toastTimerRef.current = setTimeout(() => setBoostToast(null), 3500);
   }
 
+  // Same real pledge path as MyCause's handleRealGiveExtra (see the note
+  // there for why this never calls boostDonation).
+  async function handleRealGiveExtra(amount) {
+    const res = await submitGiveExtra({
+      amountCents: Math.round(amount * 100),
+      orgCode: selectedNonprofit?.shortName,
+      email: hasAccount?.email,
+    });
+    if (res?.ok) refreshRealRoundups();
+    return res;
+  }
+
   const match = selectedNonprofit.corporateMatch;
 
   return (
@@ -293,6 +308,8 @@ export default function Dashboard() {
         onConfirm={handleBoostConfirm}
         nonprofit={selectedNonprofit}
         brand={brand}
+        demoActive={demoActive}
+        onSubmitReal={handleRealGiveExtra}
       />
 
       {/* Corp Match hero button - only rendered when NO match is running, so the
@@ -314,9 +331,17 @@ export default function Dashboard() {
       >
         <div>
           <p className="text-white/70 text-sm font-medium">{getGreeting()}, {hasAccount?.name ?? DEMO_USER.name} 👋</p>
-          <h1 className="text-white text-2xl font-bold mt-1" style={{ letterSpacing: '-0.3px' }}>
-            {brand.appName}
-          </h1>
+          <div className="flex items-center gap-2 mt-1">
+            <h1 className="text-white text-2xl font-bold" style={{ letterSpacing: '-0.3px' }}>
+              {brand.appName}
+            </h1>
+            {/* The subtle demo-mode marker (shake to toggle; also in Settings). */}
+            {demoMode && (
+              <span data-testid="demo-mode-pill" className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-300/90 text-amber-900">
+                Demo
+              </span>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -349,7 +374,7 @@ export default function Dashboard() {
                 and skips the streak badge, which would otherwise read as a
                 fake multi-month streak on a brand-new account. Demo mode
                 keeps both, clearly labeled. */}
-            {hasAccount ? (
+            {!demoActive ? (
               <p className="text-white/60 text-sm mt-2">{FIRST_MONTH_LABEL} · All time</p>
             ) : (
               <>
@@ -398,30 +423,44 @@ export default function Dashboard() {
             {
               icon: <Zap size={18} />,
               label: 'Pending',
-              value: `$${pendingRoundUps.toFixed(2)}`,
+              // Round-ups accrued this month PLUS any real "Give Extra"
+              // pledges still pending (they join the same monthly charge -
+              // giveExtraPending is 0 while demoActive, so the demo figure is
+              // untouched). The sub names the pledge portion when there is
+              // one so the bump is explained, not mysterious.
+              value: `$${(pendingRoundUps + giveExtraPending).toFixed(2)}`,
               // Accrual figure, so the raw round-ups are the honest number here -
               // but on a skipped cycle "This month" would read as "coming out this
               // month", which is exactly what is NOT happening. For a donor with a
               // real linked bank, "This month" becomes the freshness caption
               // (computed once on response arrival, not a ticking clock - see
               // fmtFreshness) so the figure reads as live, not a static demo number.
-              sub: skipNextCharge ? SKIP_TILE_SUB : (hasRealBankLinked ? realRoundupsFreshness : 'This month'),
+              sub: skipNextCharge
+                ? SKIP_TILE_SUB
+                : giveExtraPending > 0
+                  ? `Incl. $${fmtMoney(giveExtraPending)} extra gift`
+                  : (hasRealBankLinked ? realRoundupsFreshness : 'This month'),
               iconColor: brand.primary,
               textColor: '#059669',
             },
+            // Average + count bind to REAL account data for a real account
+            // (item 12): a fresh account has no completed months, so there is
+            // no average to fake - it reads a dash - and the round-up count is
+            // the server's real figure (0 until the card starts purchasing).
+            // The rich fake numbers only appear while demoActive.
             {
               icon: <TrendingUp size={18} />,
               label: 'Avg/mo',
-              value: `$${avgPerMonth.toFixed(2)}`,
-              sub: momDisplay,
+              value: demoActive ? `$${avgPerMonth.toFixed(2)}` : '--',
+              sub: demoActive ? momDisplay : 'No completed months yet',
               iconColor: brand.secondary,
-              textColor: momChange !== null && momChange < 0 ? '#dc2626' : '#059669',
+              textColor: demoActive && momChange !== null && momChange < 0 ? '#dc2626' : '#059669',
             },
             {
               icon: <Heart size={18} />,
               label: 'Round-ups',
-              value: String(totalRoundupsCount),
-              sub: 'All time (est.)',
+              value: demoActive ? String(totalRoundupsCount) : String(realRoundupsCount),
+              sub: demoActive ? 'All time (est.)' : 'Since you joined',
               iconColor: brand.secondary,
               textColor: brand.secondary,
             },
@@ -590,11 +629,11 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-gray-900 text-base">Milestones</h3>
-              {/* Badges below are driven by totalDonated, which in demo mode
-                  is the fake demo total - the same figure Activity.jsx labels
-                  "Demo data" for the same reason. A real account's honest
-                  (often $0) total needs no such label. */}
-              {!hasAccount && (
+              {/* Badges below are driven by totalDonated, which while
+                  demoActive is the fake demo total - the same figure
+                  Activity.jsx labels "Demo data" for the same reason. A real
+                  account's honest (often $0) total needs no such label. */}
+              {demoActive && (
                 <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                   Demo data
                 </span>

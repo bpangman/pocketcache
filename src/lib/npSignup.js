@@ -32,7 +32,7 @@
 // surfaces and legally load-bearing (the license summary, the launch-kit email,
 // the widget snippet), lives here too so the two surfaces cannot drift apart.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { buildOrgFromSignup, saveCustomOrg, generateJoinCode, isJoinCodeAvailable } from '../store/orgStore';
@@ -127,11 +127,21 @@ export const EIN_DEMO_FALLBACK = {
  *  admin sets their real org's name instead of inheriting BGCA's. */
 export const EIN_UNKNOWN_NAME = 'Your Nonprofit';
 
-/** Does this EIN (digits only) belong to a seeded org (BGCA today)? Shared by
- *  the Candid Seal check and the EIN-demo-fallback name resolution so both
- *  agree on which EINs are "known" vs genuinely unknown. */
+/** The seeded org (BGCA today) this EIN or name belongs to, or null. One
+ *  matcher shared by the Candid Seal check, the EIN-fallback name resolution,
+ *  the confirm-org logo, and the known-org domain rule, so they all agree on
+ *  which orgs are "known" vs genuinely unknown. */
+export function seededOrgFor({ einDigits, orgName } = {}) {
+  const lowerName = (orgName ?? '').trim().toLowerCase();
+  return NONPROFITS.find(np =>
+    (einDigits && (np.ein ?? '').replace(/\D/g, '') === einDigits) ||
+    (lowerName && np.name.toLowerCase() === lowerName)
+  ) ?? null;
+}
+
+/** Does this EIN (digits only) belong to a seeded org (BGCA today)? */
 function einIsSeeded(einDigits) {
-  return NONPROFITS.some(np => (np.ein ?? '').replace(/\D/g, '') === einDigits);
+  return !!seededOrgFor({ einDigits });
 }
 
 // ─── Simulated Candid Seal of Transparency lookup ──────────────────────────────
@@ -155,36 +165,28 @@ function determineCandidSeal({ einDemoMode, einDigits, orgName }) {
   return (einIsSeeded(einDigits) || nameIsSeeded) ? 'found' : 'none';
 }
 
-// ─── Work-email verification (DEMO one-time code) ─────────────────────────────
+// ─── Work-email verification ─────────────────────────────────────────────────
+//
+// Personal-mail domains can never administer a nonprofit (rejected in
+// adminAuth.sendCode before a code is even sent, and again server-side).
+// For KNOWN orgs - the seeded list in data/nonprofits.js, BGCA today - the
+// admin email must be on the org's official domain (officialDomain on the
+// seed record), or anyone with any work email could claim BGCA. Enforced
+// here BEFORE the OTP goes out (sendCode below, via requiredDomainFor) and
+// enforced again server-side in the org-signup edge function
+// (officialDomainFor in supabase/functions/_shared/org.ts), so the client
+// check is a courtesy save of a wasted OTP round trip, never the real gate.
 
-// Personal-mail domains can never administer a nonprofit. For orgs whose domain
-// we know (BGCA in the demo), the email must be ON that domain. Production
-// cross-checks the domain against org records + Stripe KYC and actually emails
-// the code (see PRELAUNCH.md).
-const FREE_MAIL = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com', 'live.com', 'msn.com', 'me.com'];
-const KNOWN_ORG_DOMAINS = { 'boys & girls clubs of america': 'bgca.org' };
-
-/** The domain this org's admins must use, when we know it. */
-export function requiredDomainFor(orgName) {
-  return KNOWN_ORG_DOMAINS[orgName?.toLowerCase?.()] ?? null;
+/** The domain this org's admins must use, when we know it - the seeded org's
+ *  officialDomain, matched by EIN or exact name via seededOrgFor. Null for
+ *  unknown orgs (their verified domain becomes theirs). */
+export function requiredDomainFor({ einDigits, orgName } = {}) {
+  return seededOrgFor({ einDigits, orgName })?.officialDomain ?? null;
 }
 
-/** DEMO: any email passes so the flow can be walked end to end. This returns
- *  what the LIVE rules would have said, so the surface can say it out loud. */
-export function demoBypassNoteFor(orgName, email) {
-  const domain = (email ?? '').split('@')[1];
-  if (!domain) return null;
-  const required = requiredDomainFor(orgName);
-  if (required && domain !== required) {
-    return `the live version requires an @${required} address for ${orgName}`;
-  }
-  if (FREE_MAIL.includes(domain)) {
-    return 'the live version rejects personal email domains  -  admins must use their work address';
-  }
-  return null;
-}
-
-/** DEMO: the code is generated here, in the browser, and auto-filled. */
+/** DEMO: the settings-change verification modal (pages/nonprofit/AdminVerify)
+ *  still simulates its one-time code in the browser - signup itself uses the
+ *  real Supabase OTP (adminAuth.js). */
 export function generateOneTimeCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -300,6 +302,13 @@ export function useNpGoLive() {
     org.createdAt = new Date().toISOString();
     org.stripeConnected = serverOrg ? !!serverOrg.stripe_connected : !!config.stripeConnected;
     if (serverOrg?.id) org._serverId = serverOrg.id;
+    // Approval gate: a real server org starts 'pending_review' and only goes
+    // donor-visible once the platform owner approves it (org-approve edge
+    // function). The status rides on the local record + npOrg so the admin
+    // dashboard can show the "awaiting review" banner and lock the Grow-tab
+    // assets. A practice-mode local-only org has no server row to review, so
+    // it carries no status and reads as approved (the old walkable demo).
+    if (serverOrg?.status) org.status = serverOrg.status;
     saveCustomOrg(org);
 
     setNpOrg({
@@ -312,6 +321,7 @@ export function useNpGoLive() {
       adminEmail:     org.adminEmail,
       joinCode:       org.shortName,
       _orgId:         org.id,
+      status:         serverOrg?.status,
     });
     setAdminRole({ orgId: org.id, joinCode: org.shortName });
     setLastMode('admin');
@@ -453,6 +463,12 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   const [orgId, setOrgId] = useState(() => draft?.orgId ?? null);
   const [orgCreateError, setOrgCreateError] = useState(null);
   const [practiceMode, setPracticeMode] = useState(() => draft?.practiceMode ?? false);
+  // The server org's approval status ('pending_review' until the platform
+  // owner approves, 'approved' after - see supabase/functions/org-approve).
+  // Set from every org-signup response; null when no server org exists yet
+  // (or practice mode). Drives the completion step: a pending org gets the
+  // "Almost there - awaiting review" screen instead of the live assets.
+  const [orgStatus, setOrgStatus] = useState(() => draft?.orgStatus ?? null);
 
   // Stripe: REAL hosted Connect onboarding (test mode) via org-connect-stripe.
   const [stripeConnecting, setStripeConnecting] = useState(false);
@@ -491,7 +507,15 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // dead button. This lets the surface say why, next to the button that refused.
   const [showBrandingHint, setShowBrandingHint] = useState(false);
 
-  const requiredDomain = requiredDomainFor(orgName);
+  // The seeded org (BGCA today) this signup is claiming, or null for a
+  // genuinely unknown org. Drives two honesty rules the surfaces render:
+  //   1. Only a seeded org's own logo may appear in the wizard - an unknown
+  //      EIN gets a neutral placeholder, never BGCA branding.
+  //   2. Claiming a seeded org requires an admin email on its official
+  //      domain (requiredDomain below; sendCode refuses other domains before
+  //      an OTP is even sent, and the server enforces it again).
+  const seededOrg = seededOrgFor({ einDigits: ein.replace(/\D/g, ''), orgName });
+  const requiredDomain = seededOrg?.officialDomain ?? null;
 
   // Persist a draft of wizard progress to sessionStorage on every meaningful
   // change, so the mobile/desktop breakpoint remount (see the NP_DRAFT_KEY
@@ -501,13 +525,13 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       step, ein, einDemoMode, einNameEditable, orgName, orgAddress, org501c3,
       adminEmail, workEmail, codeSent, orgId, practiceMode, stripeConnected,
       candidSeal, benevityChoice, story, color, monthlyMinimum,
-      joinCodeCustom, accepted,
+      joinCodeCustom, accepted, orgStatus,
     });
   }, [
     step, ein, einDemoMode, einNameEditable, orgName, orgAddress, org501c3,
     adminEmail, workEmail, codeSent, orgId, practiceMode, stripeConnected,
     candidSeal, benevityChoice, story, color, monthlyMinimum,
-    joinCodeCustom, accepted,
+    joinCodeCustom, accepted, orgStatus,
   ]);
 
   // A draft saved mid candidSeal-check (the ~1.2s window confirmOrg's timeout
@@ -546,6 +570,7 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       if (org.mission) setStory(org.mission);
       if (org.brand_color) setColor(org.brand_color);
       if (org.join_code) setJoinCodeCustom(org.join_code);
+      if (org.status) setOrgStatus(org.status);
       setStripeConnected(!!org.stripe_connected);
       setEinDemoMode(false);
       // By the time an admin reaches Stripe (and comes back from it), the org
@@ -662,6 +687,15 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   async function sendCode(e) {
     e?.preventDefault?.();
     const email = workEmail.trim().toLowerCase();
+    // Known-org claim gate (client half - org-signup enforces it again):
+    // claiming a seeded org (BGCA today) requires an email on its official
+    // domain. Refusing here saves the admin a wasted OTP round trip.
+    const domain = email.split('@')[1] || '';
+    if (requiredDomain && domain !== requiredDomain) {
+      const err = `To claim ${orgName}, use an email at @${requiredDomain}.`;
+      setEmailError(err);
+      return false;
+    }
     const result = await adminAuth.sendCode(email);
     if (!result.ok) { setEmailError(result.error); return false; }
     setEmailError(null);
@@ -687,6 +721,7 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     const res = await orgSignup({ name: orgName, ein: ein.replace(/\D/g, '') });
     if (res.ok && res.data?.org?.id) {
       setOrgId(res.data.org.id);
+      if (res.data.org.status) setOrgStatus(res.data.org.status);
       setOrgCreateError(null);
       setPracticeMode(false);
       return res.data.org;
@@ -844,6 +879,47 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       : { status: benevityChoice ?? 'benevity_needed', method: 'benevity' }
   ), [candidSeal, benevityChoice]);
 
+  // The moment the wizard reaches its completion step with a real server org,
+  // send the completed payload to org-signup. That call is what marks the org
+  // "waiting for review" server-side and fires the owner's approval-alert
+  // email - it must NOT wait for the admin to also click "Open your
+  // dashboard" (useNpGoLive sends the same idempotent payload again there;
+  // the alert itself is sent exactly once, guarded by approve_alert_sent_at
+  // server-side). The response's status tells this wizard whether to show
+  // "Almost there - awaiting review" or the live assets.
+  const finalizeRanRef = useRef(false);
+  useEffect(() => {
+    if (step !== 'live' || !orgId || practiceMode || finalizeRanRef.current) return;
+    finalizeRanRef.current = true;
+    (async () => {
+      const res = await orgSignup({
+        name: orgName,
+        ein,
+        mission: story,
+        color,
+        joinCode,
+        appleApproval,
+      });
+      if (res.ok && res.data?.org?.status) setOrgStatus(res.data.org.status);
+      else if (!res.ok) console.error('npSignup: completion org-signup failed', res.status, res.data);
+    })();
+    // Only the arrival on 'live' should fire this - the payload fields are
+    // settled by then and must not re-trigger it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, orgId, practiceMode]);
+
+  // A real server org that has not been approved yet. The surfaces swap the
+  // "You're Live" assets for the "Almost there - awaiting review" screen, and
+  // donor surfaces hold the org back (see orgStore.isOrgPending).
+  const pendingReview = orgStatus === 'pending_review';
+
+  // The logo the surfaces should DISPLAY. The phone wizard passes BGCA's logo
+  // as defaultLogo, which is only honest while the org being signed up IS the
+  // seeded BGCA - an unknown org must never preview under BGCA's mark, so an
+  // untouched default logo reads as "no logo" (surfaces show their neutral
+  // placeholder) unless the org is genuinely seeded.
+  const displayLogoPreview = (logoPreview === defaultLogo && !seededOrg) ? null : logoPreview;
+
   /** Everything useNpGoLive needs. A logo the admin never changed stays null so
    *  the org falls back to its default mark rather than storing the demo asset.
    *  `orgId` tells goLive whether a server org already exists to update
@@ -870,17 +946,22 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     // EIN
     ein, setEin, einError, verifying, einDemoMode, einNameEditable,
     orgName, setOrgName, orgAddress, org501c3,
+    // The seeded org being claimed (BGCA today), or null for an unknown org.
+    // Surfaces use it for the ONLY case a real logo may show pre-branding.
+    seededOrg,
     // email
     adminEmail, workEmail, setWorkEmail, emailError,
     codeSent, codeInput, setCodeInput, codeError, requiredDomain,
     sendingCode: adminAuth.sendingCode, verifyingCode: adminAuth.verifying,
     // server org
     orgId, orgCreateError, practiceMode,
+    // approval gate: 'pending_review' | 'approved' | null (no server org)
+    orgStatus, pendingReview,
     // stripe
     stripeConnecting, stripeConnected, stripeError, practiceConnectStripe,
     // branding
     story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
-    logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
+    logoPreview: displayLogoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     // joinCode is the EFFECTIVE code (falls back to the generated suggestion
     // when the admin hasn't typed one) - use it for preview text and links.
     // joinCodeCustom is the raw field the admin is actually editing - bind

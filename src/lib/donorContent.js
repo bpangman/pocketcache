@@ -63,6 +63,21 @@ export function taxYearSummary(pendingRoundUps, year = new Date().getFullYear())
   return { donated, months: rows.length, feeMonths: rows.length };
 }
 
+// ─── Signup review example ───────────────────────────────────────────────────
+
+/**
+ * The obviously-sample round-up figure the signup review step illustrates a
+ * month with, on BOTH surfaces. A brand-new account has accrued NOTHING, so
+ * the review step must never present a number as the donor's own current
+ * total - it walks through "here is how a month could look" instead, using
+ * this figure and labeling it an example. One constant so the app and the web
+ * cannot illustrate two different months.
+ */
+export const EXAMPLE_MONTH_ROUNDUPS = 12.40;
+
+/** The one-line honesty note under the example - same string on both surfaces. */
+export const EXAMPLE_DISCLAIMER = 'Sample numbers, shown as an example only. Your own round-ups start at $0.00 and only count purchases made from today onward.';
+
 // ─── Corporate match ─────────────────────────────────────────────────────────
 
 /**
