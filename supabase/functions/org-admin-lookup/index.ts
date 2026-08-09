@@ -31,18 +31,25 @@ Deno.serve(async (req: Request) => {
     }
     const domain = emailDomain(email);
 
-    // Exact admin_email match first, then anyone else already on that org's
-    // verified domain (a colleague sharing giving@yourorg.org, for example).
+    // Precedence, made explicit and deterministic:
+    //   1. Exact admin_email match wins over a domain match, always - the
+    //      email that actually signed the org up outranks a colleague who
+    //      merely shares its verified domain.
+    //   2. Within either query, `limit=1` with no ORDER BY is nondeterministic
+    //      in Postgres/PostgREST - which row you get back when more than one
+    //      matches (two orgs on the same admin_domain, e.g. two teams both on
+    //      bgca.org) can change from call to call. order=created_at.asc makes
+    //      it deterministic: the OLDEST matching org always wins the tie.
     const byEmail = await dbRest(
       "GET",
-      `orgs?admin_email=eq.${encodeURIComponent(email)}&select=id,name,join_code,brand_color,mission,apple_approval,stripe_connected&limit=1`,
+      `orgs?admin_email=eq.${encodeURIComponent(email)}&select=id,name,join_code,brand_color,mission,apple_approval,stripe_connected&order=created_at.asc&limit=1`,
     );
     let row = Array.isArray(byEmail.data) ? byEmail.data[0] : null;
 
     if (!row && domain) {
       const byDomain = await dbRest(
         "GET",
-        `orgs?admin_domain=eq.${encodeURIComponent(domain)}&select=id,name,join_code,brand_color,mission,apple_approval,stripe_connected&limit=1`,
+        `orgs?admin_domain=eq.${encodeURIComponent(domain)}&select=id,name,join_code,brand_color,mission,apple_approval,stripe_connected&order=created_at.asc&limit=1`,
       );
       row = Array.isArray(byDomain.data) ? byDomain.data[0] : null;
     }

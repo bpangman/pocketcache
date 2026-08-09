@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PocketCache for Nonprofits | $0, always, never a percentage</title>
+<meta name="description" content="List your nonprofit on PocketCache for free. No invoices, no contracts, never a percentage of a donation. Get a branded public page, an embeddable widget, a QR code, and app + web giving, all set up self-serve in minutes."/>
+<link rel="icon" type="image/png" href="/logo.png"/>
+<link rel="apple-touch-icon" href="/logo.png"/>
+<meta property="og:title" content="PocketCache for Nonprofits"/>
+<meta property="og:description" content="$0 to list your nonprofit, forever. No invoices, no contracts, never a percentage. Round-ups land straight on your own Stripe account."/>
+<meta property="og:image" content="/logo.png"/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://pocketcache.app/nonprofits/"/>
+<meta name="twitter:card" content="summary"/>
+<meta name="theme-color" content="#0B2A4A"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/assets/shared.css"/>
+<style>
+  .page-hero { padding: 148px 20px 70px; text-align: center; background: linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 55%, var(--navy-900) 100%); color: #fff; }
+  .page-hero h1 { font-size: clamp(30px, 4.6vw, 48px); font-weight: 800; letter-spacing: -1.4px; line-height: 1.12; }
+  .page-hero p { font-size: 17px; color: rgba(255,255,255,0.76); line-height: 1.7; margin: 16px auto 0; max-width: 620px; }
+  .page-hero .cta-actions { margin-top: 28px; }
+
+  /* ── Widget mock card ── */
+  .widget-mock { max-width: 340px; margin: 0 auto; border-radius: 20px; overflow: hidden; box-shadow: var(--card-shadow-lg); border: 1px solid var(--line); }
+  .widget-mock img { width: 100%; display: block; }
+
+  /* ── QR panel ── */
+  .qr-panel { display: flex; align-items: center; gap: 24px; background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--card-shadow); max-width: 380px; margin: 0 auto; }
+  .qr-panel img { width: 92px; height: 92px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--line); }
+  .qr-panel h4 { font-size: 15px; font-weight: 800; color: var(--navy); }
+  .qr-panel p { font-size: 12.5px; color: var(--slate); margin-top: 4px; line-height: 1.55; }
+
+  /* ── Three-up feature strip ── */
+  .three-up { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 48px; }
+  @media (max-width: 860px) { .three-up { grid-template-columns: 1fr; gap: 32px; } }
+  .three-up-item { text-align: center; }
+  .three-up-item h3 { font-size: 16px; font-weight: 800; color: var(--navy); margin: 18px 0 8px; }
+  .three-up-item p { font-size: 13.8px; color: var(--slate); line-height: 1.65; max-width: 280px; margin: 0 auto; }
+
+  /* ── Pricing ── */
+  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin-top: 44px; }
+  .pricing-card { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 32px 28px; box-shadow: var(--card-shadow); }
+  .pricing-card.highlight { border: 2px solid var(--teal-ui); background: linear-gradient(150deg, #F0FDFA 0%, #fff 60%); }
+  .pricing-who { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--slate-400); }
+  .pricing-amount { font-size: 40px; font-weight: 800; color: var(--navy); letter-spacing: -1px; margin-top: 8px; }
+  .pricing-amount.green { color: var(--green); }
+  .pricing-amount span { font-size: 14px; font-weight: 600; color: var(--slate); letter-spacing: 0; }
+  .pricing-desc { font-size: 14px; color: var(--slate); line-height: 1.7; margin-top: 12px; }
+  .pricing-never { font-size: 13px; font-weight: 700; color: var(--teal-700); margin-top: 14px; }
+  .pricing-details { list-style: none; margin: 36px auto 0; max-width: 720px; display: grid; gap: 14px; text-align: left; }
+  .pricing-details li { display: flex; gap: 12px; font-size: 14.5px; color: var(--slate); line-height: 1.65; }
+  .pricing-details .tick { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--teal-50); color: var(--teal-700); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<a href="#main" class="skip-link">Skip to content</a>
+
+<header class="site" id="site-header">
+  <div class="nav-inner">
+    <a href="/" class="nav-brand" aria-label="PocketCache home">
+      <span class="wordmark wordmark-dark">P<svg class="coin" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="50" fill="#E5A800"/><circle cx="50" cy="50" r="44" fill="#FBBF24"/><polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/></svg>cket<span class="wordmark-cache">Cache</span></span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="/how-it-works/">How it works</a>
+      <a href="/nonprofits/" class="active">For nonprofits</a>
+      <a href="/donors/">For donors</a>
+    </nav>
+    <div class="nav-actions">
+      <a href="https://pocketcache.app/demo/?app=1" class="nav-signin">Sign in</a>
+      <a href="/start/" class="btn btn-navy btn-sm">Create account</a>
+    </div>
+    <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="mobile-panel" aria-label="Toggle menu"><span></span></button>
+  </div>
+  <div class="mobile-panel" id="mobile-panel">
+    <div class="mobile-panel-inner">
+      <a href="/how-it-works/">How it works</a>
+      <a href="/nonprofits/" class="active">For nonprofits</a>
+      <a href="/donors/">For donors</a>
+      <div class="mp-divider"></div>
+      <a href="https://pocketcache.app/demo/?app=1">Sign in</a>
+      <a href="/start/" class="btn btn-navy btn-block mp-cta">Create account</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ── PAGE HERO ── -->
+<section class="page-hero">
+  <p class="badge badge-dark reveal" style="justify-content:center;">For nonprofits</p>
+  <h1 class="reveal">A round-up giving program, for $0. Not a limited trial, $0.</h1>
+  <p class="reveal">No invoices. No contracts. No percentage of a donation, ever. List your nonprofit self-serve in about ten minutes, and every dollar donors round up lands directly on your own Stripe account.</p>
+  <div class="cta-actions center reveal">
+    <a href="/start/" class="btn btn-gold btn-lg">Create an account &rarr;</a>
+    <a href="https://pocketcache.app/demo/?npsignup=1" class="btn btn-outline-dark btn-lg">Start your program &rarr;</a>
+  </div>
+</section>
+
+<!-- ── BRANDED PAGE (browser frame) ── -->
+<section>
+  <div class="container split">
+    <div class="reveal">
+      <div class="browser-frame">
+        <div class="browser-bar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="url">pocketcache.app/yourcode</span>
+        </div>
+        <img src="/assets/app-microsite.png" alt="Example of a nonprofit's branded public giving page with a hero section, story, and a Start giving button" width="1400" height="1182"/>
+      </div>
+    </div>
+    <div class="reveal">
+      <p class="badge">Your own public page</p>
+      <h2 class="section-title">Donors land on a page that's clearly yours.</h2>
+      <p class="section-sub">Your story, your photos, your impact numbers, and a "Start giving" button, all at a link with your nonprofit's name on it. Donors never see a generic app screen first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── WIDGET + QR (three-up, surface) ── -->
+<section class="surface">
+  <div class="container center">
+    <p class="badge reveal">Meet donors where they already are</p>
+    <h2 class="section-title reveal">A widget for your site, and a code for everywhere else.</h2>
+    <p class="section-sub reveal">Drop one line into your existing website, or hand out a QR code at events, on flyers, or in a newsletter. Every path leads back to your branded page.</p>
+    <div class="three-up">
+      <div class="three-up-item reveal">
+        <div class="widget-mock">
+          <img src="/assets/app-widget.png" alt="Embeddable Round up for Your Nonprofit widget card, powered by PocketCache" width="700" height="395"/>
+        </div>
+        <h3>Embeddable widget</h3>
+        <p>One line of code adds a "Round up for us" card anywhere on your existing website.</p>
+      </div>
+      <div class="three-up-item reveal">
+        <div class="qr-panel">
+          <img src="/assets/app-qr.svg" alt="Example QR code linking to a nonprofit's PocketCache giving page"/>
+          <div>
+            <h4>Shareable QR code</h4>
+            <p>Every nonprofit gets its own scannable code for flyers, tables, and events.</p>
+          </div>
+        </div>
+        <h3 style="margin-top:18px;">Print it anywhere</h3>
+        <p>Table tents, newsletters, receipts, wherever your donors already are.</p>
+      </div>
+      <div class="three-up-item reveal">
+        <div class="phone-frame" style="max-width:220px;">
+          <div class="notch" aria-hidden="true"></div>
+          <div class="phone-screen">
+            <img src="/assets/app-dashboard.png" alt="Donor app home dashboard showing balance, streak, and upcoming monthly charge" width="285" height="620"/>
+          </div>
+        </div>
+        <h3>App and web giving</h3>
+        <p>Donors never have to download anything; they can give straight from a browser, or use the app if they'd like.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRICING ── -->
+<section id="pricing">
+  <div class="container center">
+    <p class="badge reveal">Simple, flat pricing</p>
+    <h2 class="section-title reveal">One flat fee. Never a percentage.</h2>
+    <p class="section-sub reveal">Your nonprofit is never invoiced. Donors pay one small, itemized app fee, and only in the months their card actually rounds up. That's the entire business model.</p>
+    <div class="pricing-grid">
+      <div class="pricing-card highlight reveal">
+        <p class="pricing-who">Your nonprofit</p>
+        <p class="pricing-amount green">$0<span> forever</span></p>
+        <p class="pricing-desc">No invoices exist for your nonprofit. No contracts, no setup cost, no monthly bill, and never a percentage of a donation.</p>
+        <p class="pricing-never">PocketCache never takes a cut of what your donors give.</p>
+      </div>
+      <div class="pricing-card reveal">
+        <p class="pricing-who">Your donors</p>
+        <p class="pricing-amount">$1<span> a month, flat</span></p>
+        <p class="pricing-desc">Charged only for months a donor is actually rounding up, and itemized on their charge. It's PocketCache's only revenue, and it isn't a subscription.</p>
+        <p class="pricing-never">Donors can also cover card processing, so you net 100%.</p>
+      </div>
+    </div>
+    <ul class="pricing-details">
+      <li><span class="tick" aria-hidden="true">&#10003;</span>A pre-checked option (opt out, not opt in) lets donors cover your card-processing cost, so your nonprofit nets 100% of round-ups when they leave it on.</li>
+      <li><span class="tick" aria-hidden="true">&#10003;</span>Charges only run once round-ups reach a $5 monthly minimum. Balances under it roll forward, and the $1 app fee rolls forward with them.</li>
+      <li><span class="tick" aria-hidden="true">&#10003;</span>A settle-up runs at least every 3 months, whether or not the minimum was reached.</li>
+      <li><span class="tick" aria-hidden="true">&#10003;</span>A donor can skip a month: nothing at all is collected on that charge date. The $1 app fee for a skipped month isn't waived, it rolls forward to the donor's next charge.</li>
+      <li><span class="tick" aria-hidden="true">&#10003;</span>Round-ups are tax-deductible and your nonprofit issues the receipt, since you're the merchant of record.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="cta-band center">
+  <div class="container">
+    <p class="badge badge-dark reveal">Set up in about ten minutes</p>
+    <h2 class="section-title reveal">Your program, your brand, $0 to start.</h2>
+    <div class="cta-actions center">
+      <a href="/start/" class="btn btn-gold btn-lg">Create an account &rarr;</a>
+      <a href="https://pocketcache.app/demo/?npsignup=1" class="btn btn-outline-dark btn-lg">Start your program &rarr;</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <span class="wordmark wordmark-light" aria-hidden="true">P<svg class="coin" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="50" fill="#E5A800"/><circle cx="50" cy="50" r="44" fill="#FBBF24"/><polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/></svg>cket<span class="wordmark-cache">Cache</span></span>
+      <p class="footer-tag">Round-up giving software for nonprofits. Flat pricing. No percentages. Just giving.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <h4>Donors</h4>
+        <a href="/donors/">Start giving</a>
+        <a href="https://pocketcache.app/demo/?app=1">Donor sign in</a>
+        <a href="/how-it-works/">How it works</a>
+      </div>
+      <div class="footer-col">
+        <h4>Nonprofits</h4>
+        <a href="/nonprofits/">List your nonprofit</a>
+        <a href="https://pocketcache.app/demo/?npsignup=1">Start your program</a>
+        <a href="/nonprofits/#pricing">Pricing</a>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/legal/privacy/">Privacy Policy</a>
+        <a href="/legal/terms/">Terms of Service</a>
+        <a href="/legal/nonprofit-license/">Nonprofit License</a>
+        <a href="mailto:info@pocketcache.app">Contact us</a>
+      </div>
+    </div>
+  </div>
+  <p class="footer-copy">
+    &copy; 2026 PocketCache, LLC. All rights reserved. &middot; Not available in California at launch. &middot; PocketCache is a software provider, not a charity, and never holds donor funds.
+  </p>
+</footer>
+
+<script src="/assets/shared.js"></script>
+</body>
+</html>

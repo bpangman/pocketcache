@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ShieldCheck, Mail, Landmark, Search } from 'lucide-react';
+import { CheckCircle, ShieldCheck, Mail, Landmark, Search, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../../store/AppContext';
 import CoinMark from '../../components/CoinMark';
@@ -253,7 +253,13 @@ function DonorPagePreview({ orgName, joinCode, story, color, logoPreview, monthl
             <p style={{ margin: 0, color: 'rgba(255,255,255,0.8)', fontSize: 11.5 }}>Round-Up giving  -  powered by PocketCache</p>
           </div>
         </div>
-        <p style={{ margin: '16px 0 0', color: 'rgba(255,255,255,0.92)', fontSize: 12.5, lineHeight: 1.55 }}>
+        {/* Clamped to 3 lines: a mission near the 600-char field limit would
+            otherwise push the join-code panel below far down the preview,
+            out of proportion with the real page it stands in for. */}
+        <p style={{
+          margin: '16px 0 0', color: 'rgba(255,255,255,0.92)', fontSize: 12.5, lineHeight: 1.55,
+          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
           {story || 'Your mission appears here, in your words, on every page a donor sees.'}
         </p>
       </div>
@@ -289,6 +295,22 @@ export default function NpWebSignup({ onExit }) {
   const [copyFailed, setCopyFailed] = useState(false);
   const [teamIdCopied, setTeamIdCopied] = useState(false);
   const [teamIdCopyFailed, setTeamIdCopyFailed] = useState(false);
+  // "Code sent" feedback for the Resend code button below - auto-clears.
+  // Loading (sendingCode) and failure incl. rate-limit (emailError) already
+  // come from useNpSignup / the shared useAdminAuth hook underneath it.
+  const [justResent, setJustResent] = useState(false);
+  // Focus ring for the license checkbox below - the real <input> is visually
+  // hidden (a styled span stands in for it), so its own :focus-visible never
+  // paints; this tracks it in React state instead so keyboard users still see
+  // where focus is.
+  const [licenseCheckboxFocused, setLicenseCheckboxFocused] = useState(false);
+  async function handleResend() {
+    const ok = await w.sendCode();
+    if (ok) {
+      setJustResent(true);
+      setTimeout(() => setJustResent(false), 3000);
+    }
+  }
 
   const {
     step, ein, setEin, einError, verifying, einDemoMode, einNameEditable,
@@ -301,7 +323,7 @@ export default function NpWebSignup({ onExit }) {
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeCustom, joinCodeError, accepted, setAccepted, showLicenseHint, showBrandingHint,
     candidSeal, appleApproval, openBenevityPortal, confirmBenevityRegistered, deferBenevity,
-    config,
+    config, clearDraft,
   } = w;
 
   const showBack = step !== 'live' && (step !== 'ein' || Boolean(onExit));
@@ -472,16 +494,23 @@ export default function NpWebSignup({ onExit }) {
                         ) : (
                           <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: INK.primary, lineHeight: 1.3 }}>{orgName}</p>
                         )}
-                        <p style={{ margin: '3px 0 0', fontSize: 13, color: INK.secondary }}>{orgAddress}</p>
-                        <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#15803d' }}>
-                          <CheckCircle size={15} color="#22c55e" />
-                          {org501c3 ? '501(c)(3) Verified' : 'Organization found'} · EIN {ein}
-                        </p>
+                        {orgAddress && <p style={{ margin: '3px 0 0', fontSize: 13, color: INK.secondary }}>{orgAddress}</p>}
+                        {einDemoMode ? (
+                          <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#b45309' }}>
+                            <Info size={15} color="#f59e0b" />
+                            Demo preview  -  IRS verification runs at launch · EIN {ein}
+                          </p>
+                        ) : (
+                          <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#15803d' }}>
+                            <CheckCircle size={15} color="#22c55e" />
+                            {org501c3 ? '501(c)(3) Verified' : 'Organization found'} · EIN {ein}
+                          </p>
+                        )}
                         {einDemoMode && (
                           <p style={{ margin: '10px 0 0', fontSize: 12, fontStyle: 'italic', color: '#b45309' }}>
                             {einNameEditable
-                              ? "Demo data  -  we couldn't match this EIN, so enter your organization's name."
-                              : 'Demo data  -  live verification uses IRS public records.'}
+                              ? "We couldn't match this EIN  -  enter your organization's name."
+                              : 'This EIN matches a sample organization used for the demo.'}
                           </p>
                         )}
                       </div>
@@ -543,9 +572,12 @@ export default function NpWebSignup({ onExit }) {
                       </div>
                       {codeError && <Hint tone="error">{codeError}</Hint>}
                       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                        <Button tone="quiet" onClick={w.sendCode} style={{ padding: '8px 14px', fontSize: 13 }}>Resend code</Button>
+                        <Button tone="quiet" onClick={handleResend} disabled={sendingCode} style={{ padding: '8px 14px', fontSize: 13 }}>
+                          {sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+                        </Button>
                         <Button tone="quiet" onClick={w.changeEmail} style={{ padding: '8px 14px', fontSize: 13 }}>Change email</Button>
                       </div>
+                      {emailError && <Hint tone="error">{emailError}</Hint>}
                     </form>
                   )}
                 </Pane>
@@ -612,7 +644,7 @@ export default function NpWebSignup({ onExit }) {
                     statement, not PocketCache, and you issue their tax receipts.
                   </p>
                   <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
-                    Donor charges run on the <strong style={{ color: INK.primary }}>{nextChargeLabel()}</strong> of each month,
+                    Donor charges run on <strong style={{ color: INK.primary }}>{nextChargeLabel()}</strong> each month,
                     after a 10-day review window in which donors can adjust or skip.
                   </p>
                   <p style={{ margin: '12px 0 0', fontSize: 12, fontStyle: 'italic', color: '#b45309' }}>
@@ -652,12 +684,19 @@ export default function NpWebSignup({ onExit }) {
 
                       <div>
                         <Label>Admin contact email</Label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
-                          <CheckCircle size={15} color="#22c55e" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: 13.5, color: INK.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminEmail}</span>
-                          <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: '#15803d', flexShrink: 0 }}>Verified</span>
-                        </div>
-                        <Hint>Verified in the previous step  -  this is your admin sign-in.</Hint>
+                        {adminEmail ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
+                            <CheckCircle size={15} color="#22c55e" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: 13.5, color: INK.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminEmail}</span>
+                            <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: '#15803d', flexShrink: 0 }}>Verified</span>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
+                            <Info size={15} color="#f59e0b" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: 13.5, color: INK.muted }}>Not available</span>
+                          </div>
+                        )}
+                        <Hint>{adminEmail ? 'Verified in the previous step  -  this is your admin sign-in.' : "We couldn't load your verified email  -  go back a step or refresh to try again."}</Hint>
                       </div>
 
                       <div>
@@ -815,14 +854,20 @@ export default function NpWebSignup({ onExit }) {
 
                 <Side label="Accept and go live" style={{ position: 'sticky', top: 24 }}>
                   <form onSubmit={w.acceptLicense}>
-                    <label
-                      onClick={e => { if (e.target.tagName !== 'A') setAccepted(!accepted); }}
-                      style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}
-                    >
-                      <span style={{
+                    <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={accepted}
+                        onChange={e => setAccepted(e.target.checked)}
+                        onFocus={() => setLicenseCheckboxFocused(true)}
+                        onBlur={() => setLicenseCheckboxFocused(false)}
+                        style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}
+                      />
+                      <span aria-hidden="true" style={{
                         width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1,
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         border: `2px solid ${accepted ? '#059669' : '#d1d5db'}`, background: accepted ? '#059669' : '#fff',
+                        boxShadow: licenseCheckboxFocused ? '0 0 0 3px rgba(13,148,136,0.35)' : 'none',
                       }}>
                         {accepted && <CheckCircle size={12} color="#fff" />}
                       </span>
@@ -917,7 +962,7 @@ export default function NpWebSignup({ onExit }) {
                     <LinkButton href={launchKitMailto(orgName, joinCode)}>
                       📧 Send the launch kit
                     </LinkButton>
-                    <Button tone="teal" onClick={() => goLive(config)}>Open your dashboard →</Button>
+                    <Button tone="teal" onClick={async () => { await goLive(config); clearDraft(); }}>Open your dashboard →</Button>
                   </div>
                 </div>
 

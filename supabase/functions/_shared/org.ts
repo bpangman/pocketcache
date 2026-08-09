@@ -37,7 +37,17 @@ function candidateFromName(name: string): string {
   const words = (name || "").split(/[\s&,]+/).filter((w) => w.length > 2);
   let code = words.map((w) => w[0].toUpperCase()).join("").slice(0, 6);
   if (!code) code = (name || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6);
-  return code || "ORG";
+  if (!code) code = "ORG";
+  // JOIN_CODE_RE (isValidJoinCodeShape) requires 2-8 characters - the same
+  // floor a manually-entered code is validated against. A name that reduces
+  // to a single alnum character after the rules above (e.g. "A", or "A!!!"
+  // once symbols are stripped) used to sail straight through as a 1-char
+  // code, since nothing here re-checked it against that rule. Pad with a
+  // random alphanumeric character until it clears the floor.
+  while (code.length < 2) {
+    code += Math.random().toString(36).slice(2, 3).toUpperCase();
+  }
+  return code;
 }
 
 async function joinCodeTaken(code: string, excludeId?: string): Promise<boolean> {

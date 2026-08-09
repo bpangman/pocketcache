@@ -42,6 +42,7 @@ import { NONPROFITS } from '../data/nonprofits';
 import { pcBeacon } from './beacon.js';
 import { useAdminAuth } from './adminAuth';
 import { orgSignup, orgConnectStripe, orgConnectStatus, fetchOrgPublicById, currentSessionEmail } from './npApi';
+import { useStepHistory } from './stepHistory';
 
 // ─── Apple app-listing (iPhone app only - never the web) ──────────────────────
 //
@@ -352,9 +353,57 @@ function stripeReturnParams() {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('npstripe');
     const orgId = params.get('org');
-    if ((mode === 'return' || mode === 'refresh') && orgId) return { mode, orgId };
+    if ((mode === 'return' || mode === 'refresh') && orgId) {
+      // Scrub the two params right here, synchronously, so a later reload of
+      // the same tab (or the admin just hitting refresh) finds a clean URL
+      // and does not replay this resume. The rest of the query string (and
+      // any hash) is preserved untouched.
+      params.delete('npstripe');
+      params.delete('org');
+      const rest = params.toString();
+      const cleanUrl = window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash;
+      window.history.replaceState(window.history.state, '', cleanUrl);
+      return { mode, orgId };
+    }
   } catch { /* no window */ }
   return null;
+}
+
+// ─── Draft persistence (survives the mobile/desktop breakpoint remount) ──────
+//
+// App.jsx's isMobile check (MOBILE_BP = 600) is a full component swap, not a
+// CSS media query: crossing it mid-signup unmounts whichever surface is
+// currently rendering this hook (Onboarding.jsx's NonprofitSignupFlow on the
+// phone-style shell, NpWebSignup.jsx on the web-style one) and mounts the
+// other in its place. Without this, resizing the window across 600px reset
+// the wizard straight back to step 'ein' and threw away everything the admin
+// had already typed. sessionStorage (not localStorage) is deliberate: it
+// survives this in-tab remount but clears itself when the tab closes, so
+// there is no separate staleness/expiry check to build - "same session only"
+// falls out of the storage choice itself.
+//
+// Cleared on successful go-live (see the two useNpGoLive() callers, which
+// call the `clearDraft` this hook returns) and on an explicit exit from the
+// wizard's first step (back(), below).
+const NP_DRAFT_KEY = 'pc_npsignup_draft';
+
+function loadNpDraft() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(NP_DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveNpDraft(draft) {
+  if (typeof window === 'undefined') return;
+  try { window.sessionStorage.setItem(NP_DRAFT_KEY, JSON.stringify(draft)); }
+  catch { /* storage full/unavailable - the draft just won't survive a remount */ }
+}
+
+function clearNpDraft() {
+  if (typeof window === 'undefined') return;
+  try { window.sessionStorage.removeItem(NP_DRAFT_KEY); } catch { /* ignore */ }
 }
 
 export function useNpSignup({ onExit, defaultLogo = null } = {}) {
@@ -362,27 +411,36 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // uses for its own one-time URL reads) - stable across re-renders even
   // though stripeReturnParams() itself is not memoized.
   const [resume] = useState(stripeReturnParams);
-  const [step, setStep] = useState(() => (resume ? 'stripe' : 'ein'));
+  // A draft left by a prior mount of THIS wizard in the same tab (see the
+  // persistence effect and the NP_DRAFT_KEY comment below) - ignored during a
+  // real Stripe hosted-onboarding return, which reconstructs its own state
+  // from the server (the resume effect further down), not from a local draft.
+  const [draft] = useState(() => (resume ? null : loadNpDraft()));
+  const [step, setStep] = useState(() => (resume ? 'stripe' : (draft?.step ?? 'ein')));
 
   // EIN / org identity
-  const [ein, setEinRaw] = useState('');
+  const [ein, setEinRaw] = useState(() => draft?.ein ?? '');
   const [einError, setEinError] = useState(null);
   const [verifying, setVerifying] = useState(false);
-  const [einDemoMode, setEinDemoMode] = useState(false);
+  const [einDemoMode, setEinDemoMode] = useState(() => draft?.einDemoMode ?? false);
   // True only for a demo-fallback whose EIN matches no seeded org - the
   // confirm-org step makes the name field editable in that case, instead of
   // silently branding an unknown org as BGCA.
-  const [einNameEditable, setEinNameEditable] = useState(false);
-  const [orgName, setOrgName] = useState('');
-  const [orgAddress, setOrgAddress] = useState('');
-  const [org501c3, setOrg501c3] = useState(true);
+  const [einNameEditable, setEinNameEditable] = useState(() => draft?.einNameEditable ?? false);
+  const [orgName, setOrgName] = useState(() => draft?.orgName ?? '');
+  const [orgAddress, setOrgAddress] = useState(() => draft?.orgAddress ?? '');
+  const [org501c3, setOrg501c3] = useState(() => draft?.org501c3 ?? true);
 
   // Work-email verification: REAL Supabase OTP (see src/lib/adminAuth.js).
   const adminAuth = useAdminAuth();
-  const [adminEmail, setAdminEmail] = useState('');
-  const [workEmail, setWorkEmailRaw] = useState('');
+  const [adminEmail, setAdminEmail] = useState(() => draft?.adminEmail ?? '');
+  const [workEmail, setWorkEmailRaw] = useState(() => draft?.workEmail ?? '');
   const [emailError, setEmailError] = useState(null);
-  const [codeSent, setCodeSent] = useState(false);
+  // codeSent restores (it only picks which half of the verify-email step
+  // shows); the code itself does not - a 6-digit OTP is single-use and
+  // short-lived, so a restored draft always lands back on a clean "enter the
+  // code we just sent" form rather than a stale, likely-expired one.
+  const [codeSent, setCodeSent] = useState(() => draft?.codeSent ?? false);
   const [codeInput, setCodeInputRaw] = useState('');
   const [codeError, setCodeError] = useState(null);
 
@@ -392,36 +450,41 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // created yet" or "the server was unreachable", which is what practiceMode
   // distinguishes: a clearly-labeled local-only fallback so the wizard is
   // never dead-ended by a network blip.
-  const [orgId, setOrgId] = useState(null);
+  const [orgId, setOrgId] = useState(() => draft?.orgId ?? null);
   const [orgCreateError, setOrgCreateError] = useState(null);
-  const [practiceMode, setPracticeMode] = useState(false);
+  const [practiceMode, setPracticeMode] = useState(() => draft?.practiceMode ?? false);
 
   // Stripe: REAL hosted Connect onboarding (test mode) via org-connect-stripe.
   const [stripeConnecting, setStripeConnecting] = useState(false);
-  const [stripeConnected, setStripeConnected] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(() => draft?.stripeConnected ?? false);
   const [stripeError, setStripeError] = useState(null);
 
   // Apple app-listing: simulated Candid Seal lookup + the Benevity choice the
   // admin makes on the app-listing step (only reachable when no seal was found).
-  const [candidSeal, setCandidSeal] = useState('checking'); // 'checking' | 'found' | 'none'
-  const [benevityChoice, setBenevityChoice] = useState(null); // null | 'benevity_submitted' | 'benevity_needed'
+  const [candidSeal, setCandidSeal] = useState(() => draft?.candidSeal ?? 'checking'); // 'checking' | 'found' | 'none'
+  const [benevityChoice, setBenevityChoice] = useState(() => draft?.benevityChoice ?? null); // null | 'benevity_submitted' | 'benevity_needed'
 
   // Branding
-  const [story, setStory] = useState('');
-  const [color, setColor] = useState('#003865');
-  const [monthlyMinimum, setMonthlyMinimum] = useState(5);
+  const [story, setStory] = useState(() => draft?.story ?? '');
+  const [color, setColor] = useState(() => draft?.color ?? '#003865');
+  const [monthlyMinimum, setMonthlyMinimum] = useState(() => draft?.monthlyMinimum ?? 5);
+  // Not restored from the draft: a File-derived blob: URL only resolves for
+  // this tab's current document, and while that still covers the in-session
+  // remount this draft exists for, a logo the admin never changed already
+  // falls back to defaultLogo with nothing lost - not worth persisting a
+  // value that would degrade the moment a real reload ever intervenes.
   const [logoPreview, setLogoPreview] = useState(defaultLogo);
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const [logoUrlError, setLogoUrlError] = useState(null);
 
   // Join code: auto-suggested from the org name, but the org can set their own
   // (it becomes their link, QR, and widget identity). Editable later in Grow.
-  const [joinCodeCustom, setJoinCodeCustom] = useState('');
+  const [joinCodeCustom, setJoinCodeCustom] = useState(() => draft?.joinCodeCustom ?? '');
   const [joinCodeError, setJoinCodeError] = useState(null);
   const joinCode = joinCodeCustom || generateJoinCode(orgName);
 
   // License
-  const [accepted, setAccepted] = useState(false);
+  const [accepted, setAccepted] = useState(() => draft?.accepted ?? false);
   const [showLicenseHint, setShowLicenseHint] = useState(false);
   // Same idea as showLicenseHint: submitBranding() used to just return false, so
   // pressing Continue with a bad join code did nothing visible and read as a
@@ -429,6 +492,35 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   const [showBrandingHint, setShowBrandingHint] = useState(false);
 
   const requiredDomain = requiredDomainFor(orgName);
+
+  // Persist a draft of wizard progress to sessionStorage on every meaningful
+  // change, so the mobile/desktop breakpoint remount (see the NP_DRAFT_KEY
+  // comment above) can restore it on the other surface's mount.
+  useEffect(() => {
+    saveNpDraft({
+      step, ein, einDemoMode, einNameEditable, orgName, orgAddress, org501c3,
+      adminEmail, workEmail, codeSent, orgId, practiceMode, stripeConnected,
+      candidSeal, benevityChoice, story, color, monthlyMinimum,
+      joinCodeCustom, accepted,
+    });
+  }, [
+    step, ein, einDemoMode, einNameEditable, orgName, orgAddress, org501c3,
+    adminEmail, workEmail, codeSent, orgId, practiceMode, stripeConnected,
+    candidSeal, benevityChoice, story, color, monthlyMinimum,
+    joinCodeCustom, accepted,
+  ]);
+
+  // A draft saved mid candidSeal-check (the ~1.2s window confirmOrg's timeout
+  // covers, below) restores as 'checking' with no timer left to resolve it -
+  // the timer lived on the unmounted instance. Repair it once, synchronously,
+  // with the same inputs confirmOrg's own timeout would have used, instead of
+  // leaving the license step waiting forever for a check that already ran.
+  useEffect(() => {
+    if (draft && candidSeal === 'checking' && step !== 'ein' && step !== 'confirm-org') {
+      setCandidSeal(determineCandidSeal({ einDemoMode, einDigits: ein.replace(/\D/g, ''), orgName }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Resume after the Stripe hosted-onboarding redirect. The Supabase auth
   // session survives the full-page round trip (it lives in localStorage), so
@@ -456,6 +548,12 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       if (org.join_code) setJoinCodeCustom(org.join_code);
       setStripeConnected(!!org.stripe_connected);
       setEinDemoMode(false);
+      // By the time an admin reaches Stripe (and comes back from it), the org
+      // name was already confirmed - either a real IRS match or, for an
+      // unknown EIN, whatever the admin typed into the editable field on
+      // confirm-org. Either way it is a settled fact now, not something this
+      // resumed session should let the admin edit again.
+      setEinNameEditable(false);
       if (email) setAdminEmail(email);
       if (resume.mode === 'return') {
         const status = await orgConnectStatus(org.id);
@@ -529,12 +627,16 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       // BGCA's name - any other EIN is genuinely unknown, so the name must
       // NOT default to BGCA's. It gets a neutral placeholder instead, and
       // the confirm-org step (both surfaces) makes it editable via
-      // einNameEditable so the admin sets their real org's name.
+      // einNameEditable so the admin sets their real org's name. Same logic
+      // for the address: an unknown EIN has nothing to do with BGCA's
+      // Atlanta office, so it gets no address at all rather than borrowing
+      // BGCA's - the confirm-org step (both surfaces) already treats a blank
+      // orgAddress fine, since it's just a subtitle under the org name.
       setVerifying(false);
       const seeded = einIsSeeded(digits);
       setOrgName(seeded ? EIN_DEMO_FALLBACK.name : EIN_UNKNOWN_NAME);
-      setOrgAddress(EIN_DEMO_FALLBACK.address);
-      setOrg501c3(EIN_DEMO_FALLBACK.is501c3);
+      setOrgAddress(seeded ? EIN_DEMO_FALLBACK.address : '');
+      setOrg501c3(seeded ? EIN_DEMO_FALLBACK.is501c3 : false);
       setEinDemoMode(true);
       setEinNameEditable(!seeded);
       setStep('confirm-org');
@@ -561,11 +663,12 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     e?.preventDefault?.();
     const email = workEmail.trim().toLowerCase();
     const result = await adminAuth.sendCode(email);
-    if (!result.ok) { setEmailError(result.error); return; }
+    if (!result.ok) { setEmailError(result.error); return false; }
     setEmailError(null);
     setCodeInputRaw('');
     setCodeError(null);
     setCodeSent(true);
+    return true;
   }
 
   function changeEmail() {
@@ -712,9 +815,23 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     // never shown and dead-end the admin on a re-click of "Back".
     if (step === 'live' && candidSeal === 'found') { setStep('license'); return; }
     const prev = NP_SIGNUP_PREV[step];
-    if (prev) setStep(prev);
-    else onExit?.();
+    if (prev) { setStep(prev); return; }
+    // Leaving the wizard entirely from its first step - an explicit exit, not
+    // a breakpoint-triggered remount, so the draft that exists only to survive
+    // THAT should not survive this.
+    clearNpDraft();
+    onExit?.();
   }
+
+  // Hardware/browser back steps through the SAME sequence the wizard's own
+  // "← Back" button already does (back(), above) - one wiring point covers
+  // both surfaces, since NonprofitSignupFlow (Onboarding.jsx, app) and
+  // NpWebSignup.jsx (web) both render off this one hook and both point their
+  // own back button at this same `back` function. On the first step ('ein'),
+  // back() itself already calls onExit() - the surface's own exit target -
+  // so hardware back on the first step "just works" without any special
+  // case here.
+  useStepHistory(step, back);
 
   // The Apple app-listing status that will be written to the org record at
   // go-live. Seal match -> approved, nothing else to decide. No seal -> what
@@ -783,5 +900,9 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     changeJoinCode, setLogoFile, applyLogoUrl, submitBranding,
     acceptLicense, back,
     config,
+    // Call after a successful useNpGoLive() - the wizard is done, so the
+    // in-tab draft that exists only to survive a breakpoint remount mid-signup
+    // has nothing left to protect.
+    clearDraft: clearNpDraft,
   };
 }

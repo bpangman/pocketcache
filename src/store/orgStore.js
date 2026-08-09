@@ -4,6 +4,7 @@
 // BGCA overrides (from NpSettings on the BGCA demo session) are stored under 'pc_bgca_overrides'.
 
 import { NONPROFITS } from '../data/nonprofits';
+import { fetchOrgPublicByCode } from '../lib/npApi';
 
 const CUSTOM_ORGS_KEY = 'pc_custom_orgs';
 const BGCA_OVERRIDES_KEY = 'pc_bgca_overrides';
@@ -292,4 +293,26 @@ export function findOrgByCode(code) {
 
   // 2. Check custom orgs
   return getCustomOrg(lower) ?? null;
+}
+
+// ── Async, server-first org lookup ────────────────────────────────────────────
+// findOrgByCode above is synchronous and LOCAL ONLY (BGCA seed + this device's
+// localStorage), which is fine for re-resolving an org this device already
+// knows about, but fails a code from a device that never created/joined that
+// org: real custom orgs live server-side (table `orgs`, view `orgs_public`),
+// not just in the browser that ran signup. Use this instead for any fresh code
+// entry (join gate, ?org= link, QR scan, vanity URL) - it tries the server
+// first via fetchOrgPublicByCode, caches a hit into localStorage (so this
+// device now resolves it instantly and offline next time, same as any other
+// custom org), and only falls back to the local-only lookup - the BGCA seed,
+// or a previously cached org - if the server is unreachable or has no match.
+export async function resolveOrgByCode(code) {
+  if (!code) return null;
+  try {
+    const serverOrg = await fetchOrgPublicByCode(code);
+    if (serverOrg) return cacheServerOrgLocally(serverOrg);
+  } catch {
+    // network failure - fall through to the local-only lookup below
+  }
+  return findOrgByCode(code);
 }

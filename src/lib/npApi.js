@@ -27,9 +27,31 @@ async function authHeaders() {
 
 async function callFn(name, body) {
   const headers = await authHeaders();
-  const res = await fetch(`${FUNCTIONS_BASE}/${name}`, { method: 'POST', headers, body: JSON.stringify(body ?? {}) });
-  const data = await res.json().catch(() => null);
-  return { ok: res.ok, status: res.status, data };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(`${FUNCTIONS_BASE}/${name}`, {
+      method: 'POST', headers, body: JSON.stringify(body ?? {}), signal: controller.signal,
+    });
+    const data = await res.json().catch(() => null);
+    return { ok: res.ok, status: res.status, data };
+  } catch {
+    // fetch THROWS (instead of resolving to a Response) on a real network
+    // failure - offline, DNS, connection reset - and on our own 15s abort
+    // above; without this catch either one hung the caller forever instead
+    // of ever reaching the practice-mode fallback that already handles HTTP
+    // errors. Normalize to the EXACT same { ok, status, data } shape the
+    // try block returns for an HTTP error (e.g. a 500 with a non-JSON body
+    // resolves to { ok: false, status: 500, data: null }) so every caller -
+    // ensureServerOrg's practiceMode fallback, connectStripe's stripeError,
+    // orgConnectStatus polling - keeps working unmodified: it only ever
+    // reads res.ok / res.status / res.data and never needs to tell a network
+    // failure apart from an HTTP error. status: 0 is the conventional "no
+    // HTTP response was ever received" value, distinct from any real status.
+    return { ok: false, status: 0, data: null };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /** Requires a signed-in admin session (see adminAuth.verifyCode). Idempotent

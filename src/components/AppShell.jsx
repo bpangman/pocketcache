@@ -1,7 +1,7 @@
 import { useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronRight, Settings as SettingsIcon, HelpCircle, LogOut, ArrowLeftRight } from 'lucide-react';
+import { ChevronRight, Settings as SettingsIcon, HelpCircle, LogOut, ArrowLeftRight, Landmark } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
@@ -111,7 +111,16 @@ export default function AppShell() {
               ? { background: 'linear-gradient(135deg,#0B2A4A,#003865)', color: '#fff' }
               : { background: '#f9fafb', color: '#374151' }}
           >
-            <span className="text-lg">🏛️</span>
+            {/* Same fixed-size icon wrapper as the menu rows below (icon
+                component at size={18} inside a span), so this row's icon
+                lines up with theirs pixel-for-pixel instead of sitting a
+                different size/baseline as the old emoji did. Color follows
+                the row's own text color (white on the admin gradient, gray
+                on the default row) rather than the menu rows' fixed
+                text-gray-500, since this row alone switches background. */}
+            <span style={{ color: adminRole ? 'rgba(255,255,255,0.7)' : '#6b7280' }}>
+              <Landmark size={18} />
+            </span>
             {/* One line on a 320pt-class phone (iPhone SE), which the old
                 "Run a nonprofit? Create your page" was not: at 32 characters it
                 wrapped onto a second line inside this row's ~172px of text

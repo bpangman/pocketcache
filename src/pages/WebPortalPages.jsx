@@ -3,8 +3,8 @@ import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { loadKey, saveKey } from '../store/identityStore';
-import { findOrgByCode, getCustomOrg } from '../store/orgStore';
-import { DEMO_USER, monthsGiving } from '../data/derived';
+import { resolveOrgByCode, getCustomOrg } from '../store/orgStore';
+import { DEMO_USER, monthsGiving, FIRST_MONTH_LABEL } from '../data/derived';
 import { MONTHLY_DATA } from '../data/transactions';
 import { getOrgStats } from '../lib/orgStats';
 import { fmtMoney, fmtMoneyCompact } from '../lib/format';
@@ -1100,7 +1100,7 @@ export function WebMyCause() {
 
 // ─── Share (web) ─────────────────────────────────────────────────────────────
 export function WebShare() {
-  const { selectedNonprofit, totalDonated } = useApp();
+  const { selectedNonprofit, totalDonated, hasAccount } = useApp();
   const brand = useTheme();
   const [copied, setCopied] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -1135,9 +1135,18 @@ export function WebShare() {
             <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>I&apos;ve donated</p>
             <p style={{ margin: '4px 0', fontSize: 40, fontWeight: 800 }} data-testid="web-share-total">${fmtMoney(totalDonated)}</p>
             <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>to {np.name}</p>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, background: 'rgba(255,255,255,0.18)', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600 }}>
-              🔥 {monthsGiving}-month giving streak
-            </span>
+            {/* PUBLIC card - a donor sends this link to friends, so it must
+                never show a demo number for a real account. A real account
+                with no charge history yet reads the same honest "first
+                month" framing the dashboards use, with no streak badge; demo
+                mode keeps the streak, clearly labeled. */}
+            {hasAccount ? (
+              <p style={{ margin: '12px 0 0', fontSize: 12, opacity: 0.75 }}>{FIRST_MONTH_LABEL}</p>
+            ) : (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, background: 'rgba(255,255,255,0.18)', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600 }}>
+                🔥 {monthsGiving}-month giving streak · Demo data
+              </span>
+            )}
             {np.impact && (
               <p style={{ margin: '14px 0 0', paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: 12, opacity: 0.75 }}>{np.impact}</p>
             )}
@@ -1359,7 +1368,7 @@ export function WebSettings() {
             </div>
           </SectionCard>
 
-          <SectionCard label="Card we track">
+          <SectionCard label="Card we track  -  never charged">
             <Row label={trackedCard?.name ?? 'Chase Sapphire'} sub={`•••• ${trackedCard?.last4 ?? '4242'} · Read-only via Plaid`}
               right={<span style={{ fontSize: 11.5, fontWeight: 700, color: '#0D9488', background: '#f0fdfa', borderRadius: 999, padding: '4px 10px' }}>Watching</span>} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
@@ -1367,7 +1376,7 @@ export function WebSettings() {
               right={<span style={{ color: INK.muted }}>›</span>} />
           </SectionCard>
 
-          <SectionCard label="How you pay">
+          <SectionCard label="How you pay  -  your payment card">
             <Row label={paymentMethod?.label ?? 'Credit or Debit Card'}
               sub={paymentMethod?.last4 ? `•••• ${paymentMethod.last4} · One monthly charge from ${npShort}` : `One monthly charge from ${npShort}`}
               right={<span style={{ fontSize: 18 }}>{{ ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' }[paymentMethod?.type] ?? '💳'}</span>} />
@@ -1587,13 +1596,13 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
   }
 
   return (
-    <Modal show={show} onClose={onClose} title="Track a Different Card">
+    <Modal show={show} onClose={onClose} title="Track a Different Card (Never Charged)">
       {connected ? (
         <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="web-track-card-confirm">
           <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{connected.name} ····{connected.last4} connected</p>
           <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
-            We&apos;ll watch purchases and calculate round-ups as they happen  -  nothing changes until you confirm.
+            We&apos;ll watch purchases and calculate round-ups as they happen  -  nothing changes until you confirm. This card is never charged.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             <ActionButton onClick={confirm}>Use {connected.name} ····{connected.last4} →</ActionButton>
@@ -1609,7 +1618,7 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
       ) : (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
-            Currently watching <strong>{current?.name ?? 'Chase Sapphire'} ····{current?.last4 ?? '4242'}</strong>. Pick a new card issuer  -  read-only via Plaid.
+            Currently watching <strong>{current?.name ?? 'Chase Sapphire'} ····{current?.last4 ?? '4242'}</strong>. Pick a new card issuer  -  read-only via Plaid, never charged.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             {TRACKED_CARD_BANKS.map(b => (
@@ -1694,7 +1703,7 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
     onClose();
   }
 
-  const title = cardEntry ? 'Add Your Card' : 'Change Payment Method';
+  const title = cardEntry ? 'Add Your Payment Card' : 'Change Payment Method';
 
   return (
     <Modal show={show} onClose={onClose} title={title}>
@@ -1715,7 +1724,7 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
       ) : cardEntry ? (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
-            Enter the card your monthly round-up charge should come from. Stripe holds the details  -  PocketCache never sees the number.
+            This is the payment card your monthly round-up charge comes from  -  a different card than the one we track for purchases. Stripe holds the details  -  PocketCache never sees the number.
           </p>
           <StripeCardForm
             variant="web"
@@ -1770,9 +1779,9 @@ function SwitchOrgModal({ show, onClose, onBind }) {
     return () => clearTimeout(id);
   }, [show]);
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
-    const np = findOrgByCode(code);
+    const np = await resolveOrgByCode(code);
     if (!np) { setError('Code not found. Ask the nonprofit for their PocketCache code.'); return; }
     onBind(np);
     onClose();

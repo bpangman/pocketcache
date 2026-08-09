@@ -61,6 +61,7 @@
 // scope this round.
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { dbRest } from "../_shared/stripe.ts";
+import { sendGmail } from "../_shared/gmail.ts";
 
 const CHARGE_RUN_KEY = Deno.env.get("CHARGE_RUN_KEY") ?? "";
 // Single-nonprofit phase: every locked cycle resolves to the one sandbox
@@ -68,6 +69,50 @@ const CHARGE_RUN_KEY = Deno.env.get("CHARGE_RUN_KEY") ?? "";
 // later needs no schema change, just a real per-donor lookup here.
 const DEFAULT_CONNECTED_ACCT = Deno.env.get("STRIPE_TEST_CONNECTED_ACCT") ?? "";
 const MINIMUM_CENTS = 500;
+
+// Single-nonprofit phase (same note as DEFAULT_CONNECTED_ACCT above): there
+// is no per-donor org lookup yet, so the donor email names the one nonprofit
+// this whole billing pipeline currently serves. Update alongside
+// DEFAULT_CONNECTED_ACCT if/when this becomes multi-nonprofit.
+const ORG_NAME = "Boys & Girls Clubs of America";
+
+function monthName(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Date(Date.UTC(y, (m || 1) - 1, 1)).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+}
+
+/** Plain-text donor email sent once a cycle is locked (or rolled forward)
+ *  for them - see _shared/gmail.ts for why this goes through the Gmail API
+ *  rather than raw SMTP, and PRELAUNCH.md for why Gmail is pilot-scale only,
+ *  not the production sending path. Errors are caught by the caller so a
+ *  single failed send never breaks the rest of the run. */
+async function sendDonorEmail(to: string, subject: string, text: string): Promise<void> {
+  await sendGmail(to, subject, text);
+}
+
+/** Variant A (normal locked cycle) vs variant B (roll-forward, under the $5
+ *  minimum) - see the file header's THE $5 RULE section. */
+function donorEmailBody(opts: { rolledForward: boolean; totalCents: number; monthKey: string }): string {
+  const month = monthName(opts.monthKey);
+  if (opts.rolledForward) {
+    return (
+      `Hi,\n\n` +
+      `Your round-ups for ${month} came in under ${ORG_NAME}'s $5 monthly minimum, ` +
+      `so nothing will be charged this month. Your balance carries forward automatically ` +
+      `and will combine with next month's round-ups.\n\n` +
+      `No action is needed from you.\n\n` +
+      `- PocketCache`
+    );
+  }
+  const amount = `$${(opts.totalCents / 100).toFixed(2)}`;
+  return (
+    `Hi,\n\n` +
+    `Your PocketCache round-ups for ${month} totaled ${amount}, going to ${ORG_NAME}. ` +
+    `This amount will be charged to your card on the 11th.\n\n` +
+    `Questions or want to skip a month? You can manage this anytime from your PocketCache app.\n\n` +
+    `- PocketCache`
+  );
+}
 
 const FORMSUBMIT_URL = "https://formsubmit.co/ajax/blake@pocketcache.app";
 const FORMSUBMIT_HEADERS = {
@@ -140,15 +185,55 @@ Deno.serve(async (req: Request) => {
     // rather than one query per donor in the loop below. Missing from the
     // map (should not happen - a pending roundup row only exists for a
     // customer resolved to a donor) defaults to 1x, never a bigger number.
+    // Also carries email - the address the locked/rolled-forward amount
+    // email below goes to.
     const multiplierByDonor = new Map<string, number>();
+    const emailByDonor = new Map<string, string>();
     if (totalsByDonor.size > 0) {
       const ids = [...totalsByDonor.keys()];
       const donorsRes = await dbRest(
         "GET",
-        `stripe_donors?stripe_customer_id=in.(${ids.map(encodeURIComponent).join(",")})&select=stripe_customer_id,multiplier`,
+        `stripe_donors?stripe_customer_id=in.(${ids.map(encodeURIComponent).join(",")})&select=stripe_customer_id,multiplier,email`,
       );
-      for (const d of (Array.isArray(donorsRes.data) ? donorsRes.data : []) as { stripe_customer_id: string; multiplier: number }[]) {
+      for (const d of (Array.isArray(donorsRes.data) ? donorsRes.data : []) as { stripe_customer_id: string; multiplier: number; email: string | null }[]) {
         multiplierByDonor.set(d.stripe_customer_id, d.multiplier ?? 1);
+        if (d.email) emailByDonor.set(d.stripe_customer_id, d.email);
+      }
+    }
+
+    // Idempotency: only send if this SPECIFIC charge_cycles row has never
+    // been emailed before (emailed_at is null). A re-run of cycle-lock for
+    // the same month_key re-upserts the SAME row (on_conflict=stripe_
+    // customer_id,month_key) rather than inserting a new one, and
+    // merge-duplicates only overwrites columns present in the upsert payload
+    // - emailed_at is deliberately never in that payload, so a prior send is
+    // never clobbered back to null by a later run. Failures (no email on
+    // file, SMTP error) are logged and swallowed - one donor's bad address
+    // must never abort the rest of the batch, and a failed send leaves
+    // emailed_at null so the NEXT run retries it.
+    async function maybeEmailDonor(
+      row: { id: number; emailed_at: string | null } | undefined,
+      stripeCustomerId: string,
+      rolledForwardCycle: boolean,
+      totalCents: number,
+    ): Promise<void> {
+      if (!row || row.emailed_at) return;
+      const to = emailByDonor.get(stripeCustomerId);
+      if (!to) {
+        console.error("cycle-lock: no donor email on file, skipping amount email", stripeCustomerId);
+        return;
+      }
+      const subject = `Your PocketCache donation for ${monthName(monthKey)}`;
+      const text = donorEmailBody({ rolledForward: rolledForwardCycle, totalCents, monthKey });
+      try {
+        await sendDonorEmail(to, subject, text);
+      } catch (err) {
+        console.error("cycle-lock: donor email send failed", stripeCustomerId, err);
+        return;
+      }
+      const patch = await dbRest("PATCH", `charge_cycles?id=eq.${row.id}`, { emailed_at: new Date().toISOString() });
+      if (!patch.ok) {
+        console.error("cycle-lock: emailed_at patch failed", stripeCustomerId, patch.status, JSON.stringify(patch.data));
       }
     }
 
@@ -199,6 +284,8 @@ Deno.serve(async (req: Request) => {
         rolledTotalCents += total;
         rolledDonors.push(stripeCustomerId);
         // Roundups stay 'pending' - nothing charged, nothing locked.
+        const rolledRow = Array.isArray(upsert.data) ? upsert.data[0] : upsert.data;
+        await maybeEmailDonor(rolledRow, stripeCustomerId, true, total);
       } else {
         const now = new Date().toISOString();
         const upsert = await dbRest(
@@ -231,6 +318,8 @@ Deno.serve(async (req: Request) => {
         locked++;
         lockedTotalCents += total;
         lockedDonors.push(stripeCustomerId);
+        const lockedRow = Array.isArray(upsert.data) ? upsert.data[0] : upsert.data;
+        await maybeEmailDonor(lockedRow, stripeCustomerId, false, total);
       }
     }
 

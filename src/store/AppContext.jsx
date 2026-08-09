@@ -27,6 +27,15 @@ if (typeof window !== 'undefined') {
   migrate();
   const params = new URLSearchParams(window.location.search);
   if (params.get('reset') === '1' || params.get('fresh') === '1') {
+    // Sign out of Supabase FIRST - a reset that only wipes the pc_* keys
+    // below left the sb-*-auth-token session sitting in localStorage, so the
+    // "fresh start" a reset link promises was not actually fresh: the next
+    // page load silently rehydrated the old donor/admin session. Fire-and-
+    // forget, same best-effort pattern as the explicit sign-out below in this
+    // file - GoTrue's signOut() clears its own storage key once the network
+    // round-trip settles, which does not need to be awaited before the
+    // synchronous pc_* wipe that follows.
+    getSupabase().auth.signOut().catch(() => { /* best-effort */ });
     removeKeys(RESET_KEYS);
   }
   // A scanned QR or shared join link (?org=CODE) is explicit donor intent —
@@ -139,9 +148,25 @@ export function AppProvider({ children }) {
   // Non-persisted: triggers Settings to auto-open a sheet (e.g. from reactivation check-in)
   const [pendingSettingsAction, setPendingSettingsActionState] = useState(null);
 
-  const [totalDonated, setTotalDonated] = useState(
-    () => loadKey('pc_total_donated', PRIOR_MONTHS_SUM),
-  );
+  // A REAL account (a real Supabase identity - see `hasAccount` below) has no
+  // real charge-history data source wired up yet (no billing-history sync
+  // exists server-side for a signed-in donor - see PRELAUNCH.md). Showing it
+  // the hardcoded demo total (PRIOR_MONTHS_SUM, ~$61 of fake "prior months",
+  // built from src/data/transactions.js's sample data) would be a fabricated
+  // number on a brand-new real account, so a real donor with no charge
+  // history starts at an honest $0 instead - once real billing-history sync
+  // exists, load the real total here rather than hardcoding 0. Demo mode (no
+  // real account, just exploring the prototype) keeps the demo total exactly
+  // as before, and every screen that shows it is responsible for labeling it
+  // "Demo data" (see Dashboard.jsx, WebDashboard.jsx, Share.jsx, WebShare).
+  //
+  // The check below mirrors `hasAccount`'s own initializer just below it
+  // (rather than depending on it directly) only because of state-declaration
+  // order - both read the exact same two identity keys.
+  const [totalDonated, setTotalDonated] = useState(() => {
+    const startedSignedIn = loadKey(IDENTITY_KEYS.donorRole) ? loadKey(IDENTITY_KEYS.identity) : null;
+    return loadKey('pc_total_donated', startedSignedIn ? 0 : PRIOR_MONTHS_SUM);
+  });
 
   // Account lifecycle state
   const [accountStatus, setAccountStatusState] = useState(() => loadKey('pc_account_status', 'active'));
@@ -323,6 +348,21 @@ export function AppProvider({ children }) {
   }
 
   function setHasAccount(stub) {
+    // A donor exploring in demo mode (accruing the fake PRIOR_MONTHS_SUM
+    // total, or a "Give Extra" boost on top of it) who is now getting a real
+    // identity for the first time this session must not carry that demo
+    // total into their real account - the public Share card in particular
+    // must never show it (see src/pages/Share.jsx). `!hasAccount` here is the
+    // demo -> real edge specifically: a later call with the SAME real
+    // identity (e.g. a returning-session re-adopt) leaves an already-real
+    // donor's progress alone. Real charge-history sync does not exist yet
+    // (see PRELAUNCH.md) - once it does, load the real total here instead of
+    // hardcoding 0, same as the totalDonated initializer above.
+    if (stub && !hasAccount) {
+      setTotalDonated(0);
+      saveKey('pc_total_donated', 0);
+      removeKeys(['pc_seen_milestone']);
+    }
     saveKey(IDENTITY_KEYS.identity, stub);
     saveKey(IDENTITY_KEYS.donorRole, stub ? { active: true } : null);
     setHasAccountState(stub);

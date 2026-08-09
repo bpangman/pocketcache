@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line 
 import { X } from 'lucide-react';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { Z, scrim, registerOpenSheet } from '../lib/overlay';
+import { useSheetHistory } from '../lib/stepHistory';
 
 /**
  * Shared bottom sheet. Public API is { show, onClose, title, children } plus the
@@ -45,6 +46,11 @@ export default function Sheet({ show, onClose, title, children, padBottom = true
     if (!show) return undefined;
     return registerOpenSheet();
   }, [show]);
+
+  // Hardware/browser back closes this sheet the same way its own X button or
+  // scrim tap already does - wired ONCE here so every sheet built on Sheet.jsx
+  // gets it for free. See src/lib/stepHistory.js.
+  useSheetHistory(show, onClose);
 
   return (
     <AnimatePresence>

@@ -94,7 +94,7 @@ function friendlySendError(err) {
 function friendlyVerifyError(err) {
   const msg = (err?.message || '').toLowerCase();
   if (msg.includes('expired')) return 'That code expired. Send a new one and try again.';
-  return "That code doesn't match - check the email and try again.";
+  return 'That code does not match - check the digits and try again.';
 }
 
 function friendlyOAuthError(provider) {

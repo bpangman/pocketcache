@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import {
-  DEMO_USER, avgPerMonth, momChange, sinceLabel, monthsGiving, totalRoundupsCount,
+  DEMO_USER, avgPerMonth, momChange, sinceLabel, monthsGiving, totalRoundupsCount, FIRST_MONTH_LABEL,
 } from '../data/derived';
 import { TRANSACTIONS, CURRENT_MONTH_PENDING } from '../data/transactions';
 import { fmtMoney, fmtCount } from '../lib/format';
@@ -226,8 +226,12 @@ function SectionTitle({ children, action }) {
  * progress-to-next-tier bar the app's Home carries, in the portal's own card
  * language. Driven by lifetime `totalDonated`, exactly as the app is, so a badge
  * can never light up on one surface and not the other.
+ *
+ * `demo` labels the card when `total` is the fake demo total (no real
+ * account) - the same reason Activity.jsx labels the tax-year card. A real
+ * account's honest total (often $0 with no achieved tiers yet) needs no label.
  */
-function MilestonesCard({ total }) {
+function MilestonesCard({ total, demo }) {
   const milestones = getMilestonesUpTo(total);
   const next = milestones.find(m => !m.achieved);
   const pct = next ? Math.min((total / next.amount) * 100, 100) : 100;
@@ -241,6 +245,11 @@ function MilestonesCard({ total }) {
         )}
       >
         Milestones
+        {demo && (
+          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '2px 8px' }}>
+            Demo data
+          </span>
+        )}
       </SectionTitle>
       <p style={{ margin: '2px 0 0', fontSize: 12.5, color: INK.muted }}>
         Unlocked by your lifetime giving
@@ -793,6 +802,7 @@ export default function WebDashboard() {
   const {
     selectedNonprofit, totalDonated, pendingRoundUps, skipNextCharge,
     feeMonths, signOut, adminRole, setPage, setLastMode, hasAccount,
+    goToOnboardingStep,
     monthlyCap, chargeAdjustment, setChargeAdjustment, roundUpMultiplier,
     coverProcessing,
     hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness,
@@ -915,6 +925,22 @@ export default function WebDashboard() {
                     Switch to admin dashboard
                   </button>
                 )}
+                {/* Donor-side parity with the app's account sheet (AppShell.jsx):
+                    a donor with no admin role yet gets the entry into the
+                    nonprofit signup wizard instead of the admin actions above.
+                    Same call the app row makes - goToOnboardingStep sets
+                    initialOnboardingStep to 'nonprofit-signup', which
+                    WebExperience (App.jsx) latches onto to route into
+                    NpWebSignup, the web-native version of the same wizard. */}
+                {!adminRole && (
+                  <button
+                    onClick={() => { setMenuOpen(false); goToOnboardingStep('nonprofit-signup'); }}
+                    data-testid="web-create-nonprofit-page"
+                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 13, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
+                  >
+                    Create a nonprofit page
+                  </button>
+                )}
                 {/* Admins only, and it belongs in the account menu rather than in
                     Settings: Settings is the DONOR's account, and this is an
                     action about the nonprofit's page, taken by the one person who
@@ -958,7 +984,19 @@ export default function WebDashboard() {
 
             {/* KPI row */}
             <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 16, display: 'grid', marginBottom: 20 }}>
-              <Kpi hero label="Total donated" value={`$${fmtMoney(totalDonated)}`} sub={`${sinceLabel} · all time`} pill={`🔥 ${monthsGiving}-month giving streak`} />
+              {/* A real account with no charge history yet reads the honest
+                  "first month" framing (see AppContext's totalDonated
+                  initializer) and gets no streak pill, which would otherwise
+                  read as a fake multi-month streak on a brand-new account.
+                  Demo mode keeps both, the pill labeled so the fake streak is
+                  never mistaken for a real one. */}
+              <Kpi
+                hero
+                label="Total donated"
+                value={`$${fmtMoney(totalDonated)}`}
+                sub={hasAccount ? `${FIRST_MONTH_LABEL} · all time` : `${sinceLabel} · all time`}
+                pill={hasAccount ? null : `🔥 ${monthsGiving}-month giving streak · Demo data`}
+              />
               {/* Accrual tile: raw round-ups are the honest figure, but on a
                   skipped cycle the sub-label has to say they are never collected
                   (same string the app's Pending tile uses). */}
@@ -1008,7 +1046,7 @@ export default function WebDashboard() {
                 "just delete the two cards" pass produced. */}
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr]" style={{ gap: 20, display: 'grid', alignItems: 'start' }}>
               <div style={{ display: 'grid', gap: 20 }}>
-                <MilestonesCard total={totalDonated} />
+                <MilestonesCard total={totalDonated} demo={!hasAccount} />
                 {org && <CauseRow org={org} onOpen={() => setNavTab('mycause')} />}
                 {org?.corporateMatch?.active && (
                   <MatchLine match={org.corporateMatch} onOpen={() => setNavTab('mycause')} />

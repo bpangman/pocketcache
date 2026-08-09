@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronDown } from 'lucide-react';
+import { CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronDown, Info } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { QRCodeSVG } from 'qrcode.react';
@@ -17,7 +17,7 @@ import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
-import { findOrgByCode, getAppleApproval } from '../store/orgStore';
+import { findOrgByCode, resolveOrgByCode, getAppleApproval } from '../store/orgStore';
 import {
   useNpSignup, useNpGoLive,
   NP_BRAND_COLORS, NP_LICENSE_POINTS, widgetSnippet, joinQrValue, launchKitMailto,
@@ -43,6 +43,8 @@ import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { pcBeacon } from '../lib/beacon.js';
 import { copyText } from '../lib/clipboard';
+import { useStepHistory } from '../lib/stepHistory';
+import { loadDonorDraft, saveDonorDraft, clearDonorDraft, WEB_STEP_TO_APP_STEP } from '../lib/donorDraft';
 
 
 const SLIDES = [
@@ -236,22 +238,26 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
   const [boundNp, setBoundNp] = useState(null);
 
   useEffect(() => {
-    if (autoBindOrg) {
-      const np = findOrgByCode(autoBindOrg);
+    if (!autoBindOrg) return;
+    let cancelled = false;
+    resolveOrgByCode(autoBindOrg).then(np => {
+      if (cancelled) return;
       if (np) {
         setAutoBound(true);
         setBoundNp(np);
         setTimeout(() => onBind(np), 800);
       } else {
+        setCode(autoBindOrg);
         setError('Code not found. Ask your nonprofit for their PocketCache code.');
       }
-    }
+    });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoBindOrg]);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const np = findOrgByCode(code);
+    const np = await resolveOrgByCode(code);
     if (!np) {
       setError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
@@ -525,14 +531,32 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
   } = useHeroCollapse();
   const { sheetPadBottom, showFade, syncFade } = useSheetScroll(scrollRef);
+  // A draft left by this same screen (or by WebOnboarding's 'account' step)
+  // earlier in this tab - see src/lib/donorDraft.js. Only the plain typed
+  // fields below are restored; a code mid-verification is never kept (see
+  // displayName's own note further down).
+  const [draft] = useState(loadDonorDraft);
   const [chosen, setChosen] = useState(null);
-  const [agreedTerms, setAgreedTerms] = useState(false);
-  const [commsOptin, setCommsOptin] = useState(true);
-  const [selectedState, setSelectedState] = useState('');
+  const [agreedTerms, setAgreedTerms] = useState(() => draft?.agreedTerms ?? false);
+  const [commsOptin, setCommsOptin] = useState(() => draft?.commsOptin ?? true);
+  const [selectedState, setSelectedState] = useState(() => draft?.selectedState ?? '');
   const [showTermsHint, setShowTermsHint] = useState(false);
   const [welcomeBack, setWelcomeBack] = useState(false);
   const isCA = selectedState === 'CA';
   const canContinue = agreedTerms && selectedState !== '' && !isCA;
+  // "Code sent" feedback for the Resend code buttons below - both forms on
+  // this screen share the one donorAuth instance/stage, so one flag covers
+  // whichever form is actually mounted. Auto-clears; donorAuth.sendingCode
+  // (loading) and donorAuth.sendError (failure, incl. rate-limit) already
+  // come from the shared hook - see src/lib/donorAuth.js.
+  const [justResent, setJustResent] = useState(false);
+  async function handleResend(addr, opts) {
+    const ok = await donorAuth.sendCode(addr, opts);
+    if (ok) {
+      setJustResent(true);
+      setTimeout(() => setJustResent(false), 3000);
+    }
+  }
 
   const npName = nonprofit?.name ?? 'your nonprofit';
 
@@ -542,7 +566,18 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   const [emailInput, setEmailInput] = useState('');
   const [emailInputError, setEmailInputError] = useState(null);
   const [verifiedIdentity, setVerifiedIdentity] = useState(null);
-  const [displayName, setDisplayName] = useState('');
+  // Restored so a remount after the OTP verifies (but before "Continue" is
+  // pressed) does not clear a name the donor already saw pre-filled.
+  const [displayName, setDisplayName] = useState(() => draft?.displayName ?? '');
+
+  // Persist the typed-in fields to the shared draft on every meaningful
+  // change, so the mobile/desktop breakpoint remount (see
+  // src/lib/donorDraft.js) can restore them on the other surface's mount.
+  // step: 'account' is this screen's half of the mapping the outer
+  // Onboarding() component reads back in (WEB_STEP_TO_APP_STEP).
+  useEffect(() => {
+    saveDonorDraft({ step: 'account', selectedState, agreedTerms, commsOptin, displayName });
+  }, [selectedState, agreedTerms, commsOptin, displayName]);
   // "Already have an account? Sign in" (below): a real email/OTP sign-in,
   // independent of the terms/state gate above it - a returning donor is not
   // making a new round-up commitment, so they should not have to re-agree to
@@ -795,9 +830,14 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
                 {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
               </motion.button>
               <div className="flex justify-center gap-4">
-                <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email)} className="text-sm text-gray-400 font-medium">Resend code</button>
+                <button type="button" disabled={donorAuth.sendingCode}
+                  onClick={() => handleResend(donorAuth.email)}
+                  className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                  {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+                </button>
                 <button type="button" onClick={donorAuth.resetToEmail} className="text-sm text-gray-400 font-medium">Change email</button>
               </div>
+              {donorAuth.sendError && <p className="text-red-500 text-xs px-1 text-center">{donorAuth.sendError}</p>}
             </form>
           ) : (
             <>
@@ -875,9 +915,14 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
                     {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
                   </motion.button>
                   <div className="flex justify-center gap-4">
-                    <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email, { shouldCreateUser: false })} className="text-sm text-gray-400 font-medium">Resend code</button>
+                    <button type="button" disabled={donorAuth.sendingCode}
+                      onClick={() => handleResend(donorAuth.email, { shouldCreateUser: false })}
+                      className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                      {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+                    </button>
                     <button type="button" onClick={() => donorAuth.resetToEmail()} className="text-sm text-gray-400 font-medium">Change email</button>
                   </div>
+                  {donorAuth.sendError && <p className="text-red-500 text-xs px-1 text-center">{donorAuth.sendError}</p>}
                 </form>
               ) : (
                 <form onSubmit={handleSendSignInCode} className="space-y-2">
@@ -1031,16 +1076,25 @@ function AdminSignInScreen({ onBack, onComplete }) {
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState(null);
   const [resolving, setResolving] = useState(false);
+  // "Code sent" feedback for the Resend code button below - auto-clears.
+  // Loading (auth.sendingCode) and failure incl. rate-limit (`error`, set
+  // below) already come from the shared send() handler / useAdminAuth hook.
+  const [justResent, setJustResent] = useState(false);
   const remembered = !!getRememberedAdminEmail();
 
   async function send(e) {
     e?.preventDefault?.();
+    const wasAlreadySent = sent; // true only when this call is a RESEND
     const result = await auth.sendCode(email);
     if (!result.ok) { setError(result.error); return; }
     setError(null);
     setCodeInput('');
     setCodeError(null);
     setSent(true);
+    if (wasAlreadySent) {
+      setJustResent(true);
+      setTimeout(() => setJustResent(false), 3000);
+    }
   }
 
   function notYou() {
@@ -1131,9 +1185,13 @@ function AdminSignInScreen({ onBack, onComplete }) {
               {auth.verifying || resolving ? 'Signing in…' : 'Sign in →'}
             </motion.button>
             <div className="flex justify-center gap-4">
-              <button type="button" onClick={send} className="text-sm text-gray-400 font-medium">Resend code</button>
+              <button type="button" disabled={auth.sendingCode} onClick={send}
+                className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                {auth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+              </button>
               <button type="button" onClick={() => { setSent(false); setCodeInput(''); setCodeError(null); }} className="text-sm text-gray-400 font-medium">Change email</button>
             </div>
+            {error && <p className="text-red-500 text-xs px-1 text-center">{error}</p>}
           </form>
         )}
       </div>
@@ -1157,6 +1215,15 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
   const [chosen, setChosen] = useState(null);
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState(null);
+  // "Code sent" feedback for the Resend code button below - auto-clears.
+  const [justResent, setJustResent] = useState(false);
+  async function handleResend(addr, opts) {
+    const ok = await donorAuth.sendCode(addr, opts);
+    if (ok) {
+      setJustResent(true);
+      setTimeout(() => setJustResent(false), 3000);
+    }
+  }
 
   function finishSignIn(identity) {
     onIdentityVerified?.(identity);
@@ -1247,9 +1314,14 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
               {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
             </motion.button>
             <div className="flex justify-center gap-4">
-              <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email, { shouldCreateUser: false })} className="text-sm text-gray-400 font-medium">Resend code</button>
+              <button type="button" disabled={donorAuth.sendingCode}
+                onClick={() => handleResend(donorAuth.email, { shouldCreateUser: false })}
+                className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+              </button>
               <button type="button" onClick={() => donorAuth.resetToEmail()} className="text-sm text-gray-400 font-medium">Change email</button>
             </div>
+            {donorAuth.sendError && <p className="text-red-500 text-xs px-1 text-center">{donorAuth.sendError}</p>}
           </form>
         ) : (
           <form onSubmit={handleSendCode} className="space-y-2">
@@ -1384,7 +1456,7 @@ function ConnectCardScreen({ onNext, onBack }) {
             Which card should{'\n'}we track?
           </h1>
           <p className="text-white/80 text-xs mt-2 text-center leading-relaxed">
-            Every purchase rounds up  -  the change goes straight to your cause.
+            Every purchase rounds up  -  the change goes straight to your cause. This card is never charged, we only watch it.
           </p>
         </div>
       </div>
@@ -1392,7 +1464,7 @@ function ConnectCardScreen({ onNext, onBack }) {
         <div className="rounded-t-3xl -mt-4" style={{ background: '#f0fdfb', minHeight: sheetMinHeight }}>
           <div className="px-4 pt-10 space-y-2.5" style={{ paddingBottom: sheetPadBottom }}>
 
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Connect your bank</p>
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Connect your bank  -  never charged</p>
 
           {connected ? (
             <motion.div
@@ -1435,7 +1507,7 @@ function ConnectCardScreen({ onNext, onBack }) {
 
           <div className="flex items-center gap-2 px-1 pt-1">
             <Lock size={12} className="text-gray-400 shrink-0" />
-            <p className="text-gray-400 text-xs">Read-only access via Plaid · Your credentials are never stored by PocketCache</p>
+            <p className="text-gray-400 text-xs">Read-only access via Plaid · Never charged · Your credentials are never stored by PocketCache</p>
           </div>
           </div>
         </div>
@@ -1821,7 +1893,7 @@ function CardEntryScreen({ onNext, onBack }) {
               background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
             }}
           >
-            <span className="text-white font-bold text-sm px-6 truncate max-w-full">Add your card</span>
+            <span className="text-white font-bold text-sm px-6 truncate max-w-full">Add your payment card</span>
           </div>
           {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
           <div
@@ -1844,10 +1916,10 @@ function CardEntryScreen({ onNext, onBack }) {
                 💳
               </motion.div>
               <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
-                Add your card
+                Add your payment card
               </h1>
               <p className="text-white/80 text-xs mt-2 text-center leading-relaxed">
-                Stripe handles your card  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
+                This is the card we actually charge. Stripe handles it  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
               </p>
             </div>
           </div>
@@ -2159,12 +2231,28 @@ function NonprofitSignupFlow({ onBack }) {
     connectStripe, stripeNext,
     changeJoinCode, setLogoFile, applyLogoUrl, submitBranding,
     acceptLicense, back,
-    config,
+    config, clearDraft,
   } = useNpSignup({ onExit: onBack, defaultLogo: bgcaLogoUrl });
   const goLive = useNpGoLive();
   const fileInputRef = useRef(null);
+  // Scroll the sheet back to the top on every step change - the same `step`
+  // this wizard's own back-button wiring (useStepHistory, inside
+  // useNpSignup) already tracks. Without this, advancing off a long step
+  // (e.g. the license summary) onto a short one (e.g. verify-email) left the
+  // donor looking at a scrolled-down, mostly blank sheet.
+  const sheetRef = useRef(null);
+  useEffect(() => { sheetRef.current?.scrollTo({ top: 0 }); }, [step]);
   const [teamIdCopied, setTeamIdCopied] = useState(false);
   const [teamIdCopyFailed, setTeamIdCopyFailed] = useState(false);
+  // "Code sent" feedback for the Resend code button below - auto-clears.
+  const [justResent, setJustResent] = useState(false);
+  async function handleResend() {
+    const ok = await sendCode();
+    if (ok) {
+      setJustResent(true);
+      setTimeout(() => setJustResent(false), 3000);
+    }
+  }
 
   async function copyTeamId() {
     const ok = await copyText(APPLE_TEAM_ID);
@@ -2202,7 +2290,7 @@ function NonprofitSignupFlow({ onBack }) {
       </div>
 
       {/* Sheet */}
-      <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-5 pt-6 pb-10 space-y-4">
+      <div ref={sheetRef} className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-5 pt-6 pb-10 space-y-4">
 
         {step === 'ein' && (
           <form onSubmit={verifyEIN} className="space-y-4">
@@ -2262,20 +2350,29 @@ function NonprofitSignupFlow({ onBack }) {
                   ) : (
                     <p className="font-bold text-gray-900 text-base">{orgName}</p>
                   )}
-                  <p className="text-gray-500 text-xs">{orgAddress}</p>
+                  {orgAddress && <p className="text-gray-500 text-xs">{orgAddress}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500 shrink-0" />
-                <p className="text-green-700 text-xs font-semibold">
-                  {org501c3 ? '501(c)(3) Verified' : 'Organization found'} · EIN {ein}
-                </p>
-              </div>
+              {einDemoMode ? (
+                <div className="flex items-center gap-2">
+                  <Info size={14} className="text-amber-500 shrink-0" />
+                  <p className="text-amber-700 text-xs font-semibold">
+                    Demo preview  -  IRS verification runs at launch · EIN {ein}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-500 shrink-0" />
+                  <p className="text-green-700 text-xs font-semibold">
+                    {org501c3 ? '501(c)(3) Verified' : 'Organization found'} · EIN {ein}
+                  </p>
+                </div>
+              )}
               {einDemoMode && (
                 <p className="text-xs text-amber-600 italic">
                   {einNameEditable
-                    ? "Demo data  -  we couldn't match this EIN, so enter your organization's name."
-                    : 'Demo data  -  live verification uses IRS public records.'}
+                    ? "We couldn't match this EIN  -  enter your organization's name."
+                    : 'This EIN matches a sample organization used for the demo.'}
                 </p>
               )}
             </div>
@@ -2344,9 +2441,13 @@ function NonprofitSignupFlow({ onBack }) {
                   {verifyingCode ? 'Verifying…' : 'Verify & continue →'}
                 </motion.button>
                 <div className="flex justify-center gap-4">
-                  <button type="button" onClick={sendCode} className="text-sm text-gray-400 font-medium">Resend code</button>
+                  <button type="button" disabled={sendingCode} onClick={handleResend}
+                    className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                    {sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+                  </button>
                   <button type="button" onClick={changeEmail} className="text-sm text-gray-400 font-medium">Change email</button>
                 </div>
+                {emailError && <p className="text-red-500 text-xs px-1 text-center">{emailError}</p>}
               </form>
             )}
           </div>
@@ -2414,12 +2515,21 @@ function NonprofitSignupFlow({ onBack }) {
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Admin Contact Email</label>
-              <div className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm border border-gray-200 flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500 shrink-0" />
-                <span className="text-gray-900 truncate">{adminEmail}</span>
-                <span className="text-xs text-green-700 font-semibold ml-auto shrink-0">Verified</span>
-              </div>
-              <p className="text-gray-400 text-xs mt-1">Verified in the previous step  -  this is your admin sign-in.</p>
+              {adminEmail ? (
+                <div className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm border border-gray-200 flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-500 shrink-0" />
+                  <span className="text-gray-900 truncate">{adminEmail}</span>
+                  <span className="text-xs text-green-700 font-semibold ml-auto shrink-0">Verified</span>
+                </div>
+              ) : (
+                <div className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm border border-gray-200 flex items-center gap-2">
+                  <Info size={14} className="text-amber-500 shrink-0" />
+                  <span className="text-gray-400">Not available</span>
+                </div>
+              )}
+              <p className="text-gray-400 text-xs mt-1">
+                {adminEmail ? 'Verified in the previous step  -  this is your admin sign-in.' : "We couldn't load your verified email  -  go back a step or refresh to try again."}
+              </p>
             </div>
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Mission (shown to donors)</label>
@@ -2511,9 +2621,16 @@ function NonprofitSignupFlow({ onBack }) {
               className="block text-center text-sm font-semibold underline" style={{ color: '#003865' }}>
               Read full license →
             </a>
-            <label className="flex items-start gap-3 cursor-pointer" onClick={() => setAccepted(v => !v)}>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={e => setAccepted(e.target.checked)}
+                className="sr-only peer"
+              />
               <div
-                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                aria-hidden="true"
+                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-teal-400 peer-focus-visible:ring-offset-1"
                 style={{ borderColor: accepted ? '#059669' : '#d1d5db', background: accepted ? '#059669' : '#fff' }}>
                 {accepted && <CheckCircle size={12} className="text-white" />}
               </div>
@@ -2667,7 +2784,7 @@ function NonprofitSignupFlow({ onBack }) {
             </p>
             <motion.button
               whileTap={{ scale: 0.97 }}
-              onClick={() => goLive(config)}
+              onClick={async () => { await goLive(config); clearDraft(); }}
               className="w-full py-4 rounded-2xl text-white font-bold text-base"
               style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
             >
@@ -2718,6 +2835,11 @@ export default function Onboarding() {
   // user came from. See enterNonprofitSignup below.
   const [npFromGate, setNpFromGate] = useState(false);
   const [signupIdentity, setSignupIdentity] = useState(null);
+  // A draft left by WebOnboarding's 'account' step in the same tab (see
+  // src/lib/donorDraft.js) - only consulted when it maps to a step this
+  // surface understands (today, just 'signup') and only once selectedNonprofit
+  // is already known, since SignUpScreen requires one.
+  const [donorDraft] = useState(loadDonorDraft);
   const [step, setStep] = useState(() => {
     const urlP = new URLSearchParams(window.location.search);
     if (urlP.get('npsignin') === '1') return 'admin-signin';
@@ -2730,6 +2852,8 @@ export default function Onboarding() {
     // src/lib/donorAuth.js) - land back on the signup screen so it can pick
     // up the completed session instead of dumping the donor at the gate.
     if (urlP.get('authResume') === 'app') return 'signup';
+    const mappedDraftStep = donorDraft?.step && WEB_STEP_TO_APP_STEP[donorDraft.step];
+    if (mappedDraftStep && selectedNonprofit) return mappedDraftStep;
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
     return loadKey('pc_cause_id') ? 'slides' : 'gate';
   }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
@@ -2771,6 +2895,37 @@ export default function Onboarding() {
     }
     if (!returnFromOnboarding()) setStep('gate');
   }
+
+  // Hardware/browser back for this wizard's OWN step transitions - mirrors
+  // exactly what each screen's own onBack prop already does below, so this is
+  // never a new "back" meaning, only the same one reachable through hardware
+  // back too. 'nonprofit-signup' is deliberately excluded (see `active`
+  // below): that screen's back/exit is entirely owned by useNpSignup's own
+  // wiring (src/lib/npSignup.js), which already resolves the first-step exit
+  // back to exitNonprofitSignup above - double-wiring it here would race the
+  // same popstate event against two handlers.
+  function stepBack() {
+    switch (step) {
+      case 'native-app-gate': setSelectedNonprofit(null); setStep('gate'); break;
+      case 'admin-signin': setStep('gate'); break;
+      case 'gate-signin': setStep('gate'); break;
+      case 'checkout-confirm': setStep('payment-method'); break;
+      case 'card-entry': setStep('payment-method'); break;
+      case 'payment-method': setStep('connect-card'); break;
+      case 'connect-card': setStep('signup'); break;
+      case 'signup': clearDonorDraft(); setSlide(2); setStep('slides'); break;
+      // The intro carousel has no in-UI back control of its own (only Next /
+      // dot navigation) - 'gate' is exactly where it came from, whether by
+      // scanning a code or by handleBind, so that is where hardware back
+      // sensibly returns to.
+      case 'slides': setStep('gate'); break;
+      default: break;
+    }
+  }
+  // 'gate' is the wizard's own landing/entry screen - nothing to exit BACK to
+  // at this level (that is the OS/browser's job), so it keeps no entry of its
+  // own on the stack, same as 'nonprofit-signup' above.
+  useStepHistory(step, stepBack, { active: step !== 'gate' && step !== 'nonprofit-signup' });
 
   // Gate at the moment the org is actually resolved (manual code entry AND the
   // auto-bind ?org= link both funnel through here as `onBind`), so nothing
@@ -2921,6 +3076,9 @@ export default function Onboarding() {
         else queueAppDownloadPrompt();
         setPage('home');
         pcBeacon('donor signup', { org: selectedNonprofit?.shortName, surface: 'app' });
+        // Signup is done - the draft that exists only to survive a breakpoint
+        // remount mid-wizard has nothing left to protect.
+        clearDonorDraft();
       }}
     />
   );
@@ -2928,7 +3086,7 @@ export default function Onboarding() {
   if (step === 'payment-method') return <PaymentMethodScreen onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
   if (step === 'connect-card') return <ConnectCardScreen onBack={() => setStep('signup')} onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
   if (step === 'signup') return <SignUpScreen
-    onBack={() => { setSlide(2); setStep('slides'); }}
+    onBack={() => { clearDonorDraft(); setSlide(2); setStep('slides'); }}
     onNext={() => setStep('connect-card')}
     nonprofit={selectedNonprofit}
     hasAccount={hasAccount}

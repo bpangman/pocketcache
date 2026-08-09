@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { findOrgByCode } from '../store/orgStore';
+import { findOrgByCode, resolveOrgByCode } from '../store/orgStore';
 import { fmtMoney, fmtCount } from '../lib/format';
 import { getOrgStats } from '../lib/orgStats';
 import CoinMark from '../components/CoinMark';
@@ -23,14 +23,25 @@ function DemoPill() {
 }
 
 export default function OrgLandingPage({ code }) {
-  const org = findOrgByCode(code);
+  // Initial sync value covers the BGCA seed and any org this device already
+  // has cached; the effect below is the server-first upgrade so a code from
+  // ANY device (not just the one that created the org) still resolves here -
+  // this page is exactly the surface a QR code or vanity URL lands a stranger
+  // on, so it cannot rely on localStorage alone.
+  const [org, setOrg] = useState(() => findOrgByCode(code));
   const [shareClicked, setShareClicked] = useState(false);
   const [orgStats, setOrgStats] = useState(null);
   useEffect(() => {
-    const targetOrg = findOrgByCode(code);
-    if (!targetOrg) return;
-    getOrgStats(targetOrg).then(setOrgStats);
+    let cancelled = false;
+    resolveOrgByCode(code).then(resolved => {
+      if (!cancelled && resolved) setOrg(resolved);
+    });
+    return () => { cancelled = true; };
   }, [code]);
+  useEffect(() => {
+    if (!org) return;
+    getOrgStats(org).then(setOrgStats);
+  }, [org]);
 
   if (!org) {
     return (

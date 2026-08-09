@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Z, scrim, centered } from '../../lib/overlay';
 import { useNpLayout } from './NpLayout';
 import { generateOneTimeCode } from '../../lib/npSignup';
+import { useSheetHistory } from '../../lib/stepHistory';
 
 // ─── Admin change verification ───────────────────────────────────────────────
 // Any persistent change on the Grow / Settings admin pages must be confirmed
@@ -14,6 +15,10 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
   const [code, setCode] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [error, setError] = useState(null);
+
+  // Hardware/browser back cancels this gate the same way the Cancel button
+  // already does - see src/lib/stepHistory.js.
+  useSheetHistory(show, onCancel);
 
   useEffect(() => {
     if (!show) return;
@@ -41,8 +46,11 @@ export function AdminVerifyModal({ show, adminEmail, warning, onConfirm, onCance
     <div style={{ ...scrim('blocking', { fixed: web }), ...centered(20), zIndex: Z.blockingScrim }}>
       <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl" style={{ zIndex: Z.blocking }}>
         <p className="font-bold text-gray-900 text-base mb-1">Confirm your changes</p>
+        <p className="text-gray-500 text-sm mb-2">
+          We ask for this every time a setting changes, so we can confirm it&apos;s really your organization&apos;s admin making the change, not just anyone with this screen open.
+        </p>
         <p className="text-gray-500 text-sm mb-3">
-          We sent a 6-digit code to <strong className="text-gray-900">{adminEmail}</strong>  - 
+          We sent a 6-digit code to <strong className="text-gray-900">{adminEmail}</strong>  -
           enter it to lock in these changes.
         </p>
         {warning && (

@@ -9,7 +9,7 @@ import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
 import { useDonorAuth, nativeSSOAvailable } from '../lib/donorAuth';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, PAYMENT_OPTIONS } from './Onboarding';
-import { findOrgByCode } from '../store/orgStore';
+import { findOrgByCode, resolveOrgByCode } from '../store/orgStore';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import SsoButtons from '../components/SsoButtons';
@@ -22,6 +22,12 @@ import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRMod
 import { fmtMoney } from '../lib/format';
 import { pcBeacon } from '../lib/beacon.js';
 import { chargeTotal, effectiveCharge, nextChargeLabel, processingCoverFor } from '../lib/billing';
+import { useStepHistory } from '../lib/stepHistory';
+// Draft persistence (survives the mobile/desktop breakpoint remount) and the
+// Settings-deep-link step map - shared with Onboarding.jsx via this one
+// module so the two surfaces cannot drift out of sync on which step means
+// what. See src/lib/donorDraft.js for the full rationale.
+import { loadDonorDraft, saveDonorDraft, clearDonorDraft, DEEP_LINK_MAP } from '../lib/donorDraft';
 // A donor can reach this wizard with the current month already skipped (Settings
 // deep-links land here, and the skip survives), so the review step needs the same
 // skipped-cycle copy the two dashboards use - imported, never re-typed.
@@ -64,8 +70,13 @@ const STEPS = [
   { id: 'review', label: 'Review & confirm' },
 ];
 
-// Settings deep-links reuse the app's step names
-const DEEP_LINK_MAP = { 'connect-card': 'card', 'payment-method': 'payment', 'checkout-confirm': 'review', signup: 'account' };
+// The four-step wizard has no in-UI back control between its own steps
+// (StepList above is a read-only progress rail, not a nav) - so its own
+// definition of order, STEPS, IS the only "back" semantics that already
+// exist for hardware back to mirror. 'account' (the first of the four) has
+// no entry here on purpose: going further back means leaving the wizard
+// entirely, which is handled as a special case in stepBack below.
+const PREV_STEP = Object.fromEntries(STEPS.map((s, i) => [s.id, STEPS[i - 1]?.id ?? null]));
 
 // The numbered step list. `idx` of -1 (the join step, which is not one of the
 // four) leaves every row muted, so the rail reads as "here is what is ahead".
@@ -256,20 +267,27 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   const org = selectedNonprofit ?? entryOrg;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
 
+  // A draft from a prior mount of THIS wizard in the same tab (see
+  // DONOR_DRAFT_KEY above) - restored below wherever it beats the plain
+  // default, so the mobile/desktop breakpoint swap does not reset progress.
+  const [draft] = useState(loadDonorDraft);
+
   // No nonprofit yet means one extra question first. Decided once, on mount: the
   // join step binds the org itself, and re-deriving this would bounce the donor
   // straight back out of the step they just completed.
   const [step, setStep] = useState(() => {
     // Returning here after an Apple/Google sign-in redirect (see
     // src/lib/donorAuth.js) - land back on the account step so it can pick up
-    // the completed session instead of dumping the donor at the join step.
+    // the completed session instead of dumping the donor at the join step,
+    // even if a stale draft from before the redirect suggests otherwise.
     if (new URLSearchParams(window.location.search).get('authResume') === 'web') return 'account';
+    if (draft?.step) return draft.step;
     return org ? 'account' : 'join';
   });
   // Join step. A join link whose code this device cannot resolve prefills the
   // input and explains itself rather than failing silently  -  same behaviour as
   // the phone gate (Onboarding.jsx OrgGateScreen ~216).
-  const [code, setCode] = useState(() => (entryCode && !findOrgByCode(entryCode) ? entryCode.toUpperCase() : ''));
+  const [code, setCode] = useState(() => draft?.code ?? (entryCode && !findOrgByCode(entryCode) ? entryCode.toUpperCase() : ''));
   const [codeError, setCodeError] = useState(() => (
     entryCode && !findOrgByCode(entryCode) ? 'Code not found. Ask your nonprofit for their PocketCache code.' : null
   ));
@@ -278,28 +296,46 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   const [signInEmail, setSignInEmail] = useState('');
   const [signInEmailError, setSignInEmailError] = useState(null);
   // Account step
-  const [selectedState, setSelectedState] = useState('');
-  const [agreedTerms, setAgreedTerms] = useState(false);
-  const [commsOptin, setCommsOptin] = useState(true);
+  const [selectedState, setSelectedState] = useState(() => draft?.selectedState ?? '');
+  const [agreedTerms, setAgreedTerms] = useState(() => draft?.agreedTerms ?? false);
+  const [commsOptin, setCommsOptin] = useState(() => draft?.commsOptin ?? true);
   const [chosen, setChosen] = useState(null);
-  const [provider, setProvider] = useState('demo');
+  const [provider, setProvider] = useState(() => draft?.provider ?? 'demo');
   // Real donor sign-in (email code, plus Apple/Google once configured) - see
   // src/lib/donorAuth.js for the shared logic behind both signup surfaces.
+  // Deliberately NOT draft-restored: a code mid-verification is single-use and
+  // short-lived, so a remount here always re-shows a clean "send code" form.
   const donorAuth = useDonorAuth({ resumeKey: 'web' });
   const [emailInput, setEmailInput] = useState('');
   const [emailInputError, setEmailInputError] = useState(null);
   const [verifiedIdentity, setVerifiedIdentity] = useState(null);
-  const [displayName, setDisplayName] = useState('');
-  const [signupIdentity, setSignupIdentity] = useState(null);
+  const [displayName, setDisplayName] = useState(() => draft?.displayName ?? '');
+  // Restored so a remount past the account step (signup already verified, but
+  // AppContext's hasAccount is not set until handleConfirm on the review step)
+  // does not strand the donor on 'card'/'payment'/'review' with no identity.
+  const [signupIdentity, setSignupIdentity] = useState(() => draft?.signupIdentity ?? null);
   // Card step
-  const [connected, setConnected] = useState(null);
+  const [connected, setConnected] = useState(() => draft?.connected ?? null);
   // Payment step
-  const [paymentSel, setPaymentSel] = useState(null);
+  const [paymentSel, setPaymentSel] = useState(() => draft?.paymentSel ?? null);
   const [showApplePay, setShowApplePay] = useState(false);
   // Real card details, captured through Stripe Elements when the donor picks
   // "Credit or Debit Card" - the wizard used to store last4: null no matter what.
   const [cardEntry, setCardEntry] = useState(false);
-  const [cardInfo, setCardInfo] = useState(null);
+  const [cardInfo, setCardInfo] = useState(() => draft?.cardInfo ?? null);
+  // "Code sent" feedback for the Resend code buttons below (the 'signin' step
+  // and the 'account' step each have their own code form, but both share this
+  // one donorAuth instance/stage, so one flag covers whichever is mounted).
+  // Auto-clears. Loading (donorAuth.sendingCode) and failure incl. rate-limit
+  // (donorAuth.sendError) already come from the shared hook.
+  const [justResent, setJustResent] = useState(false);
+  async function handleResend(addr, opts) {
+    const ok = await donorAuth.sendCode(addr, opts);
+    if (ok) {
+      setJustResent(true);
+      setTimeout(() => setJustResent(false), 3000);
+    }
+  }
   // Review step.
   // `coverProcessing` is NOT local state here. It was, and that is exactly the
   // bug: the checkbox below is pre-checked, the donor agrees to cover the
@@ -311,6 +347,37 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
 
   const isCA = selectedState === 'CA';
   const canContinue = agreedTerms && selectedState !== '' && !isCA;
+
+  // Persist a draft of wizard progress to sessionStorage on every meaningful
+  // change, so the mobile/desktop breakpoint remount (see DONOR_DRAFT_KEY
+  // above) can restore it on the other surface's mount.
+  useEffect(() => {
+    saveDonorDraft({
+      step, code, selectedState, agreedTerms, commsOptin, provider,
+      displayName, signupIdentity, connected, paymentSel, cardInfo,
+    });
+  }, [step, code, selectedState, agreedTerms, commsOptin, provider,
+    displayName, signupIdentity, connected, paymentSel, cardInfo]);
+
+  // Hardware/browser back for this wizard's OWN step transitions - mirrors
+  // exactly what already moves the donor backward on this surface: the
+  // explicit "← Back" button on 'signin' (setStep('join')), and PREV_STEP's
+  // order (the same order StepList already renders) for the four-step
+  // account/card/payment/review sequence, which has no in-UI back button of
+  // its own to mirror. 'join' is excluded below (see `active`) - it is this
+  // wizard's own landing screen, same as Onboarding.jsx's 'gate'.
+  function stepBack() {
+    if (step === 'signin') { setStep('join'); donorAuth.resetToEmail(); return; }
+    const prev = PREV_STEP[step];
+    // 'account' (PREV_STEP['account'] is null) has nothing before it in the
+    // four-step sequence - back from here leaves the wizard for the join
+    // screen, same landing spot 'signin' backs out to, and is an explicit
+    // exit from the signup flow itself (not a breakpoint remount), so the
+    // draft that exists only to survive THAT should not survive this.
+    if (!prev) clearDonorDraft();
+    setStep(prev ?? 'join');
+  }
+  useStepHistory(step, stepBack, { active: step !== 'join' });
 
   // Bind the org this page was reached from (replaces the app's gate auto-bind)
   useEffect(() => {
@@ -328,11 +395,12 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
   }, [initialOnboardingStep, clearInitialOnboardingStep]);
 
   // Join step: the real lookup, not a re-implementation of code matching  -
-  // findOrgByCode is the same resolver the phone gate, the ?org= link and the
-  // vanity-URL forwarder all go through, so custom orgs and BGCA behave alike.
-  function handleJoin(e) {
+  // resolveOrgByCode is the same server-first resolver the phone gate, the
+  // ?org= link and the vanity-URL forwarder all go through, so a code from
+  // any device (not just the one that created the org) resolves here too.
+  async function handleJoin(e) {
     e?.preventDefault?.();
-    const np = findOrgByCode(code);
+    const np = await resolveOrgByCode(code);
     if (!np) {
       setCodeError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
@@ -505,6 +573,9 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     if (!isNative()) queueAppDownloadPrompt();
     setPage('home');
     pcBeacon('donor signup', { org: org?.shortName, surface: 'web' });
+    // Signup is done - the draft that exists only to survive a breakpoint
+    // remount mid-wizard has nothing left to protect.
+    clearDonorDraft();
   }
 
   // The review estimate has to respect the cap the donor may have just set on
@@ -689,9 +760,14 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                         {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
                       </PrimaryButton>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10 }}>
-                        <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email, { shouldCreateUser: false })} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Resend code</button>
+                        <button type="button" disabled={donorAuth.sendingCode}
+                          onClick={() => handleResend(donorAuth.email, { shouldCreateUser: false })}
+                          style={{ border: 'none', background: 'transparent', cursor: donorAuth.sendingCode ? 'default' : 'pointer', fontSize: 12.5, color: INK.muted, opacity: donorAuth.sendingCode ? 0.6 : 1 }}>
+                          {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+                        </button>
                         <button type="button" onClick={donorAuth.resetToEmail} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Change email</button>
                       </div>
+                      {donorAuth.sendError && <p style={{ margin: '10px 0 0', fontSize: 12.5, color: '#dc2626', textAlign: 'center' }}>{donorAuth.sendError}</p>}
                     </form>
                   ) : (
                     <form onSubmit={handleSendSignInCode} style={{ marginBottom: 14 }}>
@@ -855,9 +931,14 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                         {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
                       </PrimaryButton>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10 }}>
-                        <button type="button" onClick={() => donorAuth.sendCode(donorAuth.email)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Resend code</button>
+                        <button type="button" disabled={donorAuth.sendingCode}
+                          onClick={() => handleResend(donorAuth.email)}
+                          style={{ border: 'none', background: 'transparent', cursor: donorAuth.sendingCode ? 'default' : 'pointer', fontSize: 12.5, color: INK.muted, opacity: donorAuth.sendingCode ? 0.6 : 1 }}>
+                          {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
+                        </button>
                         <button type="button" onClick={donorAuth.resetToEmail} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted }}>Change email</button>
                       </div>
+                      {donorAuth.sendError && <p style={{ margin: '10px 0 0', fontSize: 12.5, color: '#dc2626', textAlign: 'center' }}>{donorAuth.sendError}</p>}
                     </form>
                   ) : (
                     <>
@@ -911,7 +992,7 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
 
               {step === 'card' && (
                 <>
-                  <PanelTitle title="Which card should we track?" sub={`Every purchase on this card rounds up  -  the change goes straight to ${npShort}.`} />
+                  <PanelTitle title="Which card should we track?" sub={`Every purchase on this card rounds up  -  the change goes straight to ${npShort}. This card is never charged, we only watch it.`} />
                   {connected ? (
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 14, padding: 16, marginBottom: 16 }}>
                       <CheckCircle size={22} color="#0D9488" />
@@ -926,7 +1007,7 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                     </div>
                   )}
                   <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK.muted, margin: '0 0 16px' }}>
-                    <Lock size={12} /> Read-only access via Plaid · Your credentials are never stored by PocketCache
+                    <Lock size={12} /> Read-only access via Plaid · Never charged · Your credentials are never stored by PocketCache
                   </p>
                   <PrimaryButton disabled={!connected} onClick={() => setStep('payment')}>
                     {connected ? 'Continue →' : 'Select a card to continue'}
@@ -991,8 +1072,11 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
                       nothing at all here and store last4: null. */}
                   {paymentSel === 'card' && (cardEntry || !cardInfo) && (
                     <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+                      <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: INK.muted }}>
+                        Payment card
+                      </p>
                       <p style={{ margin: '0 0 10px', fontSize: 12.5, color: INK.secondary, lineHeight: 1.55 }}>
-                        Stripe handles your card  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
+                        This is the card we actually charge. Stripe handles it  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
                       </p>
                       <StripeCardForm
                         variant="web"

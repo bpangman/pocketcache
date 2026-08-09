@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>How PocketCache Works | Round-up giving, step by step</title>
+<meta name="description" content="How PocketCache works: link a card through Plaid, purchases round up to the next dollar, and one monthly charge lands on your nonprofit's own Stripe account. See why round-ups roll forward under a $5 minimum, and what keeps the whole thing trustworthy."/>
+<link rel="icon" type="image/png" href="/logo.png"/>
+<link rel="apple-touch-icon" href="/logo.png"/>
+<meta property="og:title" content="How PocketCache Works"/>
+<meta property="og:description" content="Link a card, round up purchases, and one monthly charge lands on your nonprofit's own Stripe account. No percentages, ever."/>
+<meta property="og:image" content="/logo.png"/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://pocketcache.app/how-it-works/"/>
+<meta name="twitter:card" content="summary"/>
+<meta name="theme-color" content="#0B2A4A"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/assets/shared.css"/>
+<style>
+  /* ── Page hero (light, simpler than homepage) ── */
+  .page-hero { padding: 148px 20px 70px; text-align: center; }
+  .page-hero h1 { font-size: clamp(30px, 4.6vw, 48px); font-weight: 800; letter-spacing: -1.4px; color: var(--navy); line-height: 1.12; }
+  .page-hero p { font-size: 17px; color: var(--slate); line-height: 1.7; margin: 16px auto 0; max-width: 620px; }
+
+  /* ── Fee bar chart (why the $5 floor exists) ── */
+  .feechart-wrap { max-width: 760px; margin: 48px auto 0; }
+  .feechart-figure { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 32px 28px 22px; box-shadow: var(--card-shadow); }
+  .feechart-svg { width: 100%; height: auto; display: block; }
+  .feechart-caption { font-size: 13px; color: var(--slate-400); text-align: center; margin-top: 14px; line-height: 1.6; }
+  /* No white-space:nowrap here on purpose: this hides a <table>, and nowrap on
+     its multi-word cell text forces the browser's table auto-layout algorithm
+     to grow the table past its 1px width to fit the unwrapped content, which
+     breaks the visual hiding and caused horizontal overflow at narrow widths. */
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* ── Trust list ── */
+  .trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 44px; }
+  .trust-item { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; }
+  .trust-icon { width: 42px; height: 42px; border-radius: 12px; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
+  .trust-item p { font-size: 14px; color: var(--navy); font-weight: 600; line-height: 1.55; }
+</style>
+</head>
+<body>
+
+<a href="#main" class="skip-link">Skip to content</a>
+
+<header class="site" id="site-header">
+  <div class="nav-inner">
+    <a href="/" class="nav-brand" aria-label="PocketCache home">
+      <span class="wordmark wordmark-dark">P<svg class="coin" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="50" fill="#E5A800"/><circle cx="50" cy="50" r="44" fill="#FBBF24"/><polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/></svg>cket<span class="wordmark-cache">Cache</span></span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="/how-it-works/" class="active">How it works</a>
+      <a href="/nonprofits/">For nonprofits</a>
+      <a href="/donors/">For donors</a>
+    </nav>
+    <div class="nav-actions">
+      <a href="https://pocketcache.app/demo/?app=1" class="nav-signin">Sign in</a>
+      <a href="/start/" class="btn btn-navy btn-sm">Create account</a>
+    </div>
+    <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="mobile-panel" aria-label="Toggle menu"><span></span></button>
+  </div>
+  <div class="mobile-panel" id="mobile-panel">
+    <div class="mobile-panel-inner">
+      <a href="/how-it-works/" class="active">How it works</a>
+      <a href="/nonprofits/">For nonprofits</a>
+      <a href="/donors/">For donors</a>
+      <div class="mp-divider"></div>
+      <a href="https://pocketcache.app/demo/?app=1">Sign in</a>
+      <a href="/start/" class="btn btn-navy btn-block mp-cta">Create account</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ── PAGE HERO ── -->
+<section class="page-hero">
+  <p class="badge reveal" style="justify-content:center;">How it works</p>
+  <h1 class="reveal">From a linked card to a monthly gift, in three real steps.</h1>
+  <p class="reveal">No hidden middle step, no percentage skimmed off the top. Here's exactly what happens, in order.</p>
+</section>
+
+<!-- ── VERTICAL TIMELINE ── -->
+<section class="surface">
+  <div class="container">
+    <div class="vtimeline">
+      <div class="vt-item reveal">
+        <div class="vt-marker" aria-hidden="true">1</div>
+        <div class="vt-body">
+          <h3>Link a card through Plaid</h3>
+          <p>Donors connect a debit or credit card using Plaid, the same read-only bank connection technology most finance apps use. PocketCache never sees or stores a full card number, and the connection can't move money on its own.</p>
+        </div>
+      </div>
+      <div class="vt-item reveal">
+        <div class="vt-marker" aria-hidden="true">2</div>
+        <div class="vt-body">
+          <h3>Everyday purchases round up</h3>
+          <p>A $6.40 coffee run rounds up to $7.00. A $23.10 grocery trip rounds up to $24.00. The 60 cents and 90 cents in spare change accumulate automatically, all month, with nothing for the donor to remember to do.</p>
+        </div>
+      </div>
+      <div class="vt-item reveal">
+        <div class="vt-marker" aria-hidden="true">3</div>
+        <div class="vt-body">
+          <h3>The amount locks on the 1st</h3>
+          <p>At the end of the month, the round-up total locks in. Donors get an email with the exact amount, and a ten-day window to review it, adjust it, cap it, or skip that month entirely before anything is charged.</p>
+        </div>
+      </div>
+      <div class="vt-item reveal">
+        <div class="vt-marker gold" aria-hidden="true">4</div>
+        <div class="vt-body">
+          <h3>One monthly charge, straight to your nonprofit</h3>
+          <p>On the 11th, a single charge runs, and it lands directly on your nonprofit's own Stripe account. PocketCache is never in the middle of the money. There is no PocketCache-held balance, ever.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── WHY THE $5 FLOOR EXISTS ── -->
+<section id="floor">
+  <div class="container center">
+    <p class="badge reveal">The math behind the minimum</p>
+    <h2 class="section-title reveal">Why round-ups wait for a $5 minimum.</h2>
+    <p class="section-sub reveal">Every card charge costs real processing fees, a flat 2.9% + $0.30 on Stripe. On a small charge, that fee eats a big share of the gift. So PocketCache lets round-ups build up instead of charging every tiny amount right away.</p>
+
+    <div class="feechart-wrap">
+      <div class="feechart-figure reveal">
+        <svg class="feechart-svg" viewBox="0 0 640 300" role="img" aria-labelledby="feechart-title feechart-desc">
+          <title id="feechart-title">Card processing fee as a percentage of the charge, at $2, $5, and $15</title>
+          <desc id="feechart-desc">A $2 charge loses 18 percent to processing fees. A $5 charge loses 8.9 percent. A $15 charge loses 4.9 percent. The smaller the charge, the bigger the bite.</desc>
+
+          <!-- baseline -->
+          <line x1="60" y1="240" x2="600" y2="240" stroke="#E5E7EB" stroke-width="2"/>
+
+          <!-- $2 bar: 18% -> height 176 -->
+          <rect x="120" y="64" width="86" height="176" rx="10" fill="#0B2A4A"/>
+          <text x="163" y="50" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="20" fill="#0B2A4A">18%</text>
+          <text x="163" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$2 charge</text>
+          <text x="163" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.36</text>
+
+          <!-- $5 bar: 8.9% -> height ~87, highlighted as the floor -->
+          <rect x="277" y="153" width="86" height="87" rx="10" fill="#0D9488"/>
+          <text x="320" y="139" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="20" fill="#0D9488">8.9%</text>
+          <text x="320" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$5 charge</text>
+          <text x="320" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.445</text>
+          <rect x="269" y="52" width="102" height="24" rx="12" fill="#FBBF24"/>
+          <text x="320" y="68" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="11" fill="#0B2A4A" letter-spacing="0.03em">OUR FLOOR</text>
+
+          <!-- $15 bar: 4.9% -> height ~48 -->
+          <rect x="434" y="192" width="86" height="48" rx="10" fill="#5EEAD4"/>
+          <text x="477" y="178" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="20" fill="#0F766E">4.9%</text>
+          <text x="477" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$15 charge</text>
+          <text x="477" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.735</text>
+        </svg>
+        <table class="sr-only">
+          <caption>Card processing fee eaten as a percentage of the charge</caption>
+          <thead><tr><th>Charge amount</th><th>Fee</th><th>Percent lost</th></tr></thead>
+          <tbody>
+            <tr><td>$2.00</td><td>$0.36</td><td>18%</td></tr>
+            <tr><td>$5.00</td><td>$0.445</td><td>8.9%</td></tr>
+            <tr><td>$15.00</td><td>$0.735</td><td>4.9%</td></tr>
+          </tbody>
+        </table>
+        <p class="feechart-caption">Stripe processing runs 2.9% + $0.30 per charge. The smaller the charge, the bigger the bite, so PocketCache waits until round-ups clear $5 before charging.</p>
+      </div>
+    </div>
+
+    <p class="section-sub reveal" style="margin:32px auto 0;">If a donor's round-ups haven't reached $5 by the end of a month, the balance rolls forward to the next month instead of charging early. Either way, a settle-up runs at least once every three months, so a balance never lingers indefinitely.</p>
+  </div>
+</section>
+
+<!-- ── TRUST ── -->
+<section class="band">
+  <div class="container center">
+    <p class="badge badge-dark reveal">Built on trust</p>
+    <h2 class="section-title reveal">The money never touches us.</h2>
+    <p class="section-sub reveal">Donations flow from the donor's card to your nonprofit's own Stripe account to your nonprofit's bank. PocketCache is the software in between, and nothing more.</p>
+    <div class="trust-grid">
+      <div class="trust-item reveal">
+        <div class="trust-icon" aria-hidden="true">&#128179;</div>
+        <p>Your nonprofit is the merchant of record and issues the receipts</p>
+      </div>
+      <div class="trust-item reveal">
+        <div class="trust-icon" aria-hidden="true">&#128176;</div>
+        <p>A flat donor fee only, never a percentage of a donation</p>
+      </div>
+      <div class="trust-item reveal">
+        <div class="trust-icon" aria-hidden="true">&#127974;</div>
+        <p>Card connection is read-only through Plaid, always</p>
+      </div>
+      <div class="trust-item reveal">
+        <div class="trust-icon" aria-hidden="true">&#9989;</div>
+        <p>Disconnect anytime. No lock-in, no exit fee, for donors or nonprofits</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA (light, on purpose: the trust band above and the footer below are
+     both dark navy, so this stays light to avoid three dark sections stacked) ── -->
+<section class="center">
+  <div class="container">
+    <h2 class="section-title reveal">Ready to see it for your nonprofit?</h2>
+    <p class="section-sub reveal">Setup is self-serve and takes about ten minutes.</p>
+    <div class="cta-actions center">
+      <a href="/start/" class="btn btn-navy btn-lg">Create an account &rarr;</a>
+      <a href="/nonprofits/" class="btn btn-outline btn-lg">For nonprofits</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <span class="wordmark wordmark-light" aria-hidden="true">P<svg class="coin" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="50" fill="#E5A800"/><circle cx="50" cy="50" r="44" fill="#FBBF24"/><polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/></svg>cket<span class="wordmark-cache">Cache</span></span>
+      <p class="footer-tag">Round-up giving software for nonprofits. Flat pricing. No percentages. Just giving.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <h4>Donors</h4>
+        <a href="/donors/">Start giving</a>
+        <a href="https://pocketcache.app/demo/?app=1">Donor sign in</a>
+        <a href="/how-it-works/">How it works</a>
+      </div>
+      <div class="footer-col">
+        <h4>Nonprofits</h4>
+        <a href="/nonprofits/">List your nonprofit</a>
+        <a href="https://pocketcache.app/demo/?npsignup=1">Start your program</a>
+        <a href="/nonprofits/#pricing">Pricing</a>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/legal/privacy/">Privacy Policy</a>
+        <a href="/legal/terms/">Terms of Service</a>
+        <a href="/legal/nonprofit-license/">Nonprofit License</a>
+        <a href="mailto:info@pocketcache.app">Contact us</a>
+      </div>
+    </div>
+  </div>
+  <p class="footer-copy">
+    &copy; 2026 PocketCache, LLC. All rights reserved. &middot; Not available in California at launch. &middot; PocketCache is a software provider, not a charity, and never holds donor funds.
+  </p>
+</footer>
+
+<script src="/assets/shared.js"></script>
+</body>
+</html>

@@ -15,7 +15,7 @@ import {
 } from '../lib/donorContent';
 import { Z } from '../lib/overlay';
 import { safeBottomAtLeast, safeTopAtLeast } from '../lib/safeArea';
-import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER } from '../data/derived';
+import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER, FIRST_MONTH_LABEL } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import Sheet from '../components/Sheet';
 import GiveExtraSheet from '../components/sheets/GiveExtraSheet';
@@ -182,7 +182,7 @@ function AdjustChargeSheet({ show, onClose, pendingRoundUps, effectiveAmount, ch
 export default function Dashboard() {
   const {
     selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge, coverProcessing,
-    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness,
+    hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, hasAccount,
   } = useApp();
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
@@ -313,7 +313,7 @@ export default function Dashboard() {
         style={{ paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <div>
-          <p className="text-white/70 text-sm font-medium">{getGreeting()}, {DEMO_USER.name} 👋</p>
+          <p className="text-white/70 text-sm font-medium">{getGreeting()}, {hasAccount?.name ?? DEMO_USER.name} 👋</p>
           <h1 className="text-white text-2xl font-bold mt-1" style={{ letterSpacing: '-0.3px' }}>
             {brand.appName}
           </h1>
@@ -342,12 +342,24 @@ export default function Dashboard() {
             <div className="mt-1">
               <span className="text-5xl font-bold">${fmtMoney(totalDonated)}</span>
             </div>
-            {/* Subtitle derived from MONTHLY_DATA range  -  never hardcoded */}
-            <p className="text-white/60 text-sm mt-2">{sinceLabel} · All time</p>
-            <div className="mt-2 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
-              <Flame size={13} className="text-amber-300" />
-              <span className="text-white/90 text-xs font-semibold">{monthsGiving}-month giving streak</span>
-            </div>
+            {/* Subtitle derived from MONTHLY_DATA range  -  never hardcoded.
+                A REAL account with no charge history yet reads an honest,
+                positively-framed "Your first month" instead of the demo
+                total's history - see AppContext's totalDonated initializer -
+                and skips the streak badge, which would otherwise read as a
+                fake multi-month streak on a brand-new account. Demo mode
+                keeps both, clearly labeled. */}
+            {hasAccount ? (
+              <p className="text-white/60 text-sm mt-2">{FIRST_MONTH_LABEL} · All time</p>
+            ) : (
+              <>
+                <p className="text-white/60 text-sm mt-2">{sinceLabel} · All time</p>
+                <div className="mt-2 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
+                  <Flame size={13} className="text-amber-300" />
+                  <span className="text-white/90 text-xs font-semibold">{monthsGiving}-month giving streak · Demo data</span>
+                </div>
+              </>
+            )}
             <div className="mt-5 pt-4 border-t border-white/20 flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
                 <OrgLogo nonprofit={selectedNonprofit} size={8} rounded="full" className="shrink-0" />
@@ -576,7 +588,18 @@ export default function Dashboard() {
           className="bg-white rounded-3xl p-5 card-shadow"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900 text-base">Milestones</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-gray-900 text-base">Milestones</h3>
+              {/* Badges below are driven by totalDonated, which in demo mode
+                  is the fake demo total - the same figure Activity.jsx labels
+                  "Demo data" for the same reason. A real account's honest
+                  (often $0) total needs no such label. */}
+              {!hasAccount && (
+                <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  Demo data
+                </span>
+              )}
+            </div>
             {nextMilestone && (
               <span className="text-xs text-gray-400">${(nextMilestone.amount - totalDonated).toFixed(2)} to next</span>
             )}

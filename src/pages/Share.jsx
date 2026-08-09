@@ -5,12 +5,12 @@ import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import Logo from '../components/Logo';
 import OrgLogo from '../components/OrgLogo';
-import { monthsGiving, DEMO_USER } from '../data/derived';
+import { monthsGiving, DEMO_USER, FIRST_MONTH_LABEL } from '../data/derived';
 import { fmtMoney } from '../lib/format';
 import { copyText } from '../lib/clipboard';
 
 export default function Share() {
-  const { selectedNonprofit, totalDonated, showToast } = useApp();
+  const { selectedNonprofit, totalDonated, showToast, hasAccount } = useApp();
   const brand = useTheme();
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -133,11 +133,20 @@ export default function Share() {
                   $999 toFixed rendered "1234.56" while Home read "1,234.56". */}
               <p className="text-5xl font-bold">${fmtMoney(totalDonated)}</p>
               <p className="text-white/80 text-sm mt-2">to {selectedNonprofit.name}</p>
-              {/* Streak badge  -  monthsGiving derived from data, not hardcoded */}
-              <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
-                <Flame size={13} className="text-amber-300" />
-                <span className="text-white/90 text-xs font-semibold">{monthsGiving}-month giving streak</span>
-              </div>
+              {/* This card is PUBLIC - a donor sends this link to friends, so it
+                  must never show a demo number for a real account. A real
+                  account with no charge history yet reads the same honest
+                  "first month" framing the dashboards use, with no streak
+                  badge; demo mode keeps the streak, clearly labeled, exactly
+                  like everywhere else the same demo total shows up. */}
+              {hasAccount ? (
+                <p className="text-white/70 text-xs mt-3">{FIRST_MONTH_LABEL}</p>
+              ) : (
+                <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
+                  <Flame size={13} className="text-amber-300" />
+                  <span className="text-white/90 text-xs font-semibold">{monthsGiving}-month giving streak · Demo data</span>
+                </div>
+              )}
               <div className="mt-3 pt-4 border-t border-white/20">
                 <p className="text-white/70 text-xs">{selectedNonprofit.impact}</p>
               </div>

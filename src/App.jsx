@@ -9,7 +9,7 @@ import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/Devi
 import { motion, AnimatePresence } from 'framer-motion';
 import OrgLogo from './components/OrgLogo';
 import AppleLogo from './components/AppleLogo';
-import { findOrgByCode } from './store/orgStore';
+import { findOrgByCode, resolveOrgByCode } from './store/orgStore';
 import { useBiometricGate, useBiometricOffer, AppLockScreen, WebLockScreen, BiometricOfferCard } from './components/BiometricLock';
 import ChargeReviewAlert from './components/ChargeReviewAlert';
 import { WebPortalPrompt } from './components/WebPortalLinkModal';
@@ -750,11 +750,14 @@ function ThemedApp() {
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('org');
     if (!code) return;
-    const org = findOrgByCode(code);
-    if (!org) return;
-    const slug = encodeURIComponent((org.shortName || org.id).toUpperCase());
-    const t = setTimeout(() => window.history.replaceState(null, '', `/${slug}/give`), 2500);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    let cleanupTimer = null;
+    resolveOrgByCode(code).then(org => {
+      if (cancelled || !org) return;
+      const slug = encodeURIComponent((org.shortName || org.id).toUpperCase());
+      cleanupTimer = setTimeout(() => { if (!cancelled) window.history.replaceState(null, '', `/${slug}/give`); }, 2500);
+    });
+    return () => { cancelled = true; if (cleanupTimer) clearTimeout(cleanupTimer); };
   }, []);
 
   return (
@@ -791,7 +794,7 @@ function WebExperience() {
   const { page, accountStatus, selectedNonprofit, initialOnboardingStep, returnFromOnboarding } = useApp();
   const bioGate = useBiometricGate();
   // Capture the entry context ONCE  -  the pretty-URL rewrite strips the params.
-  const [entry] = useState(() => {
+  const [entry, setEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const npstripe = params.get('npstripe');
     // ?npstripe=return|refresh&org=<uuid> is Stripe's hosted-onboarding
@@ -804,15 +807,30 @@ function WebExperience() {
     const code = npstripe ? null : params.get('org');
     return {
       // The raw ?org= string as well as the resolved org: a code this device
-      // cannot resolve (custom orgs live in their creator's localStorage) has to
-      // reach the join step so it can be prefilled and explained, exactly as the
-      // phone gate does, rather than vanishing.
+      // cannot resolve locally yet (see the resolveOrgByCode effect just below)
+      // still has to reach the join step so it can be prefilled and explained,
+      // exactly as the phone gate does, rather than vanishing.
       code,
       org: findOrgByCode(code),
       npsignin: params.get('npsignin') === '1',
       npsignup: params.get('npsignup') === '1' || npstripe === 'return' || npstripe === 'refresh',
     };
   });
+  // A join code this device has never seen (a custom org created/joined on a
+  // DIFFERENT device) is not in local cache, so the synchronous lookup above
+  // (BGCA seed + localStorage only) comes back empty even though the org is
+  // real. One follow-up try against the server - see resolveOrgByCode in
+  // orgStore.js - resolves and caches it so the join step gets the real org
+  // instead of treating a valid code as "not found".
+  useEffect(() => {
+    if (!entry.code || entry.org) return;
+    let cancelled = false;
+    resolveOrgByCode(entry.code).then(org => {
+      if (!cancelled && org) setEntry(prev => ({ ...prev, org }));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Desktop nonprofit signup is its OWN page (NpWebSignup), not Onboarding's
   // internal step, so this is where the route is decided. Latch every signal:
   // the ?npsignup=1 deep link, and goToOnboardingStep('nonprofit-signup') from

@@ -80,13 +80,12 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
     against the connected account, re-running the charge job was a no-op (no double charge, no
     duplicate `connected_customers` row), and a below-minimum cycle correctly rolled forward and was
     never charged.
-- [ ] **Donor-facing "here's your amount" email on the 1st.** `cycle-lock` currently sends one
-  INTERNAL summary email to blake@pocketcache.app (counts locked/rolled-forward, totals) via
-  FormSubmit - the same transactional-email path already used for the Apple secret renewal job.
-  FormSubmit is fine for that single internal recipient but is not meant for per-donor mail. The
-  donor-facing "your round-ups locked at $X, charging on the 11th" email promised by the billing
-  copy (`src/lib/donorContent.js` billingExplainer) needs real SMTP/transactional email (e.g.
-  Postmark, SES, Resend) wired into `cycle-lock` before launch. Out of scope for this build.
+- [x] **Donor-facing "here's your amount" email on the 1st.** `cycle-lock` now sends each donor a
+  plain-text email once their cycle locks (or rolls forward under the $5 minimum), via the Gmail
+  API as info@pocketcache.app (`supabase/functions/_shared/gmail.ts`), idempotent on
+  `charge_cycles.emailed_at`. `cycle-lock` still ALSO sends the internal blake@pocketcache.app
+  summary via FormSubmit, unchanged. Production needs a proper sending domain with SPF/DKIM set up
+  and real volume headroom before launch - Gmail is acceptable for pilot scale only.
 - [ ] **Multi-nonprofit routing.** Every charge cycle currently resolves to the single sandbox
   connected account (`STRIPE_TEST_CONNECTED_ACCT`, "Pretend BGCA") because PocketCache is
   single-nonprofit in this phase. `charge_cycles.connected_account` is already a per-cycle column

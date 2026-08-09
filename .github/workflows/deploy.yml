@@ -37,6 +37,17 @@ jobs:
           # Landing page at root
           cp landing/index.html dist-pages/index.html
 
+          # Landing sub-pages
+          mkdir -p dist-pages/how-it-works dist-pages/nonprofits dist-pages/donors dist-pages/start
+          cp landing/how-it-works/index.html dist-pages/how-it-works/index.html
+          cp landing/nonprofits/index.html dist-pages/nonprofits/index.html
+          cp landing/donors/index.html dist-pages/donors/index.html
+          cp landing/start/index.html dist-pages/start/index.html
+
+          # Shared landing assets (CSS, JS, screenshots) - used by every page above
+          mkdir -p dist-pages/assets
+          cp -r landing/assets/. dist-pages/assets/
+
           # React prototype app at /demo/
           mkdir -p dist-pages/demo
           cp -r dist/* dist-pages/demo/

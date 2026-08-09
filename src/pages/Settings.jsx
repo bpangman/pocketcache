@@ -13,7 +13,7 @@ import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
 import CoinAccent from '../components/CoinAccent';
 import OrgLogo from '../components/OrgLogo';
-import { findOrgByCode } from '../store/orgStore';
+import { resolveOrgByCode } from '../store/orgStore';
 import { loadKey, saveKey } from '../store/identityStore';
 import {
   CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeTotal,
@@ -365,7 +365,7 @@ function AddCardForm({ onAdd, onClose, brand }) {
 
 function AddCardSheet({ show, onClose, onAdd, brand }) {
   return (
-    <Sheet show={show} onClose={onClose} title="Add a Card">
+    <Sheet show={show} onClose={onClose} title="Add a Payment Card">
       {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
       <div className="px-6 pt-4">
         <Elements stripe={stripePromise}>
@@ -548,9 +548,9 @@ function SwitchOrgSheet({ show, onClose, brand, onBind }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const np = findOrgByCode(code);
+    const np = await resolveOrgByCode(code);
     if (!np) {
       setError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
@@ -870,13 +870,13 @@ function TrackCardSheet({ show, onClose, currentCard, onConnected }) {
   // Left to Sheet, the inset padding would land below the footer and render as
   // the sheet card's white, putting a white band under a #f0fdfb footer.
   return (
-    <Sheet padBottom={false} show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); setShowManualForm(false); }} title="Track a Different Card">
+    <Sheet padBottom={false} show={show} onClose={() => { onClose(); setConnected(null); setConnecting(null); setShowManualForm(false); }} title="Track a Different Card (Never Charged)">
       <div className="flex flex-col h-full overflow-hidden" style={{ background: '#f0fdfb' }}>
         <div className="flex-1 px-4 pt-5 pb-2 space-y-2.5 overflow-y-auto">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">
             Currently tracking: {currentCard?.name ?? 'Chase Sapphire'} ···· {currentCard?.last4 ?? '4242'}
           </p>
-          <p className="text-gray-500 text-xs px-1 pb-1">Select the card you want us to watch. Read-only access  -  we never touch your money, just count round-ups.</p>
+          <p className="text-gray-500 text-xs px-1 pb-1">Select the card you want us to watch. Read-only access  -  we never touch your money, just count round-ups. This card is never charged.</p>
 
           {connected ? (
             <motion.div
@@ -1397,7 +1397,7 @@ export default function Settings() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
           className="bg-white rounded-3xl overflow-hidden card-shadow">
           <div className="px-4 pt-4 pb-2">
-            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Card We Track</p>
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Card We Track  -  Never Charged</p>
           </div>
           <SettingRow
             icon={<CreditCard size={18} />}
@@ -1421,7 +1421,7 @@ export default function Settings() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
           className="bg-white rounded-3xl overflow-hidden card-shadow">
           <div className="px-4 pt-4 pb-2">
-            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">How You Pay</p>
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">How You Pay  -  Your Payment Card</p>
           </div>
           <SettingRow
             icon={<span className="text-base">{PAYMENT_TYPE_ICON[paymentMethod?.type] ?? '💳'}</span>}
