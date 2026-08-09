@@ -6,7 +6,8 @@ import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
-import { useDonorAuth, nativeSSOAvailable } from '../lib/donorAuth';
+import { useDonorAuth, nativeSSOAvailable, greetingNameFor } from '../lib/donorAuth';
+import { fetchRoundupsMe, pushDonorProfile } from '../lib/roundupsMe';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, PAYMENT_OPTIONS } from './Onboarding';
 import { findOrgByCode, resolveOrgByCode, isOrgPending, ORG_PENDING_MESSAGE } from '../store/orgStore';
@@ -16,8 +17,14 @@ import SsoButtons from '../components/SsoButtons';
 import StripeCardForm from '../components/StripeCardForm';
 import PlaidBankConnect from '../components/PlaidBankConnect';
 import ManualCardForm from '../components/ManualCardForm';
-import ApplePaySheet from '../components/ApplePaySheet';
+// Web Apple Pay treatment (round-3 item 1): a web-styled confirmation where
+// Safari's ApplePaySession could really exist, an honest greyed-out option
+// everywhere else - never the phone's "Confirm with Side Button" sheet.
+import WebApplePayConfirm, { webApplePayAvailable, APPLE_PAY_UNAVAILABLE_NOTE } from '../components/WebApplePayConfirm';
+import BankPaymentAuth from '../components/BankPaymentAuth';
 import AppleLogo from '../components/AppleLogo';
+import PocketCacheWordmark, { PoweredByWordmark } from '../components/PocketCacheWordmark';
+import { DEFAULT_BRAND } from '../data/nonprofits';
 import { CapControl } from './WebPortalPages';
 import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRModal';
 import { fmtMoney } from '../lib/format';
@@ -76,6 +83,10 @@ const PREV_STEP = Object.fromEntries(STEPS.map((s, i) => [s.id, STEPS[i - 1]?.id
 // The numbered step list. `idx` of -1 (the join step, which is not one of the
 // four) leaves every row muted, so the rail reads as "here is what is ahead".
 function StepList({ idx }) {
+  // Active step marker follows the bound org's brand color (item B), same
+  // fallback navy before an org exists.
+  const brand = useTheme();
+  const activeColor = brand !== DEFAULT_BRAND ? (brand.primary ?? NAVY) : NAVY;
   return (
     <ol style={{ listStyle: 'none', padding: 0, margin: '0 0 22px', display: 'grid', gap: 2 }}>
       {STEPS.map((s, i) => {
@@ -86,7 +97,7 @@ function StepList({ idx }) {
             <span style={{
               width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 11, fontWeight: 700, flexShrink: 0,
-              background: done ? '#0D9488' : active ? NAVY : '#e2e8f0',
+              background: done ? '#0D9488' : active ? activeColor : '#e2e8f0',
               color: done || active ? '#fff' : INK.muted,
             }}>
               {done ? '✓' : i + 1}
@@ -224,13 +235,20 @@ function PanelTitle({ title, sub }) {
 }
 
 function PrimaryButton({ children, onClick, disabled }) {
+  // Org theme parity (item B): once a nonprofit is bound, the wizard's CTAs
+  // follow its brand palette exactly as the app's buttons do. Before one is
+  // bound (join/sign-in steps) the PocketCache navy stays.
+  const brand = useTheme();
+  const themed = brand !== DEFAULT_BRAND;
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       style={{
         width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: disabled ? 'default' : 'pointer',
-        background: disabled ? 'linear-gradient(135deg, #d1d5db, #9ca3af)' : `linear-gradient(135deg, ${NAVY}, #001a33)`,
+        background: disabled
+          ? 'linear-gradient(135deg, #d1d5db, #9ca3af)'
+          : themed ? (brand.headerGradient ?? brand.gradient) : `linear-gradient(135deg, ${NAVY}, #001a33)`,
         color: '#fff', fontWeight: 700, fontSize: 15,
       }}
     >
@@ -328,6 +346,18 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   // Payment step
   const [paymentSel, setPaymentSel] = useState(() => draft?.paymentSel ?? null);
   const [showApplePay, setShowApplePay] = useState(false);
+  // The explicitly-authorized bank source for the "Bank account" payment
+  // method (item 2) - null until the donor confirms one via BankPaymentAuth.
+  const [achSource, setAchSource] = useState(() => draft?.achSource ?? null);
+  // Whether web Apple Pay could actually exist in THIS browser (item 1).
+  // Computed once - the browser does not change mid-wizard.
+  const [applePayOk] = useState(webApplePayAvailable);
+  // "What should we call you?" (item 7c) - asked on the account step, folded
+  // into the verified identity so every greeting uses it.
+  const [displayName, setDisplayName] = useState(() => draft?.displayName ?? '');
+  // Visible failure channel for the review step's confirm (item 5): any
+  // reason "Start giving" cannot finish shows here - never a silent no-op.
+  const [confirmError, setConfirmError] = useState(null);
   // Real card details, captured through Stripe Elements when the donor picks
   // "Credit or Debit Card" - the wizard used to store last4: null no matter what.
   const [cardEntry, setCardEntry] = useState(false);
@@ -365,10 +395,10 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   useEffect(() => {
     saveDonorDraft({
       step, code, selectedState, agreedTerms, commsOptin, provider,
-      signupIdentity, connected, paymentSel, cardInfo,
+      signupIdentity, connected, paymentSel, cardInfo, achSource, displayName,
     });
   }, [step, code, selectedState, agreedTerms, commsOptin, provider,
-    signupIdentity, connected, paymentSel, cardInfo]);
+    signupIdentity, connected, paymentSel, cardInfo, achSource, displayName]);
 
   // Hardware/browser back for this wizard's OWN step transitions - mirrors
   // exactly what already moves the donor backward on this surface: the
@@ -449,16 +479,37 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   // per-nonprofit, so an identity that resolves with nothing bound on this
   // device has no dashboard to land on. It comes back to the join step for the
   // one question that is missing instead of being handed an empty one.
-  function resumeSession() {
+  // With no cause bound on THIS device, ask the server first (round-3 item
+  // 4): donor_profiles.org_join_code is where every bind is mirrored, so a
+  // returning donor in a fresh browser lands straight on a populated
+  // dashboard - the join step only remains for an identity the server has
+  // no binding for. (AppContext's profile-sync effect is the backstop for
+  // paths that do not come through here.)
+  async function bindFromServer() {
+    const me = await fetchRoundupsMe();
+    const serverCode = me?.profile?.org_join_code;
+    if (!serverCode) return null;
+    const np = await resolveOrgByCode(serverCode);
+    if (np) setSelectedNonprofit(np);
+    return np;
+  }
+
+  async function resumeSession() {
     const donorOnly = hasAccount && !adminRole;
     const adminOnly = adminRole && !hasAccount;
     if (adminOnly) { setLastMode('admin'); setPage('np-dashboard'); return; }
     if (donorOnly) {
-      if (!selectedNonprofit) { setStep('join'); return; }
+      if (!selectedNonprofit) {
+        if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return; }
+        setStep('join'); return;
+      }
       setLastMode('giving'); setPage('home'); return;
     }
     if (lastMode === 'admin' && adminRole) { setPage('np-dashboard'); return; }
-    if (!selectedNonprofit) { setStep('join'); return; }
+    if (!selectedNonprofit) {
+      if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return; }
+      setStep('join'); return;
+    }
     setPage('home');
   }
 
@@ -523,13 +574,25 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   }
 
   // Writes pc_identity the same way for every sign-in path, then continues
-  // the existing flow exactly as it already proceeded after signup.
+  // the existing flow exactly as it already proceeded after signup. The typed
+  // "What should we call you?" answer (item 7c) beats any guessed name;
+  // AppContext's profile sync pushes it server-side once the account adopts.
   function finishSignup(identity) {
-    saveKey(IDENTITY_KEYS.identity, identity);
-    setSignupIdentity(identity);
-    setProvider(identity.provider);
-    setChosen(identity.provider);
+    const named = displayName.trim()
+      ? { ...identity, name: displayName.trim().slice(0, 60), nameGuessed: false }
+      : identity;
+    saveKey(IDENTITY_KEYS.identity, named);
+    setSignupIdentity(named);
+    setProvider(named.provider);
+    setChosen(named.provider);
     saveKey('pc_comms_optin', commsOptin);
+    // The session exists from this moment - mirror the cause binding and the
+    // typed name server-side NOW (item 4/7c), so even a donor who abandons
+    // the wizard here signs in elsewhere to a bound, correctly-named account.
+    pushDonorProfile({
+      ...(org ? { org_join_code: (org.shortName || org.id || '').toUpperCase() } : {}),
+      ...(displayName.trim() ? { display_name: displayName.trim().slice(0, 60) } : {}),
+    });
     setTimeout(() => setStep('card'), 500);
   }
 
@@ -575,46 +638,81 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, donorAuth.checkingSession, donorAuth.existingSession, hasAccount, autoAdvanced]);
 
+  // RESILIENT CONFIRM (round-3 item 5). "Start giving" used to be able to do
+  // visibly nothing: with no nonprofit bound (the state a stale draft or a
+  // lost localStorage binding produces), it flipped `page` to 'home', the
+  // router declined the org-less dashboard and re-rendered THIS wizard at the
+  // same review step - a perfect silent no-op. Every failure now either
+  // routes to the step that can fix it or shows a visible message, and any
+  // unexpected throw is caught and surfaced instead of swallowed.
   function handleConfirm() {
-    // A real signup already wrote the verified identity (email code or
-    // Apple/Google) above - use it here rather than overwrite it. The
-    // DEMO_USER fallback only covers the old, no-longer-reachable placeholder
-    // path so this never leaves hasAccount empty.
-    setHasAccount(signupIdentity ?? {
-      name: DEMO_USER.name,
-      email: DEMO_USER.email,
-      provider: provider || 'demo',
-      joinedAt: new Date().toISOString(),
-    });
-    setAccountStatus('active');
-    setLastMode('giving');
-    if (connected) {
-      // connected already carries the real institution/name/mask from Plaid
-      // (or an equivalent shape from the offline practice-mode fallback) -
-      // keep those fields instead of collapsing everything to the bank name.
-      setTrackedCard({
-        name: connected.name,
-        last4: connected.last4,
-        brand: connected.brand ?? connected.name,
-        institution: connected.institution ?? connected.name,
+    setConfirmError(null);
+    try {
+      if (!org) {
+        setConfirmError('We lost track of which nonprofit you are joining - pick it again and your other answers are saved.');
+        setStep('join');
+        return;
+      }
+      if (!paymentSel) {
+        setConfirmError('Pick how to collect your round-ups first.');
+        setStep('payment');
+        return;
+      }
+      // Make sure the binding actually exists in the store the dashboard
+      // reads - entryOrg arrives via props and is normally bound by the
+      // mount effect, but the confirm must not depend on that having run.
+      if (!selectedNonprofit) setSelectedNonprofit(org);
+      // A real signup already wrote the verified identity (email code or
+      // Apple/Google) above - use it here rather than overwrite it. The
+      // DEMO_USER fallback only covers the old, no-longer-reachable
+      // placeholder path so this never leaves hasAccount empty.
+      setHasAccount(signupIdentity ?? {
+        name: DEMO_USER.name,
+        email: DEMO_USER.email,
+        provider: provider || 'demo',
+        joinedAt: new Date().toISOString(),
       });
+      setAccountStatus('active');
+      setLastMode('giving');
+      if (connected) {
+        // connected already carries the real institution/name/mask from Plaid
+        // (or an equivalent shape from the offline practice-mode fallback) -
+        // keep those fields instead of collapsing everything to the bank name.
+        setTrackedCard({
+          name: connected.name,
+          last4: connected.last4,
+          brand: connected.brand ?? connected.name,
+          institution: connected.institution ?? connected.name,
+        });
+      }
+      const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
+      // A card's last4/brand come from the Stripe result; the bank method
+      // carries its authorized account (item 2); Apple Pay has neither.
+      if (opt) setPaymentMethod({
+        type: opt.id,
+        label: opt.label,
+        last4: opt.id === 'card' ? (cardInfo?.last4 ?? null) : opt.id === 'ach' ? (achSource?.last4 ?? null) : null,
+        ...(opt.id === 'card' && cardInfo?.brand ? { brand: cardInfo.brand } : {}),
+        ...(opt.id === 'card' && cardInfo?.simulated ? { simulated: true } : {}),
+        ...(opt.id === 'ach' && achSource ? { institution: achSource.institution, authorized: true } : {}),
+      });
+      // pc_page flips to 'home' IMMEDIATELY - this used to stay 'onboarding'
+      // until the QR modal was dismissed, so a reload before that dismiss (or a
+      // donor who never dismissed it) landed back on this step, not signed in.
+      // Native never shows the QR popup at all; the popup itself is now a
+      // one-shot flag (queueAppDownloadPrompt) consumed by AppDownloadPrompt once
+      // WebDashboard mounts, so it still shows up "on top" of the dashboard even
+      // though this wizard unmounts the instant `page` changes.
+      if (!isNative()) queueAppDownloadPrompt();
+      setPage('home');
+      pcBeacon('donor signup', { org: org?.shortName, surface: 'web' });
+      // Signup is done - the draft that exists only to survive a breakpoint
+      // remount mid-wizard has nothing left to protect.
+      clearDonorDraft();
+    } catch (err) {
+      console.error('[PocketCache] Start giving failed', err);
+      setConfirmError('Something went wrong finishing your setup - nothing was charged. Try again, and if it keeps happening contact support@pocketcache.app.');
     }
-    const opt = PAYMENT_OPTIONS.find(o => o.id === paymentSel);
-    // A card's last4/brand come from the Stripe result; bank/Apple Pay have none.
-    if (opt) setPaymentMethod({ type: opt.id, label: opt.label, last4: opt.id === 'card' ? (cardInfo?.last4 ?? null) : null, ...(opt.id === 'card' && cardInfo?.brand ? { brand: cardInfo.brand } : {}), ...(opt.id === 'card' && cardInfo?.simulated ? { simulated: true } : {}) });
-    // pc_page flips to 'home' IMMEDIATELY - this used to stay 'onboarding'
-    // until the QR modal was dismissed, so a reload before that dismiss (or a
-    // donor who never dismissed it) landed back on this step, not signed in.
-    // Native never shows the QR popup at all; the popup itself is now a
-    // one-shot flag (queueAppDownloadPrompt) consumed by AppDownloadPrompt once
-    // WebDashboard mounts, so it still shows up "on top" of the dashboard even
-    // though this wizard unmounts the instant `page` changes.
-    if (!isNative()) queueAppDownloadPrompt();
-    setPage('home');
-    pcBeacon('donor signup', { org: org?.shortName, surface: 'web' });
-    // Signup is done - the draft that exists only to survive a breakpoint
-    // remount mid-wizard has nothing left to protect.
-    clearDonorDraft();
   }
 
   // ILLUSTRATIVE EXAMPLE, NOT AN ESTIMATE (owner punch-list item 11). A
@@ -633,6 +731,8 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   });
   const chargeOn = nextChargeLabel();
   const cardReady = paymentSel !== 'card' || !!cardInfo;
+  // Bank account only counts as SET once a source is authorized (item 2).
+  const achReady = paymentSel !== 'ach' || !!achSource;
 
   return (
     <div style={{position:'relative'}}>
@@ -640,12 +740,23 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
       {/* Top nav  -  same webpage chrome as the dashboard */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : <CoinMark size={30} />}
-            <div style={{ lineHeight: 1.15 }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary }}>{brand.appName ?? 'PocketCache'}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: INK.muted }}>powered by PocketCache</p>
-            </div>
+          {/* Brand-kit top bar (item 3a): with an org bound the nonprofit is
+              the primary brand and PocketCache attribution renders as the
+              coin-arrow WORDMARK ("powered by P(coin)cketCache"); without
+              one, the PocketCache wordmark alone carries the bar - no
+              redundant "powered by PocketCache" text beside its own logo. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            {org ? (
+              <>
+                <OrgLogo nonprofit={org} size={9} rounded="lg" />
+                <div style={{ lineHeight: 1.2, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{brand.appName ?? 'PocketCache'}</p>
+                  <PoweredByWordmark size={11} />
+                </div>
+              </>
+            ) : (
+              <PocketCacheWordmark size={20} />
+            )}
           </div>
           {org && (
             <a href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
@@ -687,6 +798,13 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     title="Which nonprofit are you giving to?"
                     sub="Enter the PocketCache code they gave you. It is short enough to say out loud  -  BGCA, for example."
                   />
+                  {/* Carried over from a failed review confirm (item 5) so the
+                      donor knows WHY they are back on this step. */}
+                  {confirmError && (
+                    <p data-testid="web-confirm-error" style={{ margin: '0 0 14px', padding: '10px 14px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12.5, color: '#b91c1c' }}>
+                      {confirmError}
+                    </p>
+                  )}
                   {/* Not a "continue as you" button, which is what the phone
                       gate offers: on THIS step there is by definition no
                       nonprofit bound, so there is nothing to continue to. It
@@ -698,7 +816,7 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       data-testid="web-join-signed-in"
                       style={{ marginBottom: 16, padding: '11px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', fontSize: 13.5, fontWeight: 600, color: '#92400e' }}
                     >
-                      👋 Signed in as {hasAccount.name}  -  pick your nonprofit to carry on.
+                      👋 Signed in as {greetingNameFor(hasAccount) ?? hasAccount.email}  -  pick your nonprofit to carry on.
                     </div>
                   )}
                   <form onSubmit={handleJoin}>
@@ -937,6 +1055,26 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     </form>
                   ) : (
                     <>
+                      {/* "What should we call you?" (item 7c) - greetings use
+                          THIS, never the email local part. Optional: an SSO
+                          sign-up can bring its own name, and skipping it just
+                          means the friendly one-time dashboard prompt asks
+                          later. */}
+                      <div style={{ marginBottom: 14 }}>
+                        <label htmlFor="pc-display-name" style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                          What should we call you?
+                        </label>
+                        <input
+                          id="pc-display-name"
+                          type="text"
+                          value={displayName}
+                          maxLength={60}
+                          onChange={e => setDisplayName(e.target.value)}
+                          placeholder="Your first name (optional)"
+                          data-testid="web-account-name"
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 14, color: INK.primary }}
+                        />
+                      </div>
                       <form onSubmit={handleSendCode} style={{ marginBottom: 14 }}>
                         <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
                           Your email
@@ -1051,19 +1189,31 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
               {step === 'payment' && (
                 <>
                   <PanelTitle title="How should we collect your round-ups?" sub="Once a month, your round-ups total into one clean charge  -  to the method you pick here." />
+                  {confirmError && (
+                    <p data-testid="web-confirm-error" style={{ margin: '0 0 14px', padding: '10px 14px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12.5, color: '#b91c1c' }}>
+                      {confirmError}
+                    </p>
+                  )}
+                  {/* Apple Pay on the WEB (item 1): enabled only where
+                      Safari's ApplePaySession could really exist; elsewhere
+                      the pill is greyed out with the honest note. Enabled
+                      taps open the web-styled confirmation dialog - never
+                      the phone's side-button sheet. */}
                   <button
-                    onClick={() => setShowApplePay(true)}
+                    onClick={() => { if (applePayOk) setShowApplePay(true); }}
+                    disabled={!applePayOk}
                     data-testid="web-apple-pay-pill"
+                    aria-disabled={!applePayOk}
                     style={{
-                      width: '100%', padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
-                      background: '#000', color: '#fff', fontWeight: 700, fontSize: 15,
+                      width: '100%', padding: '13px 0', borderRadius: 14, border: 'none', cursor: applePayOk ? 'pointer' : 'default',
+                      background: applePayOk ? '#000' : '#e5e7eb', color: applePayOk ? '#fff' : '#9ca3af', fontWeight: 700, fontSize: 15,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 6,
                     }}
                   >
-                    <AppleLogo size={16} color="#fff" /> Pay
+                    <AppleLogo size={16} color={applePayOk ? '#fff' : '#9ca3af'} /> Pay
                   </button>
-                  <p style={{ margin: '0 0 16px', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>
-                    Fastest on iPhone and Safari
+                  <p data-testid="web-apple-pay-note" style={{ margin: '0 0 16px', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>
+                    {applePayOk ? 'Fastest in Safari on your Apple devices' : APPLE_PAY_UNAVAILABLE_NOTE}
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 14px' }}>
                     <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
@@ -1071,25 +1221,31 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
                   </div>
                   <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
-                    {PAYMENT_OPTIONS.map(opt => (
-                      <button key={opt.id} onClick={() => {
-                        // Apple Pay always goes through the real (simulated) sheet,
+                    {PAYMENT_OPTIONS.map(opt => {
+                      const appleDisabled = opt.id === 'apple_pay' && !applePayOk;
+                      return (
+                      <button key={opt.id} disabled={appleDisabled} onClick={() => {
+                        // Apple Pay goes through the web confirmation dialog,
                         // whether picked here or via the pill button above.
-                        if (opt.id === 'apple_pay') { setShowApplePay(true); return; }
+                        if (opt.id === 'apple_pay') { if (applePayOk) setShowApplePay(true); return; }
                         setPaymentSel(opt.id);
                         // Picking the card option opens the real Stripe form.
                         if (opt.id === 'card') { if (!cardInfo) setCardEntry(true); }
                         else { setCardEntry(false); }
                       }}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+                          display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14,
+                          cursor: appleDisabled ? 'default' : 'pointer', textAlign: 'left',
                           border: paymentSel === opt.id ? '2px solid #FBBF24' : '1.5px solid #e5e7eb',
-                          background: paymentSel === opt.id ? '#FEF3C7' : '#fff',
+                          background: paymentSel === opt.id ? '#FEF3C7' : appleDisabled ? '#f8fafc' : '#fff',
+                          opacity: appleDisabled ? 0.55 : 1,
                         }}>
                         <span style={{ fontSize: 22 }}>{opt.icon}</span>
                         <span style={{ flex: 1 }}>
                           <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: INK.primary }}>{opt.label}</span>
-                          <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>{opt.sub}</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>
+                            {appleDisabled ? APPLE_PAY_UNAVAILABLE_NOTE : opt.sub}
+                          </span>
                         </span>
                         <span style={{
                           width: 18, height: 18, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -1098,8 +1254,26 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                           {paymentSel === opt.id && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
                         </span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
+                  {/* Bank account requires an authorized SOURCE (item 2):
+                      the linked tracking bank via an explicit confirm, or a
+                      fresh Plaid connect framed as payment authorization. */}
+                  {paymentSel === 'ach' && (
+                    <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+                      <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: INK.muted }}>
+                        Bank account to charge
+                      </p>
+                      <BankPaymentAuth
+                        variant="web"
+                        linkedBank={connected}
+                        authorized={achSource}
+                        onAuthorized={src => setAchSource(src)}
+                        onClear={() => setAchSource(null)}
+                      />
+                    </div>
+                  )}
                   {/* Real card capture  -  the same Stripe Elements form the app
                       uses (Onboarding.jsx CardEntryScreen). Web used to collect
                       nothing at all here and store last4: null. */}
@@ -1138,16 +1312,17 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 14, marginBottom: 16 }}>
                     <CapControl subtle value={monthlyCap} onChange={setMonthlyCap} />
                   </div>
-                  <PrimaryButton disabled={!paymentSel || !cardReady} onClick={() => setStep('review')}>
-                    {!paymentSel ? 'Choose a payment method' : !cardReady ? 'Add your card to continue' : 'Continue →'}
+                  <PrimaryButton disabled={!paymentSel || !cardReady || !achReady} onClick={() => setStep('review')}>
+                    {!paymentSel ? 'Choose a payment method' : !cardReady ? 'Add your card to continue' : !achReady ? 'Authorize a bank account to continue' : 'Continue →'}
                   </PrimaryButton>
-                  <ApplePaySheet
+                  {/* Web-styled confirmation - the phone's side-button sheet
+                      (ApplePaySheet) never renders on this surface (item 1). */}
+                  <WebApplePayConfirm
                     show={showApplePay}
                     payee={npShort}
                     contextLine="Charged once a month for your round-ups  -  set up now, nothing charges today."
                     onCancel={() => setShowApplePay(false)}
                     onSuccess={() => { setPaymentSel('apple_pay'); setCardEntry(false); setShowApplePay(false); }}
-                    fixed
                   />
                 </>
               )}
@@ -1231,6 +1406,11 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
                   </p>
 
+                  {confirmError && (
+                    <p data-testid="web-confirm-error" style={{ margin: '0 0 10px', padding: '10px 14px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12.5, color: '#b91c1c' }}>
+                      {confirmError}
+                    </p>
+                  )}
                   <PrimaryButton onClick={handleConfirm}>Start Giving to {npShort}</PrimaryButton>
                   <p style={{ margin: '10px 0 0', fontSize: 11.5, color: INK.muted, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                     <CoinMark size={13} /> Powered by PocketCache, LLC. Cancel anytime in Settings.

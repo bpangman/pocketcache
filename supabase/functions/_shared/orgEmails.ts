@@ -11,6 +11,7 @@
 // Copy rules: plain language, no em or en dashes (plain "-" only), and real
 // HTML paragraphs for the HTML part (gmail.ts sends multipart/alternative).
 import type { OrgRow } from "./org.ts";
+import { brandedEmail, NAVY } from "./emailBrand.ts";
 
 export const OWNER_ALERT_EMAIL = "blake@pocketcache.app";
 
@@ -54,18 +55,19 @@ export function buildOwnerApprovalAlert(org: OrgRow, approveUrl: string): { subj
     ``,
     `Until you approve, their page, QR code, and widget stay held back and donors cannot join.`,
   ].join("\n");
-  const html = [
-    `<p>A nonprofit just finished PocketCache signup and is waiting for your approval.</p>`,
-    `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:12px 0;">`,
+  const bodyHtml = [
+    `<p style="margin:0 0 16px;">A nonprofit just finished PocketCache signup and is waiting for your approval.</p>`,
+    `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 18px;">`,
     `<tr><td style="padding:4px 16px 4px 0;color:#64748b;">Organization</td><td style="padding:4px 0;font-weight:600;">${escapeHtml(org.name)}</td></tr>`,
     `<tr><td style="padding:4px 16px 4px 0;color:#64748b;">EIN</td><td style="padding:4px 0;font-weight:600;">${escapeHtml(ein)}</td></tr>`,
     `<tr><td style="padding:4px 16px 4px 0;color:#64748b;">Join code</td><td style="padding:4px 0;font-weight:600;">${escapeHtml(org.join_code)}</td></tr>`,
     `<tr><td style="padding:4px 16px 4px 0;color:#64748b;">Admin email</td><td style="padding:4px 0;font-weight:600;">${escapeHtml(org.admin_email)}</td></tr>`,
     `</table>`,
-    `<p><a href="${escapeHtml(approveUrl)}" style="display:inline-block;background:#0D9488;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px;">Approve ${escapeHtml(org.name)}</a></p>`,
-    `<p>One click approves them, flips their page live, and emails them their launch kit (widget, QR code, and page link).</p>`,
-    `<p style="color:#64748b;">Until you approve, their page, QR code, and widget stay held back and donors cannot join.</p>`,
+    `<p style="margin:0 0 16px;"><a href="${escapeHtml(approveUrl)}" style="display:inline-block;background:#0D9488;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px;">Approve ${escapeHtml(org.name)}</a></p>`,
+    `<p style="margin:0 0 16px;">One click approves them, flips their page live, and emails them their launch kit (widget, QR code, and page link).</p>`,
+    `<p style="margin:0;color:#64748b;">Until you approve, their page, QR code, and widget stay held back and donors cannot join.</p>`,
   ].join("\n");
+  const html = brandedEmail({ heading: `Nonprofit awaiting your approval`, bodyHtml });
   return { subject, text, html };
 }
 
@@ -93,19 +95,20 @@ export function buildLaunchKitEmail(org: OrgRow): { subject: string; text: strin
     `Questions? Just reply to this email.`,
     `- The PocketCache team`,
   ].join("\n");
-  const html = [
-    `<p>Congratulations - <strong>${escapeHtml(org.name)}</strong> is approved and your round-up program is now live on PocketCache.</p>`,
-    `<p><strong>Your page:</strong> <a href="${escapeHtml(page)}">${escapeHtml(page)}</a></p>`,
-    `<p><strong>Donor join code:</strong> <span style="font-size:20px;font-weight:800;letter-spacing:0.06em;">${escapeHtml(org.join_code)}</span><br>`,
+  const bodyHtml = [
+    `<p style="margin:0 0 16px;">Congratulations - <strong>${escapeHtml(org.name)}</strong> is approved and your round-up program is now live on PocketCache.</p>`,
+    `<p style="margin:0 0 16px;"><strong>Your page:</strong> <a href="${escapeHtml(page)}" style="color:${NAVY};">${escapeHtml(page)}</a></p>`,
+    `<p style="margin:0 0 16px;"><strong>Donor join code:</strong> <span style="font-size:20px;font-weight:800;letter-spacing:0.06em;color:${NAVY};">${escapeHtml(org.join_code)}</span><br>`,
     `Donors enter this code in the PocketCache app, or open your link, to join your program.</p>`,
-    `<p><strong>Giving link:</strong> <a href="${escapeHtml(join)}">${escapeHtml(join)}</a><br>`,
+    `<p style="margin:0 0 16px;"><strong>Giving link:</strong> <a href="${escapeHtml(join)}" style="color:${NAVY};">${escapeHtml(join)}</a><br>`,
     `This is the link your QR code points to. A printable QR code is ready on your dashboard under the Grow tab, sized for posters, newsletters, and event tables.</p>`,
-    `<p><strong>Website widget:</strong> paste this one line into your website where the "Round up for us" card should appear:</p>`,
-    `<p style="background:#0f172a;color:#4ade80;border-radius:10px;padding:12px 14px;font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;">${escapeHtml(snippet)}</p>`,
-    `<p><strong>Admin sign-in:</strong> <a href="https://pocketcache.app/demo/?npsignin=1">pocketcache.app/demo/?npsignin=1</a><br>`,
+    `<p style="margin:0 0 16px;"><strong>Website widget:</strong> paste this one line into your website where the "Round up for us" card should appear:</p>`,
+    `<p style="margin:0 0 16px;background:#0f172a;color:#4ade80;border-radius:10px;padding:12px 14px;font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;">${escapeHtml(snippet)}</p>`,
+    `<p style="margin:0 0 16px;"><strong>Admin sign-in:</strong> <a href="https://pocketcache.app/demo/?npsignin=1" style="color:${NAVY};">pocketcache.app/demo/?npsignin=1</a><br>`,
     `Use this verified email and we send you a fresh sign-in code each time. No password to remember.</p>`,
-    `<p>Questions? Just reply to this email.</p>`,
-    `<p>- The PocketCache team</p>`,
+    `<p style="margin:0 0 16px;">Questions? Just reply to this email.</p>`,
+    `<p style="margin:0;">- The PocketCache team</p>`,
   ].join("\n");
+  const html = brandedEmail({ heading: `${escapeHtml(org.name)} is approved and live`, bodyHtml });
   return { subject, text, html };
 }

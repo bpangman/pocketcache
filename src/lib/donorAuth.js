@@ -52,13 +52,41 @@ export function nameFromEmail(email) {
 
 // The exact pc_identity shape identityStore.js expects (see AppContext's
 // setHasAccount) - built the same way no matter which sign-in method produced it.
+//
+// `nameGuessed` (round-3 item 7c): true when `name` is only the mechanical
+// guess from the email local part - which for an Apple private-relay address
+// is garbage ("safjbdwkfbd"). Greetings must NEVER print a guessed name (see
+// greetingNameFor below); it exists only so the avatar initial and profile
+// rows have something to show until the donor answers "What should we call
+// you?" (at signup, the one-time dashboard prompt, or the profile card).
 export function buildIdentity({ email, name, provider = 'email', joinedAt }) {
   return {
     name: name || nameFromEmail(email),
+    nameGuessed: !name,
     email,
     provider,
     joinedAt: joinedAt || new Date().toISOString(),
   };
+}
+
+/**
+ * The name a greeting is allowed to use, or null when there is none worth
+ * greeting with: no identity, or a name that is only the email-local-part
+ * guess (nameGuessed). Identities written before the flag existed carry
+ * `nameGuessed: undefined` - treated as trustworthy so long-standing
+ * accounts with a real SSO name keep their greeting; the server profile
+ * fetch corrects any that were actually guesses.
+ */
+export function greetingNameFor(identity) {
+  if (!identity?.name) return null;
+  if (identity.nameGuessed) return null;
+  // Identities written before the flag existed: if the stored name IS the
+  // mechanical guess for that email, it was a guess - do not greet with it.
+  if (identity.nameGuessed === undefined && identity.email
+    && identity.name.trim().toLowerCase() === nameFromEmail(identity.email).toLowerCase()) {
+    return null;
+  }
+  return identity.name;
 }
 
 function identityFromSession(session) {

@@ -28,6 +28,7 @@
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { dbRest } from "../_shared/stripe.ts";
 import { sendGmail } from "../_shared/gmail.ts";
+import { brandedEmail, NAVY } from "../_shared/emailBrand.ts";
 
 const RATE_LIMIT_PER_MINUTE = 5;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -62,28 +63,16 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// Same email chrome as cycle-lock's donor email (system font stack, 560px
-// column, inline styles only) so everything PocketCache sends looks like one
-// product.
-const EMAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const NAVY = "#0B2A4A";
-
+// The branded shell (header band + footer) is shared from _shared/emailBrand.ts
+// so everything PocketCache sends looks like one product; this file only builds
+// the detail table body.
 function emailShell(headingHtml: string, bodyHtml: string): string {
-  return (
-    `<!DOCTYPE html>` +
-    `<html lang="en"><head><meta charset="utf-8"/>` +
-    `<meta name="viewport" content="width=device-width, initial-scale=1"/></head>` +
-    `<body style="margin:0;padding:0;background:#f4f6f8;">` +
-    `<div style="max-width:560px;margin:0 auto;padding:28px 22px;font-family:${EMAIL_FONT};` +
-    `font-size:16px;line-height:1.6;color:#1f2937;background:#ffffff;">` +
-    `<div style="font-size:18px;font-weight:700;color:${NAVY};margin:0 0 22px;">PocketCache</div>` +
-    `<h1 style="font-size:21px;line-height:1.3;font-weight:700;color:${NAVY};margin:0 0 18px;">${headingHtml}</h1>` +
-    bodyHtml +
-    `<div style="margin-top:30px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.6;color:#6b7280;">` +
-    `You are receiving this because your nonprofit's PocketCache page has this form enabled. Reply directly to the address above to reach the person who sent it.` +
-    `</div>` +
-    `</div></body></html>`
-  );
+  return brandedEmail({
+    heading: headingHtml,
+    bodyHtml,
+    footnote:
+      "You are receiving this because your nonprofit's PocketCache page has this form enabled. Reply directly to the address above to reach the person who sent it.",
+  });
 }
 
 /** One labeled row in the detail table. Values are pre-escaped by callers. */

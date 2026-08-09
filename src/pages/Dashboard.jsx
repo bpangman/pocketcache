@@ -15,8 +15,10 @@ import {
 } from '../lib/donorContent';
 import { Z } from '../lib/overlay';
 import { safeBottomAtLeast, safeTopAtLeast } from '../lib/safeArea';
-import { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel, DEMO_USER, FIRST_MONTH_LABEL } from '../data/derived';
+import { DEMO_USER, FIRST_MONTH_LABEL } from '../data/derived';
+import { greetingNameFor } from '../lib/donorAuth';
 import OrgLogo from '../components/OrgLogo';
+import NamePromptCard from '../components/NamePromptCard';
 import Sheet from '../components/Sheet';
 import GiveExtraSheet from '../components/sheets/GiveExtraSheet';
 import { submitGiveExtra } from '../lib/engagement';
@@ -184,9 +186,12 @@ export default function Dashboard() {
   const {
     selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge, coverProcessing,
     hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount, hasAccount,
-    demoActive, demoMode,
+    demoActive, demoMode, demoLevel, demoData,
     giveExtraPending, refreshRealRoundups,
   } = useApp();
+  // Demo-dataset stats follow the active shake level (item 8b) - the level-3
+  // dataset is byte-identical to the old data/derived constants.
+  const { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel } = demoData;
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
   const [showBoost, setShowBoost] = useState(false);
@@ -330,15 +335,22 @@ export default function Dashboard() {
         style={{ paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
         <div>
-          <p className="text-white/70 text-sm font-medium">{getGreeting()}, {hasAccount?.name ?? DEMO_USER.name} 👋</p>
+          {/* Greeting name comes from greetingNameFor: a stored real name
+              (server display_name / SSO), NEVER the email local part - an
+              Apple relay address must not greet anyone as "safjbdwkfbd"
+              (item 7c). No name yet -> greet without one. The demo visitor
+              (no account) keeps a friendly generic greeting too. */}
+          <p className="text-white/70 text-sm font-medium">
+            {getGreeting()}{(() => { const n = hasAccount ? greetingNameFor(hasAccount) : DEMO_USER.name; return n ? `, ${n}` : ''; })()} 👋
+          </p>
           <div className="flex items-center gap-2 mt-1">
             <h1 className="text-white text-2xl font-bold" style={{ letterSpacing: '-0.3px' }}>
               {brand.appName}
             </h1>
-            {/* The subtle demo-mode marker (shake to toggle; also in Settings). */}
+            {/* The subtle demo marker names the level (shake cycles 1/2/3). */}
             {demoMode && (
               <span data-testid="demo-mode-pill" className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-300/90 text-amber-900">
-                Demo
+                Demo {demoLevel}/3
               </span>
             )}
           </div>
@@ -352,6 +364,10 @@ export default function Dashboard() {
         className="flex-1 scrollable pc-scrollbar px-4 space-y-4 pt-4"
         style={{ paddingBottom: safeBottomAtLeast(112, 106) }}
       >
+
+        {/* One-time name capture for accounts without a stored display name
+            (item 7c) - renders null for everyone else. */}
+        <NamePromptCard variant="app" />
 
         {/* Hero donation card */}
         <motion.div

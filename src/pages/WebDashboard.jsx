@@ -1,18 +1,17 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
-import {
-  DEMO_USER, avgPerMonth, momChange, sinceLabel, monthsGiving, totalRoundupsCount, FIRST_MONTH_LABEL,
-} from '../data/derived';
-import { TRANSACTIONS, CURRENT_MONTH_PENDING } from '../data/transactions';
+import { DEMO_USER, FIRST_MONTH_LABEL } from '../data/derived';
 import { fmtMoney, fmtCount } from '../lib/format';
-import { getMilestonesUpTo, matchProgress, monthlyHistory, taxYearSummary } from '../lib/donorContent';
+import { getMilestonesUpTo, matchProgress, monthlyHistoryFor, taxYearSummary } from '../lib/donorContent';
+import { greetingNameFor } from '../lib/donorAuth';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
+import PocketCacheWordmark, { PoweredByWordmark } from '../components/PocketCacheWordmark';
+import NamePromptCard from '../components/NamePromptCard';
 import {
   WebMyCause, WebShare, WebSettings, GiveExtraModal, AdjustChargeModal, TransferNonprofitModal,
 } from './WebPortalPages';
-import { useBiometricOffer, BiometricOfferCard } from '../components/BiometricLock';
 import ChargeReviewAlert from '../components/ChargeReviewAlert';
 import {
   chargeTotal, cycleDays, daysUntilNextCharge, effectiveCharge, nextChargeDate,
@@ -183,10 +182,12 @@ function GivingChart({ data }) {
 }
 
 // ─── KPI tile ────────────────────────────────────────────────────────────────
-function Kpi({ label, value, sub, hero = false, pill = null, testId }) {
+function Kpi({ label, value, sub, hero = false, pill = null, testId, heroBackground }) {
   return (
     <div data-testid={testId} style={hero
-      ? { ...CARD, border: 'none', background: 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)', padding: '18px 20px' }
+      // Hero tile follows the bound org's brand gradient, same as the app's
+      // hero donation card (item B: org theme parity on web).
+      ? { ...CARD, border: 'none', background: heroBackground ?? 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)', padding: '18px 20px' }
       : { ...CARD, padding: '18px 20px' }}>
       <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hero ? 'rgba(255,255,255,0.65)' : INK.muted }}>
         {label}
@@ -403,7 +404,7 @@ function MatchLine({ match, onOpen }) {
  * The two round-up COUNTS are Home's own facts (the app's third stat tile), so
  * they live here rather than on Activity, which owns the transactions themselves.
  */
-function ActivityLinkCard({ onOpen, demoActive, realCount = 0 }) {
+function ActivityLinkCard({ onOpen, demoActive, realCount = 0, demoData }) {
   const figure = { margin: 0, fontSize: 20, fontWeight: 800, color: INK.primary, letterSpacing: '-0.3px' };
   const cap = { margin: '2px 0 0', fontSize: 11.5, color: INK.muted };
   return (
@@ -421,11 +422,11 @@ function ActivityLinkCard({ onOpen, demoActive, realCount = 0 }) {
           purchasing - item 12); the estimates are demo-dataset-only. */}
       <div style={{ display: 'flex', gap: 32, marginTop: 12 }}>
         <div>
-          <p style={figure}>{demoActive ? fmtCount(TRANSACTIONS.length) : fmtCount(realCount)}</p>
+          <p style={figure}>{demoActive ? fmtCount(demoData.transactions.length) : fmtCount(realCount)}</p>
           <p style={cap}>This cycle</p>
         </div>
         <div>
-          <p style={figure}>{demoActive ? fmtCount(totalRoundupsCount) : fmtCount(realCount)}</p>
+          <p style={figure}>{demoActive ? fmtCount(demoData.totalRoundupsCount) : fmtCount(realCount)}</p>
           <p style={cap}>{demoActive ? 'All time (est.)' : 'Since you joined'}</p>
         </div>
       </div>
@@ -627,15 +628,15 @@ function EstimateCard({
  * a billing explainer - Settings owns that, and the one pointer this tab needs
  * (where to download the history) is a single line at the bottom of the tax card.
  */
-function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBankLinked, realRecent, freshness, demoActive }) {
+function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBankLinked, realRecent, freshness, demoActive, demoData, momChange }) {
   const current = history[history.length - 1];
   const currentMonthLabel = `${current.month} ${current.year}`;
   // Tax-year summary: honest zeros for a real account - it has ZERO completed
   // months of charge history. The demo dataset's totals only appear while
-  // demoActive (item 12).
+  // demoActive (item 12), against the ACTIVE demo level's series (item 8b).
   const taxYear = new Date().getFullYear();
   const tax = demoActive
-    ? taxYearSummary(pending, taxYear)
+    ? taxYearSummary(pending, taxYear, demoData.monthlyData)
     : { donated: 0, months: 0, feeMonths: 0 };
   const taxMonthsLabel = tax.months === 1 ? '1 completed month' : `${tax.months} completed months`;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
@@ -654,13 +655,13 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
     roundUp: (r.roundup_cents ?? 0) / 100,
   }));
   const showRealLedger = hasRealBankLinked && realRows.length > 0;
-  const activityRows = demoActive ? TRANSACTIONS : realRows;
+  const activityRows = demoActive ? demoData.transactions : realRows;
   // BASE (pre-multiplier) figures for the month summary pill below - same
   // "raw round-ups, multiplier shown separately" semantics the demo pill
   // already used, fed from whichever dataset is actually showing.
   const monthTxnCount = activityRows.length;
   const monthBaseAmount = demoActive
-    ? CURRENT_MONTH_PENDING
+    ? demoData.currentMonthPending
     : realRows.reduce((sum, r) => sum + r.roundUp, 0);
 
   return (
@@ -839,7 +840,7 @@ export default function WebDashboard() {
     monthlyCap, chargeAdjustment, setChargeAdjustment, roundUpMultiplier,
     coverProcessing,
     hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount,
-    demoActive, demoMode,
+    demoActive, demoMode, demoLevel, demoData,
     giveExtraPending,
   } = useApp();
   const brand = useTheme();
@@ -848,7 +849,9 @@ export default function WebDashboard() {
   const [giveExtra, setGiveExtra] = useState(false);
   const [adjustCharge, setAdjustCharge] = useState(false);
   const [transferOrg, setTransferOrg] = useState(false);
-  const bioOffer = useBiometricOffer();
+  // Demo stats follow the active shake level's dataset (item 8b); level 3 is
+  // byte-identical to the retired data/derived constants.
+  const { avgPerMonth, momChange, sinceLabel, monthsGiving } = demoData;
 
   // The donor's standing "cover the card-processing costs" consent, pre-checked
   // at signup and persisted in AppContext. It is real money on every charge, so
@@ -876,15 +879,19 @@ export default function WebDashboard() {
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
   const userName = hasAccount?.name ?? DEMO_USER.name;
   const userEmail = hasAccount?.email ?? DEMO_USER.email;
+  // The name a greeting may use: a stored real name only, NEVER the email
+  // local part ("Hello safjbdwkfbd" - item 7c). No trustworthy name yet ->
+  // greet without one; the demo visitor keeps DEMO_USER's.
+  const greetName = hasAccount ? greetingNameFor(hasAccount) : DEMO_USER.name;
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   }, []);
 
-  // The one series every chart on this surface plots: MONTHLY_DATA with the
-  // in-progress month swapped for the live multiplied figure, so the final bar
-  // always equals the headline "this month" number.
-  const history = useMemo(() => monthlyHistory(pendingRoundUps), [pendingRoundUps]);
+  // The one series every chart on this surface plots: the active demo level's
+  // month series with the in-progress month swapped for the live multiplied
+  // figure, so the final bar always equals the headline "this month" number.
+  const history = useMemo(() => monthlyHistoryFor(demoData.monthlyData, pendingRoundUps), [demoData, pendingRoundUps]);
 
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb' }} onClick={() => menuOpen && setMenuOpen(false)}>
@@ -902,7 +909,12 @@ export default function WebDashboard() {
         onClose={() => setTransferOrg(false)}
         adminRole={adminRole}
       />
-      <BiometricOfferCard offer={bioOffer} surface="web" />
+      {/* Face ID / biometric enrollment deliberately has NO prompt on the web
+          portal (round-3 item 6): the offer belongs on the phone, where the
+          app surface shows it after sign-in (App.jsx's BiometricOfferCard).
+          A donor who wants a browser passkey can still enroll from Settings'
+          Privacy & Security controls; the WebLockScreen keeps honoring an
+          existing enrollment. */}
       <ChargeReviewAlert surface="web" />
       {/* ── Top nav ──
           zIndex 30/40 here are PAGE CHROME (sticky header, account dropdown),
@@ -911,20 +923,37 @@ export default function WebDashboard() {
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : <CoinMark size={30} />}
-            <div style={{ lineHeight: 1.15, minWidth: 0 }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {brand.appName ?? `${npShort} Round-Up`}
-                {/* The subtle demo-mode marker (Settings toggle / phone shake). */}
-                {demoMode && (
-                  <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
-                    Demo
-                  </span>
-                )}
-              </p>
-              {/* "powered by PocketCache" was here AND in the footer on every
-                  single view. The footer keeps it (Settings owns the attribution
-                  and the version string); the header carries the app name alone. */}
+            {/* Brand-kit top bar (round-3 item 3a). Org bound: the nonprofit
+                is the primary brand, so its logo + app name lead and the
+                PocketCache attribution renders as the coin-arrow WORDMARK
+                ("powered by P(coin)cketCache") - never a plain-text caption.
+                No org: the PocketCache wordmark alone carries the bar, with
+                no redundant "powered by" text beside its own logo. */}
+            {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : null}
+            <div style={{ lineHeight: 1.2, minWidth: 0 }}>
+              {org ? (
+                <>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {brand.appName ?? `${npShort} Round-Up`}
+                    {/* The subtle demo marker names the level (Settings toggle / phone shake). */}
+                    {demoMode && (
+                      <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
+                        Demo {demoLevel}/3
+                      </span>
+                    )}
+                  </p>
+                  <PoweredByWordmark size={11} />
+                </>
+              ) : (
+                <>
+                  <PocketCacheWordmark size={20} />
+                  {demoMode && (
+                    <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
+                      Demo {demoLevel}/3
+                    </span>
+                  )}
+                </>
+              )}
             </div>
           </div>
           <nav style={{ display: 'flex', gap: 4, flex: 1 }}>
@@ -932,11 +961,13 @@ export default function WebDashboard() {
               <button
                 key={t.id}
                 onClick={() => setNavTab(t.id)}
+                // Active tab follows the bound org's brand palette, exactly
+                // like the app's chrome does (item B: org theme parity).
                 style={{
-                  border: 'none', background: navTab === t.id ? '#eef4fa' : 'transparent', cursor: 'pointer',
+                  border: 'none', background: navTab === t.id ? (brand.accentLight ?? '#eef4fa') : 'transparent', cursor: 'pointer',
                   padding: '8px 14px', borderRadius: 10, fontSize: 13.5,
                   fontWeight: navTab === t.id ? 700 : 500,
-                  color: navTab === t.id ? '#003865' : INK.secondary,
+                  color: navTab === t.id ? (brand.primary ?? '#003865') : INK.secondary,
                 }}
               >
                 {t.label}
@@ -948,15 +979,23 @@ export default function WebDashboard() {
             <button
               onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
               aria-label="Account menu"
-              style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid #dbe3ec', background: 'linear-gradient(135deg, #003865, #0B2A4A)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid #dbe3ec', background: brand.gradient ?? 'linear-gradient(135deg, #003865, #0B2A4A)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
             >
               {userName[0]}
             </button>
+            {/* Dropdown (item A): the panel must CONTAIN its content - a long
+                Apple-relay email or name truncates with an ellipsis instead
+                of spilling past the card edge, and the panel itself never
+                exceeds the viewport. */}
             {menuOpen && (
-              <div style={{ position: 'absolute', right: 0, top: 46, width: 240, ...CARD, boxShadow: '0 12px 32px rgba(11,42,74,0.16)', padding: 8, zIndex: 40 }} onClick={e => e.stopPropagation()}>
-                <div style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', marginBottom: 4 }}>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: 13.5, color: INK.primary }}>{userName}</p>
-                  <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>{userEmail}</p>
+              <div
+                data-testid="web-account-dropdown"
+                style={{ position: 'absolute', right: 0, top: 46, width: 260, maxWidth: 'min(300px, calc(100vw - 32px))', ...CARD, boxShadow: '0 12px 32px rgba(11,42,74,0.16)', padding: 8, zIndex: 40, overflow: 'hidden' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', marginBottom: 4, minWidth: 0 }}>
+                  <p title={userName} style={{ margin: 0, fontWeight: 700, fontSize: 13.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</p>
+                  <p title={userEmail} style={{ margin: 0, fontSize: 12, color: INK.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail}</p>
                 </div>
                 {adminRole && (
                   <button
@@ -1016,12 +1055,16 @@ export default function WebDashboard() {
           <>
             <div style={{ marginBottom: 20 }}>
               <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>
-                {greeting}, {userName} 👋
+                {greeting}{greetName ? `, ${greetName}` : ''} 👋
               </h1>
               <p style={{ margin: '4px 0 0', fontSize: 13.5, color: INK.secondary }}>
                 Here&apos;s your giving with {org?.name ?? 'your nonprofit'}.
               </p>
             </div>
+
+            {/* One-time name capture for accounts without a stored display
+                name (item 7c) - renders null for everyone else. */}
+            <NamePromptCard variant="web" />
 
             {/* KPI row */}
             <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 16, display: 'grid', marginBottom: 20 }}>
@@ -1033,6 +1076,7 @@ export default function WebDashboard() {
                   never mistaken for a real one. */}
               <Kpi
                 hero
+                heroBackground={brand.gradient}
                 label="Total donated"
                 value={`$${fmtMoney(totalDonated)}`}
                 sub={demoActive ? `${sinceLabel} · all time` : `${FIRST_MONTH_LABEL} · all time`}
@@ -1059,7 +1103,7 @@ export default function WebDashboard() {
                     : hasRealBankLinked
                       ? realRoundupsFreshness
                       : demoActive
-                        ? `${TRANSACTIONS.length} round-ups so far`
+                        ? `${demoData.transactions.length} round-ups so far`
                         : `${realRoundupsCount} round-ups so far`}
               />
               <Kpi
@@ -1106,7 +1150,7 @@ export default function WebDashboard() {
                 {org?.corporateMatch?.active && (
                   <MatchLine match={org.corporateMatch} onOpen={() => setNavTab('mycause')} />
                 )}
-                <ActivityLinkCard onOpen={() => setNavTab('activity')} demoActive={demoActive} realCount={realRoundupsCount} />
+                <ActivityLinkCard onOpen={() => setNavTab('activity')} demoActive={demoActive} realCount={realRoundupsCount} demoData={demoData} />
               </div>
 
               <div style={{ display: 'grid', gap: 20 }}>
@@ -1138,6 +1182,8 @@ export default function WebDashboard() {
             realRecent={realRoundupsRecent}
             freshness={realRoundupsFreshness}
             demoActive={demoActive}
+            demoData={demoData}
+            momChange={momChange}
           />
         )}
 

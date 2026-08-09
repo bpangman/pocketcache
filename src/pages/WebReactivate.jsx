@@ -4,6 +4,7 @@ import { useTheme } from '../store/ThemeContext';
 import { fmtMoney } from '../lib/format';
 import { nextChargeLabel } from '../lib/billing';
 import { monthsGiving, sinceLabel } from '../data/derived';
+import { greetingNameFor } from '../lib/donorAuth';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import AppleLogo from '../components/AppleLogo';
@@ -271,7 +272,7 @@ export default function WebReactivate() {
                   data-testid="web-reactivate-signout"
                   style={{ width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: INK.primary, fontWeight: 700, fontSize: 14.5 }}
                 >
-                  Sign out{hasAccount?.name ? ` of ${hasAccount.name}'s account` : ''}
+                  Sign out{greetingNameFor(hasAccount) ? ` of ${greetingNameFor(hasAccount)}'s account` : ''}
                 </button>
                 <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
                   Your account stays closed either way  -  signing out just closes this browser session.{' '}

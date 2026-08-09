@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
 import { Z, scrim } from '../lib/overlay';
+import CoinMark from './CoinMark';
 
 // Web only - the native app never shows this popup. Completion handlers also
 // use this to skip straight to the next screen instead of waiting for a
@@ -89,7 +90,8 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
             >
               <X size={16} color="#64748b" />
             </button>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>&#129689;</div>
+            <CoinMark size={40} className="" />
+            <div style={{ height: 12 }} />
             <img
               src={QR_SRC}
               alt="QR code to download PocketCache"
@@ -139,7 +141,7 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
 // One-shot flag: set at donor-signup completion (non-native only), consumed by
 // AppDownloadPrompt when the donor lands on their dashboard. Mirrors
 // WebPortalLinkModal's queueWebPortalPrompt/WebPortalPrompt pair (the native
-// inverse of this one) — the modal has to survive the wizard unmounting the
+// inverse of this one) - the modal has to survive the wizard unmounting the
 // moment `page` flips to 'home', so it can no longer live as local state
 // inside the checkout-confirm screen.
 const PROMPT_KEY = 'pc_app_download_prompt';

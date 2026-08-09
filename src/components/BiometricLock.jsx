@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
+import { greetingNameFor } from '../lib/donorAuth';
 import CoinMark from './CoinMark';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { Z, scrim, centered } from '../lib/overlay';
@@ -80,7 +81,7 @@ export function AppLockScreen({ gate }) {
       className="w-full h-full flex flex-col items-center justify-center px-8 text-center"
       style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)' }}
     >
-      <LockBody gate={gate} name={hasAccount?.name} dark />
+      <LockBody gate={gate} name={greetingNameFor(hasAccount)} dark />
       {/* bottom: 28 was a pixel guess that put this tagline under the home
           indicator on every notched iPhone - and this screen shows on every
           locked launch. Same floor pattern as App.jsx's toast. */}
@@ -97,7 +98,7 @@ export function WebLockScreen({ gate }) {
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ width: 420, maxWidth: '100%', background: '#fff', borderRadius: 20, border: '1px solid #e5e7eb', boxShadow: '0 16px 48px rgba(11,42,74,0.10)', padding: '36px 28px', textAlign: 'center' }}>
-        <LockBody gate={gate} name={hasAccount?.name} />
+        <LockBody gate={gate} name={greetingNameFor(hasAccount)} />
         <p style={{ margin: '22px 0 0', fontSize: 11.5, color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
           <CoinMark size={13} /> Powered by PocketCache
         </p>

@@ -4,103 +4,158 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PocketCache for iPhone</title>
+  <meta name="description" content="PocketCache for iPhone is in early access via TestFlight. Join through your nonprofit's link to get in." />
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="apple-touch-icon" href="/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
+    /* Standalone page - brand tokens inlined from landing/assets/shared.css */
+    :root {
+      --navy: #0B2A4A;
+      --navy-deep: #003865;
+      --navy-900: #001A33;
+      --gold: #FBBF24;
+      --gold-deep: #E5A800;
+      --teal-logo: #5EEAD4;
+      --teal-ui: #0D9488;
+      --teal-50: #E8FBF7;
+      --surface: #F6F8FB;
+      --slate: #64748B;
+      --ink: #0F172A;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Poppins', sans-serif;
-      background: #0B2A4A;
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: radial-gradient(120% 90% at 50% -10%, var(--navy-deep) 0%, var(--navy) 45%, var(--navy-900) 100%);
       color: #fff;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px;
+      padding: 24px 20px;
+      -webkit-font-smoothing: antialiased;
     }
     .card {
       background: #fff;
-      border-radius: 28px;
-      padding: 40px 32px 36px;
-      max-width: 400px;
+      color: var(--ink);
+      border-radius: 26px;
+      padding: 38px 30px 32px;
+      max-width: 430px;
       width: 100%;
       text-align: center;
       box-shadow: 0 24px 64px rgba(11,42,74,0.35);
     }
-    .coin-logo {
-      width: 72px;
-      height: 72px;
-      margin: 0 auto 20px;
-      display: block;
+    /* ── Wordmark: coin replaces the "o" in Pocket, "Cache" in teal ── */
+    .wordmark {
+      font-weight: 800;
+      font-size: 30px;
+      letter-spacing: -0.6px;
+      white-space: nowrap;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      line-height: 1;
+      color: var(--navy);
     }
-    .app-name {
-      font-size: 11px;
+    .wordmark .coin {
+      width: 0.82em; height: 0.82em;
+      display: inline-block;
+      margin: 0 0.02em;
+      position: relative;
+      top: 0.05em;
+    }
+    .wordmark .cache { color: var(--teal-ui); }
+    /* ── Early-access pill ── */
+    .pill {
+      display: inline-block;
+      margin: 22px 0 18px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--teal-50);
+      color: var(--teal-ui);
+      font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #5EEAD4;
-      margin-bottom: 6px;
     }
     h1 {
-      font-size: 24px;
+      font-size: 23px;
       font-weight: 800;
-      color: #0B2A4A;
-      line-height: 1.2;
-      margin-bottom: 16px;
+      color: var(--navy);
+      line-height: 1.25;
+      margin-bottom: 14px;
     }
     .body-copy {
       font-size: 15px;
       line-height: 1.65;
-      color: #475569;
-      margin-bottom: 10px;
+      color: var(--slate);
+      margin-bottom: 16px;
     }
-    .coming-back {
-      font-size: 13px;
-      color: #94a3b8;
-      line-height: 1.55;
-      margin-bottom: 28px;
-    }
-    /* TODO: Replace the div below with a real App Store badge link when the listing goes live */
-    .store-placeholder {
-      display: inline-block;
-      background: #0B2A4A;
-      color: #5EEAD4;
+    .guidance {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 16px 18px;
       font-size: 14px;
+      line-height: 1.6;
+      color: var(--ink);
+      text-align: left;
+      margin-bottom: 24px;
+    }
+    .guidance strong { color: var(--navy); }
+    .cta {
+      display: block;
+      width: 100%;
+      background: var(--navy);
+      color: #fff;
+      font-size: 16px;
       font-weight: 700;
-      border-radius: 14px;
-      padding: 14px 32px;
-      letter-spacing: 0.02em;
-    }
-    .footer {
-      margin-top: 28px;
-      font-size: 11px;
-      color: #94a3b8;
-    }
-    .footer a {
-      color: #5EEAD4;
       text-decoration: none;
+      border-radius: 14px;
+      padding: 15px 24px;
+      transition: background 0.2s, transform 0.06s;
+    }
+    .cta:hover { background: var(--navy-deep); }
+    .cta:active { transform: translateY(1px); }
+    .footer {
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--slate);
+    }
+    .footer a { color: var(--teal-ui); text-decoration: none; font-weight: 600; }
+    .footer .tag { display: block; margin-top: 6px; color: #94a3b8; }
+    @media (max-width: 380px) {
+      .card { padding: 32px 22px 28px; }
+      .wordmark { font-size: 26px; }
+      h1 { font-size: 21px; }
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <img class="coin-logo" src="/coin.png" alt="PocketCache coin logo" />
-    <p class="app-name">PocketCache</p>
-    <h1>PocketCache for iPhone</h1>
+  <main class="card">
+    <!-- Wordmark once: P + coin-arrow (as the "o") + cketCache -->
+    <span class="wordmark" role="img" aria-label="PocketCache">P<svg class="coin" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="50" fill="#E5A800"/><circle cx="50" cy="50" r="44" fill="#FBBF24"/><polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/></svg>cket<span class="cache">Cache</span></span>
+
+    <span class="pill">Early access</span>
+
+    <h1>The iPhone app is in early access</h1>
+
     <p class="body-copy">
-      The PocketCache app is coming to the iPhone App Store soon!
-      Manage your round-up donations, track your giving, and support
-      your favorite nonprofit - all from your pocket.
+      PocketCache for iPhone is in early access via Apple's TestFlight while we finish getting it App Store ready.
     </p>
-    <p class="coming-back">
-      Check back here for the App Store link when we launch.
-    </p>
-    <!-- TODO: Replace this block with the real App Store badge + link when the listing goes live -->
-    <span class="store-placeholder">Coming to the App Store</span>
+
+    <div class="guidance">
+      To get in, join through <strong>your nonprofit's link</strong>. That is how we match you to the right cause and add you to the TestFlight build - the same link your nonprofit shares to sign up for round-up giving.
+    </div>
+
+    <a class="cta" href="https://pocketcache.app/start/">Find your nonprofit's link</a>
+
     <p class="footer">
       <a href="https://pocketcache.app">pocketcache.app</a>
+      <span class="tag">PocketCache - round-up giving software</span>
     </p>
-  </div>
+  </main>
 </body>
 </html>

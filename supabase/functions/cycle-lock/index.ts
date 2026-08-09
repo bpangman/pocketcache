@@ -87,6 +87,7 @@
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { dbRest } from "../_shared/stripe.ts";
 import { sendGmail } from "../_shared/gmail.ts";
+import { brandedEmail, NAVY, para } from "../_shared/emailBrand.ts";
 
 const CHARGE_RUN_KEY = Deno.env.get("CHARGE_RUN_KEY") ?? "";
 // Single-nonprofit phase: every locked cycle resolves to the one sandbox
@@ -127,33 +128,17 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// System font stack + a 560px column, styled with inline attributes only so
-// it renders consistently across email clients (which strip <style> blocks and
-// external CSS). Real <p> margins carry the paragraph spacing - no baked-in
-// hard line breaks mid-sentence, so it reflows cleanly on a phone.
-const EMAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const NAVY = "#0B2A4A";
+// Styled with inline attributes only so it renders consistently across email
+// clients (which strip <style> blocks and external CSS). Real <p> margins carry
+// the paragraph spacing - no baked-in hard line breaks mid-sentence, so it
+// reflows cleanly on a phone. The branded shell (header band + footer) lives in
+// _shared/emailBrand.ts so every PocketCache email shares one look; this file
+// only builds the body copy.
+const DONOR_FOOTNOTE =
+  "You are receiving this because you set up round-up giving in the PocketCache app.";
 
 function emailShell(headingHtml: string, bodyHtml: string): string {
-  return (
-    `<!DOCTYPE html>` +
-    `<html lang="en"><head><meta charset="utf-8"/>` +
-    `<meta name="viewport" content="width=device-width, initial-scale=1"/></head>` +
-    `<body style="margin:0;padding:0;background:#f4f6f8;">` +
-    `<div style="max-width:560px;margin:0 auto;padding:28px 22px;font-family:${EMAIL_FONT};` +
-    `font-size:16px;line-height:1.6;color:#1f2937;background:#ffffff;">` +
-    `<div style="font-size:18px;font-weight:700;color:${NAVY};margin:0 0 22px;">PocketCache</div>` +
-    `<h1 style="font-size:21px;line-height:1.3;font-weight:700;color:${NAVY};margin:0 0 18px;">${headingHtml}</h1>` +
-    bodyHtml +
-    `<div style="margin-top:30px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.6;color:#6b7280;">` +
-    `PocketCache turns your spare change into everyday giving. You are receiving this because you set up round-up giving in the PocketCache app.` +
-    `</div>` +
-    `</div></body></html>`
-  );
-}
-
-function para(html: string): string {
-  return `<p style="margin:0 0 16px;">${html}</p>`;
+  return brandedEmail({ heading: headingHtml, bodyHtml, footnote: DONOR_FOOTNOTE });
 }
 
 /** Variant A (normal locked cycle) vs variant B (roll-forward, under the $5

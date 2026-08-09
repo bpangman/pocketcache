@@ -1,7 +1,7 @@
 import { useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronRight, Settings as SettingsIcon, HelpCircle, LogOut, ArrowLeftRight, Landmark } from 'lucide-react';
+import { ChevronRight, Settings as SettingsIcon, HelpCircle, LogOut, ArrowLeftRight, Landmark, Pencil } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
@@ -17,6 +17,7 @@ import Activity from '../pages/Activity';
 import Share from '../pages/Share';
 import Settings from '../pages/Settings';
 import { useShakeDetector } from '../lib/shake';
+import { DEMO_LEVEL_TOASTS } from '../lib/donorContent';
 
 const SUPPORT_EMAIL = 'support@pocketcache.app';
 
@@ -44,22 +45,29 @@ const PAGES = {
 };
 
 export default function AppShell() {
-  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep, hasAccount, demoMode, setDemoMode, showToast } = useApp();
+  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep, hasAccount, demoLevel, setDemoLevel, showToast, saveDisplayName } = useApp();
   const { resetNpContent } = useNp();
   const brand = useTheme();
   const [showProfile, setShowProfile] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  // Inline "what should we call you" edit inside the account sheet - the
+  // app-side home of the profile-name edit (item 7c). Web parity lives in
+  // WebSettings' identity line.
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
   const Page = PAGES[tab] || Dashboard;
 
-  // Shake-to-toggle demo mode, wired ONCE at the shell level so it works on
+  // Shake-to-cycle demo mode, wired ONCE at the shell level so it works on
   // every donor tab. lib/shake.js owns detection and the iOS motion
   // permission dance (requested on the first tap, gracefully absent when
-  // denied - the Settings toggle remains the fallback). The toast is the
-  // only visible confirmation besides the small "Demo" pill in the header.
+  // denied - the Settings toggle remains the fallback). PROGRESSIVE (round-3
+  // item 8b): each shake advances the demo level 0 -> 1 -> 2 -> 3 -> 0
+  // (small / medium / full dataset / back to real data) instead of a binary
+  // flip; the toast names the level and the header pill shows "Demo n/3".
   useShakeDetector(() => {
-    const next = !demoMode;
-    setDemoMode(next);
-    showToast(next ? 'Demo mode on - sample data' : 'Demo mode off - your real data');
+    const next = (demoLevel + 1) % 4;
+    setDemoLevel(next);
+    showToast(DEMO_LEVEL_TOASTS[next]);
   });
 
   // Identity comes from the signed-in account, exactly as Settings.jsx reads
@@ -98,7 +106,10 @@ export default function AppShell() {
       <Sheet show={showProfile} onClose={() => setShowProfile(false)} title="Your Account">
         {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
         <div className="px-6 pt-2 space-y-1">
-          {/* Avatar + name block */}
+          {/* Avatar + name block. The name is EDITABLE here (item 7c): this
+              sheet is the app's profile card, so "what should we call you"
+              lives on it - saved server-side (donor_profiles.display_name)
+              and into pc_identity in one motion via saveDisplayName. */}
           <div className="flex flex-col items-center py-6 gap-2">
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
@@ -106,7 +117,45 @@ export default function AppShell() {
             >
               {userName[0]}
             </div>
-            <p className="font-bold text-gray-900 text-lg mt-1">{userName}</p>
+            {editingName ? (
+              <form
+                className="flex items-center gap-2 mt-1"
+                onSubmit={e => {
+                  e.preventDefault();
+                  if (nameInput.trim()) saveDisplayName(nameInput);
+                  setEditingName(false);
+                }}
+              >
+                <input
+                  autoFocus
+                  type="text"
+                  value={nameInput}
+                  maxLength={60}
+                  onChange={e => setNameInput(e.target.value)}
+                  placeholder="What should we call you?"
+                  className="bg-gray-50 rounded-xl px-3 py-2 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                  data-testid="account-name-input"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-2 rounded-xl text-white text-sm font-bold"
+                  style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)' }}
+                >
+                  Save
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setNameInput(hasAccount?.nameGuessed ? '' : userName); setEditingName(true); }}
+                className="flex items-center gap-1.5 mt-1"
+                data-testid="account-name-edit"
+                aria-label="Edit your name"
+              >
+                <span className="font-bold text-gray-900 text-lg">{userName}</span>
+                <Pencil size={13} className="text-gray-300" />
+              </button>
+            )}
             <p className="text-gray-400 text-sm">{userEmail}</p>
           </div>
 

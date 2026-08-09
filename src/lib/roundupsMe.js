@@ -20,11 +20,16 @@ const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
 const TIMEOUT_MS = 5000;
 
 /**
- * @param {{ multiplier?: number }} [opts] - pass multiplier to also persist
- *   a multiplier change server-side in the same round trip.
+ * @param {{ multiplier?: number, profile?: { display_name?: string, org_join_code?: string } }} [opts]
+ *   - `multiplier` also persists a multiplier change server-side in the same
+ *     round trip.
+ *   - `profile` upserts the donor's server-side profile (display name and/or
+ *     bound cause join code - see supabase/donor_profiles.sql) in the same
+ *     round trip; the response's `profile` reflects the update.
  * @returns {Promise<null | {
  *   ok: true, linked: boolean, month_key?: string, pending_total_cents?: number,
  *   txn_count?: number, last_synced_at?: string|null, recent?: Array, multiplier: number,
+ *   profile?: null | { display_name: string|null, org_join_code: string|null, org_bound_at: string|null },
  * }>} null on no-session/network-error/timeout/non-2xx - callers fall back to demo data.
  */
 export async function fetchRoundupsMe(opts = {}) {
@@ -34,12 +39,16 @@ export async function fetchRoundupsMe(opts = {}) {
     const token = data?.session?.access_token;
     if (!token) return null; // no real session - demo-only donor, do not call
 
+    const body = {};
+    if (opts.multiplier) body.multiplier = opts.multiplier;
+    if (opts.profile) body.profile = opts.profile;
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     const res = await fetch(`${FUNCTIONS_BASE}/roundups-me`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
-      body: JSON.stringify(opts.multiplier ? { multiplier: opts.multiplier } : {}),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -49,4 +58,17 @@ export async function fetchRoundupsMe(opts = {}) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Persist part of the donor's server-side profile (display name / bound
+ * cause), best-effort and fire-and-forget friendly: resolves null quickly
+ * when there is no session (the common demo-only case), same convention as
+ * fetchRoundupsMe itself. Callers that also want the fresh totals can use
+ * the resolved response, which is a full roundups-me payload.
+ *
+ * @param {{ display_name?: string, org_join_code?: string }} fields
+ */
+export function pushDonorProfile(fields) {
+  return fetchRoundupsMe({ profile: fields });
 }

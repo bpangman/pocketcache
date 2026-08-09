@@ -26,7 +26,9 @@ import {
 import { useAdminAuth, getRememberedAdminEmail, rememberAdminEmail, forgetAdminEmail } from '../lib/adminAuth';
 import { orgAdminLookup } from '../lib/npApi';
 import { loadKey, saveKey, IDENTITY_KEYS } from '../store/identityStore';
-import { useDonorAuth, nativeSSOAvailable } from '../lib/donorAuth';
+import { useDonorAuth, nativeSSOAvailable, greetingNameFor } from '../lib/donorAuth';
+import { fetchRoundupsMe, pushDonorProfile } from '../lib/roundupsMe';
+import BankPaymentAuth from '../components/BankPaymentAuth';
 import { DEMO_USER } from '../data/derived';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
@@ -379,8 +381,10 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
                 style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
               >
                 <span className="text-amber-500">👋</span>
-                <span className="text-amber-800 text-sm font-semibold flex-1">
-                  Welcome back  -  continue as {hasAccount.name} →
+                {/* Never the guessed email-local-part name (item 7c): a real
+                    stored name, else the email itself - both truthful. */}
+                <span className="text-amber-800 text-sm font-semibold flex-1 min-w-0 truncate">
+                  Welcome back  -  continue as {greetingNameFor(hasAccount) ?? hasAccount.email} →
                 </span>
               </motion.button>
             )}
@@ -551,6 +555,10 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   const [agreedTerms, setAgreedTerms] = useState(() => draft?.agreedTerms ?? false);
   const [commsOptin, setCommsOptin] = useState(() => draft?.commsOptin ?? true);
   const [selectedState, setSelectedState] = useState(() => draft?.selectedState ?? '');
+  // "What should we call you?" (round-3 item 7c) - greetings use THIS, never
+  // the email local part. Optional; skipping it just means the one-time
+  // dashboard prompt asks later.
+  const [displayName, setDisplayName] = useState(() => draft?.displayName ?? '');
   const [showTermsHint, setShowTermsHint] = useState(false);
   const [welcomeBack, setWelcomeBack] = useState(false);
   const isCA = selectedState === 'CA';
@@ -585,8 +593,8 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   // step: 'account' is this screen's half of the mapping the outer
   // Onboarding() component reads back in (WEB_STEP_TO_APP_STEP).
   useEffect(() => {
-    saveDonorDraft({ step: 'account', selectedState, agreedTerms, commsOptin });
-  }, [selectedState, agreedTerms, commsOptin]);
+    saveDonorDraft({ step: 'account', selectedState, agreedTerms, commsOptin, displayName });
+  }, [selectedState, agreedTerms, commsOptin, displayName]);
   // "Already have an account? Sign in" (below): a real email/OTP sign-in,
   // independent of the terms/state gate above it - a returning donor is not
   // making a new round-up commitment, so they should not have to re-agree to
@@ -603,13 +611,25 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
   }
 
   // Writes pc_identity the same way for every sign-in path, then continues
-  // the existing flow exactly as it already proceeded after signup.
+  // the existing flow exactly as it already proceeded after signup. The
+  // typed "What should we call you?" answer (item 7c) beats any guessed
+  // name; AppContext's profile sync pushes it server-side once the account
+  // adopts.
   function finishSignup(identity) {
-    saveKey(IDENTITY_KEYS.identity, identity);
-    onIdentityVerified?.(identity);
-    onProviderChosen?.(identity.provider);
+    const named = displayName.trim()
+      ? { ...identity, name: displayName.trim().slice(0, 60), nameGuessed: false }
+      : identity;
+    saveKey(IDENTITY_KEYS.identity, named);
+    onIdentityVerified?.(named);
+    onProviderChosen?.(named.provider);
     saveKey('pc_comms_optin', commsOptin);
-    setChosen(identity.provider);
+    // Session exists from this moment - mirror the binding and typed name
+    // server-side now (item 4/7c), same as WebOnboarding's finishSignup.
+    pushDonorProfile({
+      ...(nonprofit ? { org_join_code: (nonprofit.shortName || nonprofit.id || '').toUpperCase() } : {}),
+      ...(displayName.trim() ? { display_name: displayName.trim().slice(0, 60) } : {}),
+    });
+    setChosen(named.provider);
     setTimeout(() => onNext(), 500);
   }
 
@@ -826,6 +846,21 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
           ) : (
             <>
               <form onSubmit={handleSendCode} className="space-y-2">
+                {/* Name first (item 7c): greetings use this, never the email
+                    local part - an Apple relay address must not become
+                    "Hello safjbdwkfbd". Optional on purpose. */}
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">What should we call you?</label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    maxLength={60}
+                    onChange={e => setDisplayName(e.target.value)}
+                    placeholder="Your first name (optional)"
+                    data-testid="signup-name-input"
+                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                  />
+                </div>
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
                   <input
@@ -1046,7 +1081,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             style={{ ...scrim('opaque'), zIndex: Z.blocking }}
           >
             <div className="text-5xl">👋</div>
-            <p className="text-white font-bold text-2xl text-center">Welcome back, {hasAccount?.name}!</p>
+            <p className="text-white font-bold text-2xl text-center">Welcome back{greetingNameFor(hasAccount) ? `, ${greetingNameFor(hasAccount)}` : ''}!</p>
             <p className="text-white/70 text-sm text-center">Taking you to your dashboard…</p>
           </motion.div>
         )}
@@ -1553,7 +1588,7 @@ export const PAYMENT_OPTIONS = [
   },
 ];
 
-function PaymentMethodScreen({ onNext, onBack }) {
+function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -1562,12 +1597,25 @@ function PaymentMethodScreen({ onNext, onBack }) {
   const { selectedNonprofit, monthlyCap, setMonthlyCap } = useApp();
   const [selected, setSelected] = useState(null);
   const [showApplePay, setShowApplePay] = useState(false);
+  // Bank account as the PAYMENT method needs an authorized SOURCE (round-3
+  // item 2) - the linked tracking bank via an explicit confirm, or a fresh
+  // Plaid connect framed as payment authorization. Until one is set, the
+  // option is not considered chosen. Production note: real ACH debits will
+  // be authorized through Stripe Financial Connections per the launch
+  // checklist (PRELAUNCH.md) - see BankPaymentAuth.jsx.
+  const [achSource, setAchSource] = useState(null);
+  const achReady = selected !== 'ach' || !!achSource;
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
 
   function handleContinue() {
     if (!selected) return;
     if (selected === 'apple_pay') { setShowApplePay(true); return; }
+    if (selected === 'ach') {
+      if (!achSource) return; // the panel below is the way forward
+      onNext('ach', { type: 'ach', label: 'Bank Account', last4: achSource.last4, institution: achSource.institution, authorized: true });
+      return;
+    }
     const opt = PAYMENT_OPTIONS.find(o => o.id === selected);
     onNext(selected, { type: selected, label: opt?.label ?? selected, last4: null });
   }
@@ -1685,6 +1733,22 @@ function PaymentMethodScreen({ onNext, onBack }) {
             </motion.button>
           ))}
 
+          {/* Bank account authorization panel (item 2) - appears the moment
+              the option is picked; Continue stays gated until a source is
+              explicitly authorized. */}
+          {selected === 'ach' && (
+            <div className="rounded-2xl p-4 bg-white" style={{ border: '1.5px solid #e5e7eb' }}>
+              <p className="text-gray-400 text-xs font-bold uppercase tracking-widest pb-2">Bank account to charge</p>
+              <BankPaymentAuth
+                variant="app"
+                linkedBank={linkedBank}
+                authorized={achSource}
+                onAuthorized={src => setAchSource(src)}
+                onClear={() => setAchSource(null)}
+              />
+            </div>
+          )}
+
           <p className="text-gray-400 text-xs text-center px-2 pt-1">
             Change this anytime in Settings. Payments are processed by Stripe  -  not us.
           </p>
@@ -1727,16 +1791,19 @@ function PaymentMethodScreen({ onNext, onBack }) {
 
       <div className="px-4 pt-3 bg-gray-50 border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
           <motion.button
-            whileTap={selected ? { scale: 0.97 } : {}}
+            whileTap={selected && achReady ? { scale: 0.97 } : {}}
             onClick={handleContinue}
             className="w-full py-4 rounded-2xl text-white font-bold text-base"
             style={{
-              background: selected ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-              color: selected ? '#0B2A4A' : '#fff',
-              cursor: selected ? 'pointer' : 'default',
+              background: selected && achReady ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+              color: selected && achReady ? '#0B2A4A' : '#fff',
+              cursor: selected && achReady ? 'pointer' : 'default',
             }}
           >
-            {selected === 'apple_pay' ? 'Pay with Apple Pay →' : selected ? 'Continue →' : 'Choose a payment method'}
+            {!selected ? 'Choose a payment method'
+              : selected === 'apple_pay' ? 'Pay with Apple Pay →'
+                : !achReady ? 'Authorize a bank account above'
+                  : 'Continue →'}
           </motion.button>
           <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
             Your round-ups charge once a month through {npName}&apos;s Stripe. You&apos;ll see &ldquo;{npShort}&rdquo; on your statement. They issue your receipt.
@@ -3002,16 +3069,37 @@ export default function Onboarding() {
   // resolves with no cause on this device comes back to the gate - which
   // greets them by name and asks for the one thing missing, their nonprofit's
   // code - instead of being handed an empty app.
-  function resumeSession() {
+  // With no cause bound on THIS device, ask the server first (round-3 item
+  // 4): donor_profiles.org_join_code is where every bind is mirrored now, so
+  // a returning donor on a fresh phone goes STRAIGHT to a populated
+  // dashboard. Only an identity the server has no binding for still sees the
+  // gate. (AppContext's profile-sync effect provides the same rescue as a
+  // backstop for paths that do not come through here.)
+  async function bindFromServer() {
+    const me = await fetchRoundupsMe();
+    const code = me?.profile?.org_join_code;
+    if (!code) return null;
+    const np = await resolveOrgByCode(code);
+    if (np) setSelectedNonprofit(np);
+    return np;
+  }
+
+  async function resumeSession() {
     const donorOnly = hasAccount && !adminRole;
     const adminOnly = adminRole && !hasAccount;
     if (adminOnly) { setLastMode('admin'); setPage('np-dashboard'); return; }
     if (donorOnly) {
-      if (!selectedNonprofit) { setStep('gate'); return; }
+      if (!selectedNonprofit) {
+        if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return; }
+        setStep('gate'); return;
+      }
       setLastMode('giving'); setPage('home'); return;
     }
     if (lastMode === 'admin' && adminRole) { setPage('np-dashboard'); return; }
-    if (!selectedNonprofit) { setStep('gate'); return; }
+    if (!selectedNonprofit) {
+      if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return; }
+      setStep('gate'); return;
+    }
     setPage('home');
   }
 
@@ -3124,7 +3212,7 @@ export default function Onboarding() {
     />
   );
   if (step === 'card-entry') return <CardEntryScreen onBack={() => setStep('payment-method')} onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null, ...(cardInfo?.brand ? { brand: cardInfo.brand } : {}), ...(cardInfo?.simulated ? { simulated: true } : {}) }); setStep('checkout-confirm'); }} />;
-  if (step === 'payment-method') return <PaymentMethodScreen onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
+  if (step === 'payment-method') return <PaymentMethodScreen linkedBank={connectedBank} onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
   if (step === 'connect-card') return <ConnectCardScreen onBack={backFromConnectCard} onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
   if (step === 'signup') return <SignUpScreen
     onBack={() => { clearDonorDraft(); setSlide(2); setStep('slides'); }}

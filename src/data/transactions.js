@@ -3,7 +3,7 @@
 // Greenwich an evening render pushed the date forward a day and daysAgo(0)
 // produced TOMORROW - the Activity ledger showed a future-dated group sitting
 // above "Today".
-function daysAgo(n) {
+export function daysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
   const m = String(d.getMonth() + 1).padStart(2, '0');

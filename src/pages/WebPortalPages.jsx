@@ -26,10 +26,15 @@ import { useAdminAuth, getRememberedAdminEmail, rememberAdminEmail, forgetAdminE
 import { orgAdminLookup } from '../lib/npApi';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
+import PocketCacheWordmark from '../components/PocketCacheWordmark';
 import MatchBadge from '../components/MatchBadge';
 import ManualCardForm from '../components/ManualCardForm';
 import StripeCardForm from '../components/StripeCardForm';
-import ApplePaySheet from '../components/ApplePaySheet';
+// Web Apple Pay treatment (round-3 item 1): the phone's side-button sheet
+// never renders on this surface - a web-styled confirm where ApplePaySession
+// could exist, an honest greyed-out option elsewhere.
+import WebApplePayConfirm, { webApplePayAvailable, APPLE_PAY_UNAVAILABLE_NOTE } from '../components/WebApplePayConfirm';
+import BankPaymentAuth from '../components/BankPaymentAuth';
 import AppleLogo from '../components/AppleLogo';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 import { requestEmailChange, pollConfirmed, syncServerEmail, hasRealSession, isValidEmail } from '../lib/emailChange';
@@ -324,11 +329,10 @@ export function WebAdminSignIn() {
     <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <CoinMark size={30} />
-          <div style={{ lineHeight: 1.15 }}>
-            <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary }}>PocketCache</p>
-            <p style={{ margin: 0, fontSize: 10.5, color: INK.muted }}>Nonprofit admin</p>
-          </div>
+          {/* Brand-kit top bar (item 3a): the wordmark IS the brand here -
+              no logo + plain-text name pair, no redundant caption. */}
+          <PocketCacheWordmark size={20} />
+          <p style={{ margin: 0, fontSize: 11.5, color: INK.muted, alignSelf: 'flex-end', paddingBottom: 2 }}>Nonprofit admin</p>
         </div>
       </header>
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -1335,9 +1339,13 @@ export function WebSettings() {
     pendingSettingsAction, clearPendingSettingsAction,
     monthlyCap, setMonthlyCap, skipNextCharge, setSkipNextCharge, hasAccount, setHasAccount, feeMonths,
     chargeAdjustment, coverProcessing, setCoverProcessing,
-    demoMode, setDemoMode,
+    demoMode, setDemoMode, saveDisplayName,
   } = useApp();
   const { message: toast, showToast, clearToast } = useWebToast();
+  // Inline profile-name edit (round-3 item 7c) - the web home of "what
+  // should we call you", mirrored server-side via saveDisplayName.
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
 
   const [prefs, setPrefsState] = useState(loadPrefs);
   function updatePref(key, value) {
@@ -1446,9 +1454,39 @@ export function WebSettings() {
         {/* Identity only. The lifetime "$61.05 donated" used to ride along here;
             Overview's hero owns that figure and a settings header is not where a
             donor looks for it. */}
-        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }} data-testid="web-settings-identity">
-          {hasAccount?.name ?? DEMO_USER.name} · {hasAccount?.email ?? DEMO_USER.email} · Member since {memberSince}
-        </p>
+        {editingName ? (
+          <form
+            style={{ display: 'flex', gap: 8, marginTop: 6, maxWidth: 380 }}
+            onSubmit={e => {
+              e.preventDefault();
+              if (nameInput.trim()) { saveDisplayName(nameInput); showToast('Name updated'); }
+              setEditingName(false);
+            }}
+          >
+            <input
+              autoFocus type="text" value={nameInput} maxLength={60}
+              onChange={e => setNameInput(e.target.value)}
+              placeholder="What should we call you?"
+              data-testid="web-settings-name-input"
+              style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '8px 12px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 13.5, color: INK.primary, outline: 'none' }}
+            />
+            <ActionButton onClick={() => { if (nameInput.trim()) { saveDisplayName(nameInput); showToast('Name updated'); } setEditingName(false); }}>Save</ActionButton>
+            <ActionButton tone="quiet" onClick={() => setEditingName(false)}>Cancel</ActionButton>
+          </form>
+        ) : (
+          <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }} data-testid="web-settings-identity">
+            {hasAccount?.name ?? DEMO_USER.name} · {hasAccount?.email ?? DEMO_USER.email} · Member since {memberSince}
+            {hasAccount && (
+              <button
+                onClick={() => { setNameInput(hasAccount?.nameGuessed ? '' : (hasAccount?.name ?? '')); setEditingName(true); }}
+                data-testid="web-settings-name-edit"
+                style={{ marginLeft: 10, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: NAVY, textDecoration: 'underline', padding: 0 }}
+              >
+                Edit name
+              </button>
+            )}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2" style={{ display: 'grid', gap: 20, alignItems: 'start' }}>
@@ -1833,20 +1871,25 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
  * a second copy would be the third implementation of the same Stripe form.
  */
 export function ChangePaymentModal({ show, onClose, onChanged }) {
-  const { selectedNonprofit } = useApp();
+  const { selectedNonprofit, trackedCard } = useApp();
   const [saving, setSaving] = useState(null);
   const [staged, setStaged] = useState(null);   // ready to confirm, NOT committed
   const [cardEntry, setCardEntry] = useState(false);
   const [showApplePay, setShowApplePay] = useState(false);
+  // Bank account requires an authorized SOURCE here too (item 2), same rule
+  // as the signup payment steps on both surfaces.
+  const [bankAuth, setBankAuth] = useState(false);
+  const [applePayOk] = useState(webApplePayAvailable);
   useEffect(() => {
     if (!show) return;
-    const id = setTimeout(() => { setSaving(null); setStaged(null); setCardEntry(false); setShowApplePay(false); }, 0);
+    const id = setTimeout(() => { setSaving(null); setStaged(null); setCardEntry(false); setShowApplePay(false); setBankAuth(false); }, 0);
     return () => clearTimeout(id);
   }, [show]);
 
   function pick(opt) {
     if (opt.id === 'card') { setCardEntry(true); return; }
-    if (opt.id === 'apple_pay') { setShowApplePay(true); return; }
+    if (opt.id === 'apple_pay') { if (applePayOk) setShowApplePay(true); return; }
+    if (opt.id === 'ach') { setBankAuth(true); return; }
     setSaving(opt.id);
     setTimeout(() => {
       setSaving(null);
@@ -1878,6 +1921,16 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
             <ActionButton tone="quiet" onClick={onClose}>Cancel</ActionButton>
           </div>
         </div>
+      ) : bankAuth ? (
+        <>
+          <BankPaymentAuth
+            variant="web"
+            linkedBank={trackedCard}
+            authorized={null}
+            onAuthorized={src => { setBankAuth(false); setStaged({ type: 'ach', label: 'Bank Account', last4: src.last4, institution: src.institution, authorized: true }); }}
+          />
+          <ActionButton tone="quiet" onClick={() => setBankAuth(false)}>Cancel</ActionButton>
+        </>
       ) : cardEntry ? (
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
@@ -1898,29 +1951,31 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
         <>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>Payments are processed by Stripe  -  PocketCache never sees your details.</p>
           <div style={{ display: 'grid', gap: 8 }}>
-            {PAYMENT_METHOD_OPTIONS.map(opt => (
-              <button key={opt.id} onClick={() => pick(opt)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', opacity: saving && saving !== opt.id ? 0.4 : 1 }}>
+            {PAYMENT_METHOD_OPTIONS.map(opt => {
+              const appleDisabled = opt.id === 'apple_pay' && !applePayOk;
+              return (
+              <button key={opt.id} disabled={appleDisabled} onClick={() => pick(opt)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, border: '1.5px solid #e5e7eb', background: appleDisabled ? '#f8fafc' : '#fff', cursor: appleDisabled ? 'default' : 'pointer', textAlign: 'left', opacity: appleDisabled ? 0.55 : saving && saving !== opt.id ? 0.4 : 1 }}>
                 <span style={{ fontSize: 20 }}>{opt.icon}</span>
                 <span style={{ flex: 1 }}>
                   <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: INK.primary }}>{opt.label}</span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>{opt.sub}</span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>{appleDisabled ? APPLE_PAY_UNAVAILABLE_NOTE : opt.sub}</span>
                 </span>
                 {saving === opt.id && <span style={{ fontSize: 11.5, fontWeight: 600, color: '#0D9488' }}>Saving…</span>}
               </button>
-            ))}
+              );
+            })}
           </div>
           <p style={{ margin: '12px 0 0', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>
             Nothing changes until you confirm on the next screen.
           </p>
         </>
       )}
-      <ApplePaySheet
+      <WebApplePayConfirm
         show={showApplePay}
         payee={selectedNonprofit?.name}
         onCancel={() => setShowApplePay(false)}
         onSuccess={info => { setShowApplePay(false); setStaged(info); }}
-        fixed
       />
     </Modal>
   );

@@ -3,9 +3,7 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { ChevronRight } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
-import { TRANSACTIONS, CURRENT_MONTH_PENDING } from '../data/transactions';
-import { momChange } from '../data/derived';
-import { monthlyHistory, taxYearSummary } from '../lib/donorContent';
+import { monthlyHistoryFor, taxYearSummary } from '../lib/donorContent';
 import CustomTooltip from '../components/CustomTooltip';
 import OrgLogo from '../components/OrgLogo';
 import { fmtMoney } from '../lib/format';
@@ -34,9 +32,12 @@ function formatDate(dateStr) {
 export default function Activity() {
   const {
     pendingRoundUps, roundUpMultiplier, selectedNonprofit, setTab,
-    demoActive, realRoundupsRecent, realRoundupsFreshness,
+    demoActive, realRoundupsRecent, realRoundupsFreshness, demoData,
   } = useApp();
   const brand = useTheme();
+  // Demo figures follow the active shake level's dataset (item 8b) - level 3
+  // is byte-identical to the old TRANSACTIONS / derived constants.
+  const { transactions: demoTransactions, currentMonthPending: demoPending, momChange } = demoData;
   // REAL account, demo mode off (item 12): the ledger binds to the server's
   // real round-up rows (roundups-me) - a brand-new account has none, so it
   // renders the friendly empty state instead of the prefilled demo feed.
@@ -49,12 +50,12 @@ export default function Activity() {
     amount: (r.amount_cents ?? 0) / 100,
     roundUp: (r.roundup_cents ?? 0) / 100,
   }));
-  const rows = demoActive ? TRANSACTIONS : realRows;
+  const rows = demoActive ? demoTransactions : realRows;
   const grouped = groupByDate(rows);
   // Raw sum of round-ups before any multiplier  -  the exported constant for
   // the demo dataset, the real rows' own sum for a real account.
   const rawRoundUps = demoActive
-    ? CURRENT_MONTH_PENDING
+    ? demoPending
     : parseFloat(realRows.reduce((s, r) => s + r.roundUp, 0).toFixed(2));
 
   // The chart MUST plot the same numbers the headlines show: monthlyHistory()
@@ -62,7 +63,7 @@ export default function Activity() {
   // MONTHLY_DATA is what made "This Month $9.26" sit above a $4.63 bar at 2x.
   // Demo dataset only: a real account has no multi-month history to chart yet,
   // so the chart itself is demo-gated below.
-  const history = monthlyHistory(pendingRoundUps);
+  const history = monthlyHistoryFor(demoData.monthlyData, pendingRoundUps);
 
   // Current month label derived from the history data  -  never hardcoded
   const currentEntry = history[history.length - 1];
@@ -74,7 +75,7 @@ export default function Activity() {
   // never the demo dataset's totals.
   const taxYear = new Date().getFullYear();
   const tax = demoActive
-    ? taxYearSummary(pendingRoundUps, taxYear)
+    ? taxYearSummary(pendingRoundUps, taxYear, demoData.monthlyData)
     : { donated: 0, months: 0, feeMonths: 0 };
   const taxMonthsLabel = tax.months === 1 ? '1 completed month' : `${tax.months} completed months`;
 

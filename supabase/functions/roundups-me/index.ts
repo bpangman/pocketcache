@@ -1,8 +1,22 @@
 // roundups-me
 //
-// POST { multiplier? } -> { ok, linked, month_key, pending_total_cents,
+// POST { multiplier?, profile? } -> { ok, linked, month_key, pending_total_cents,
 //   txn_count, last_synced_at, recent, multiplier,
-//   give_extras: { pending_cents, lifetime_cents } }
+//   give_extras: { pending_cents, lifetime_cents },
+//   profile: null | { display_name, org_join_code, org_bound_at } }
+//
+// PROFILE (round-3 items 4 + 7c): every response for a resolvable identity
+// also carries the donor's server-side profile from donor_profiles (see
+// supabase/donor_profiles.sql) - their display name and their bound cause's
+// join code - so a returning donor on a brand-new device can land straight
+// on a populated, correctly-greeted dashboard from this ONE round trip.
+// Passing `profile: { display_name?, org_join_code? }` in the body upserts
+// those fields (the client calls this when a donor binds a cause or answers
+// "What should we call you?"), and the response reflects the update. The
+// profile row is keyed by auth user_id first, email as fallback - same
+// identity rules as the stripe_donors lookup below, and deliberately NOT
+// dependent on a stripe_donors row existing (a donor has a name and a cause
+// before any card save ever starts).
 //
 // The on-demand path a signed-in donor's dashboard calls (both the app and
 // the web portal) to show a REAL pending round-up total next to the
@@ -86,8 +100,120 @@ function currentMonthKeyUTC(): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-async function findDonor(req: Request, body: { email?: unknown }): Promise<DonorRow | null> {
-  const user = await resolveUser(req);
+// ─── donor_profiles (display name + cause binding) ──────────────────────────
+
+interface ProfileRow {
+  id: number;
+  user_id: string | null;
+  email: string | null;
+  display_name: string | null;
+  org_join_code: string | null;
+  org_bound_at: string | null;
+}
+
+const PROFILE_SELECT = "id,user_id,email,display_name,org_join_code,org_bound_at";
+const JOIN_CODE_RE = /^[A-Z0-9-]{2,12}$/;
+
+async function loadProfile(
+  user: { id: string; email?: string | null } | null,
+  email: string | null,
+): Promise<ProfileRow | null> {
+  if (user) {
+    const byUser = await dbRest(
+      "GET",
+      `donor_profiles?user_id=eq.${encodeURIComponent(user.id)}&select=${PROFILE_SELECT}&limit=1`,
+    );
+    const row = Array.isArray(byUser.data) ? (byUser.data[0] as ProfileRow | undefined) : undefined;
+    if (row) return row;
+  }
+  if (email) {
+    const byEmail = await dbRest(
+      "GET",
+      `donor_profiles?email=eq.${encodeURIComponent(email)}&select=${PROFILE_SELECT}&limit=1`,
+    );
+    const row = Array.isArray(byEmail.data) ? (byEmail.data[0] as ProfileRow | undefined) : undefined;
+    if (row) return row;
+  }
+  return null;
+}
+
+/**
+ * Apply the body's `profile` update (if any) and return the row to answer
+ * with. Sanitized hard: display_name is a trimmed string capped at 60 chars,
+ * org_join_code must look like a join code (same shape orgStore.JOIN_CODE_RE
+ * accepts, upper-cased here). Unknown fields are ignored.
+ */
+async function upsertProfile(
+  existing: ProfileRow | null,
+  user: { id: string; email?: string | null } | null,
+  email: string | null,
+  requested: unknown,
+): Promise<ProfileRow | null> {
+  const req = (requested && typeof requested === "object") ? requested as Record<string, unknown> : null;
+  const updates: Record<string, unknown> = {};
+  if (req) {
+    if (typeof req.display_name === "string" && req.display_name.trim()) {
+      updates.display_name = req.display_name.trim().slice(0, 60);
+    }
+    if (typeof req.org_join_code === "string") {
+      const code = req.org_join_code.trim().toUpperCase();
+      if (JOIN_CODE_RE.test(code) && code !== existing?.org_join_code) {
+        updates.org_join_code = code;
+        updates.org_bound_at = new Date().toISOString();
+      }
+    }
+  }
+  // Adopt a pre-signup email-keyed row into the real auth user the first
+  // time it is seen with a session - the same email-fallback adoption the
+  // stripe_donors lookup below does implicitly.
+  if (existing && user && !existing.user_id) updates.user_id = user.id;
+
+  if (existing && Object.keys(updates).length > 0) {
+    updates.updated_at = new Date().toISOString();
+    const patched = await dbRest("PATCH", `donor_profiles?id=eq.${existing.id}`, updates);
+    if (!patched.ok) {
+      console.error("roundups-me: profile update failed", patched.status, JSON.stringify(patched.data));
+      return existing;
+    }
+    return { ...existing, ...updates } as ProfileRow;
+  }
+  if (!existing && Object.keys(updates).length > 0 && (user || email)) {
+    const inserted = await dbRest("POST", "donor_profiles", {
+      user_id: user?.id ?? null,
+      email: user?.email ?? email,
+      ...updates,
+    });
+    if (!inserted.ok) {
+      console.error("roundups-me: profile insert failed", inserted.status, JSON.stringify(inserted.data));
+      return null;
+    }
+    // PostgREST returns the inserted row(s) when asked; dbRest may not ask,
+    // so answer from what we know rather than depending on the echo.
+    return {
+      id: -1,
+      user_id: user?.id ?? null,
+      email: user?.email ?? email,
+      display_name: (updates.display_name as string) ?? null,
+      org_join_code: (updates.org_join_code as string) ?? null,
+      org_bound_at: (updates.org_bound_at as string) ?? null,
+    };
+  }
+  return existing;
+}
+
+function publicProfile(row: ProfileRow | null) {
+  if (!row) return null;
+  return {
+    display_name: row.display_name,
+    org_join_code: row.org_join_code,
+    org_bound_at: row.org_bound_at,
+  };
+}
+
+async function findDonor(
+  user: { id: string; email?: string | null } | null,
+  body: { email?: unknown },
+): Promise<DonorRow | null> {
   if (user) {
     const byUser = await dbRest(
       "GET",
@@ -174,14 +300,24 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const donor = await findDonor(req, body);
+    const user = await resolveUser(req);
+    const bodyEmail = typeof body?.email === "string" && body.email.includes("@") ? body.email.trim() : null;
+    const identityEmail = user?.email ?? bodyEmail;
+
+    // Profile first: it exists independently of stripe_donors (a donor has a
+    // name and a bound cause before any card save starts), and the body may
+    // carry an update to persist in this same round trip.
+    const profileRow = await upsertProfile(await loadProfile(user, identityEmail), user, identityEmail, body?.profile);
+    const profile = publicProfile(profileRow);
+
+    const donor = await findDonor(user, body);
 
     if (!donor) {
       // No stripe_donors row at all for this identity - a demo-only visitor
       // who has never started a card save. Same shape as "linked: false"
       // below so this branch is not distinguishable from "found but no
       // bank" (see file header on enumeration).
-      return jsonResponse(req, { ok: true, linked: false, multiplier: 1, give_extras: ZERO_GIVE_EXTRAS });
+      return jsonResponse(req, { ok: true, linked: false, multiplier: 1, give_extras: ZERO_GIVE_EXTRAS, profile });
     }
 
     // Optional multiplier update, persisted before computing the total so a
@@ -207,14 +343,14 @@ Deno.serve(async (req: Request) => {
 
     const items = await findDonorPlaidItems(donor);
     if (items.length === 0) {
-      return jsonResponse(req, { ok: true, linked: false, multiplier, give_extras: giveExtras });
+      return jsonResponse(req, { ok: true, linked: false, multiplier, give_extras: giveExtras, profile });
     }
 
     if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
       console.error("roundups-me: missing PLAID_CLIENT_ID or PLAID_SECRET secret");
       // Configuration problem, not "no bank" - but still fail soft into the
       // demo fallback rather than surfacing a scary error to a donor.
-      return jsonResponse(req, { ok: true, linked: false, multiplier, give_extras: giveExtras });
+      return jsonResponse(req, { ok: true, linked: false, multiplier, give_extras: giveExtras, profile });
     }
 
     let latestSync: string | null = null;
@@ -266,7 +402,7 @@ Deno.serve(async (req: Request) => {
       last_synced_at: latestSync,
       recent,
       multiplier,
-      give_extras: giveExtras,
+      give_extras: giveExtras, profile,
     });
   } catch (err) {
     console.error("roundups-me: unexpected error", err);
