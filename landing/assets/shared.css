@@ -247,14 +247,23 @@ h2.section-title {
 .flow-arrow.teal { color: var(--teal-ui); }
 @media (max-width: 760px) { .flow { flex-direction: column; } .flow-arrow { transform: rotate(90deg); padding: 6px 0; } }
 
-/* ── Device frames ── */
+/* ── Device frames ──
+   App screenshots are captured at exactly 390x844 (see the landing screenshot
+   script). phone-screen locks that same ratio with aspect-ratio rather than a
+   fixed pixel height, so sizing stays width-driven and every phone mock stays
+   undistorted at any column width instead of being squashed to fit a box.
+   object-fit:cover + object-position:top is a safety net for the rare shot
+   that isn't captured at exactly 390:844 - it crops instead of stretching. */
 .phone-frame {
   width: 100%; max-width: 300px; margin: 0 auto;
   background: var(--navy-900); border-radius: 42px; padding: 12px;
   box-shadow: var(--card-shadow-lg);
 }
-.phone-frame .phone-screen { border-radius: 32px; overflow: hidden; background: #fff; position: relative; }
-.phone-frame .phone-screen img { width: 100%; display: block; }
+.phone-frame .phone-screen {
+  aspect-ratio: 390 / 844;
+  border-radius: 32px; overflow: hidden; background: #fff; position: relative;
+}
+.phone-frame .phone-screen img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: top; }
 .phone-frame .notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 22px; background: var(--navy-900); border-radius: 0 0 16px 16px; z-index: 2; }
 
 .browser-frame {
