@@ -652,7 +652,13 @@ function ThemedApp() {
   // Donors arriving through an org's join link (?org=CODE)  -  or admins signing
   // in from their micro-site (?npsignin=1) or listing their org (?npsignup=1)  -
   // get the real app experience: full-bleed on phones, a real webpage in a
-  // desktop browser. ?app=1 forces it too. Everyone else gets the phone-mockup
+  // desktop browser. ?app=1 forces it too, and so do the device-aware entry
+  // params ?signin=1 (donor sign-in) and ?join=1 (donor join/code entry) - the
+  // marketing site's own header/CTA links, so a desktop click lands on the real
+  // web portal (WebOnboarding's signin/join step) instead of this demo shell,
+  // and a mobile/native tap lands on the app's own sign-in/join gate. See
+  // WebExperience and Onboarding.jsx's `step` initializer for where each of
+  // those two params is actually read. Everyone else gets the phone-mockup
   // demo shell EXCEPT a device that already has a session: `hasAccount` (an
   // identity with pc_donor_role) or `adminRole` (pc_admin_role) means someone
   // signed in here before, and a returning donor or admin lands on bare /demo/
@@ -677,6 +683,8 @@ function ThemedApp() {
       params.get('npsignin') === '1' ||
       params.get('npsignup') === '1' ||
       params.get('app') === '1' ||
+      params.get('signin') === '1' ||
+      params.get('join') === '1' ||
       window.Capacitor?.isNativePlatform?.() ||
       hasAccount ||
       adminRole ||
@@ -715,6 +723,14 @@ function ThemedApp() {
   // mismatch at this one mount-time read; it does not fight in-app navigation,
   // and a cancelled donor's deliberate page='onboarding' (cancelAccount) is
   // left alone so WebReactivate / the mobile cancel flow still take over.
+  //
+  // ?signin=1 / ?join=1 are deliberately NOT in hasEntryParam below, unlike
+  // the params they sit next to: those two are marketing-site entry points
+  // whose whole job is "route this NEW visitor to the right onboarding
+  // door," so a device that already has a session should skip that door
+  // entirely and get the correction below, straight to its dashboard -
+  // exactly the "signed-in user never sees onboarding again" guarantee this
+  // effect exists to provide.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hasEntryParam = params.get('org') || params.get('npsignin') === '1' || params.get('npsignup') === '1' || params.get('app') === '1';
@@ -814,6 +830,11 @@ function WebExperience() {
       org: findOrgByCode(code),
       npsignin: params.get('npsignin') === '1',
       npsignup: params.get('npsignup') === '1' || npstripe === 'return' || npstripe === 'refresh',
+      // ?signin=1 / ?join=1: the marketing site's device-aware entry params.
+      // WebOnboarding reads this to open on its 'signin' or 'join' step
+      // instead of its default (org ? 'account' : 'join'). Only one can win;
+      // signin is checked first since it is the more specific ask.
+      donorIntent: params.get('signin') === '1' ? 'signin' : params.get('join') === '1' ? 'join' : null,
     };
   });
   // A join code this device has never seen (a custom org created/joined on a
@@ -917,6 +938,7 @@ function WebExperience() {
         <WebOnboarding
           entryOrg={entry.org}
           entryCode={entry.code}
+          entryIntent={entry.donorIntent}
           onAdminSignIn={() => setAdminSignIn(true)}
         />
       </LazySurface>
@@ -961,6 +983,7 @@ function WebExperience() {
       <WebOnboarding
         entryOrg={entry.org}
         entryCode={entry.code}
+        entryIntent={entry.donorIntent}
         onAdminSignIn={() => setAdminSignIn(true)}
       />
     </LazySurface>

@@ -2852,6 +2852,12 @@ export default function Onboarding() {
     // src/lib/donorAuth.js) - land back on the signup screen so it can pick
     // up the completed session instead of dumping the donor at the gate.
     if (urlP.get('authResume') === 'app') return 'signup';
+    // ?signin=1 / ?join=1: the marketing site's device-aware entry params
+    // (see App.jsx's appEntry). On mobile web / native this is the app's own
+    // gate, not WebOnboarding's - GateSignInScreen for signin, OrgGateScreen
+    // (the plain 'gate' step, same as the default below) for join.
+    if (urlP.get('signin') === '1') return 'gate-signin';
+    if (urlP.get('join') === '1') return 'gate';
     const mappedDraftStep = donorDraft?.step && WEB_STEP_TO_APP_STEP[donorDraft.step];
     if (mappedDraftStep && selectedNonprofit) return mappedDraftStep;
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';

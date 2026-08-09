@@ -254,7 +254,7 @@ function Checkbox({ checked, onChange, children }) {
   );
 }
 
-export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
+export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdminSignIn }) {
   const {
     selectedNonprofit, setSelectedNonprofit, hasAccount, accountStatus,
     setHasAccount, setAccountStatus, setLastMode, setTrackedCard, setPaymentMethod,
@@ -282,6 +282,13 @@ export default function WebOnboarding({ entryOrg, entryCode, onAdminSignIn }) {
     // even if a stale draft from before the redirect suggests otherwise.
     if (new URLSearchParams(window.location.search).get('authResume') === 'web') return 'account';
     if (draft?.step) return draft.step;
+    // entryIntent: the marketing site's device-aware ?signin=1 / ?join=1 links
+    // (see App.jsx's WebExperience). A returning donor's "Sign in" click opens
+    // straight on this wizard's own sign-in door instead of the join/code
+    // step; "Start giving" opens on the join/code step explicitly, same as the
+    // default below, but without depending on `org` being unset.
+    if (entryIntent === 'signin') return 'signin';
+    if (entryIntent === 'join') return 'join';
     return org ? 'account' : 'join';
   });
   // Join step. A join link whose code this device cannot resolve prefills the
