@@ -31,20 +31,16 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
 <style>
   /* ── Hero (page-specific) ── */
   .hero {
-    background: linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 55%, var(--navy-900) 100%);
-    padding: 140px 20px 88px;
+    background:
+      radial-gradient(ellipse 55% 75% at 78% 22%, rgba(94,234,212,0.14) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 70% at 6% 96%, rgba(251,191,36,0.10) 0%, transparent 60%),
+      linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 55%, var(--navy-900) 100%);
+    padding: 148px 20px 104px;
     position: relative; overflow: hidden;
   }
   .hero::before {
-    content: ''; position: absolute; top: -240px; right: -160px;
-    width: 620px; height: 620px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(94,234,212,0.16) 0%, transparent 68%);
-    pointer-events: none;
-  }
-  .hero::after {
-    content: ''; position: absolute; bottom: -220px; left: -180px;
-    width: 560px; height: 560px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(251,191,36,0.14) 0%, transparent 68%);
+    content: ''; position: absolute; inset: 0;
+    background-image: var(--coin-pattern);
     pointer-events: none;
   }
   .hero-inner {
@@ -53,35 +49,52 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
   }
   .hero-tag {
     display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(94,234,212,0.14); color: var(--teal-logo);
-    border: 1px solid rgba(94,234,212,0.28);
+    background: rgba(94,234,212,0.12); color: var(--teal-logo);
+    border: 1px solid rgba(94,234,212,0.26);
     padding: 7px 15px; border-radius: 999px;
-    font-size: 14px; font-weight: 700; margin-bottom: 20px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 22px;
+  }
+  .hero-tag::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--gold) 0%, var(--gold-deep) 90%);
   }
   .hero h1 {
-    font-size: clamp(35px, 5.1vw, 58px);
-    font-weight: 800; line-height: 1.08;
-    letter-spacing: -1.6px; color: #fff;
+    font-size: clamp(37px, 5.4vw, 64px);
+    font-weight: 800; line-height: 1.05;
+    letter-spacing: -0.035em; color: #fff;
   }
   .hero h1 .accent { color: var(--teal-logo); }
   .hero-sub {
     font-size: 18.5px; color: rgba(255,255,255,0.76);
-    line-height: 1.7; margin-top: 20px; max-width: 480px;
+    line-height: 1.7; margin-top: 22px; max-width: 480px;
   }
-  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 32px; }
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
   .hero-note { margin-top: 22px; font-size: 14px; color: rgba(255,255,255,0.5); }
 
-  /* ── Receipt card visual ── */
-  .receipt-wrap { display: flex; justify-content: center; }
+  /* ── Hero art: layered floating fragments, not a screenshot ── */
+  .hero-art { position: relative; display: flex; justify-content: center; padding: 34px 0 46px; }
+  .hero-art .glow {
+    position: absolute; left: 50%; top: 50%; width: 560px; height: 560px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(94,234,212,0.20) 0%, rgba(94,234,212,0.05) 45%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-art .ring-field { color: var(--teal-logo); }
+  .hero-art .ring-field span:nth-child(1) { width: 380px; height: 380px; }
+  .hero-art .ring-field span:nth-child(2) { width: 480px; height: 480px; opacity: 0.09; }
+  .hero-art .ring-field span:nth-child(3) { width: 590px; height: 590px; opacity: 0.05; }
+
   .receipt-card {
-    width: 100%; max-width: 320px; background: #fff; border-radius: 22px;
-    padding: 26px 24px 22px; box-shadow: var(--card-shadow-lg);
+    width: 100%; max-width: 320px; background: #fff; border-radius: var(--r-lg);
+    padding: 26px 24px 22px; box-shadow: var(--shadow-3);
     font-family: 'Poppins', sans-serif;
+    position: relative; transform: rotate(-2.5deg);
   }
   .receipt-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
   .receipt-store { font-weight: 800; color: var(--navy); font-size: 16px; }
   .receipt-date { font-size: 12.5px; color: var(--slate-400); }
-  .receipt-row { display: flex; justify-content: space-between; font-size: 15px; color: var(--slate); padding: 7px 0; }
+  .receipt-row { display: flex; justify-content: space-between; font-size: 15px; color: var(--slate); padding: 7px 0; font-variant-numeric: tabular-nums; }
   .receipt-row.up { color: var(--teal-700); font-weight: 600; }
   .receipt-divider { border-top: 1px dashed var(--line); margin: 8px 0; }
   .receipt-row.highlight { font-size: 18px; font-weight: 800; color: var(--green); padding: 10px 0 4px; }
@@ -91,12 +104,32 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
   }
   .receipt-outer { position: relative; }
 
+  /* Floating round-up chip, breaking the receipt's top-right corner */
+  .hero-chip {
+    position: absolute; top: -44px; right: -58px; z-index: 2;
+    transform: rotate(2deg);
+  }
+  /* Floating monthly-total card, bottom left, overlapping the receipt edge
+     without covering the "To your nonprofit" punchline row */
+  .hero-month {
+    position: absolute; bottom: -62px; left: -86px; z-index: 2;
+    transform: rotate(1.5deg); min-width: 196px;
+  }
+  .hero-month .ms-spark { color: var(--teal-ui); }
+
+  @media (max-width: 1080px) {
+    .hero-chip { right: -8px; }
+    .hero-month { left: -20px; }
+  }
   @media (max-width: 900px) {
-    .hero { padding: 120px 20px 64px; }
+    .hero { padding: 124px 20px 76px; }
     .hero-inner { grid-template-columns: 1fr; text-align: center; }
     .hero-sub { margin-left: auto; margin-right: auto; }
     .hero-actions { justify-content: center; }
-    .receipt-card { margin-top: 12px; }
+    .hero-art { padding: 40px 0 52px; margin-top: 4px; }
+    .hero-art .glow { width: 420px; height: 420px; }
+    .hero-chip { right: -4px; top: -34px; }
+    .hero-month { left: -4px; bottom: -52px; }
   }
 </style>
 </head>
@@ -147,8 +180,10 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
       </div>
       <p class="hero-note">$0 for nonprofits, always. Flat $1 for donors, only in months they round up.</p>
     </div>
-    <div class="receipt-wrap">
-      <div class="receipt-outer">
+    <div class="hero-art" role="img" aria-label="A purchase receipt rounding $6.40 up to $7.00, with a floating 60-cent round-up chip and a monthly total card showing $18.40 so far this month">
+      <span class="glow" aria-hidden="true"></span>
+      <span class="ring-field" aria-hidden="true"><span></span><span></span><span></span></span>
+      <div class="receipt-outer" aria-hidden="true">
         <div class="receipt-card">
           <div class="receipt-head">
             <span class="receipt-store">Corner Market</span>
@@ -160,6 +195,18 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
           <div class="receipt-row highlight"><span>To your nonprofit</span><span>+$0.60</span></div>
           <div class="receipt-foot">Round-ups add up all month, then charge once, straight to your nonprofit.</div>
         </div>
+        <span class="chip-float hero-chip drift">
+          <svg class="chip-coin" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="50" fill="#E5A800"/><circle cx="50" cy="50" r="44" fill="#FBBF24"/><polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/></svg>
+          <span><span class="chip-amt">+$0.60</span> round-up<span class="chip-sub">straight to your nonprofit</span></span>
+        </span>
+        <span class="mini-stat-card hero-month drift-2">
+          <span class="ms-label">August so far</span>
+          <span class="ms-value" style="display:block;">$18.40</span>
+          <svg class="ms-spark" width="150" height="30" viewBox="0 0 150 30" fill="none" aria-hidden="true">
+            <path d="M2 26 C 18 24, 28 21, 42 20 S 70 17, 84 13 S 118 9, 148 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="148" cy="4" r="3.5" fill="currentColor"/>
+          </svg>
+        </span>
       </div>
     </div>
   </div>
@@ -171,7 +218,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     <p class="badge reveal">The short version</p>
     <h2 class="section-title reveal">Three steps. That's the whole product.</h2>
     <p class="section-sub reveal">No new habits for donors, no new work for your nonprofit.</p>
-    <div class="steps">
+    <div class="steps stagger">
       <div class="step reveal">
         <div class="step-icon" aria-hidden="true">&#128179;</div>
         <p class="step-num">Step 1</p>
@@ -200,7 +247,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
   <div class="container center">
     <p class="badge badge-dark reveal">Why it works</p>
     <h2 class="section-title reveal">Built so the money goes where it should.</h2>
-    <div class="stats-grid">
+    <div class="stats-grid stagger">
       <div class="stat-card reveal">
         <p class="stat-num">$0</p>
         <p class="stat-label">Your nonprofit ever pays PocketCache, forever</p>

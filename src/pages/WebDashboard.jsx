@@ -36,15 +36,10 @@ import {
 // convention documented in WebPortalPages.jsx (see the "data-testid convention"
 // block there). Do not invent a second naming scheme here.
 
-const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
+import { INK, CARD, SHADOW, RADIUS, HERO_TEXTURE, NUMS } from '../lib/webTheme';
+
 const SERIES = '#0D9488';       // validated vs light surface (3:1+, chroma/lightness pass)
 const METER = '#D97706';        // validated match-meter fill
-const CARD = {
-  background: '#fff',
-  borderRadius: 16,
-  border: '1px solid #e5e7eb',
-  boxShadow: '0 1px 2px rgba(11,42,74,0.04)',
-};
 
 // Money formatting comes from lib/format. This file used to define its own
 // byte-identical `fmtMoney`, which is how a second formatter (`.toFixed(2)`)
@@ -114,18 +109,26 @@ function GivingChart({ data }) {
   return (
     <div style={{ position: 'relative' }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Monthly giving totals">
-        {/* Recessive gridlines + y labels */}
+        <defs>
+          {/* Editorial bar treatment: a soft vertical ramp instead of a flat
+              default-chart fill (same move as the marketing fee chart). */}
+          <linearGradient id="webGivingBar" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#14B8A6" />
+            <stop offset="1" stopColor={SERIES} />
+          </linearGradient>
+        </defs>
+        {/* Recessive dashed gridlines + y labels */}
         {ticks.map(t => {
           const y = PAD.top + plotH - (t / yMax) * plotH;
           return (
             <g key={t}>
-              <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="#eef2f7" strokeWidth="1" />
+              <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="#E6EBF2" strokeWidth="1" strokeDasharray="3 5" />
               <text x={PAD.left - 8} y={y + 3.5} textAnchor="end" fontSize="10" fill={INK.muted}>${t}</text>
             </g>
           );
         })}
         {/* Baseline */}
-        <line x1={PAD.left} x2={W - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} stroke="#e2e8f0" strokeWidth="1" />
+        <line x1={PAD.left} x2={W - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} stroke="#DDE4EC" strokeWidth="1.5" />
 
         {data.map((m, i) => {
           const inProgress = i === n - 1;
@@ -136,9 +139,9 @@ function GivingChart({ data }) {
           return (
             <g key={`${m.month}${m.year}`}>
               {inProgress ? (
-                <path d={barPath(x, y, barW, h)} fill="#ccfbf1" stroke={SERIES} strokeWidth="1.5" />
+                <path d={barPath(x, y, barW, h)} fill="#ccfbf1" stroke={SERIES} strokeWidth="1.5" strokeDasharray="4 3" />
               ) : (
-                <path d={barPath(x, y, barW, h)} fill={SERIES} opacity={hover === null || hover === i ? 1 : 0.55} />
+                <path d={barPath(x, y, barW, h)} fill="url(#webGivingBar)" opacity={hover === null || hover === i ? 1 : 0.55} />
               )}
               {labeled && (
                 <text
@@ -169,8 +172,9 @@ function GivingChart({ data }) {
             left: `${((PAD.left + hover * slot + slot / 2) / W) * 100}%`,
             top: 0,
             transform: 'translateX(-50%)',
-            background: '#0f172a', color: '#fff', borderRadius: 8,
-            padding: '5px 9px', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', pointerEvents: 'none',
+            background: '#0f172a', color: '#fff', borderRadius: 10,
+            padding: '5px 10px', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', pointerEvents: 'none',
+            boxShadow: SHADOW.md,
           }}
         >
           {data[hover].month} · ${fmtMoney(data[hover].donated)}
@@ -186,18 +190,28 @@ function Kpi({ label, value, sub, hero = false, pill = null, testId, heroBackgro
   return (
     <div data-testid={testId} style={hero
       // Hero tile follows the bound org's brand gradient, same as the app's
-      // hero donation card (item B: org theme parity on web).
-      ? { ...CARD, border: 'none', background: heroBackground ?? 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)', padding: '18px 20px' }
+      // hero donation card (item B: org theme parity on web). The faint dot
+      // grid + oversized coin-arrow watermark are the same micro-detail
+      // language the marketing site's dark bands carry.
+      ? { ...CARD, border: 'none', background: heroBackground ?? 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)', boxShadow: SHADOW.md, padding: '18px 20px', position: 'relative', overflow: 'hidden' }
       : { ...CARD, padding: '18px 20px' }}>
-      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hero ? 'rgba(255,255,255,0.65)' : INK.muted }}>
+      {hero && (
+        <>
+          <span aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: HERO_TEXTURE, pointerEvents: 'none' }} />
+          <svg aria-hidden viewBox="0 0 100 100" style={{ position: 'absolute', right: -18, bottom: -26, width: 110, height: 110, opacity: 0.10, pointerEvents: 'none' }}>
+            <polygon points="50,6 12,44 32,44 32,94 68,94 68,44 88,44" fill="#fff" />
+          </svg>
+        </>
+      )}
+      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: hero ? 'rgba(255,255,255,0.65)' : INK.muted, position: 'relative' }}>
         {label}
       </p>
-      <p style={{ margin: '6px 0 2px', fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px', color: hero ? '#fff' : INK.primary }}>
+      <p style={{ margin: '6px 0 2px', fontSize: 33, fontWeight: 800, letterSpacing: '-0.02em', ...NUMS, color: hero ? '#fff' : INK.primary, position: 'relative' }}>
         {value}
       </p>
-      <p style={{ margin: 0, fontSize: 14.5, color: hero ? 'rgba(255,255,255,0.75)' : INK.secondary }}>{sub}</p>
+      <p style={{ margin: 0, fontSize: 14.5, color: hero ? 'rgba(255,255,255,0.75)' : INK.secondary, position: 'relative' }}>{sub}</p>
       {pill && (
-        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 13.5, fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, padding: '3px 10px' }}>
+        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 13.5, fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: RADIUS.pill, padding: '3px 10px', position: 'relative' }}>
           {pill}
         </span>
       )}
@@ -601,14 +615,14 @@ function EstimateCard({
         <button
           onClick={onAdjust}
           data-testid="web-adjust-charge-button"
-          style={{ width: '100%', marginTop: 12, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
+          style={{ width: '100%', marginTop: 12, padding: '10px 14px', borderRadius: RADIUS.pill, border: '1px solid #CBD8E4', background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
         >
           Adjust this charge →
         </button>
       )}
       <button
         onClick={onGiveExtra}
-        style={{ width: '100%', marginTop: 8, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
+        style={{ width: '100%', marginTop: 8, padding: '10px 14px', borderRadius: RADIUS.pill, border: '1px solid #CBD8E4', background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
       >
         💚 Give a little extra…
       </button>
@@ -808,7 +822,7 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
               onClick={onSettings}
               data-testid="web-taxyear-settings-link"
               style={{
-                width: '100%', marginTop: 14, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1',
+                width: '100%', marginTop: 14, padding: '10px 14px', borderRadius: RADIUS.pill, border: '1px solid #CBD8E4',
                 background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, textAlign: 'left',
               }}
@@ -893,7 +907,7 @@ export default function WebDashboard() {
   const history = useMemo(() => monthlyHistoryFor(demoData.monthlyData, pendingRoundUps), [demoData, pendingRoundUps]);
 
   return (
-    <div style={{ minHeight: '100dvh', background: '#f6f8fb' }} onClick={() => menuOpen && setMenuOpen(false)}>
+    <div style={{ minHeight: '100dvh', background: 'linear-gradient(180deg, #EDF2F8 0%, #F6F8FB 260px)' }} onClick={() => menuOpen && setMenuOpen(false)}>
       <GiveExtraModal show={giveExtra} onClose={() => setGiveExtra(false)} />
       <AdjustChargeModal
         show={adjustCharge}
@@ -919,7 +933,7 @@ export default function WebDashboard() {
           zIndex 30/40 here are PAGE CHROME (sticky header, account dropdown),
           not overlays: lib/overlay.js's Z scale starts at the sheet/modal layer
           and every scrim in this portal sits above both. Nothing to convert. */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
+      <header style={{ background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(18px) saturate(1.4)', WebkitBackdropFilter: 'blur(18px) saturate(1.4)', borderBottom: '1px solid rgba(11,42,74,0.06)', position: 'sticky', top: 0, zIndex: 30 }}>
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px', height: 76, display: 'flex', alignItems: 'center', gap: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             {/* Brand-kit top bar (round-3 item 3a). Org bound: the nonprofit
@@ -964,9 +978,10 @@ export default function WebDashboard() {
                 // like the app's chrome does (item B: org theme parity).
                 style={{
                   border: 'none', background: navTab === t.id ? (brand.accentLight ?? '#eef4fa') : 'transparent', cursor: 'pointer',
-                  padding: '10px 16px', borderRadius: 11, fontSize: 15.5,
+                  padding: '10px 18px', borderRadius: RADIUS.pill, fontSize: 15.5,
                   fontWeight: navTab === t.id ? 700 : 500,
                   color: navTab === t.id ? (brand.primary ?? '#003865') : INK.secondary,
+                  transition: 'background 0.2s, color 0.2s',
                 }}
               >
                 {t.label}

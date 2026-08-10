@@ -7,6 +7,7 @@ import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
 import { useDonorAuth, nativeSSOAvailable, greetingNameFor } from '../lib/donorAuth';
+import { INK, NAVY, PANEL, RADIUS } from '../lib/webTheme';
 import { fetchRoundupsMe, pushDonorProfile } from '../lib/roundupsMe';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, PAYMENT_OPTIONS } from './Onboarding';
@@ -56,14 +57,8 @@ import { loadDonorDraft, saveDonorDraft, clearDonorDraft, DEEP_LINK_MAP } from '
 // Before this existed the codeless donor fell through App.jsx's router into the
 // WebPortal column and got the phone UI at 440px on a 1440px page.
 
-const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
-const NAVY = '#003865';
-const PANEL = {
-  background: '#fff',
-  borderRadius: 20,
-  border: '1px solid #e5e7eb',
-  boxShadow: '0 16px 48px rgba(11,42,74,0.08), 0 2px 8px rgba(11,42,74,0.05)',
-};
+// Ink, panel and depth tokens come from the shared web design vocabulary
+// (lib/webTheme), imported above with the other libs.
 
 const STEPS = [
   { id: 'account', label: 'Create your account' },
@@ -211,7 +206,7 @@ function NonprofitCta({ onSignup, placement = 'above' }) {
         onClick={onSignup}
         data-testid="web-nonprofit-cta"
         style={{
-          width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer',
+          width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
           background: `linear-gradient(135deg, ${NAVY}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 17,
         }}
       >
@@ -245,7 +240,7 @@ function PrimaryButton({ children, onClick, disabled }) {
       onClick={onClick}
       disabled={disabled}
       style={{
-        width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: disabled ? 'default' : 'pointer',
+        width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: disabled ? 'default' : 'pointer',
         background: disabled
           ? 'linear-gradient(135deg, #d1d5db, #9ca3af)'
           : themed ? (brand.headerGradient ?? brand.gradient) : `linear-gradient(135deg, ${NAVY}, #001a33)`,
@@ -855,7 +850,7 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                   <button
                     onClick={() => setStep('signin')}
                     data-testid="web-join-signin"
-                    style={{ width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#f0f4f8', color: '#0B2A4A', fontWeight: 700, fontSize: 17 }}
+                    style={{ width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer', background: '#f0f4f8', color: '#0B2A4A', fontWeight: 700, fontSize: 17 }}
                   >
                     Already have an account? Sign in
                   </button>
@@ -1205,7 +1200,7 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     data-testid="web-apple-pay-pill"
                     aria-disabled={!applePayOk}
                     style={{
-                      width: '100%', padding: '13px 0', borderRadius: 14, border: 'none', cursor: applePayOk ? 'pointer' : 'default',
+                      width: '100%', padding: '13px 0', borderRadius: RADIUS.pill, border: 'none', cursor: applePayOk ? 'pointer' : 'default',
                       background: applePayOk ? '#000' : '#e5e7eb', color: applePayOk ? '#fff' : '#9ca3af', fontWeight: 700, fontSize: 17,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 6,
                     }}

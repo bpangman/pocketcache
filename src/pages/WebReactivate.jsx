@@ -9,6 +9,7 @@ import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import AppleLogo from '../components/AppleLogo';
 import { ChangePaymentModal } from './WebPortalPages';
+import { INK, NAVY, PANEL, RADIUS } from '../lib/webTheme';
 
 // ─── Web-native closed account / reactivation ────────────────────────────────
 // The last desktop donor journey that still rendered the PHONE UI inside a
@@ -39,14 +40,8 @@ import { ChangePaymentModal } from './WebPortalPages';
 //
 // "BACK TO START" HAS NO WEB EQUIVALENT - see the secondary actions below.
 
-const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
-const NAVY = '#003865';
-const PANEL = {
-  background: '#fff',
-  borderRadius: 20,
-  border: '1px solid #e5e7eb',
-  boxShadow: '0 16px 48px rgba(11,42,74,0.08), 0 2px 8px rgba(11,42,74,0.05)',
-};
+// Ink, panel and depth tokens come from the shared web design vocabulary
+// (lib/webTheme), imported above with the other libs.
 
 const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' };
 
@@ -66,7 +61,7 @@ function PrimaryButton({ children, onClick, disabled, testId }) {
       disabled={disabled}
       data-testid={testId}
       style={{
-        width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: disabled ? 'default' : 'pointer',
+        width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: disabled ? 'default' : 'pointer',
         background: disabled ? 'linear-gradient(135deg, #d1d5db, #9ca3af)' : `linear-gradient(135deg, ${NAVY}, #001a33)`,
         color: '#fff', fontWeight: 700, fontSize: 17,
       }}
@@ -117,7 +112,7 @@ function RailFact({ tone, children }) {
         alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
         background: teal ? '#0D9488' : '#e2e8f0', color: teal ? '#fff' : INK.muted,
       }}>
-        {teal ? '✓' : '–'}
+        {teal ? '✓' : '-'}
       </span>
       <span style={{ fontSize: 15, lineHeight: 1.5, color: teal ? INK.secondary : INK.muted }}>{children}</span>
     </li>
@@ -270,7 +265,7 @@ export default function WebReactivate() {
                 <button
                   onClick={() => signOut()}
                   data-testid="web-reactivate-signout"
-                  style={{ width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: INK.primary, fontWeight: 700, fontSize: 16.5 }}
+                  style={{ width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: INK.primary, fontWeight: 700, fontSize: 16.5 }}
                 >
                   Sign out{greetingNameFor(hasAccount) ? ` of ${greetingNameFor(hasAccount)}'s account` : ''}
                 </button>

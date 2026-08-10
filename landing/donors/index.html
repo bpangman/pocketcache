@@ -19,17 +19,39 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/assets/shared.css"/>
 <style>
-  .page-hero { padding: 148px 20px 70px; }
-  .page-hero-inner { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; }
-  .page-hero h1 { font-size: clamp(31px, 4.7vw, 50px); font-weight: 800; letter-spacing: -1.4px; color: var(--navy); line-height: 1.12; }
+  .page-hero { padding: 148px 20px 84px; position: relative; overflow: hidden; }
+  .page-hero::before {
+    content: ''; position: absolute; top: -180px; right: -140px; width: 560px; height: 560px;
+    background: radial-gradient(circle, rgba(94,234,212,0.16) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .page-hero-inner { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; position: relative; }
+  .page-hero h1 { font-size: clamp(33px, 4.9vw, 54px); font-weight: 800; letter-spacing: -0.03em; color: var(--navy); line-height: 1.08; }
   .page-hero p.sub { font-size: 19px; color: var(--slate); line-height: 1.7; margin: 16px 0 0; max-width: 500px; }
-  /* Single phone mock, sized/positioned like the nonprofits page's phone-frame:
-     the default .phone-frame in shared.css is already width:100%, max-width:300px,
-     margin:0 auto, so it centers cleanly in this hero column at every width. */
-  .donor-hero-phone { max-width: 300px; margin: 0 auto; }
+
+  /* ── Hero art: phone mock + floating fragments ── */
+  .donor-hero-art { position: relative; display: flex; justify-content: center; padding: 26px 0 34px; }
+  .donor-hero-art .glow {
+    position: absolute; left: 50%; top: 50%; width: 520px; height: 520px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(94,234,212,0.18) 0%, rgba(251,191,36,0.06) 45%, transparent 70%);
+    pointer-events: none;
+  }
+  .donor-hero-art .ring-field { color: var(--teal-ui); }
+  .donor-hero-art .ring-field span:nth-child(1) { width: 360px; height: 360px; opacity: 0.10; }
+  .donor-hero-art .ring-field span:nth-child(2) { width: 470px; height: 470px; opacity: 0.06; }
+  .donor-hero-phone { max-width: 300px; margin: 0 auto; position: relative; }
+  .donor-chip-roundup { position: absolute; top: 12px; right: -104px; z-index: 2; transform: rotate(2deg); }
+  .donor-chip-control { position: absolute; bottom: 96px; left: -118px; z-index: 2; transform: rotate(-2deg); }
+  @media (max-width: 1080px) {
+    .donor-chip-roundup { right: -48px; }
+    .donor-chip-control { left: -56px; }
+  }
   @media (max-width: 900px) {
     .page-hero-inner { grid-template-columns: 1fr; text-align: center; }
     .page-hero p.sub { margin-left: auto; margin-right: auto; }
+    .donor-chip-roundup { right: -10px; top: -18px; }
+    .donor-chip-control { left: -10px; bottom: 48px; }
   }
 
   /* ── Feature list ── */
@@ -86,30 +108,42 @@
       </div>
     </div>
     <div class="reveal">
-      <div class="donor-hero-phone">
-        <div class="phone-frame" role="img" aria-label="Donor app home dashboard showing round-up balance, giving streak, and upcoming monthly charge">
-          <div class="notch" aria-hidden="true"></div>
-          <div class="phone-screen">
-            <div class="mock-dash" aria-hidden="true">
-              <div class="mock-dash-top">
-                <div class="mock-dash-avatar"></div>
-                <div class="mock-dash-bell"></div>
-              </div>
-              <div class="mock-dash-balance">
-                <p class="amt">$6.40</p>
-                <p class="lbl">Rounded up so far this month</p>
-              </div>
-              <div class="mock-dash-row">
-                <b>12-day streak</b>
-                <span>Charges on the 11th</span>
-              </div>
-              <div class="mock-dash-bars">
-                <span style="height:35%;"></span><span style="height:55%;"></span><span style="height:40%;"></span>
-                <span style="height:70%;"></span><span style="height:50%;"></span><span style="height:85%;"></span>
-                <span style="height:60%;"></span>
+      <div class="donor-hero-art">
+        <span class="glow" aria-hidden="true"></span>
+        <span class="ring-field" aria-hidden="true"><span></span><span></span></span>
+        <div class="donor-hero-phone">
+          <div class="phone-frame" role="img" aria-label="Donor app home dashboard showing round-up balance, giving streak, and upcoming monthly charge">
+            <div class="notch" aria-hidden="true"></div>
+            <div class="phone-screen">
+              <div class="mock-dash" aria-hidden="true">
+                <div class="mock-dash-top">
+                  <div class="mock-dash-avatar"></div>
+                  <div class="mock-dash-bell"></div>
+                </div>
+                <div class="mock-dash-balance">
+                  <p class="amt">$6.40</p>
+                  <p class="lbl">Rounded up so far this month</p>
+                </div>
+                <div class="mock-dash-row">
+                  <b>12-day streak</b>
+                  <span>Charges on the 11th</span>
+                </div>
+                <div class="mock-dash-bars">
+                  <span style="height:35%;"></span><span style="height:55%;"></span><span style="height:40%;"></span>
+                  <span style="height:70%;"></span><span style="height:50%;"></span><span style="height:85%;"></span>
+                  <span style="height:60%;"></span>
+                </div>
               </div>
             </div>
           </div>
+          <span class="chip-float donor-chip-roundup drift" aria-hidden="true">
+            <svg class="chip-coin" viewBox="0 0 100 100" focusable="false"><circle cx="50" cy="50" r="50" fill="#E5A800"/><circle cx="50" cy="50" r="44" fill="#FBBF24"/><polygon points="50,17 24,43 37,43 37,77 63,77 63,43 76,43" fill="#5EEAD4" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/></svg>
+            <span><span class="chip-amt">+$0.90</span> round-up<span class="chip-sub">groceries, $23.10 to $24</span></span>
+          </span>
+          <span class="chip-float donor-chip-control drift-2" aria-hidden="true">
+            <span style="width:26px;height:26px;border-radius:50%;background:var(--teal-50);display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">&#10003;</span>
+            <span>Skip a month anytime<span class="chip-sub">no penalty, ever</span></span>
+          </span>
         </div>
       </div>
     </div>
@@ -121,7 +155,7 @@
   <div class="container center">
     <p class="badge reveal">How your giving works</p>
     <h2 class="section-title reveal">Automatic, but never a surprise.</h2>
-    <ul class="donor-features" style="margin-left:auto; margin-right:auto;">
+    <ul class="donor-features stagger" style="margin-left:auto; margin-right:auto;">
       <li class="reveal">
         <span class="tick" aria-hidden="true">&#10003;</span>
         <span>

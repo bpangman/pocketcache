@@ -20,13 +20,23 @@
 <link rel="stylesheet" href="/assets/shared.css"/>
 <style>
   /* ── Page hero (light, simpler than homepage) ── */
-  .page-hero { padding: 148px 20px 70px; text-align: center; }
-  .page-hero h1 { font-size: clamp(31px, 4.7vw, 50px); font-weight: 800; letter-spacing: -1.4px; color: var(--navy); line-height: 1.12; }
-  .page-hero p { font-size: 19px; color: var(--slate); line-height: 1.7; margin: 16px auto 0; max-width: 640px; }
+  .page-hero { padding: 148px 20px 70px; text-align: center; position: relative; overflow: hidden; }
+  .page-hero::before {
+    content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+    width: 720px; height: 520px;
+    background: radial-gradient(ellipse, rgba(94,234,212,0.13) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .page-hero h1 { font-size: clamp(33px, 4.9vw, 54px); font-weight: 800; letter-spacing: -0.03em; color: var(--navy); line-height: 1.08; position: relative; max-width: 860px; margin-left: auto; margin-right: auto; }
+  .page-hero p { font-size: 19px; color: var(--slate); line-height: 1.7; margin: 16px auto 0; max-width: 640px; position: relative; }
 
   /* ── Fee bar chart (why the $5 floor exists) ── */
   .feechart-wrap { max-width: 760px; margin: 48px auto 0; }
-  .feechart-figure { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 32px 28px 22px; box-shadow: var(--card-shadow); }
+  .feechart-figure {
+    background: #fff; border: 1px solid var(--line); border-radius: var(--r-xl);
+    padding: 34px 30px 24px; box-shadow: var(--shadow-2);
+    background-image: var(--dot-grid); background-size: 24px 24px;
+  }
   .feechart-svg { width: 100%; height: auto; display: block; }
   .feechart-caption { font-size: 14px; color: var(--slate-400); text-align: center; margin-top: 14px; line-height: 1.6; }
   /* No white-space:nowrap here on purpose: this hides a <table>, and nowrap on
@@ -35,11 +45,16 @@
      breaks the visual hiding and caused horizontal overflow at narrow widths. */
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-  /* ── Trust list ── */
+  /* ── Trust list (sits on the dark band: frosted cards, not white boxes) ── */
   .trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 44px; }
-  .trust-item { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; }
-  .trust-icon { width: 42px; height: 42px; border-radius: 12px; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
-  .trust-item p { font-size: 16px; color: var(--navy); font-weight: 600; line-height: 1.55; }
+  .trust-item {
+    display: flex; gap: 14px; align-items: flex-start; text-align: left;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(94,234,212,0.16);
+    border-radius: var(--r-lg); padding: 22px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .trust-icon { width: 44px; height: 44px; border-radius: 30%; background: rgba(94,234,212,0.12); border: 1px solid rgba(94,234,212,0.22); display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
+  .trust-item p { font-size: 16px; color: #fff; font-weight: 600; line-height: 1.55; }
 </style>
 </head>
 <body>
@@ -132,26 +147,49 @@
           <title id="feechart-title">Card processing fee as a percentage of the charge, at $2, $5, and $15</title>
           <desc id="feechart-desc">A $2 charge loses 18 percent to processing fees. A $5 charge loses 8.9 percent. A $15 charge loses 4.9 percent. The smaller the charge, the bigger the bite.</desc>
 
-          <!-- baseline -->
-          <line x1="60" y1="240" x2="600" y2="240" stroke="#E5E7EB" stroke-width="2"/>
+          <defs>
+            <linearGradient id="fcNavy" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#0B2A4A"/><stop offset="1" stop-color="#003865"/>
+            </linearGradient>
+            <linearGradient id="fcTeal" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#14B8A6"/><stop offset="1" stop-color="#0D9488"/>
+            </linearGradient>
+            <linearGradient id="fcTealLight" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#7FF0DE"/><stop offset="1" stop-color="#5EEAD4"/>
+            </linearGradient>
+          </defs>
 
-          <!-- $2 bar: 18% -> height 176 -->
-          <rect x="120" y="64" width="86" height="176" rx="10" fill="#0B2A4A"/>
-          <text x="163" y="50" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="20" fill="#0B2A4A">18%</text>
+          <!-- hairline grid: 5% / 10% / 15%, dashed and recessive -->
+          <g font-family="Poppins, sans-serif" font-size="11" fill="#94A3B8">
+            <line x1="72" y1="191" x2="600" y2="191" stroke="#E6EBF2" stroke-width="1" stroke-dasharray="3 5"/>
+            <line x1="72" y1="142" x2="600" y2="142" stroke="#E6EBF2" stroke-width="1" stroke-dasharray="3 5"/>
+            <line x1="72" y1="93"  x2="600" y2="93"  stroke="#E6EBF2" stroke-width="1" stroke-dasharray="3 5"/>
+            <text x="64" y="195" text-anchor="end">5%</text>
+            <text x="64" y="146" text-anchor="end">10%</text>
+            <text x="64" y="97"  text-anchor="end">15%</text>
+          </g>
+          <!-- baseline -->
+          <line x1="72" y1="240" x2="600" y2="240" stroke="#DDE4EC" stroke-width="1.5"/>
+
+          <!-- $2 bar: 18% -> height 176, rounded shoulders only -->
+          <path d="M120,240 L120,76 Q120,64 132,64 L194,64 Q206,64 206,76 L206,240 Z" fill="url(#fcNavy)"/>
+          <text x="163" y="48" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0B2A4A">18%</text>
           <text x="163" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$2 charge</text>
           <text x="163" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.36</text>
 
           <!-- $5 bar: 8.9% -> height ~87, highlighted as the floor -->
-          <rect x="277" y="153" width="86" height="87" rx="10" fill="#0D9488"/>
-          <text x="320" y="139" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="20" fill="#0D9488">8.9%</text>
+          <path d="M277,240 L277,165 Q277,153 289,153 L351,153 Q363,153 363,165 L363,240 Z" fill="url(#fcTeal)"/>
+          <text x="320" y="137" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0D9488">8.9%</text>
           <text x="320" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$5 charge</text>
           <text x="320" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.445</text>
-          <rect x="269" y="52" width="102" height="24" rx="12" fill="#FBBF24"/>
-          <text x="320" y="68" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="11" fill="#0B2A4A" letter-spacing="0.03em">OUR FLOOR</text>
+          <!-- gold annotation flag, pointing at the floor bar -->
+          <rect x="269" y="88" width="102" height="24" rx="12" fill="#FBBF24"/>
+          <polygon points="320,118 313,112 327,112" fill="#FBBF24"/>
+          <text x="320" y="104" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="11" fill="#0B2A4A" letter-spacing="0.06em">OUR FLOOR</text>
 
           <!-- $15 bar: 4.9% -> height ~48 -->
-          <rect x="434" y="192" width="86" height="48" rx="10" fill="#5EEAD4"/>
-          <text x="477" y="178" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="20" fill="#0F766E">4.9%</text>
+          <path d="M434,240 L434,204 Q434,192 446,192 L508,192 Q520,192 520,204 L520,240 Z" fill="url(#fcTealLight)"/>
+          <text x="477" y="176" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0F766E">4.9%</text>
           <text x="477" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$15 charge</text>
           <text x="477" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.735</text>
         </svg>
@@ -178,7 +216,7 @@
     <p class="badge badge-dark reveal">Built on trust</p>
     <h2 class="section-title reveal">The money never touches us.</h2>
     <p class="section-sub reveal">Donations flow from the donor's card, through secure payment processing by Stripe, straight to your nonprofit's bank. PocketCache is the software in between, and nothing more.</p>
-    <div class="trust-grid">
+    <div class="trust-grid stagger">
       <div class="trust-item reveal">
         <div class="trust-icon" aria-hidden="true">&#128179;</div>
         <p>Your nonprofit is the merchant of record and issues the receipts</p>

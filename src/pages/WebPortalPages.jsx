@@ -39,6 +39,7 @@ import AppleLogo from '../components/AppleLogo';
 import { biometricEnrolled, biometricEnroll, biometricDisable, markSessionUnlocked } from '../lib/biometric';
 import { requestEmailChange, pollConfirmed, syncServerEmail, hasRealSession, isValidEmail } from '../lib/emailChange';
 import { submitGiveExtra, submitOrgContact } from '../lib/engagement';
+import { INK, NAVY, TEAL_INK, CARD, SHADOW, RADIUS } from '../lib/webTheme';
 
 // ─── Web-native My Cause / Share / Settings + shared modals ──────────────────
 // True webpage versions of the app's tabs  -  same store, same account, web
@@ -60,19 +61,12 @@ import { submitGiveExtra, submitOrgContact } from '../lib/engagement';
 // feature is its continued absence, and that absence is deliberate parity, not
 // an oversight to be "fixed".
 
-const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
-const NAVY = '#003865';
-// Same teal ink the app's My Cause uses for the sponsor tile (MyCause.jsx:25).
-// Fixed, never the per-nonprofit brand accent: the accent resolves to red under
-// BGCA, which turned the involvement group into a row of things that look like
-// errors. Navy and teal stay calm for every org.
-const TEAL_INK = '#0f766e';
-const CARD = {
-  background: '#fff',
-  borderRadius: 16,
-  border: '1px solid #e5e7eb',
-  boxShadow: '0 1px 2px rgba(11,42,74,0.04)',
-};
+// Ink, card and depth tokens come from the shared web design vocabulary
+// (lib/webTheme). TEAL_INK note preserved there: same teal ink the app's My
+// Cause uses for the sponsor tile (MyCause.jsx:25) - fixed, never the
+// per-nonprofit brand accent: the accent resolves to red under BGCA, which
+// turned the involvement group into a row of things that look like errors.
+// Navy and teal stay calm for every org.
 
 const TRACKED_CARD_BANKS = [
   { id: 'chase',   name: 'Chase',            sub: 'Sapphire, Freedom, Ink',   emoji: '🏦' },
@@ -113,7 +107,7 @@ export function Modal({ show, onClose, title, children, width = 460 }) {
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ position: 'relative', zIndex: Z.modal, width, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 24 }}
+        style={{ position: 'relative', zIndex: Z.modal, width, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: RADIUS.lg, boxShadow: SHADOW.lg, padding: 24 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: INK.primary }}>{title}</h3>
@@ -171,7 +165,7 @@ function ActionButton({ children, onClick, disabled, tone = 'primary' }) {
     <button
       onClick={onClick} disabled={disabled}
       style={{
-        width: '100%', padding: '12px 16px', borderRadius: 12, border: 'none', cursor: disabled ? 'default' : 'pointer',
+        width: '100%', padding: '12px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: disabled ? 'default' : 'pointer',
         fontWeight: 700, fontSize: 16, opacity: disabled ? 0.5 : 1, ...tones[tone],
       }}
     >
@@ -336,7 +330,7 @@ export function WebAdminSignIn() {
         </div>
       </header>
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ width: 440, maxWidth: '100%', ...CARD, borderRadius: 20, boxShadow: '0 16px 48px rgba(11,42,74,0.10)', padding: 28 }}>
+        <div style={{ width: 440, maxWidth: '100%', ...CARD, borderRadius: RADIUS.lg, boxShadow: SHADOW.md, padding: 28 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Admin sign-in</h1>
           <p style={{ margin: '6px 0 18px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>
             Sign in with your organization&apos;s work email. No password  -  we email you a fresh 6-digit code each time.
