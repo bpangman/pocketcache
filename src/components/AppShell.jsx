@@ -17,7 +17,7 @@ import Activity from '../pages/Activity';
 import Share from '../pages/Share';
 import Settings from '../pages/Settings';
 import { useShakeDetector } from '../lib/shake';
-import { DEMO_LEVEL_TOASTS } from '../lib/donorContent';
+import { DEMO_TOASTS } from '../lib/donorContent';
 
 const SUPPORT_EMAIL = 'support@pocketcache.app';
 
@@ -45,7 +45,7 @@ const PAGES = {
 };
 
 export default function AppShell() {
-  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep, hasAccount, demoLevel, setDemoLevel, showToast, saveDisplayName } = useApp();
+  const { tab, setTab, signOut, adminRole, setPage, setLastMode, goToOnboardingStep, hasAccount, demoMode, setDemoMode, showToast, saveDisplayName } = useApp();
   const { resetNpContent } = useNp();
   const brand = useTheme();
   const [showProfile, setShowProfile] = useState(false);
@@ -57,17 +57,16 @@ export default function AppShell() {
   const [nameInput, setNameInput] = useState('');
   const Page = PAGES[tab] || Dashboard;
 
-  // Shake-to-cycle demo mode, wired ONCE at the shell level so it works on
+  // Shake-to-toggle demo mode, wired ONCE at the shell level so it works on
   // every donor tab. lib/shake.js owns detection and the iOS motion
   // permission dance (requested on the first tap, gracefully absent when
-  // denied - the Settings toggle remains the fallback). PROGRESSIVE (round-3
-  // item 8b): each shake advances the demo level 0 -> 1 -> 2 -> 3 -> 0
-  // (small / medium / full dataset / back to real data) instead of a binary
-  // flip; the toast names the level and the header pill shows "Demo n/3".
+  // denied - the Settings toggle remains the fallback). A plain toggle
+  // (round-4 item 2b): shake flips between real data and the full rich demo
+  // dataset; the toast names the direction and the header pill says "Demo".
   useShakeDetector(() => {
-    const next = (demoLevel + 1) % 4;
-    setDemoLevel(next);
-    showToast(DEMO_LEVEL_TOASTS[next]);
+    const next = !demoMode;
+    setDemoMode(next);
+    showToast(next ? DEMO_TOASTS.on : DEMO_TOASTS.off);
   });
 
   // Identity comes from the signed-in account, exactly as Settings.jsx reads

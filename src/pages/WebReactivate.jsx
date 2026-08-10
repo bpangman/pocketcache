@@ -53,8 +53,8 @@ const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: <AppleLogo size={16} />, car
 function PanelTitle({ title, sub }) {
   return (
     <div style={{ marginBottom: 18 }}>
-      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{title}</h2>
-      {sub && <p style={{ margin: '5px 0 0', fontSize: 13.5, color: INK.secondary, lineHeight: 1.55 }}>{sub}</p>}
+      <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{title}</h2>
+      {sub && <p style={{ margin: '5px 0 0', fontSize: 15.5, color: INK.secondary, lineHeight: 1.55 }}>{sub}</p>}
     </div>
   );
 }
@@ -68,7 +68,7 @@ function PrimaryButton({ children, onClick, disabled, testId }) {
       style={{
         width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: disabled ? 'default' : 'pointer',
         background: disabled ? 'linear-gradient(135deg, #d1d5db, #9ca3af)' : `linear-gradient(135deg, ${NAVY}, #001a33)`,
-        color: '#fff', fontWeight: 700, fontSize: 15,
+        color: '#fff', fontWeight: 700, fontSize: 17,
       }}
     >
       {children}
@@ -81,9 +81,9 @@ function PrimaryButton({ children, onClick, disabled, testId }) {
 function StatTile({ label, value, sub, testId }) {
   return (
     <div data-testid={testId} style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 14, padding: '14px 16px' }}>
-      <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>
-      <p style={{ margin: '6px 0 0', fontSize: 19, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{value}</p>
-      {sub && <p style={{ margin: '3px 0 0', fontSize: 11.5, lineHeight: 1.45, color: INK.muted }}>{sub}</p>}
+      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>
+      <p style={{ margin: '6px 0 0', fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{value}</p>
+      {sub && <p style={{ margin: '3px 0 0', fontSize: 13.5, lineHeight: 1.45, color: INK.muted }}>{sub}</p>}
     </div>
   );
 }
@@ -94,13 +94,13 @@ function StatTile({ label, value, sub, testId }) {
 function ReviewBlock({ label, icon, title, meta, note, action, testId }) {
   return (
     <div data-testid={testId} style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 16, marginBottom: 12 }}>
-      <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>
+      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 24, lineHeight: 1 }}>{icon}</span>
+        <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
         <span style={{ flex: 1, minWidth: 180 }}>
-          <span style={{ display: 'block', fontWeight: 700, fontSize: 14.5, color: INK.primary }}>{title}</span>
-          {meta && <span style={{ display: 'block', fontSize: 12.5, color: INK.muted, marginTop: 1 }}>{meta}</span>}
-          {note && <span style={{ display: 'block', fontSize: 12.5, lineHeight: 1.5, color: '#b45309', marginTop: 4 }}>{note}</span>}
+          <span style={{ display: 'block', fontWeight: 700, fontSize: 16.5, color: INK.primary }}>{title}</span>
+          {meta && <span style={{ display: 'block', fontSize: 14.5, color: INK.muted, marginTop: 1 }}>{meta}</span>}
+          {note && <span style={{ display: 'block', fontSize: 14.5, lineHeight: 1.5, color: '#b45309', marginTop: 4 }}>{note}</span>}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>{action}</span>
       </div>
@@ -114,12 +114,12 @@ function RailFact({ tone, children }) {
     <li style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '5px 0' }}>
       <span style={{
         width: 17, height: 17, borderRadius: '50%', flexShrink: 0, marginTop: 1, display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800,
+        alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
         background: teal ? '#0D9488' : '#e2e8f0', color: teal ? '#fff' : INK.muted,
       }}>
         {teal ? '✓' : '–'}
       </span>
-      <span style={{ fontSize: 13, lineHeight: 1.5, color: teal ? INK.secondary : INK.muted }}>{children}</span>
+      <span style={{ fontSize: 15, lineHeight: 1.5, color: teal ? INK.secondary : INK.muted }}>{children}</span>
     </li>
   );
 }
@@ -173,44 +173,44 @@ export default function WebReactivate() {
 
       {/* Top nav  -  same webpage chrome as the wizard and the dashboard */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px', height: 76, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : <CoinMark size={30} />}
             <div style={{ lineHeight: 1.15 }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary }}>{brand.appName ?? 'PocketCache'}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: INK.muted }}>powered by PocketCache</p>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 16.5, color: INK.primary }}>{brand.appName ?? 'PocketCache'}</p>
+              <p style={{ margin: 0, fontSize: 12.5, color: INK.muted }}>powered by PocketCache</p>
             </div>
           </div>
           {org && (
             <a href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
-              style={{ fontSize: 13, fontWeight: 600, color: NAVY, textDecoration: 'none' }}>
+              style={{ fontSize: 15, fontWeight: 600, color: NAVY, textDecoration: 'none' }}>
               About {npShort} →
             </a>
           )}
         </div>
       </header>
 
-      <main style={{ flex: 1, width: '100%', maxWidth: 980, margin: '0 auto', padding: '36px 24px 48px' }}>
+      <main style={{ flex: 1, width: '100%', maxWidth: 1040, margin: '0 auto', padding: '44px 32px 56px' }}>
         <div className="grid grid-cols-1 md:grid-cols-[300px_1fr]" style={{ display: 'grid', gap: 36, alignItems: 'start' }}>
           {/* ── Rail: the same geometry as the wizard's, carrying the status ── */}
           <aside style={{ position: 'sticky', top: 90 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               {org ? <OrgLogo nonprofit={org} size={12} rounded="xl" /> : <CoinMark size={44} />}
               <div>
-                <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary, lineHeight: 1.25 }}>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary, lineHeight: 1.25 }}>
                   {org?.name ?? 'Your giving'}
                 </p>
-                <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>
+                <p style={{ margin: 0, fontSize: 14, color: INK.muted }}>
                   {stage === 'closed' ? 'Your account is closed.' : 'One check and you are back.'}
                 </p>
               </div>
             </div>
-            <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+            <p style={{ margin: '0 0 16px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>
               {stage === 'closed'
                 ? `You closed your round-up giving to ${npShort}. Nothing was deleted  -  reactivating picks up exactly where you left off.`
                 : `Reactivating restarts tracking today. Round-ups total through the end of the month, and one charge from ${npShort} follows on ${chargeOn}.`}
             </p>
-            <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
               While it is closed
             </p>
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px' }}>
@@ -218,7 +218,7 @@ export default function WebReactivate() {
               <RailFact>No charge runs, this month or any month.</RailFact>
               <RailFact tone="kept">Your donation history, receipts and settings stay exactly as they were.</RailFact>
             </ul>
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.muted }}>
               🔒 We disconnected your card from Plaid the day you closed the account, so re-linking it is the one step reactivation cannot skip.
             </p>
           </aside>
@@ -264,17 +264,17 @@ export default function WebReactivate() {
                     or leave for the marketing site. */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0 14px' }}>
                   <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                  <span style={{ fontSize: 12, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>Not now?</span>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>Not now?</span>
                   <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
                 </div>
                 <button
                   onClick={() => signOut()}
                   data-testid="web-reactivate-signout"
-                  style={{ width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: INK.primary, fontWeight: 700, fontSize: 14.5 }}
+                  style={{ width: '100%', padding: '13px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: INK.primary, fontWeight: 700, fontSize: 16.5 }}
                 >
                   Sign out{greetingNameFor(hasAccount) ? ` of ${greetingNameFor(hasAccount)}'s account` : ''}
                 </button>
-                <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
+                <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
                   Your account stays closed either way  -  signing out just closes this browser session.{' '}
                   <a href="/" style={{ color: NAVY, fontWeight: 600 }}>Return to pocketcache.app</a>
                 </p>
@@ -295,10 +295,10 @@ export default function WebReactivate() {
                   meta={`····${card.last4 ?? '4242'}`}
                   note={relinked ? null : 'We disconnected this from Plaid when you left, so nothing can round up until it is re-linked.'}
                   action={relinked ? (
-                    <span data-testid="web-reactivate-relinked" style={{ fontSize: 13, fontWeight: 700, color: '#0f766e' }}>Connected ✓</span>
+                    <span data-testid="web-reactivate-relinked" style={{ fontSize: 15, fontWeight: 700, color: '#0f766e' }}>Connected ✓</span>
                   ) : (
                     <>
-                      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '4px 9px' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '4px 9px' }}>
                         Required
                       </span>
                       <button
@@ -306,7 +306,7 @@ export default function WebReactivate() {
                         disabled={relinking}
                         data-testid="web-reactivate-relink"
                         style={{
-                          border: 'none', borderRadius: 12, padding: '10px 16px', fontSize: 13.5, fontWeight: 700, color: '#fff',
+                          border: 'none', borderRadius: 12, padding: '10px 16px', fontSize: 15.5, fontWeight: 700, color: '#fff',
                           background: relinking ? '#9ca3af' : 'linear-gradient(135deg, #0d9488, #003865)',
                           cursor: relinking ? 'default' : 'pointer',
                         }}
@@ -326,12 +326,12 @@ export default function WebReactivate() {
                   meta={pay.last4 ? `····${pay.last4}` : 'One charge a month, collected by ' + npShort}
                   action={(
                     <>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#0f766e' }}>Keep</span>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: '#0f766e' }}>Keep</span>
                       <span style={{ color: '#cbd5e1' }}>·</span>
                       <button
                         onClick={() => setChangePayment(true)}
                         data-testid="web-reactivate-change-payment"
-                        style={{ border: '1px solid #dbe3ec', background: '#fff', borderRadius: 12, padding: '9px 14px', fontSize: 13.5, fontWeight: 700, color: NAVY, cursor: 'pointer' }}
+                        style={{ border: '1px solid #dbe3ec', background: '#fff', borderRadius: 12, padding: '9px 14px', fontSize: 15.5, fontWeight: 700, color: NAVY, cursor: 'pointer' }}
                       >
                         Change
                       </button>
@@ -339,7 +339,7 @@ export default function WebReactivate() {
                   )}
                 />
 
-                <p style={{ margin: '0 0 16px', fontSize: 12.5, lineHeight: 1.6, color: INK.muted }}>
+                <p style={{ margin: '0 0 16px', fontSize: 14.5, lineHeight: 1.6, color: INK.muted }}>
                   Tracking restarts the moment you confirm. Your round-ups total through the last day of the
                   month, we email the exact amount on the 1st, and {npShort} charges you on {chargeOn}. Nothing
                   from while you were away is ever charged.
@@ -352,14 +352,14 @@ export default function WebReactivate() {
                   Restart my round-ups
                 </PrimaryButton>
                 {!relinked && (
-                  <p data-testid="web-reactivate-gate-note" style={{ margin: '8px 0 0', fontSize: 12.5, color: '#b45309', textAlign: 'center' }}>
+                  <p data-testid="web-reactivate-gate-note" style={{ margin: '8px 0 0', fontSize: 14.5, color: '#b45309', textAlign: 'center' }}>
                     Re-link {card.name ?? 'your card'} first  -  round-ups cannot resume without it.
                   </p>
                 )}
                 <button
                   onClick={() => setStage('closed')}
                   data-testid="web-reactivate-back"
-                  style={{ width: '100%', marginTop: 10, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: INK.muted }}
+                  style={{ width: '100%', marginTop: 10, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, fontWeight: 600, color: INK.muted }}
                 >
                   ← Not yet, leave my account closed
                 </button>
@@ -370,7 +370,7 @@ export default function WebReactivate() {
       </main>
 
       <footer style={{ padding: '0 24px 20px', textAlign: 'center' }}>
-        <p style={{ color: INK.muted, fontSize: 12, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <p style={{ color: INK.muted, fontSize: 14, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <CoinMark size={14} />
           Powered by PocketCache ·{' '}
           <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Terms</a>{' '}

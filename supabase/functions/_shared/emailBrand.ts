@@ -43,8 +43,12 @@ export function brandedEmail(opts: { heading: string; bodyHtml: string; footnote
     `<html lang="en"><head><meta charset="utf-8"/>` +
     `<meta name="viewport" content="width=device-width, initial-scale=1"/></head>` +
     `<body style="margin:0;padding:0;background:#f4f6f8;">` +
-    `<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;">` +
-    // Navy header band: coin PNG + "Pocket" white / "Cache" teal.
+    // Card: square top corners on purpose - the navy header band must read as
+    // a plain solid rectangle (owner round-4 item 1), so only the bottom of
+    // the card keeps a subtle radius. overflow:hidden preserves that clip.
+    `<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:0 0 16px 16px;overflow:hidden;">` +
+    // Navy header band: coin PNG + "Pocket" white / "Cache" teal. No
+    // border-radius here, and none inherited from the card above - squared.
     `<div style="background:${NAVY};padding:20px 22px;text-align:center;">` +
     `<img src="${COIN_LOGO_URL}" width="30" height="30" alt="PocketCache" ` +
     `style="display:inline-block;vertical-align:middle;margin:0 9px 0 0;border:0;"/>` +

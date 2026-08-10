@@ -14,11 +14,11 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>PocketCache | Round-up giving your nonprofit owns</title>
-<meta name="description" content="PocketCache gives every nonprofit its own branded round-up giving experience: app, web, and widget. Your nonprofit pays nothing, ever, and we never take a percentage. Donations charge on your own Stripe account, so you are the merchant of record and PocketCache never touches the money."/>
+<meta name="description" content="PocketCache gives every nonprofit its own branded round-up giving experience: app, web, and widget. Your nonprofit pays nothing, ever, and we never take a percentage. Donations go directly to your nonprofit, so PocketCache never touches the money."/>
 <link rel="icon" type="image/png" href="/logo.png"/>
 <link rel="apple-touch-icon" href="/logo.png"/>
 <meta property="og:title" content="PocketCache | Round-up giving your nonprofit owns"/>
-<meta property="og:description" content="Every nonprofit gets its own branded micro-donation experience. Nonprofits pay $0 and never a percentage. Donations land straight on your own Stripe account."/>
+<meta property="og:description" content="Every nonprofit gets its own branded micro-donation experience. Nonprofits pay $0 and never a percentage. Donations go directly to your nonprofit, we never hold the money."/>
 <meta property="og:image" content="/logo.png"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://pocketcache.app"/>
@@ -76,7 +76,6 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
   .receipt-card {
     width: 100%; max-width: 320px; background: #fff; border-radius: 22px;
     padding: 26px 24px 22px; box-shadow: var(--card-shadow-lg);
-    transform: rotate(-2deg);
     font-family: 'Poppins', sans-serif;
   }
   .receipt-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
@@ -90,12 +89,6 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
     font-size: 12.5px; color: var(--slate-400); line-height: 1.6; text-align: center;
   }
-  .receipt-badge {
-    position: absolute; top: -14px; right: -14px;
-    background: var(--gold); color: var(--navy); font-weight: 800; font-size: 12px;
-    padding: 8px 14px; border-radius: 999px; box-shadow: 0 8px 20px rgba(251,191,36,0.4);
-    transform: rotate(6deg);
-  }
   .receipt-outer { position: relative; }
 
   @media (max-width: 900px) {
@@ -103,7 +96,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     .hero-inner { grid-template-columns: 1fr; text-align: center; }
     .hero-sub { margin-left: auto; margin-right: auto; }
     .hero-actions { justify-content: center; }
-    .receipt-card { transform: none; margin-top: 12px; }
+    .receipt-card { margin-top: 12px; }
   }
 </style>
 </head>
@@ -147,7 +140,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     <div>
       <p class="hero-tag">Round-up giving for nonprofits</p>
       <h1>Round-up giving <span class="accent">your nonprofit owns.</span></h1>
-      <p class="hero-sub">Donors link a card, everyday purchases round up to the next dollar, and one monthly charge lands straight on your nonprofit's own Stripe account. PocketCache never holds the money and never takes a percentage.</p>
+      <p class="hero-sub">Donors link a card, everyday purchases round up to the next dollar, and one monthly charge goes straight to your nonprofit. PocketCache never holds the money and never takes a percentage.</p>
       <div class="hero-actions">
         <a href="/start/" class="btn btn-gold btn-lg">Create an account &rarr;</a>
         <a href="/how-it-works/" class="btn btn-outline-dark btn-lg">See how it works</a>
@@ -165,9 +158,8 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
           <div class="receipt-row up"><span>Rounds up to</span><span>$7.00</span></div>
           <div class="receipt-divider"></div>
           <div class="receipt-row highlight"><span>To your nonprofit</span><span>+$0.60</span></div>
-          <div class="receipt-foot">Round-ups add up all month, then charge once, straight to your nonprofit's own Stripe account.</div>
+          <div class="receipt-foot">Round-ups add up all month, then charge once, straight to your nonprofit.</div>
         </div>
-        <span class="receipt-badge">Their Stripe, not ours</span>
       </div>
     </div>
   </div>
@@ -196,7 +188,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
         <div class="step-icon" aria-hidden="true">&#127974;</div>
         <p class="step-num">Step 3</p>
         <h3>One monthly charge</h3>
-        <p>Once a month, the round-ups charge as a single amount that lands directly on your nonprofit's own Stripe account.</p>
+        <p>Once a month, the round-ups charge as a single amount that goes directly to your nonprofit.</p>
       </div>
     </div>
     <p style="margin-top:32px;"><a href="/how-it-works/" class="btn btn-outline btn-sm">See the full walkthrough &rarr;</a></p>
@@ -219,7 +211,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
       </div>
       <div class="stat-card reveal">
         <p class="stat-num">100%</p>
-        <p class="stat-label">Of round-ups charge to your own Stripe account, never ours</p>
+        <p class="stat-label">Of every round-up goes to your nonprofit, never held by us</p>
       </div>
       <div class="stat-card reveal">
         <p class="stat-num">$749M</p>

@@ -186,11 +186,10 @@ export default function Dashboard() {
   const {
     selectedNonprofit, totalDonated, boostDonation, pendingRoundUps, setTab, monthlyCap, chargeAdjustment, setChargeAdjustment, feeMonths, skipNextCharge, coverProcessing,
     hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount, hasAccount,
-    demoActive, demoMode, demoLevel, demoData,
+    demoActive, demoMode, demoData,
     giveExtraPending, refreshRealRoundups,
   } = useApp();
-  // Demo-dataset stats follow the active shake level (item 8b) - the level-3
-  // dataset is byte-identical to the old data/derived constants.
+  // Demo-dataset stats - byte-identical to the old data/derived constants.
   const { monthsGiving, momChange, totalRoundupsCount, avgPerMonth, sinceLabel } = demoData;
   const brand = useTheme();
   const [seenMilestoneAmount, setSeenMilestoneAmount] = useState(() => loadKey('pc_seen_milestone', 0));
@@ -347,10 +346,10 @@ export default function Dashboard() {
             <h1 className="text-white text-2xl font-bold" style={{ letterSpacing: '-0.3px' }}>
               {brand.appName}
             </h1>
-            {/* The subtle demo marker names the level (shake cycles 1/2/3). */}
+            {/* The subtle demo marker (Settings toggle / phone shake). */}
             {demoMode && (
               <span data-testid="demo-mode-pill" className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-300/90 text-amber-900">
-                Demo {demoLevel}/3
+                Demo
               </span>
             )}
           </div>

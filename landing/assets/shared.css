@@ -42,7 +42,7 @@ body {
   color: var(--slate);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.6;
 }
 img { max-width: 100%; display: block; }
@@ -128,6 +128,9 @@ header.site.scrolled { box-shadow: 0 2px 20px rgba(11,42,74,0.07); }
 .mobile-panel a:hover { background: var(--surface); }
 .mobile-panel a.active { background: var(--teal-50); }
 .mobile-panel .mp-divider { height: 1px; background: var(--line); margin: 8px 2px; }
+/* The CTA is a .btn-navy (white text). Without this, `.mobile-panel a`'s navy
+   color out-specifies the button and the label renders navy-on-navy. */
+.mobile-panel a.mp-cta { color: #fff; }
 .mobile-panel .mp-cta { margin-top: 8px; }
 
 @media (max-width: 860px) {
@@ -178,8 +181,8 @@ h2.section-title {
 .band h2.section-title, .cta-band h2.section-title { color: #fff; }
 .band .section-sub, .cta-band .section-sub { color: rgba(255,255,255,0.78); }
 .section-sub {
-  font-size: 18px; color: var(--slate);
-  line-height: 1.7; margin-top: 14px; max-width: 640px;
+  font-size: 19px; color: var(--slate);
+  line-height: 1.7; margin-top: 14px; max-width: 660px;
 }
 .on-dark .section-sub { color: rgba(255,255,255,0.72); }
 .center { text-align: center; }
@@ -197,8 +200,8 @@ h2.section-title {
 .step-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 18px; background: var(--teal-50); }
 .step-icon.alt { background: #E8EFF6; }
 .step-num { font-size: 11.5px; font-weight: 800; color: var(--slate-400); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 7px; }
-.step h3 { font-size: 18px; font-weight: 800; margin-bottom: 8px; color: var(--navy); }
-.step p { font-size: 15px; color: var(--slate); line-height: 1.7; }
+.step h3 { font-size: 19px; font-weight: 800; margin-bottom: 8px; color: var(--navy); }
+.step p { font-size: 15.5px; color: var(--slate); line-height: 1.7; }
 
 /* ── Shape: stat band (full-bleed dark) ── */
 .band { background: linear-gradient(160deg, var(--navy-900) 0%, var(--navy-deep) 100%); color: #fff; }
@@ -213,8 +216,8 @@ h2.section-title {
 .feature-card:hover { transform: translateY(-3px); }
 .feature-icon { width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 21px; margin-bottom: 15px; background: var(--teal-50); }
 .feature-icon.alt { background: #E8EFF6; }
-.feature-card h3 { font-size: 17.5px; font-weight: 800; margin-bottom: 8px; color: var(--navy); }
-.feature-card p { font-size: 14.8px; color: var(--slate); line-height: 1.7; }
+.feature-card h3 { font-size: 18.5px; font-weight: 800; margin-bottom: 8px; color: var(--navy); }
+.feature-card p { font-size: 15.5px; color: var(--slate); line-height: 1.7; }
 .feature-card .fc-shot { margin: -6px -6px 16px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
 
 /* ── Shape: comparison strip ── */
@@ -226,7 +229,7 @@ h2.section-title {
 .compare-col.win .compare-who { color: var(--teal-700); }
 .compare-amount { font-size: 39px; font-weight: 800; color: var(--navy); letter-spacing: -1px; line-height: 1.1; }
 .compare-amount span { font-size: 15px; font-weight: 600; color: var(--slate); letter-spacing: 0; }
-.compare-desc { font-size: 15px; color: var(--slate); line-height: 1.7; margin-top: 12px; }
+.compare-desc { font-size: 15.5px; color: var(--slate); line-height: 1.7; margin-top: 12px; }
 
 /* ── Shape: vertical timeline ── */
 .vtimeline { max-width: 720px; margin: 48px auto 0; }
@@ -236,8 +239,8 @@ h2.section-title {
 .vt-marker { width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, var(--navy), var(--navy-deep)); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; z-index: 1; }
 .vt-marker.gold { background: var(--gold); color: var(--navy); }
 .vt-body { padding-top: 6px; }
-.vt-body h3 { font-size: 19px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
-.vt-body p { font-size: 15.5px; color: var(--slate); line-height: 1.7; max-width: 480px; }
+.vt-body h3 { font-size: 20px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
+.vt-body p { font-size: 16px; color: var(--slate); line-height: 1.7; max-width: 480px; }
 
 /* ── Shape: flow diagram (horizontal, with arrows) ── */
 .flow { display: flex; align-items: center; justify-content: center; gap: 0; margin-top: 48px; flex-wrap: wrap; }
@@ -342,9 +345,9 @@ h2.section-title {
 .chooser-card .cc-icon { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 18px; background: var(--teal-50); }
 .chooser-card .cc-icon.alt { background: #E8EFF6; }
 .chooser-card h2 { font-size: 25px; font-weight: 800; color: var(--navy); letter-spacing: -0.5px; }
-.chooser-card p.cc-copy { font-size: 16px; line-height: 1.7; color: var(--slate); margin-top: 12px; }
+.chooser-card p.cc-copy { font-size: 16.5px; line-height: 1.7; color: var(--slate); margin-top: 12px; }
 .chooser-list { list-style: none; margin: 18px 0 26px; display: grid; gap: 10px; }
-.chooser-list li { display: flex; gap: 10px; font-size: 14.8px; color: var(--slate); line-height: 1.6; }
+.chooser-list li { display: flex; gap: 10px; font-size: 15.5px; color: var(--slate); line-height: 1.6; }
 .chooser-list li .tick { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: var(--teal-50); color: var(--teal-700); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; margin-top: 1px; }
 .chooser-card .cc-actions { margin-top: auto; display: grid; gap: 10px; }
 .chooser-note { font-size: 14px; color: var(--slate); text-align: center; margin-top: 8px; }

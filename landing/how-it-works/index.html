@@ -4,11 +4,11 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>How PocketCache Works | Round-up giving, step by step</title>
-<meta name="description" content="How PocketCache works: link a card through Plaid, purchases round up to the next dollar, and one monthly charge lands on your nonprofit's own Stripe account. See why round-ups roll forward under a $5 minimum, and what keeps the whole thing trustworthy."/>
+<meta name="description" content="How PocketCache works: link a card through Plaid, purchases round up to the next dollar, and one monthly charge goes directly to your nonprofit. See why round-ups roll forward under a $5 minimum, and what keeps the whole thing trustworthy."/>
 <link rel="icon" type="image/png" href="/logo.png"/>
 <link rel="apple-touch-icon" href="/logo.png"/>
 <meta property="og:title" content="How PocketCache Works"/>
-<meta property="og:description" content="Link a card, round up purchases, and one monthly charge lands on your nonprofit's own Stripe account. No percentages, ever."/>
+<meta property="og:description" content="Link a card, round up purchases, and one monthly charge goes directly to your nonprofit. No percentages, ever."/>
 <meta property="og:image" content="/logo.png"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://pocketcache.app/how-it-works/"/>
@@ -22,7 +22,7 @@
   /* ── Page hero (light, simpler than homepage) ── */
   .page-hero { padding: 148px 20px 70px; text-align: center; }
   .page-hero h1 { font-size: clamp(31px, 4.7vw, 50px); font-weight: 800; letter-spacing: -1.4px; color: var(--navy); line-height: 1.12; }
-  .page-hero p { font-size: 18px; color: var(--slate); line-height: 1.7; margin: 16px auto 0; max-width: 620px; }
+  .page-hero p { font-size: 19px; color: var(--slate); line-height: 1.7; margin: 16px auto 0; max-width: 640px; }
 
   /* ── Fee bar chart (why the $5 floor exists) ── */
   .feechart-wrap { max-width: 760px; margin: 48px auto 0; }
@@ -39,7 +39,7 @@
   .trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 44px; }
   .trust-item { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; }
   .trust-icon { width: 42px; height: 42px; border-radius: 12px; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
-  .trust-item p { font-size: 15px; color: var(--navy); font-weight: 600; line-height: 1.55; }
+  .trust-item p { font-size: 16px; color: var(--navy); font-weight: 600; line-height: 1.55; }
 </style>
 </head>
 <body>
@@ -112,7 +112,7 @@
         <div class="vt-marker gold" aria-hidden="true">4</div>
         <div class="vt-body">
           <h3>One monthly charge, straight to your nonprofit</h3>
-          <p>On the 11th, a single charge runs, and it lands directly on your nonprofit's own Stripe account. PocketCache is never in the middle of the money. There is no PocketCache-held balance, ever.</p>
+          <p>On the 11th, a single charge runs, and it goes directly to your nonprofit. PocketCache is never in the middle of the money. There is no PocketCache-held balance, ever.</p>
         </div>
       </div>
     </div>
@@ -124,7 +124,7 @@
   <div class="container center">
     <p class="badge reveal">The math behind the minimum</p>
     <h2 class="section-title reveal">Why round-ups wait for a $5 minimum.</h2>
-    <p class="section-sub reveal">Every card charge costs real processing fees, a flat 2.9% + $0.30 on Stripe. On a small charge, that fee eats a big share of the gift. So PocketCache lets round-ups build up instead of charging every tiny amount right away.</p>
+    <p class="section-sub reveal">Every card charge costs real processing fees, a flat 2.9% + $0.30 to the card processor. On a small charge, that fee eats a big share of the gift. So PocketCache lets round-ups build up instead of charging every tiny amount right away.</p>
 
     <div class="feechart-wrap">
       <div class="feechart-figure reveal">
@@ -164,7 +164,7 @@
             <tr><td>$15.00</td><td>$0.735</td><td>4.9%</td></tr>
           </tbody>
         </table>
-        <p class="feechart-caption">Stripe processing runs 2.9% + $0.30 per charge. The smaller the charge, the bigger the bite, so PocketCache waits until round-ups clear $5 before charging.</p>
+        <p class="feechart-caption">Card processing runs 2.9% + $0.30 per charge. The smaller the charge, the bigger the bite, so PocketCache waits until round-ups clear $5 before charging.</p>
       </div>
     </div>
 
@@ -177,7 +177,7 @@
   <div class="container center">
     <p class="badge badge-dark reveal">Built on trust</p>
     <h2 class="section-title reveal">The money never touches us.</h2>
-    <p class="section-sub reveal">Donations flow from the donor's card to your nonprofit's own Stripe account to your nonprofit's bank. PocketCache is the software in between, and nothing more.</p>
+    <p class="section-sub reveal">Donations flow from the donor's card, through secure payment processing by Stripe, straight to your nonprofit's bank. PocketCache is the software in between, and nothing more.</p>
     <div class="trust-grid">
       <div class="trust-item reveal">
         <div class="trust-icon" aria-hidden="true">&#128179;</div>

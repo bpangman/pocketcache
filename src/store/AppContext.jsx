@@ -5,7 +5,7 @@ import { IDENTITY_KEYS, migrate, loadKey, saveKey, removeKeys, clearIdentityKeys
 import { monthKey, settleCycle } from '../lib/billing';
 import { pcBeacon } from '../lib/beacon.js';
 import { fetchRoundupsMe, pushDonorProfile } from '../lib/roundupsMe';
-import { demoDataset } from '../lib/donorContent';
+import { DEMO_DATASET } from '../lib/donorContent';
 import { buildIdentity, greetingNameFor } from '../lib/donorAuth';
 import { fmtFreshness } from '../lib/format';
 import { getSupabase } from '../lib/supa';
@@ -20,6 +20,9 @@ const DONOR_KEYS = [
   'pc_comms_optin', 'pc_monthly_cap', 'pc_charge_adjustment', 'pc_fee_months',
   'pc_bio', 'pc_bio_prompt_dismissed', 'pc_skip_next', 'pc_review_ack',
   'pc_skip_month', 'pc_last_cycle', 'pc_cover_processing', 'pc_demo_mode',
+  // pc_demo_level is the retired round-3 progressive-level key: kept in the
+  // list so the wipe paths still clear it on devices that predate the plain
+  // on/off demo toggle.
   'pc_demo_level', 'pc_name_prompt_done',
 ];
 // Keys cleared on ?reset=1, ?fresh=1, or explicit sign-out.
@@ -157,42 +160,36 @@ export function AppProvider({ children }) {
   // HOW TO FLIP IT
   //   - setDemoMode(true|false) - the documented public setter. The Settings
   //     screen renders the visible toggle and calls this.
-  //   - Shaking the phone - AppShell wires lib/shake.js to setDemoLevel.
+  //   - Shaking the phone - AppShell wires lib/shake.js to the same setter.
   //
-  // PROGRESSIVE LEVELS (round-3 item 8b). Demo is a LEVEL 0..3 now, not a
-  // boolean: shake once for a small few-days dataset (1), again for a
-  // few-weeks one (2), again for the original full rich dataset (3), and a
-  // fourth shake returns to real data (0). The Settings toggle maps on=3 /
-  // off=0 through setDemoMode, which is kept as the boolean-shaped setter so
-  // existing callers do not change. `demoMode` (any level > 0) keeps every
-  // existing demoActive gate working unchanged, and `demoData` below is the
-  // level's dataset (see lib/donorContent.js demoDataset).
+  // A plain BOOLEAN again (round-4 item 2b): the round-3 progressive levels
+  // (pc_demo_level 0..3) are retired by owner request - shake or toggle flips
+  // straight between real data and THE full rich demo dataset. Any stored
+  // pc_demo_level is migrated below (>0 reads as demo on) so no device loses
+  // its state.
   //
   // HOW SCREENS SHOULD CONSUME IT
   //   Read `demoActive` (below), not demoMode directly: a visitor with NO real
   //   account is always on the demo dataset (that is the prototype experience),
   //   so demoActive = demoMode || !hasAccount. Screens label demo figures with
-  //   a small "Demo n/3" pill whenever demoMode is on.
-  const [demoLevel, setDemoLevelState] = useState(() => {
+  //   a small "Demo" pill whenever demoMode is on.
+  const [demoMode, setDemoModeState] = useState(() => {
+    // Migrate the retired progressive level: any level > 0 was demo on.
     const lvl = loadKey('pc_demo_level', null);
-    if (lvl !== null) return Math.max(0, Math.min(3, lvl));
-    // Migrate the retired boolean: demoMode true reads as the full dataset.
-    return loadKey('pc_demo_mode', false) ? 3 : 0;
+    if (lvl !== null) return lvl > 0;
+    return !!loadKey('pc_demo_mode', false);
   });
-  function setDemoLevel(l) {
-    const v = Math.max(0, Math.min(3, Math.round(Number(l) || 0)));
-    saveKey('pc_demo_level', v);
-    // Kept in step for any storage reader that still knows only the boolean.
-    saveKey('pc_demo_mode', v > 0);
-    setDemoLevelState(v);
-  }
-  const demoMode = demoLevel > 0;
   function setDemoMode(v) {
-    setDemoLevel(v ? 3 : 0);
+    const on = !!v;
+    saveKey('pc_demo_mode', on);
+    // Retire the progressive-level key for good so the migration above can
+    // never resurrect a stale level on a device that has moved on.
+    removeKeys(['pc_demo_level']);
+    setDemoModeState(on);
   }
-  // The active demo dataset. Level 0 / no account -> the full level-3 data,
-  // so the no-account prototype experience is exactly what it always was.
-  const demoData = useMemo(() => demoDataset(demoLevel), [demoLevel]);
+  // The demo dataset - one rich dataset now, shared by demo mode and the
+  // no-account prototype experience (see lib/donorContent.js DEMO_DATASET).
+  const demoData = DEMO_DATASET;
 
   // A REAL account (a real Supabase identity - see `hasAccount` below) has no
   // real charge-history data source wired up yet (no billing-history sync
@@ -420,8 +417,7 @@ export function AppProvider({ children }) {
   // Demo mode overrides even a real linked bank: the whole point of the
   // toggle is "swap EVERY figure to the rich fake dataset".
   const hasRealBankLinked = bankLinked && !demoMode;
-  // The demo pending figure comes from the ACTIVE demo dataset (level 1/2/3
-  // - see demoData above), so the shake levels scale every derived figure.
+  // The demo pending figure comes from the demo dataset (see demoData above).
   const simulatedPendingRoundUps = parseFloat((demoData.currentMonthPending * roundUpMultiplier).toFixed(2));
   // The single substitution point for the pending figure, in priority order:
   //   1. demoActive          -> the simulated demo number (rich fake dataset).
@@ -755,7 +751,7 @@ export function AppProvider({ children }) {
       boostDonation,
       pendingRoundUps,
       demoMode, setDemoMode, demoActive,
-      demoLevel, setDemoLevel, demoData,
+      demoData,
       donorProfile, saveDisplayName,
       hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount,
       giveExtraPending, giveExtraLifetime, refreshRealRoundups,

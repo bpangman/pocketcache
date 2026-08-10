@@ -116,7 +116,7 @@ export function Modal({ show, onClose, title, children, width = 460 }) {
         style={{ position: 'relative', zIndex: Z.modal, width, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.25)', padding: 24 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: INK.primary }}>{title}</h3>
+          <h3 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: INK.primary }}>{title}</h3>
           <button onClick={onClose} aria-label="Close" style={{ border: 'none', background: '#f1f5f9', borderRadius: 999, width: 28, height: 28, cursor: 'pointer', color: INK.secondary, fontWeight: 700 }}>✕</button>
         </div>
         {children}
@@ -140,7 +140,7 @@ function WebToggle({ value, onChange }) {
 function SectionCard({ label, children, style, testId }) {
   return (
     <div data-testid={testId} style={{ ...CARD, padding: 20, ...style }}>
-      {label && <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>}
+      {label && <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>}
       {children}
     </div>
   );
@@ -150,8 +150,8 @@ function Row({ label, sub, right, onPress }) {
   const inner = (
     <>
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontWeight: 600, fontSize: 13.5, color: INK.primary }}>{label}</span>
-        {sub && <span style={{ display: 'block', fontSize: 12, color: INK.muted, marginTop: 1 }}>{sub}</span>}
+        <span style={{ display: 'block', fontWeight: 600, fontSize: 15.5, color: INK.primary }}>{label}</span>
+        {sub && <span style={{ display: 'block', fontSize: 14, color: INK.muted, marginTop: 1 }}>{sub}</span>}
       </span>
       {right}
     </>
@@ -172,7 +172,7 @@ function ActionButton({ children, onClick, disabled, tone = 'primary' }) {
       onClick={onClick} disabled={disabled}
       style={{
         width: '100%', padding: '12px 16px', borderRadius: 12, border: 'none', cursor: disabled ? 'default' : 'pointer',
-        fontWeight: 700, fontSize: 14, opacity: disabled ? 0.5 : 1, ...tones[tone],
+        fontWeight: 700, fontSize: 16, opacity: disabled ? 0.5 : 1, ...tones[tone],
       }}
     >
       {children}
@@ -201,11 +201,11 @@ function InvolveTile({ onClick, emoji, title, sub, ink, tint, edge, chip, testId
         background: tint, border: `1.5px solid ${edge}`,
       }}
     >
-      <span style={{ width: 32, height: 32, borderRadius: 10, background: chip, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+      <span style={{ width: 32, height: 32, borderRadius: 10, background: chip, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
         {emoji}
       </span>
-      <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, lineHeight: 1.3, color: ink }}>{title}</span>
-      <span style={{ display: 'block', fontSize: 12, lineHeight: 1.4, color: ink, opacity: 0.78 }}>{sub}</span>
+      <span style={{ display: 'block', fontWeight: 700, fontSize: 15.5, lineHeight: 1.3, color: ink }}>{title}</span>
+      <span style={{ display: 'block', fontSize: 14, lineHeight: 1.4, color: ink, opacity: 0.78 }}>{sub}</span>
     </button>
   );
 }
@@ -263,7 +263,7 @@ function WebToast({ message, onClose }) {
       style={{
         position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', zIndex: Z.globalToast,
         maxWidth: 520, background: '#0f172a', color: '#fff', borderRadius: 14, padding: '12px 18px',
-        fontSize: 13.5, fontWeight: 600, lineHeight: 1.5, boxShadow: '0 18px 40px rgba(11,42,74,0.28)', cursor: 'pointer',
+        fontSize: 15.5, fontWeight: 600, lineHeight: 1.5, boxShadow: '0 18px 40px rgba(11,42,74,0.28)', cursor: 'pointer',
       }}
     >
       {message}
@@ -323,7 +323,7 @@ export function WebAdminSignIn() {
     setPage('np-dashboard');
   }
 
-  const input = { width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 14 };
+  const input = { width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 16 };
 
   return (
     <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
@@ -332,50 +332,50 @@ export function WebAdminSignIn() {
           {/* Brand-kit top bar (item 3a): the wordmark IS the brand here -
               no logo + plain-text name pair, no redundant caption. */}
           <PocketCacheWordmark size={20} />
-          <p style={{ margin: 0, fontSize: 11.5, color: INK.muted, alignSelf: 'flex-end', paddingBottom: 2 }}>Nonprofit admin</p>
+          <p style={{ margin: 0, fontSize: 13.5, color: INK.muted, alignSelf: 'flex-end', paddingBottom: 2 }}>Nonprofit admin</p>
         </div>
       </header>
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <div style={{ width: 440, maxWidth: '100%', ...CARD, borderRadius: 20, boxShadow: '0 16px 48px rgba(11,42,74,0.10)', padding: 28 }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Admin sign-in</h1>
-          <p style={{ margin: '6px 0 18px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Admin sign-in</h1>
+          <p style={{ margin: '6px 0 18px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>
             Sign in with your organization&apos;s work email. No password  -  we email you a fresh 6-digit code each time.
           </p>
           {!sent ? (
             <form onSubmit={send} style={{ display: 'grid', gap: 10 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>Work email</label>
+              <label style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>Work email</label>
               <input type="email" required value={email} placeholder="you@yourorg.org"
                 onChange={e => { setEmail(e.target.value); setError(null); }}
                 style={{ ...input, borderColor: error ? '#ef4444' : '#d1d5db' }} />
               {remembered && (
-                <button type="button" onClick={notYou} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: INK.muted, fontWeight: 600, textDecoration: 'underline', justifySelf: 'start' }}>Not you?</button>
+                <button type="button" onClick={notYou} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: INK.muted, fontWeight: 600, textDecoration: 'underline', justifySelf: 'start' }}>Not you?</button>
               )}
-              {error && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{error}</p>}
+              {error && <p style={{ margin: 0, fontSize: 14, color: '#dc2626' }}>{error}</p>}
               <ActionButton disabled={!email || auth.sendingCode} onClick={send}>{auth.sendingCode ? 'Sending…' : 'Email me a sign-in code →'}</ActionButton>
-              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.muted }}>
                 Your admin sign-in is the work email verified when your page was created. Nothing to remember, nothing to steal.
               </p>
             </form>
           ) : (
             <form onSubmit={verify} style={{ display: 'grid', gap: 10 }}>
-              <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>
+              <p style={{ margin: 0, fontSize: 15.5, color: INK.secondary }}>
                 We sent a 6-digit code to <strong style={{ color: INK.primary }}>{email}</strong>. Enter it to continue.
               </p>
               <input type="text" inputMode="numeric" maxLength={6} value={codeInput}
                 onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
-                style={{ ...input, fontFamily: 'monospace', textAlign: 'center', fontSize: 20, letterSpacing: '0.5em', borderColor: codeError ? '#ef4444' : '#d1d5db' }} />
-              {codeError && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{codeError}</p>}
+                style={{ ...input, fontFamily: 'monospace', textAlign: 'center', fontSize: 22, letterSpacing: '0.5em', borderColor: codeError ? '#ef4444' : '#d1d5db' }} />
+              {codeError && <p style={{ margin: 0, fontSize: 14, color: '#dc2626' }}>{codeError}</p>}
               <ActionButton disabled={codeInput.length !== 6 || auth.verifying || resolving} onClick={verify}>{auth.verifying || resolving ? 'Signing in…' : 'Sign in →'}</ActionButton>
               <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
-                <button type="button" onClick={send} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted, fontWeight: 600 }}>Resend code</button>
-                <button type="button" onClick={() => { setSent(false); setCodeInput(''); setCodeError(null); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, color: INK.muted, fontWeight: 600 }}>Change email</button>
+                <button type="button" onClick={send} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, color: INK.muted, fontWeight: 600 }}>Resend code</button>
+                <button type="button" onClick={() => { setSent(false); setCodeInput(''); setCodeError(null); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, color: INK.muted, fontWeight: 600 }}>Change email</button>
               </div>
             </form>
           )}
         </div>
       </main>
       <footer style={{ padding: '0 24px 20px', textAlign: 'center' }}>
-        <p style={{ color: INK.muted, fontSize: 12, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <p style={{ color: INK.muted, fontSize: 14, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <CoinMark size={14} />
           Powered by PocketCache ·{' '}
           <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Terms</a>{' '}
@@ -471,14 +471,14 @@ export function GiveExtraModal({ show, onClose }) {
     <Modal show={show} onClose={onClose} title="Give Extra Now">
       {step === 'amount' && (
         <>
-          <p style={{ margin: '0 0 14px', fontSize: 13.5, color: INK.secondary }}>
+          <p style={{ margin: '0 0 14px', fontSize: 15.5, color: INK.secondary }}>
             Make a one-time gift to <strong style={{ color: INK.primary }}>{npShort}</strong> on top of your round-ups.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 10 }}>
             {BOOST_PRESETS.map(p => (
               <button key={p} onClick={() => { setSelected(p); setCustom(''); }}
                 style={{
-                  padding: '10px 0', borderRadius: 12, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                  padding: '10px 0', borderRadius: 12, fontWeight: 700, fontSize: 16, cursor: 'pointer',
                   border: selected === p && !custom ? `2px solid ${NAVY}` : '1.5px solid #e5e7eb',
                   background: selected === p && !custom ? '#eef4fa' : '#fff', color: selected === p && !custom ? NAVY : INK.secondary,
                 }}>
@@ -491,19 +491,19 @@ export function GiveExtraModal({ show, onClose }) {
             <input
               type="number" inputMode="decimal" min="0" step="0.01" placeholder="Or type a custom amount"
               value={custom} onChange={e => { setCustom(e.target.value); setSelected(null); }}
-              style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: INK.primary, background: 'transparent' }}
+              style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, color: INK.primary, background: 'transparent' }}
             />
           </div>
           {/* Fee table is DEMO ONLY - a real pledge stores just the gift
               amount and joins the next monthly charge, so "Total today"
               would be a lie there (see the component note above). */}
           {valid && !demoActive && (
-            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 15, color: INK.secondary, lineHeight: 1.6 }}>
               Your ${fmtMoney(amount)} gift joins your next monthly round-up charge - nothing is charged today.
             </div>
           )}
           {valid && demoActive && (
-            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13 }}>
+            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 15 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                 <span style={{ color: INK.secondary }}>Gift to {npShort}</span>
                 <span style={{ fontWeight: 700, color: INK.primary }}>${fmtMoney(amount)}</span>
@@ -511,7 +511,7 @@ export function GiveExtraModal({ show, onClose }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: INK.muted }}>
                 <span>App fee (required)</span><span>$1.00</span>
               </div>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0 2px', cursor: 'pointer', color: INK.muted, fontSize: 12.5 }}
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0 2px', cursor: 'pointer', color: INK.muted, fontSize: 14.5 }}
                 onClick={() => setCoverProcessing(v => !v)}>
                 <input type="checkbox" readOnly checked={coverProcessing} style={{ marginTop: 2, accentColor: '#059669' }} />
                 <span>Cover {npShort}&apos;s card processing (~${fmtMoney(processingFee)})  -  goes to them, counts as part of your gift</span>
@@ -530,24 +530,24 @@ export function GiveExtraModal({ show, onClose }) {
       {step === 'review' && (
         <>
           <div style={{ textAlign: 'center', padding: '8px 0 14px' }}>
-            <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>You&apos;re about to give</p>
-            <p style={{ margin: '6px 0', fontSize: 34, fontWeight: 800, color: NAVY }}>${fmtMoney(amount)}</p>
-            <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>
+            <p style={{ margin: 0, fontSize: 15.5, color: INK.secondary }}>You&apos;re about to give</p>
+            <p style={{ margin: '6px 0', fontSize: 40, fontWeight: 800, color: NAVY }}>${fmtMoney(amount)}</p>
+            <p style={{ margin: 0, fontSize: 15.5, color: INK.secondary }}>
               to <strong style={{ color: INK.primary }}>{selectedNonprofit?.name ?? npShort}</strong>
             </p>
           </div>
           {demoActive ? (
-            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 12.5, color: INK.secondary, lineHeight: 1.6 }}>
+            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 14.5, color: INK.secondary, lineHeight: 1.6 }}>
               Total charge today: <strong style={{ color: INK.primary }}>${fmtMoney(total)}</strong>  -  your ${fmtMoney(amount)} gift, the $1 app fee{coverProcessing ? `, and ~$${fmtMoney(processingFee)} processing cover (goes to ${npShort})` : ''}.
               Charged to your saved payment method. {npShort} sends your receipt. <em>Demo  -  no real charge is made.</em>
             </div>
           ) : (
-            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 12.5, color: INK.secondary, lineHeight: 1.6 }}>
+            <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 14.5, color: INK.secondary, lineHeight: 1.6 }}>
               Your ${fmtMoney(amount)} gift joins your next monthly round-up charge - it will be billed with your round-ups on the 11th, not today.
             </div>
           )}
           {error && (
-            <div data-testid="web-give-extra-error" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#dc2626' }}>
+            <div data-testid="web-give-extra-error" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontSize: 15, color: '#dc2626' }}>
               {error}
             </div>
           )}
@@ -560,12 +560,12 @@ export function GiveExtraModal({ show, onClose }) {
 
       {step === 'confirm' && (
         <div data-testid="web-give-extra-large-confirm" style={{ background: '#fffbeb', border: '2px solid #fde68a', borderRadius: 16, padding: 18 }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 16, color: '#78350f' }}>Just to confirm…</p>
-          <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: '#92400e' }}>
+          <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 18, color: '#78350f' }}>Just to confirm…</p>
+          <p style={{ margin: '0 0 16px', fontSize: 15.5, lineHeight: 1.6, color: '#92400e' }}>
             You&apos;re about to donate <strong>${fmtMoney(amount)}</strong> to {npShort}. Was that intentional?
           </p>
           {error && (
-            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', margin: '0 0 12px', fontSize: 13, color: '#dc2626' }}>
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', margin: '0 0 12px', fontSize: 15, color: '#dc2626' }}>
               {error}
             </div>
           )}
@@ -578,18 +578,18 @@ export function GiveExtraModal({ show, onClose }) {
 
       {step === 'done' && (
         <div style={{ textAlign: 'center', padding: '18px 0 8px' }} data-testid="web-give-extra-done">
-          <div style={{ fontSize: 44, marginBottom: 8 }}>💚</div>
+          <div style={{ fontSize: 52, marginBottom: 8 }}>💚</div>
           {demoActive ? (
             <>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Thank you!</p>
-              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 19, color: INK.primary }}>Thank you!</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 15.5, color: INK.secondary }}>
                 Your extra ${fmtMoney(amount)} is on its way to {npShort}.
               </p>
             </>
           ) : (
             <>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Added to your next monthly charge</p>
-              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 19, color: INK.primary }}>Added to your next monthly charge</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 15.5, color: INK.secondary }}>
                 Your ${fmtMoney(amount)} gift to {npShort} will be included when your round-ups are charged on the 11th.
               </p>
             </>
@@ -666,20 +666,20 @@ export function TransferNonprofitModal({ show, onClose, adminRole }) {
     setStage('confirm');
   }
 
-  const input = { width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1.5px solid #d1d5db', fontSize: 14 };
+  const input = { width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1.5px solid #d1d5db', fontSize: 16 };
 
   return (
     <Modal show={show} onClose={onClose} title="Transfer nonprofit page" width={520}>
       <div data-testid="web-transfer-modal">
         {stage === 'done' ? (
           <div style={{ textAlign: 'center', padding: '10px 0 4px' }} data-testid="web-transfer-done">
-            <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-            <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>Demo: transfer simulated</p>
-            <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.65, color: INK.secondary }}>
+            <div style={{ fontSize: 46, marginBottom: 8 }}>✅</div>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary }}>Demo: transfer simulated</p>
+            <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: 1.65, color: INK.secondary }}>
               Nothing actually changed. You still administer {joinCode} and no email was sent to {email.trim()}.
             </p>
             <div style={{ textAlign: 'left', background: '#fef3c7', border: '1.5px solid #fde68a', borderRadius: 14, padding: '12px 14px', margin: '14px 0 16px' }}>
-              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.65, color: '#92400e' }}>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: '#92400e' }}>
                 In the live version we check the new address is on your organization&apos;s domain, email them a link to accept, email you a copy, and give you a window to reverse it before your access ends.
               </p>
             </div>
@@ -687,13 +687,13 @@ export function TransferNonprofitModal({ show, onClose, adminRole }) {
           </div>
         ) : (
           <form onSubmit={handleContinue}>
-            <p style={{ margin: '0 0 14px', fontSize: 13.5, lineHeight: 1.65, color: INK.secondary }}>
+            <p style={{ margin: '0 0 14px', fontSize: 15.5, lineHeight: 1.65, color: INK.secondary }}>
               PocketCache gives each nonprofit one admin address, and right now that is
               {currentAdminEmail ? <> <strong style={{ color: INK.primary }}>{currentAdminEmail}</strong></> : ' yours'}.
               {' '}Moving on? Hand {joinCode} to a colleague so your organization keeps its page.
             </p>
 
-            <label htmlFor="web-transfer-email" style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+            <label htmlFor="web-transfer-email" style={{ display: 'block', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
               Colleague&apos;s work email
             </label>
             <input
@@ -706,36 +706,36 @@ export function TransferNonprofitModal({ show, onClose, adminRole }) {
               onChange={e => { setEmail(e.target.value); setError(null); }}
               style={{ ...input, borderColor: error ? '#ef4444' : email ? NAVY : '#e5e7eb' }}
             />
-            {error && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#dc2626' }} data-testid="web-transfer-error">{error}</p>}
+            {error && <p style={{ margin: '6px 0 0', fontSize: 14, color: '#dc2626' }} data-testid="web-transfer-error">{error}</p>}
 
             {/* Names what is LOST, not just what is gained. A handover screen that
                 only describes the colleague's new powers is not a warning. */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 14, padding: '12px 14px', marginTop: 14 }} data-testid="web-transfer-warning">
-              <span style={{ fontSize: 15, lineHeight: 1.2 }}>⚠️</span>
-              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.65, color: '#b91c1c' }}>
+              <span style={{ fontSize: 17, lineHeight: 1.2 }}>⚠️</span>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: '#b91c1c' }}>
                 This hands over control of {joinCode}. They get the donor list, the payout settings, and the page itself. You lose your admin access, and you will not be able to take it back yourself - only the new admin can transfer it again.
               </p>
             </div>
 
-            <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.65, color: INK.muted }}>
+            <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.65, color: INK.muted }}>
               Demo: this transfer is simulated. Nothing is handed over, no email is sent, and you keep your admin access.
             </p>
 
             {stage === 'confirm' && (
               <div style={{ background: '#fff7ed', border: '2px solid #fed7aa', borderRadius: 14, padding: 16, marginTop: 14 }} data-testid="web-transfer-confirm">
-                <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 13.5, color: '#9a3412' }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 15.5, color: '#9a3412' }}>
                   Give {joinCode} to {email.trim()}?
                 </p>
-                <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.65, color: '#9a3412' }}>
+                <p style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.65, color: '#9a3412' }}>
                   They become the only admin for {joinCode}. Your own admin access ends. Confirm only if this person works at your organization and is expecting it.
                 </p>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button type="button" onClick={() => setStage('form')}
-                    style={{ flex: 1, padding: '11px 14px', borderRadius: 12, background: '#fff', border: '1px solid #fed7aa', fontWeight: 700, fontSize: 13, color: '#9a3412', cursor: 'pointer' }}>
+                    style={{ flex: 1, padding: '11px 14px', borderRadius: 12, background: '#fff', border: '1px solid #fed7aa', fontWeight: 700, fontSize: 15, color: '#9a3412', cursor: 'pointer' }}>
                     Cancel
                   </button>
                   <button type="button" onClick={() => setStage('done')}
-                    style={{ flex: 1, padding: '11px 14px', borderRadius: 12, background: '#c2410c', border: 'none', fontWeight: 700, fontSize: 13, color: '#fff', cursor: 'pointer' }}>
+                    style={{ flex: 1, padding: '11px 14px', borderRadius: 12, background: '#c2410c', border: 'none', fontWeight: 700, fontSize: 15, color: '#fff', cursor: 'pointer' }}>
                     Yes, transfer control
                   </button>
                 </div>
@@ -795,11 +795,11 @@ export function CapControl({ value, onChange, subtle = false }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ flex: 1 }}>
-          <span style={{ display: 'block', fontWeight: 600, fontSize: subtle ? 13 : 13.5, color: subtle ? INK.secondary : INK.primary }}>
+          <span style={{ display: 'block', fontWeight: 600, fontSize: subtle ? 15 : 15.5, color: subtle ? INK.secondary : INK.primary }}>
             {/* subtle = Onboarding.jsx's wizard opt-in copy; default = Settings.jsx's row */}
             {subtle ? 'Set a monthly maximum (optional)' : 'Monthly Cap'}
           </span>
-          <span style={{ display: 'block', fontSize: 12, color: INK.muted, marginTop: 1 }}>
+          <span style={{ display: 'block', fontSize: 14, color: INK.muted, marginTop: 1 }}>
             {subtle
               ? 'Round-ups above it are simply never charged.'
               : enabled ? `Capped at $${value}/month` : 'No cap set'}
@@ -810,19 +810,19 @@ export function CapControl({ value, onChange, subtle = false }) {
       {enabled && (
         <div style={{ marginTop: 10 }}>
           <p style={{ textAlign: 'center', margin: '0 0 4px' }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: INK.primary }}>${value}</span>
-            <span style={{ fontSize: 13, color: INK.muted }}>/month</span>
+            <span style={{ fontSize: 30, fontWeight: 800, color: INK.primary }}>${value}</span>
+            <span style={{ fontSize: 15, color: INK.muted }}>/month</span>
           </p>
           <input type="range" min={5} max={200} step={5} value={value}
             onChange={e => onChange(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#0D9488' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: INK.muted }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: INK.muted }}>
             <span>$5</span><span>$200</span>
           </div>
         </div>
       )}
       {!subtle && (
-        <p style={{ margin: '12px 0 0', fontSize: 12, lineHeight: 1.6, color: INK.muted }}>
+        <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.muted }}>
           Cap what you give each month. If your round-ups go over, we only charge up to your cap  -  the rest is simply never charged.
         </p>
       )}
@@ -867,12 +867,12 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
 
   return (
     <Modal show={show} onClose={onClose} title="Adjust This Month's Charge">
-      <p style={{ margin: '0 0 14px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+      <p style={{ margin: '0 0 14px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>
         One-time adjustment for this month&apos;s charge only. In the real app you&apos;ll also get an email/push 3 days before each charge with this same control.
       </p>
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
-        <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: INK.primary }} data-testid="web-adjust-charge-value">${fmtMoney(value)}</p>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: INK.muted }}>of ${fmtMoney(accrued)} accrued this month</p>
+        <p style={{ margin: 0, fontSize: 37, fontWeight: 800, color: INK.primary }} data-testid="web-adjust-charge-value">${fmtMoney(value)}</p>
+        <p style={{ margin: '2px 0 0', fontSize: 14, color: INK.muted }}>of ${fmtMoney(accrued)} accrued this month</p>
       </div>
       <input
         type="range" min={bounds.min} max={bounds.max} step={bounds.step} value={value}
@@ -880,11 +880,11 @@ export function AdjustChargeModal({ show, onClose, pendingRoundUps, chargeAdjust
         aria-label="This month's charge"
         style={{ width: '100%', accentColor: '#0D9488' }}
       />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: INK.muted, marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: INK.muted, marginBottom: 14 }}>
         <span>${fmtMoney(bounds.min)}</span><span>${fmtMoney(bounds.max)}</span>
       </div>
       {capped && (
-        <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.55, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
+        <p style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.55, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }}>
           Your ${monthlyCap}/month cap is on. An amount you set here wins for this month, even above the cap  -  the cap comes back next month.
         </p>
       )}
@@ -1002,36 +1002,36 @@ function InvolvementModal({ kind, show, onClose, npShort }) {
     <Modal show={show} onClose={onClose} title={COPY.title}>
       {submitted ? (
         <div style={{ textAlign: 'center', padding: '18px 0 8px' }} data-testid="web-involve-done">
-          <div style={{ fontSize: 44, marginBottom: 8 }}>{COPY.done.emoji}</div>
+          <div style={{ fontSize: 52, marginBottom: 8 }}>{COPY.done.emoji}</div>
           {demoActive ? (
             <>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>{COPY.done.head}</p>
-              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>{COPY.done.body}</p>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 19, color: INK.primary }}>{COPY.done.head}</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 15.5, color: INK.secondary }}>{COPY.done.body}</p>
             </>
           ) : (
             <>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Sent to {sentOrgName}.</p>
-              <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: INK.secondary }}>They will reach out to you directly.</p>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 19, color: INK.primary }}>Sent to {sentOrgName}.</p>
+              <p style={{ margin: '6px 0 18px', fontSize: 15.5, color: INK.secondary }}>They will reach out to you directly.</p>
             </>
           )}
           <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
         </div>
       ) : (
         <>
-          <p style={{ margin: '0 0 14px', fontSize: 13.5, color: INK.secondary, lineHeight: 1.6 }}>{COPY.intro}</p>
+          <p style={{ margin: '0 0 14px', fontSize: 15.5, color: INK.secondary, lineHeight: 1.6 }}>{COPY.intro}</p>
           <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
             {COPY.inputs.map(inp => inp.textarea ? (
               <textarea key={inp.key} rows={3} placeholder={inp.placeholder} value={fields[inp.key] ?? ''}
                 onChange={e => setFields(f => ({ ...f, [inp.key]: e.target.value }))}
-                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 13.5, resize: 'none', fontFamily: 'inherit' }} />
+                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 15.5, resize: 'none', fontFamily: 'inherit' }} />
             ) : (
               <input key={inp.key} type={inp.type ?? 'text'} placeholder={inp.placeholder} value={fields[inp.key] ?? ''}
                 onChange={e => setFields(f => ({ ...f, [inp.key]: e.target.value }))}
-                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 13.5 }} />
+                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '1px solid #d1d5db', fontSize: 15.5 }} />
             ))}
           </div>
           {error && (
-            <div data-testid="web-involve-error" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#dc2626' }}>
+            <div data-testid="web-involve-error" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontSize: 15, color: '#dc2626' }}>
               {error}
             </div>
           )}
@@ -1060,7 +1060,7 @@ function WebMatchDetailsModal({ show, onClose, match }) {
       <div data-testid="web-match-details">
         {match.sample && (
           <p style={{ margin: '0 0 12px' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>
               Example partnership  -  demo only
             </span>
           </p>
@@ -1071,28 +1071,28 @@ function WebMatchDetailsModal({ show, onClose, match }) {
               <img src={match.logoUrl} alt={company} style={{ height: 30, objectFit: 'contain' }} />
             </span>
             <span>
-              <span style={{ display: 'block', fontWeight: 800, fontSize: 15, color: INK.primary }}>{match.company}</span>
-              <span style={{ display: 'block', fontSize: 12.5, color: INK.muted }}>Corporate Match Partner</span>
+              <span style={{ display: 'block', fontWeight: 800, fontSize: 17, color: INK.primary }}>{match.company}</span>
+              <span style={{ display: 'block', fontSize: 14.5, color: INK.muted }}>Corporate Match Partner</span>
             </span>
           </div>
         )}
-        <p style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, lineHeight: 1.6, color: INK.primary }}>{mp.headline}</p>
+        <p style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 600, lineHeight: 1.6, color: INK.primary }}>{mp.headline}</p>
         {match.impactReport && (
-          <p style={{ margin: '0 0 14px', fontSize: 13, lineHeight: 1.7, color: INK.secondary }}>{match.impactReport}</p>
+          <p style={{ margin: '0 0 14px', fontSize: 15, lineHeight: 1.7, color: INK.secondary }}>{match.impactReport}</p>
         )}
         <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 14, marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>Match Pool Progress</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#b45309' }}>{mp.matchedLabel} / {mp.poolLabel}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#92400e' }}>Match Pool Progress</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: '#b45309' }}>{mp.matchedLabel} / {mp.poolLabel}</span>
           </div>
           <div style={{ background: '#fef3c7', borderRadius: 999, height: 8, overflow: 'hidden' }}>
             <div style={{ width: `${mp.pct}%`, height: '100%', background: '#D97706', borderRadius: 999 }} />
           </div>
-          <p style={{ margin: '7px 0 0', fontSize: 12, color: '#b45309' }} data-testid="web-match-progress">{mp.progressLabel}</p>
+          <p style={{ margin: '7px 0 0', fontSize: 14, color: '#b45309' }} data-testid="web-match-progress">{mp.progressLabel}</p>
         </div>
         {match.impactUrl && (
           <a href={match.impactUrl} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 13, fontWeight: 600, color: '#b45309', textDecoration: 'none' }}>
+            style={{ fontSize: 15, fontWeight: 600, color: '#b45309', textDecoration: 'none' }}>
             {mp.impactLinkLabel} ↗
           </a>
         )}
@@ -1131,25 +1131,25 @@ export function WebMyCause() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
         <OrgLogo nonprofit={np} size={14} rounded="2xl" />
         <div>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>Your cause</p>
-          <h1 style={{ margin: '2px 0 0', fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{np.name}</h1>
-          {np.category && <p style={{ margin: '2px 0 0', fontSize: 12.5, color: INK.secondary }}>{np.category}</p>}
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>Your cause</p>
+          <h1 style={{ margin: '2px 0 0', fontSize: 23, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{np.name}</h1>
+          {np.category && <p style={{ margin: '2px 0 0', fontSize: 14.5, color: INK.secondary }}>{np.category}</p>}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr]" style={{ display: 'grid', gap: 20, alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 20 }}>
           <SectionCard label="Mission">
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.7, color: INK.secondary }}>{np.description}</p>
+            <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: INK.secondary }}>{np.description}</p>
           </SectionCard>
           {np.impact && (
             <div style={{ ...CARD, border: 'none', padding: 20, background: `linear-gradient(135deg, ${NAVY} 0%, #0B2A4A 100%)` }}>
-              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)' }}>Impact</p>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 700, lineHeight: 1.55, color: '#fff' }}>&ldquo;{np.impact}&rdquo;</p>
+              <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)' }}>Impact</p>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 700, lineHeight: 1.55, color: '#fff' }}>&ldquo;{np.impact}&rdquo;</p>
             </div>
           )}
           <SectionCard label="Your impact">
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.7, color: INK.secondary }} data-testid="web-impact-tier">
+            <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.7, color: INK.secondary }} data-testid="web-impact-tier">
               {impactTier(totalDonated, npShort)}
             </p>
           </SectionCard>
@@ -1157,14 +1157,14 @@ export function WebMyCause() {
             <div>
               {(orgStats != null ? orgStats.isDemo : !!np.sampleStats) && (
                 <p style={{ textAlign: 'right', margin: '0 0 6px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>Demo data</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>Demo data</span>
                 </p>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(3, stats.length)}, 1fr)`, gap: 12 }}>
                 {stats.map(s => (
                   <div key={s.label} style={{ ...CARD, padding: '14px 16px' }}>
-                    <p style={{ margin: 0, fontSize: 11.5, color: INK.muted }}>{s.label}</p>
-                    <p style={{ margin: '3px 0 0', fontWeight: 800, fontSize: 16, color: INK.primary }}>{s.value}</p>
+                    <p style={{ margin: 0, fontSize: 13.5, color: INK.muted }}>{s.label}</p>
+                    <p style={{ margin: '3px 0 0', fontWeight: 800, fontSize: 18, color: INK.primary }}>{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -1189,7 +1189,7 @@ export function WebMyCause() {
               it cannot turn into an alarm for the next nonprofit either. */}
           <SectionCard label="Get more involved" testId="web-involvement">
             {/* Same sentence the app's group leads with. */}
-            <p style={{ margin: '-4px 0 14px', fontSize: 12.5, lineHeight: 1.6, color: INK.muted }}>
+            <p style={{ margin: '-4px 0 14px', fontSize: 14.5, lineHeight: 1.6, color: INK.muted }}>
               Your round-ups are already running. Here are three ways to do more for {npShort}.
             </p>
             {/* One lead action, then two equal-weight tiles that say what they
@@ -1221,7 +1221,7 @@ export function WebMyCause() {
             <div>
               {match.sample && (
                 <p style={{ margin: '0 0 6px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>Example partnership  -  demo</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px' }}>Example partnership  -  demo</span>
                 </p>
               )}
               {/* The match display is the SHARED MatchBadge component, the same one
@@ -1263,8 +1263,8 @@ export function WebShare() {
   return (
     <>
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Share</h1>
-        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>Spread the word  -  every share grows {np.shortName ?? np.name}&apos;s quiet-giving crowd.</p>
+        <h1 style={{ margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Share</h1>
+        <p style={{ margin: '3px 0 0', fontSize: 15.5, color: INK.secondary }}>Spread the word  -  every share grows {np.shortName ?? np.name}&apos;s quiet-giving crowd.</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr]" style={{ display: 'grid', gap: 20, alignItems: 'start' }}>
         <div style={{ ...CARD, border: 'none', overflow: 'hidden' }}>
@@ -1273,34 +1273,34 @@ export function WebShare() {
               <CoinMark size={26} />
               <span style={{ fontWeight: 800 }}>{brand.appName}</span>
             </div>
-            <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>I&apos;ve donated</p>
-            <p style={{ margin: '4px 0', fontSize: 40, fontWeight: 800 }} data-testid="web-share-total">${fmtMoney(totalDonated)}</p>
-            <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>to {np.name}</p>
+            <p style={{ margin: 0, fontSize: 15, opacity: 0.85 }}>I&apos;ve donated</p>
+            <p style={{ margin: '4px 0', fontSize: 46, fontWeight: 800 }} data-testid="web-share-total">${fmtMoney(totalDonated)}</p>
+            <p style={{ margin: 0, fontSize: 15, opacity: 0.85 }}>to {np.name}</p>
             {/* PUBLIC card - a donor sends this link to friends, so it must
                 never show a demo number for a real account. A real account
                 with no charge history yet reads the same honest "first
                 month" framing the dashboards use, with no streak badge; demo
                 mode keeps the streak, clearly labeled. */}
             {hasAccount ? (
-              <p style={{ margin: '12px 0 0', fontSize: 12, opacity: 0.75 }}>{FIRST_MONTH_LABEL}</p>
+              <p style={{ margin: '12px 0 0', fontSize: 14, opacity: 0.75 }}>{FIRST_MONTH_LABEL}</p>
             ) : (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, background: 'rgba(255,255,255,0.18)', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, background: 'rgba(255,255,255,0.18)', borderRadius: 999, padding: '4px 12px', fontSize: 14, fontWeight: 600 }}>
                 🔥 {monthsGiving}-month giving streak · Demo data
               </span>
             )}
             {np.impact && (
-              <p style={{ margin: '14px 0 0', paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: 12, opacity: 0.75 }}>{np.impact}</p>
+              <p style={{ margin: '14px 0 0', paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: 14, opacity: 0.75 }}>{np.impact}</p>
             )}
           </div>
-          <div style={{ padding: '12px 20px', background: '#fff', fontSize: 12.5, color: INK.secondary }}>
+          <div style={{ padding: '12px 20px', background: '#fff', fontSize: 14.5, color: INK.secondary }}>
             Spare change from every purchase  -  it adds up. 💙
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: 20 }}>
           <SectionCard label="Message preview">
-            <p style={{ margin: '0 0 8px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>{shareText}</p>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: NAVY, wordBreak: 'break-all' }}>{displayUrl}</p>
+            <p style={{ margin: '0 0 8px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>{shareText}</p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: NAVY, wordBreak: 'break-all' }}>{displayUrl}</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 14 }}>
               <ActionButton tone="quiet" onClick={() => copy(`${shareText}\n${shareUrl}`, setCopied)}>{copied ? '✓ Copied' : 'Copy link'}</ActionButton>
               <ActionButton tone="quiet" onClick={() => navigator.share?.({ title: brand.appName, text: shareText, url: shareUrl })}>Share via…</ActionButton>
@@ -1311,15 +1311,15 @@ export function WebShare() {
             </div>
           </SectionCard>
           <div style={{ ...CARD, border: 'none', padding: 20, background: `linear-gradient(135deg, ${NAVY}, #0B2A4A)`, color: '#fff' }}>
-            <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 15 }}>Invite a Friend</p>
-            <p style={{ margin: '0 0 14px', fontSize: 13, lineHeight: 1.6, opacity: 0.85 }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 17 }}>Invite a Friend</p>
+            <p style={{ margin: '0 0 14px', fontSize: 15, lineHeight: 1.6, opacity: 0.85 }}>
               When someone joins with your link, we waive their first month&apos;s $1 app fee  - 
               so their very first charge is pure giving to {np.name}.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.16)', borderRadius: 12, padding: '10px 14px' }}>
               <span style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 }}>{referralCode}</span>
               <button onClick={() => copy(referralCode, setCodeCopied)}
-                style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                style={{ border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: 10, padding: '6px 12px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                 {codeCopied ? 'Copied!' : 'Copy code'}
               </button>
             </div>
@@ -1450,7 +1450,7 @@ export function WebSettings() {
   return (
     <>
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Settings</h1>
+        <h1 style={{ margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Settings</h1>
         {/* Identity only. The lifetime "$61.05 donated" used to ride along here;
             Overview's hero owns that figure and a settings header is not where a
             donor looks for it. */}
@@ -1468,19 +1468,19 @@ export function WebSettings() {
               onChange={e => setNameInput(e.target.value)}
               placeholder="What should we call you?"
               data-testid="web-settings-name-input"
-              style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '8px 12px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 13.5, color: INK.primary, outline: 'none' }}
+              style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '8px 12px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 15.5, color: INK.primary, outline: 'none' }}
             />
             <ActionButton onClick={() => { if (nameInput.trim()) { saveDisplayName(nameInput); showToast('Name updated'); } setEditingName(false); }}>Save</ActionButton>
             <ActionButton tone="quiet" onClick={() => setEditingName(false)}>Cancel</ActionButton>
           </form>
         ) : (
-          <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }} data-testid="web-settings-identity">
+          <p style={{ margin: '3px 0 0', fontSize: 15.5, color: INK.secondary }} data-testid="web-settings-identity">
             {hasAccount?.name ?? DEMO_USER.name} · {hasAccount?.email ?? DEMO_USER.email} · Member since {memberSince}
             {hasAccount && (
               <button
                 onClick={() => { setNameInput(hasAccount?.nameGuessed ? '' : (hasAccount?.name ?? '')); setEditingName(true); }}
                 data-testid="web-settings-name-edit"
-                style={{ marginLeft: 10, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: NAVY, textDecoration: 'underline', padding: 0 }}
+                style={{ marginLeft: 10, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, fontWeight: 700, color: NAVY, textDecoration: 'underline', padding: 0 }}
               >
                 Edit name
               </button>
@@ -1507,10 +1507,10 @@ export function WebSettings() {
                     border: roundUpMultiplier === opt.value ? `2px solid ${NAVY}` : '1.5px solid #e5e7eb',
                     background: roundUpMultiplier === opt.value ? '#eef4fa' : '#fff',
                   }}>
-                  <span style={{ display: 'block', fontWeight: 800, fontSize: 14, color: roundUpMultiplier === opt.value ? NAVY : INK.primary }}>
+                  <span style={{ display: 'block', fontWeight: 800, fontSize: 16, color: roundUpMultiplier === opt.value ? NAVY : INK.primary }}>
                     {opt.label}
                   </span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: INK.muted, marginTop: 2, lineHeight: 1.35 }}>
+                  <span style={{ display: 'block', fontSize: 13.5, color: INK.muted, marginTop: 2, lineHeight: 1.35 }}>
                     {opt.desc}
                   </span>
                 </button>
@@ -1524,7 +1524,7 @@ export function WebSettings() {
               right={skipNextCharge ? (
                 <button onClick={() => setSkipNextCharge(false)}
                   style={{
-                    padding: '6px 12px', borderRadius: 10, fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                    padding: '6px 12px', borderRadius: 10, fontWeight: 700, fontSize: 14.5, cursor: 'pointer',
                     border: '1.5px solid #e5e7eb', background: '#fff', color: INK.secondary,
                   }}>
                   Undo
@@ -1532,7 +1532,7 @@ export function WebSettings() {
               ) : (
                 <button onClick={() => { setSkipNextCharge(true); setModal('skip'); }}
                   style={{
-                    padding: '6px 12px', borderRadius: 10, fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                    padding: '6px 12px', borderRadius: 10, fontWeight: 700, fontSize: 14.5, cursor: 'pointer',
                     border: 'none', background: NAVY, color: '#fff',
                   }}>
                   Skip {skipMonthName}
@@ -1546,7 +1546,7 @@ export function WebSettings() {
 
           <SectionCard label="Card we track  -  never charged">
             <Row label={trackedCard?.name ?? 'Chase Sapphire'} sub={`•••• ${trackedCard?.last4 ?? '4242'} · Read-only via Plaid`}
-              right={<span style={{ fontSize: 11.5, fontWeight: 700, color: '#0D9488', background: '#f0fdfa', borderRadius: 999, padding: '4px 10px' }}>Watching</span>} />
+              right={<span style={{ fontSize: 13.5, fontWeight: 700, color: '#0D9488', background: '#f0fdfa', borderRadius: 999, padding: '4px 10px' }}>Watching</span>} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Track a different card" sub="Switch which card we watch for round-ups" onPress={() => setModal('card')}
               right={<span style={{ color: INK.muted }}>›</span>} />
@@ -1555,7 +1555,7 @@ export function WebSettings() {
           <SectionCard label="How you pay  -  your payment card">
             <Row label={paymentMethod?.label ?? 'Credit or Debit Card'}
               sub={paymentMethod?.last4 ? `•••• ${paymentMethod.last4} · One monthly charge from ${npShort}` : `One monthly charge from ${npShort}`}
-              right={<span style={{ fontSize: 18 }}>{{ ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' }[paymentMethod?.type] ?? '💳'}</span>} />
+              right={<span style={{ fontSize: 20 }}>{{ ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' }[paymentMethod?.type] ?? '💳'}</span>} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label="Change payment method" sub="Bank account, Apple Pay, or card" onPress={() => setModal('payment')}
               right={<span style={{ color: INK.muted }}>›</span>} />
@@ -1632,7 +1632,7 @@ export function WebSettings() {
                 storage key and semantics for that one. Same split as
                 Settings.jsx's donor Preferences card. */}
             <Row label="Service emails" sub="Charge confirmations, receipts, and account & security notices - required while your account is active"
-              right={<span style={{ color: INK.muted, fontSize: 12, fontWeight: 700 }}>Always on</span>} />
+              right={<span style={{ color: INK.muted, fontSize: 14, fontWeight: 700 }}>Always on</span>} />
             <div style={{ height: 1, background: '#f1f5f9' }} />
             <Row label={`${npShort} updates`} sub="Optional giving updates and news from your cause"
               right={<WebToggle value={commsOptin} onChange={updateCommsOptin} />} />
@@ -1665,7 +1665,7 @@ export function WebSettings() {
               recurring plan. Closing stops round-ups and removes the linked card;
               nothing further is charged. Settle-up mechanics are unchanged. */}
           <SectionCard label="Account">
-            <p style={{ margin: '0 0 12px', fontSize: 12.5, color: INK.muted, lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 12px', fontSize: 14.5, color: INK.muted, lineHeight: 1.6 }}>
               Closing your account never costs anything  -  you choose whether this month&apos;s round-ups become a final donation or are simply never charged. Closing stops round-ups and removes your linked card; nothing further is charged.
             </p>
             <ActionButton tone="danger" onClick={() => setModal('cancel')}>Close my account</ActionButton>
@@ -1678,7 +1678,7 @@ export function WebSettings() {
           anywhere, so a web donor reporting a bug had nothing to quote. */}
       <p
         data-testid="web-settings-version"
-        style={{ margin: '24px 0 0', textAlign: 'center', fontSize: 12, color: INK.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        style={{ margin: '24px 0 0', textAlign: 'center', fontSize: 14, color: INK.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
       >
         <CoinMark size={14} />PocketCache · v1.0.0
       </p>
@@ -1722,7 +1722,7 @@ export function WebSettings() {
       <Modal show={modal === 'skip'} onClose={() => setModal(null)} title={`${skipMonthName} skipped`}>
         <div data-testid="web-skip-modal">
           {skipConfirmParagraphs({ monthName: skipMonthName, feeMonths }).map((para, i, all) => (
-            <p key={i} style={{ margin: i === all.length - 1 ? '0 0 16px' : '0 0 10px', fontSize: 13, color: INK.secondary, lineHeight: 1.6 }}>
+            <p key={i} style={{ margin: i === all.length - 1 ? '0 0 16px' : '0 0 10px', fontSize: 15, color: INK.secondary, lineHeight: 1.6 }}>
               {para}
             </p>
           ))}
@@ -1739,7 +1739,7 @@ export function WebSettings() {
           {billingParagraphs.map((para, i) => (
             <div key={i}>
               {i > 0 && <div style={{ height: 1, background: '#f1f5f9' }} />}
-              <p style={{ margin: 0, padding: '9px 0', fontSize: 12.5, lineHeight: 1.65, color: INK.secondary }}>{para}</p>
+              <p style={{ margin: 0, padding: '9px 0', fontSize: 14.5, lineHeight: 1.65, color: INK.secondary }}>{para}</p>
             </div>
           ))}
         </div>
@@ -1794,9 +1794,9 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
     <Modal show={show} onClose={onClose} title="Track a Different Card (Never Charged)">
       {connected ? (
         <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="web-track-card-confirm">
-          <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{connected.name} ····{connected.last4} connected</p>
-          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
+          <div style={{ fontSize: 46, marginBottom: 8 }}>✅</div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary }}>{connected.name} ····{connected.last4} connected</p>
+          <p style={{ margin: '6px 0 16px', fontSize: 15, color: INK.secondary }}>
             We&apos;ll watch purchases and calculate round-ups as they happen  -  nothing changes until you confirm. This card is never charged.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
@@ -1812,29 +1812,29 @@ function TrackCardModal({ show, onClose, current, onConnected }) {
         />
       ) : (
         <>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
+          <p style={{ margin: '0 0 12px', fontSize: 15, color: INK.secondary }}>
             Currently watching <strong>{current?.name ?? 'Chase Sapphire'} ····{current?.last4 ?? '4242'}</strong>. Pick a new card issuer  -  read-only via Plaid, never charged.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             {TRACKED_CARD_BANKS.map(b => (
               <button key={b.id} onClick={() => pick(b)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', opacity: connecting && connecting !== b.id ? 0.4 : 1 }}>
-                <span style={{ fontSize: 20 }}>{b.emoji}</span>
+                <span style={{ fontSize: 22 }}>{b.emoji}</span>
                 <span style={{ flex: 1 }}>
-                  <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: INK.primary }}>{b.name}</span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>{b.sub}</span>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: 15.5, color: INK.primary }}>{b.name}</span>
+                  <span style={{ display: 'block', fontSize: 13.5, color: INK.muted }}>{b.sub}</span>
                 </span>
-                {connecting === b.id && <span style={{ fontSize: 11.5, fontWeight: 600, color: '#0D9488' }}>Connecting…</span>}
+                {connecting === b.id && <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0D9488' }}>Connecting…</span>}
               </button>
             ))}
             <button
               onClick={() => setShowManualForm(true)}
               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, border: '1.5px dashed #99f6e4', background: '#f0fdfb', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{ fontSize: 20 }}>🔒</span>
+              <span style={{ fontSize: 22 }}>🔒</span>
               <span style={{ flex: 1 }}>
-                <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: INK.primary }}>Enter your card manually</span>
-                <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>Type your card number  -  encrypted via Plaid</span>
+                <span style={{ display: 'block', fontWeight: 700, fontSize: 15.5, color: INK.primary }}>Enter your card manually</span>
+                <span style={{ display: 'block', fontSize: 13.5, color: INK.muted }}>Type your card number  -  encrypted via Plaid</span>
               </span>
             </button>
           </div>
@@ -1909,11 +1909,11 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
     <Modal show={show} onClose={onClose} title={title}>
       {staged ? (
         <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="web-change-payment-confirm">
-          <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>
+          <div style={{ fontSize: 46, marginBottom: 8 }}>✅</div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary }}>
             {staged.label} ready{staged.last4 ? ` ····${staged.last4}` : ''}
           </p>
-          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
+          <p style={{ margin: '6px 0 16px', fontSize: 15, color: INK.secondary }}>
             Confirm and your next monthly charge uses this method. Secured by Stripe.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
@@ -1933,7 +1933,7 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
         </>
       ) : cardEntry ? (
         <>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
+          <p style={{ margin: '0 0 12px', fontSize: 15, color: INK.secondary }}>
             This is the payment card your monthly round-up charge comes from  -  a different card than the one we track for purchases. Stripe holds the details  -  PocketCache never sees the number.
           </p>
           <StripeCardForm
@@ -1949,24 +1949,24 @@ export function ChangePaymentModal({ show, onClose, onChanged }) {
         </>
       ) : (
         <>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>Payments are processed by Stripe  -  PocketCache never sees your details.</p>
+          <p style={{ margin: '0 0 12px', fontSize: 15, color: INK.secondary }}>Payments are processed by Stripe  -  PocketCache never sees your details.</p>
           <div style={{ display: 'grid', gap: 8 }}>
             {PAYMENT_METHOD_OPTIONS.map(opt => {
               const appleDisabled = opt.id === 'apple_pay' && !applePayOk;
               return (
               <button key={opt.id} disabled={appleDisabled} onClick={() => pick(opt)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, border: '1.5px solid #e5e7eb', background: appleDisabled ? '#f8fafc' : '#fff', cursor: appleDisabled ? 'default' : 'pointer', textAlign: 'left', opacity: appleDisabled ? 0.55 : saving && saving !== opt.id ? 0.4 : 1 }}>
-                <span style={{ fontSize: 20 }}>{opt.icon}</span>
+                <span style={{ fontSize: 22 }}>{opt.icon}</span>
                 <span style={{ flex: 1 }}>
-                  <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: INK.primary }}>{opt.label}</span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>{appleDisabled ? APPLE_PAY_UNAVAILABLE_NOTE : opt.sub}</span>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: 15.5, color: INK.primary }}>{opt.label}</span>
+                  <span style={{ display: 'block', fontSize: 13.5, color: INK.muted }}>{appleDisabled ? APPLE_PAY_UNAVAILABLE_NOTE : opt.sub}</span>
                 </span>
-                {saving === opt.id && <span style={{ fontSize: 11.5, fontWeight: 600, color: '#0D9488' }}>Saving…</span>}
+                {saving === opt.id && <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0D9488' }}>Saving…</span>}
               </button>
               );
             })}
           </div>
-          <p style={{ margin: '12px 0 0', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>
+          <p style={{ margin: '12px 0 0', fontSize: 13.5, color: INK.muted, textAlign: 'center' }}>
             Nothing changes until you confirm on the next screen.
           </p>
         </>
@@ -2003,16 +2003,16 @@ function SwitchOrgModal({ show, onClose, onBind }) {
 
   return (
     <Modal show={show} onClose={onClose} title="Switch Nonprofit">
-      <p style={{ margin: '0 0 12px', fontSize: 13, color: INK.secondary }}>
+      <p style={{ margin: '0 0 12px', fontSize: 15, color: INK.secondary }}>
         Your history stays with you  -  future round-ups go to the new cause.
       </p>
       <form onSubmit={submit}>
         <input
           type="text" placeholder="Enter code (e.g. BGCA)" value={code}
           onChange={e => { setCode(e.target.value); setError(null); }}
-          style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${error ? '#ef4444' : '#d1d5db'}`, fontSize: 14, fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 8 }}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${error ? '#ef4444' : '#d1d5db'}`, fontSize: 16, fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 8 }}
         />
-        {error && <p style={{ margin: '0 0 8px', fontSize: 12, color: '#dc2626' }}>{error}</p>}
+        {error && <p style={{ margin: '0 0 8px', fontSize: 14, color: '#dc2626' }}>{error}</p>}
         <ActionButton disabled={!code.trim()} onClick={submit}>Switch</ActionButton>
       </form>
     </Modal>
@@ -2083,7 +2083,7 @@ function PrivacyModal({ show, onClose, prefs, updatePref, adminOrgName, onDelete
       <div style={{ height: 1, background: '#f1f5f9', marginBottom: 12 }} />
       {confirmDelete ? (
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: 14 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, color: '#991b1b', lineHeight: 1.55 }}>
+          <p style={{ margin: '0 0 10px', fontSize: 15, color: '#991b1b', lineHeight: 1.55 }}>
             This permanently removes your giving account and data{adminOrgName ? `  -  your admin account for ${adminOrgName} is untouched` : ''}. This can&apos;t be undone.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
@@ -2150,43 +2150,43 @@ function WebChangeEmailModal({ show, onClose, currentEmail, onChanged }) {
     <Modal show={show} onClose={onClose} title="Change email address">
       {stage === 'done' ? (
         <div style={{ textAlign: 'center', padding: '14px 0 6px' }} data-testid="web-change-email-done">
-          <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>Email updated</p>
-          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>You now sign in with <strong>{newEmail.trim()}</strong>.</p>
+          <div style={{ fontSize: 46, marginBottom: 8 }}>✅</div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary }}>Email updated</p>
+          <p style={{ margin: '6px 0 16px', fontSize: 15, color: INK.secondary }}>You now sign in with <strong>{newEmail.trim()}</strong>.</p>
           <ActionButton tone="quiet" onClick={onClose}>Done</ActionButton>
         </div>
       ) : stage === 'nosession' ? (
         <div style={{ textAlign: 'center', padding: '10px 0 6px' }}>
-          <div style={{ fontSize: 34, marginBottom: 8 }}>🔑</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: INK.primary }}>Sign in first</p>
-          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>You need to sign in again before changing your email. Sign out and back in, then try again.</p>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>🔑</div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 17, color: INK.primary }}>Sign in first</p>
+          <p style={{ margin: '6px 0 16px', fontSize: 15, color: INK.secondary }}>You need to sign in again before changing your email. Sign out and back in, then try again.</p>
           <ActionButton tone="quiet" onClick={onClose}>Got it</ActionButton>
         </div>
       ) : stage === 'sent' ? (
         <div data-testid="web-change-email-sent">
           <div style={{ background: '#eef4fa', border: `1.5px solid ${NAVY}33`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
-            <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 14, color: INK.primary }}>Check your inbox</p>
-            <p style={{ margin: 0, fontSize: 12.5, color: INK.secondary, lineHeight: 1.55 }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 16, color: INK.primary }}>Check your inbox</p>
+            <p style={{ margin: 0, fontSize: 14.5, color: INK.secondary, lineHeight: 1.55 }}>
               We sent a confirmation link to <strong>{newEmail.trim()}</strong> and to your current address ({currentEmail}). Open the link in each email, then come back here  -  we&apos;ll update automatically.
             </p>
           </div>
-          <p style={{ margin: '0 0 12px', fontSize: 12, color: INK.muted, textAlign: 'center' }}>Waiting for you to confirm…</p>
+          <p style={{ margin: '0 0 12px', fontSize: 14, color: INK.muted, textAlign: 'center' }}>Waiting for you to confirm…</p>
           <ActionButton tone="quiet" onClick={onClose}>Close  -  I&apos;ll finish later</ActionButton>
         </div>
       ) : (
         <form onSubmit={handleSend}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, color: INK.secondary }}>Your sign-in email is <strong>{currentEmail}</strong>. Enter the new address you want to use.</p>
+          <p style={{ margin: '0 0 10px', fontSize: 15, color: INK.secondary }}>Your sign-in email is <strong>{currentEmail}</strong>. Enter the new address you want to use.</p>
           <input
             type="email" inputMode="email" autoComplete="email" placeholder="you@example.com"
             value={newEmail}
             onChange={e => { setNewEmail(e.target.value); setError(null); }}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${error ? '#ef4444' : '#d1d5db'}`, fontSize: 14, marginBottom: 8 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${error ? '#ef4444' : '#d1d5db'}`, fontSize: 16, marginBottom: 8 }}
           />
-          {error && <p style={{ margin: '0 0 8px', fontSize: 12, color: '#dc2626' }}>{error}</p>}
+          {error && <p style={{ margin: '0 0 8px', fontSize: 14, color: '#dc2626' }}>{error}</p>}
           <ActionButton disabled={!newEmail.trim() || sending} onClick={handleSend}>
             {sending ? 'Sending…' : 'Send confirmation link'}
           </ActionButton>
-          <p style={{ margin: '10px 0 0', fontSize: 11.5, color: INK.muted, textAlign: 'center' }}>We&apos;ll email a link to confirm it&apos;s really you. Nothing changes until you open it.</p>
+          <p style={{ margin: '10px 0 0', fontSize: 13.5, color: INK.muted, textAlign: 'center' }}>We&apos;ll email a link to confirm it&apos;s really you. Nothing changes until you open it.</p>
         </form>
       )}
     </Modal>
@@ -2258,11 +2258,11 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
     <Modal show={show} onClose={onClose} title="Before you go…">
       {result === 'donated' || result === 'cancelled' ? (
         <div style={{ textAlign: 'center', padding: '14px 0 6px' }}>
-          <div style={{ fontSize: 44, marginBottom: 8 }}>{result === 'donated' ? '💚' : '👋'}</div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>
+          <div style={{ fontSize: 52, marginBottom: 8 }}>{result === 'donated' ? '💚' : '👋'}</div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary }}>
             {result === 'donated' ? 'Donated! Your account is closed.' : 'Account closed'}
           </p>
-          <p style={{ margin: '6px 0 16px', fontSize: 13, color: INK.secondary }}>
+          <p style={{ margin: '6px 0 16px', fontSize: 15, color: INK.secondary }}>
             {result === 'donated'
               ? `Thank you for your final donation to ${npShort}. Round-ups have stopped and your linked card is removed - nothing further is charged.`
               : "This month's round-ups won't be charged  -  as if the month never happened. Your linked card is removed and nothing further is charged."}
@@ -2271,11 +2271,11 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
         </div>
       ) : (
         <>
-          <p style={{ margin: '0 0 12px', fontSize: 13.5, color: INK.secondary, lineHeight: 1.6 }}>
+          <p style={{ margin: '0 0 12px', fontSize: 15.5, color: INK.secondary, lineHeight: 1.6 }}>
             You&apos;ve rounded up <strong style={{ color: INK.primary }}>${fmtMoney(raw)}</strong> for {npShort} this month.
             Would you like to make this month&apos;s donation before closing your account?
           </p>
-          <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 12, padding: 14, marginBottom: 10, fontSize: 13 }}>
+          <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 12, padding: 14, marginBottom: 10, fontSize: 15 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
               <span style={{ color: INK.secondary }}>Round-ups</span>
               <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-cancel-roundups">
@@ -2285,7 +2285,7 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
               </span>
             </div>
             {trimmed && (
-              <p style={{ margin: '0 0 2px', fontSize: 12, color: '#b45309' }} data-testid="web-cancel-note">
+              <p style={{ margin: '0 0 2px', fontSize: 14, color: '#b45309' }} data-testid="web-cancel-note">
                 {chargeAdjustment !== null && chargeAdjustment !== undefined
                   ? `Adjusted to $${chargeableStr} for this month  -  the rest is never charged.`
                   : `Capped at $${fmtMoney(monthlyCap)}/month  -  the rest is never charged.`}
@@ -2307,11 +2307,11 @@ function CancelModal({ show, onClose, pendingRoundUps, feeMonths, nonprofit, mon
             </div>
           </div>
           {belowMin && (
-            <p style={{ margin: '0 0 10px', fontSize: 12, color: '#92400e', background: '#fffbeb', borderRadius: 10, padding: '8px 12px', lineHeight: 1.55 }}>
+            <p style={{ margin: '0 0 10px', fontSize: 14, color: '#92400e', background: '#fffbeb', borderRadius: 10, padding: '8px 12px', lineHeight: 1.55 }}>
               Note: ${chargeableStr} is below the ${nonprofit?.monthlyMinimum ?? 5} minimum  -  in a live account this would roll over rather than charge. Cancelling now forfeits this amount.
             </p>
           )}
-          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: INK.secondary, marginBottom: 14, cursor: 'pointer' }}
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 14.5, color: INK.secondary, marginBottom: 14, cursor: 'pointer' }}
             onClick={() => setCoverProcessing(v => !v)}>
             <input type="checkbox" readOnly checked={coverProcessing} style={{ marginTop: 2, accentColor: '#059669' }} />
             <span>Cover {npShort}&apos;s card-processing costs (~${fmtMoney(processingCover)}) so 100% of my round-ups reach them</span>

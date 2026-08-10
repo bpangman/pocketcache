@@ -17,112 +17,48 @@
  * surfaces (iPhone app and web portal) cannot drift.
  */
 
-import { MONTHLY_DATA, TRANSACTIONS, CURRENT_MONTH_PENDING, PRIOR_MONTHS_SUM, daysAgo } from '../data/transactions';
+import { MONTHLY_DATA, TRANSACTIONS, CURRENT_MONTH_PENDING, PRIOR_MONTHS_SUM } from '../data/transactions';
 import { MAX_FEE_MONTHS, chargeAfterNextLabel, nextChargeLabel } from './billing';
 import { fmtMoney } from './format';
 
-// ─── Progressive demo datasets (round-3 item 8b) ─────────────────────────────
+// ─── The demo dataset ────────────────────────────────────────────────────────
 //
-// The shake gesture (and the Settings toggle) drive a demo LEVEL, not a
-// binary any more:
+// Demo is a simple ON/OFF again (round-4 item 2b - the round-3 progressive
+// levels 1 and 2 are gone by owner request). Shaking the phone, or the
+// Settings toggle, flips between the donor's real data and THE full rich
+// demo dataset: the original one, src/data/transactions.js untouched. A
+// visitor with no real account always gets this dataset too - that is the
+// prototype experience. Screens label demo figures with a small "Demo" pill
+// whenever demo mode is on.
 //
-//   1 - a few days of activity: a brand-new donor's first week. A handful of
-//       purchases, no completed months, a modest pending figure.
-//   2 - a few weeks: one completed month behind them, a normal mid-month.
-//   3 - the original full rich dataset (src/data/transactions.js untouched).
-//
-// Level 0 means demo OFF (real data). demoActive semantics are unchanged:
-// any level > 0 is demo, and a visitor with no real account still gets the
-// full level-3 dataset as the prototype experience. Each level is labeled by
-// the "Demo n/3" pill in both dashboard headers.
-//
-// The datasets are plausibly SCALED, not just truncated: prior-month totals
-// respect the $5 monthly minimum (a month under it would have rolled
-// forward), and every roundUp is exactly Math.ceil(amount) - amount.
+// Everything below is derived from the exact arrays data/transactions.js
+// exports, so the demo experience is byte-identical to the historical one.
 
-const LEVEL1_TRANSACTIONS = [
-  { id: 'l1-1', merchant: 'Blue Bottle Coffee', amount: 6.75,  roundUp: 0.25, date: daysAgo(0), category: 'Food & Drink' },
-  { id: 'l1-2', merchant: 'Uber',               amount: 14.60, roundUp: 0.40, date: daysAgo(1), category: 'Transport' },
-  { id: 'l1-3', merchant: 'Sweetgreen',         amount: 13.40, roundUp: 0.60, date: daysAgo(2), category: 'Food & Drink' },
-  { id: 'l1-4', merchant: 'Target',             amount: 67.83, roundUp: 0.17, date: daysAgo(2), category: 'Shopping' },
-];
+const priorMonthDonations = MONTHLY_DATA.slice(0, -1).map(m => m.donated);
+const completedDemoMonths = MONTHLY_DATA.slice(0, -1);
 
-const LEVEL2_TRANSACTIONS = [
-  { id: 'l2-1', merchant: 'Whole Foods Market', amount: 43.18, roundUp: 0.82, date: daysAgo(0),  category: 'Groceries' },
-  { id: 'l2-2', merchant: 'Starbucks',          amount: 5.45,  roundUp: 0.55, date: daysAgo(1),  category: 'Food & Drink' },
-  { id: 'l2-3', merchant: 'Netflix',            amount: 15.99, roundUp: 0.01, date: daysAgo(3),  category: 'Entertainment' },
-  { id: 'l2-4', merchant: 'Shell Gas Station',  amount: 52.30, roundUp: 0.70, date: daysAgo(5),  category: 'Fuel' },
-  { id: 'l2-5', merchant: 'Chipotle',           amount: 11.25, roundUp: 0.75, date: daysAgo(8),  category: 'Food & Drink' },
-  { id: 'l2-6', merchant: 'Amazon',             amount: 29.99, roundUp: 0.01, date: daysAgo(11), category: 'Shopping' },
-  { id: 'l2-7', merchant: 'CVS Pharmacy',       amount: 18.64, roundUp: 0.36, date: daysAgo(14), category: 'Health' },
-  { id: 'l2-8', merchant: 'Blue Bottle Coffee', amount: 4.75,  roundUp: 0.25, date: daysAgo(16), category: 'Food & Drink' },
-];
-
-const sumRoundUps = txns => parseFloat(txns.reduce((s, t) => s + t.roundUp, 0).toFixed(2));
-
-/** Month entries shaped exactly like data/transactions.js MONTHLY_DATA. */
-function monthEntry(offset, donated) {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-  return { month: d.toLocaleString('en-US', { month: 'short' }), year: d.getFullYear(), monthIndex: d.getMonth(), donated };
-}
-
-function buildDataset(level, transactions, priorMonthDonations) {
-  const currentMonthPending = sumRoundUps(transactions);
-  const monthlyData = [
-    ...priorMonthDonations.map((d, i) => monthEntry(priorMonthDonations.length - i, d)),
-    monthEntry(0, currentMonthPending),
-  ];
-  const priorMonthsSum = parseFloat(priorMonthDonations.reduce((s, d) => s + d, 0).toFixed(2));
-  const completed = monthlyData.slice(0, -1);
-  const momChange = completed.length >= 2 && completed[completed.length - 2].donated > 0
-    ? parseFloat(((completed[completed.length - 1].donated - completed[completed.length - 2].donated)
-      / completed[completed.length - 2].donated * 100).toFixed(1))
-    : null;
-  return {
-    level,
-    transactions,
-    monthlyData,
-    currentMonthPending,
-    priorMonthsSum,
-    monthsGiving: monthlyData.length,
-    avgPerMonth: completed.length > 0 ? parseFloat((priorMonthsSum / completed.length).toFixed(2)) : 0,
-    momChange,
-    totalRoundupsCount: Math.round(transactions.length * monthlyData.length),
-    sinceLabel: `Since ${monthlyData[0].month} ${monthlyData[0].year}`,
-  };
-}
-
-const DEMO_DATASETS = {
-  1: buildDataset(1, LEVEL1_TRANSACTIONS, []),
-  2: buildDataset(2, LEVEL2_TRANSACTIONS, [8.4]),
-  3: buildDataset(3, TRANSACTIONS, MONTHLY_DATA.slice(0, -1).map(m => m.donated)),
+export const DEMO_DATASET = {
+  transactions: TRANSACTIONS,
+  monthlyData: MONTHLY_DATA,
+  currentMonthPending: CURRENT_MONTH_PENDING,
+  priorMonthsSum: PRIOR_MONTHS_SUM,
+  monthsGiving: MONTHLY_DATA.length,
+  avgPerMonth: completedDemoMonths.length > 0
+    ? parseFloat((priorMonthDonations.reduce((s, d) => s + d, 0) / completedDemoMonths.length).toFixed(2))
+    : 0,
+  momChange: completedDemoMonths.length >= 2 && completedDemoMonths[completedDemoMonths.length - 2].donated > 0
+    ? parseFloat(((completedDemoMonths[completedDemoMonths.length - 1].donated - completedDemoMonths[completedDemoMonths.length - 2].donated)
+      / completedDemoMonths[completedDemoMonths.length - 2].donated * 100).toFixed(1))
+    : null,
+  totalRoundupsCount: Math.round(TRANSACTIONS.length * MONTHLY_DATA.length),
+  sinceLabel: `Since ${MONTHLY_DATA[0].month} ${MONTHLY_DATA[0].year}`,
 };
 
-// Level 3 must be byte-identical to the historical full dataset - assert by
-// construction: reuse the exact arrays/figures data/transactions.js exports.
-DEMO_DATASETS[3].transactions = TRANSACTIONS;
-DEMO_DATASETS[3].monthlyData = MONTHLY_DATA;
-DEMO_DATASETS[3].currentMonthPending = CURRENT_MONTH_PENDING;
-DEMO_DATASETS[3].priorMonthsSum = PRIOR_MONTHS_SUM;
-
-/** Toast copy for the shake gesture, level -> line. */
-export const DEMO_LEVEL_TOASTS = {
-  0: 'Demo off - your real data',
-  1: 'Demo 1/3 - a few days of sample activity',
-  2: 'Demo 2/3 - a few weeks of sample activity',
-  3: 'Demo 3/3 - full sample history',
+/** Toast copy for the shake gesture - one line per direction of the flip. */
+export const DEMO_TOASTS = {
+  on: 'Demo on - full sample history',
+  off: 'Demo off - your real data',
 };
-
-/**
- * The dataset for a demo level. Level 0 (demo off) and unknown levels return
- * the full level-3 dataset: a visitor with NO account is always the rich
- * prototype experience, and every legacy demoMode=true reads as level 3.
- * @param {number} level - 0..3
- */
-export function demoDataset(level) {
-  return DEMO_DATASETS[level] ?? DEMO_DATASETS[3];
-}
 
 // ─── Monthly history ─────────────────────────────────────────────────────────
 

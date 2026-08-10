@@ -170,7 +170,7 @@ function GivingChart({ data }) {
             top: 0,
             transform: 'translateX(-50%)',
             background: '#0f172a', color: '#fff', borderRadius: 8,
-            padding: '5px 9px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', pointerEvents: 'none',
+            padding: '5px 9px', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', pointerEvents: 'none',
           }}
         >
           {data[hover].month} · ${fmtMoney(data[hover].donated)}
@@ -189,15 +189,15 @@ function Kpi({ label, value, sub, hero = false, pill = null, testId, heroBackgro
       // hero donation card (item B: org theme parity on web).
       ? { ...CARD, border: 'none', background: heroBackground ?? 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)', padding: '18px 20px' }
       : { ...CARD, padding: '18px 20px' }}>
-      <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hero ? 'rgba(255,255,255,0.65)' : INK.muted }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hero ? 'rgba(255,255,255,0.65)' : INK.muted }}>
         {label}
       </p>
-      <p style={{ margin: '6px 0 2px', fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', color: hero ? '#fff' : INK.primary }}>
+      <p style={{ margin: '6px 0 2px', fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px', color: hero ? '#fff' : INK.primary }}>
         {value}
       </p>
-      <p style={{ margin: 0, fontSize: 12.5, color: hero ? 'rgba(255,255,255,0.75)' : INK.secondary }}>{sub}</p>
+      <p style={{ margin: 0, fontSize: 14.5, color: hero ? 'rgba(255,255,255,0.75)' : INK.secondary }}>{sub}</p>
       {pill && (
-        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 11.5, fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, padding: '3px 10px' }}>
+        <span style={{ display: 'inline-block', marginTop: 8, fontSize: 13.5, fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, padding: '3px 10px' }}>
           {pill}
         </span>
       )}
@@ -208,7 +208,7 @@ function Kpi({ label, value, sub, hero = false, pill = null, testId, heroBackgro
 function SectionTitle({ children, action }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: INK.primary }}>{children}</h2>
+      <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: INK.primary }}>{children}</h2>
       {action}
     </div>
   );
@@ -240,19 +240,19 @@ function MilestonesCard({ total, demo }) {
     <div style={{ ...CARD, padding: 20 }} data-testid="web-milestones">
       <SectionTitle
         action={next && (
-          <span style={{ fontSize: 12.5, color: INK.muted }} data-testid="web-milestones-to-next">
+          <span style={{ fontSize: 14.5, color: INK.muted }} data-testid="web-milestones-to-next">
             ${fmtMoney(next.amount - total)} to next
           </span>
         )}
       >
         Milestones
         {demo && (
-          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '2px 8px' }}>
+          <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '2px 8px' }}>
             Demo data
           </span>
         )}
       </SectionTitle>
-      <p style={{ margin: '2px 0 0', fontSize: 12.5, color: INK.muted }}>
+      <p style={{ margin: '2px 0 0', fontSize: 14.5, color: INK.muted }}>
         Unlocked by your lifetime giving
       </p>
       <div style={{ display: 'flex', gap: 14, overflowX: 'auto', padding: '14px 2px 4px' }}>
@@ -260,14 +260,14 @@ function MilestonesCard({ total, demo }) {
           <div key={m.amount} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <div style={{
               width: 46, height: 46, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 22, lineHeight: 1,
+              fontSize: 26, lineHeight: 1,
               background: m.achieved ? 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)' : '#f1f5f9',
               boxShadow: m.achieved ? '0 2px 8px rgba(11,42,74,0.18)' : 'none',
               filter: m.achieved ? 'none' : 'grayscale(1)', opacity: m.achieved ? 1 : 0.45,
             }}>
               {m.emoji}
             </div>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', color: m.achieved ? INK.secondary : INK.muted }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', color: m.achieved ? INK.secondary : INK.muted }}>
               {m.label}
             </p>
           </div>
@@ -275,14 +275,14 @@ function MilestonesCard({ total, demo }) {
       </div>
       {next && (
         <div style={{ marginTop: 6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: INK.muted, marginBottom: 5 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, color: INK.muted, marginBottom: 5 }}>
             <span>${fmtMoney(total)}</span>
             <span>${fmtCount(next.amount)}</span>
           </div>
           <div style={{ background: '#f1f5f9', borderRadius: 999, height: 8, overflow: 'hidden' }}>
             <div style={{ width: `${pct}%`, height: '100%', background: SERIES, borderRadius: 999 }} />
           </div>
-          <p style={{ margin: '8px 0 0', fontSize: 12.5, color: INK.secondary }}>
+          <p style={{ margin: '8px 0 0', fontSize: 14.5, color: INK.secondary }}>
             {Math.round(pct)}% of the way to the {next.label}.
           </p>
         </div>
@@ -298,11 +298,11 @@ function MilestonesCard({ total, demo }) {
 function ActivityTable({ rows }) {
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15.5 }}>
         <thead>
           <tr>
             {['Date', 'Merchant', 'Category', 'Purchase', 'Round-up'].map((h, i) => (
-              <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.muted, borderBottom: '1px solid #e5e7eb' }}>
+              <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding: '8px 10px', fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.muted, borderBottom: '1px solid #e5e7eb' }}>
                 {h}
               </th>
             ))}
@@ -339,21 +339,21 @@ function CauseRow({ org, onOpen }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <OrgLogo nonprofit={org} size={10} rounded="xl" />
         <div style={{ minWidth: 0, flex: 1 }}>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: INK.primary, lineHeight: 1.25 }}>{org.name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: INK.muted }}>Your chosen cause</p>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: INK.primary, lineHeight: 1.25 }}>{org.name}</p>
+          <p style={{ margin: 0, fontSize: 14, color: INK.muted }}>Your chosen cause</p>
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12 }}>
         <button
           onClick={onOpen}
-          style={{ border: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 600, color: '#003865', cursor: 'pointer' }}
+          style={{ border: 'none', background: 'transparent', padding: 0, fontSize: 15, fontWeight: 600, color: '#003865', cursor: 'pointer' }}
         >
           My Cause →
         </button>
         <a
           href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
           target="_blank" rel="noopener"
-          style={{ fontSize: 13, fontWeight: 600, color: INK.secondary, textDecoration: 'none' }}
+          style={{ fontSize: 15, fontWeight: 600, color: INK.secondary, textDecoration: 'none' }}
         >
           Visit {org.shortName ?? 'their'} page ↗
         </a>
@@ -388,11 +388,11 @@ function MatchLine({ match, onOpen }) {
           <img src={match.logoUrl} alt={match.companyShort ?? match.company} style={{ height: 22, objectFit: 'contain' }} />
         </span>
       ) : (
-        <span style={{ width: 36, height: 36, borderRadius: 12, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>🏢</span>
+        <span style={{ width: 36, height: 36, borderRadius: 12, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🏢</span>
       )}
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: INK.primary }}>{mp.headline}</span>
-        <span style={{ display: 'block', fontSize: 12, color: METER, fontWeight: 600, marginTop: 2 }}>See the match on My Cause</span>
+        <span style={{ display: 'block', fontSize: 15, fontWeight: 600, lineHeight: 1.5, color: INK.primary }}>{mp.headline}</span>
+        <span style={{ display: 'block', fontSize: 14, color: METER, fontWeight: 600, marginTop: 2 }}>See the match on My Cause</span>
       </span>
       <span style={{ color: INK.muted, flexShrink: 0 }}>›</span>
     </button>
@@ -405,13 +405,13 @@ function MatchLine({ match, onOpen }) {
  * they live here rather than on Activity, which owns the transactions themselves.
  */
 function ActivityLinkCard({ onOpen, demoActive, realCount = 0, demoData }) {
-  const figure = { margin: 0, fontSize: 20, fontWeight: 800, color: INK.primary, letterSpacing: '-0.3px' };
-  const cap = { margin: '2px 0 0', fontSize: 11.5, color: INK.muted };
+  const figure = { margin: 0, fontSize: 22, fontWeight: 800, color: INK.primary, letterSpacing: '-0.3px' };
+  const cap = { margin: '2px 0 0', fontSize: 13.5, color: INK.muted };
   return (
     <div style={{ ...CARD, padding: 20 }} data-testid="web-activity-link">
       <SectionTitle
         action={
-          <button onClick={onOpen} style={{ border: 'none', background: 'transparent', color: '#003865', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={onOpen} style={{ border: 'none', background: 'transparent', color: '#003865', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>
             View activity →
           </button>
         }
@@ -465,12 +465,12 @@ function EstimateCard({
   // minimum), so the two surfaces contradicted each other on first load.
   const belowMinimum = pending < monthlyMinimum;
   const rollingOver = belowMinimum && !skipped;
-  const row = { display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '5px 0' };
+  const row = { display: 'flex', justifyContent: 'space-between', fontSize: 15.5, padding: '5px 0' };
   return (
     <div style={{ ...CARD, padding: 20 }}>
       <SectionTitle>Next charge · {skipped ? 'skipped this month' : nextChargeLabel()}</SectionTitle>
       {skipped && (
-        <p style={{ margin: '6px 0 0', fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }} data-testid="web-estimate-skipped">
+        <p style={{ margin: '6px 0 0', fontSize: 14.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' }} data-testid="web-estimate-skipped">
           {skipExplainer({ pendingRoundUps: pending, feeMonths })}
         </p>
       )}
@@ -478,23 +478,23 @@ function EstimateCard({
       {/* ── Where this cycle is ── */}
       <div style={{ marginTop: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8 }}>
-          <p style={{ margin: 0, fontSize: 12.5, color: INK.secondary }}>
+          <p style={{ margin: 0, fontSize: 14.5, color: INK.secondary }}>
             {cycleLength}-day cycle
           </p>
           <p style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 22, fontWeight: 800, color: '#0B2A4A', letterSpacing: '-0.4px' }} data-testid="web-cycle-days-left">
+            <span style={{ fontSize: 26, fontWeight: 800, color: '#0B2A4A', letterSpacing: '-0.4px' }} data-testid="web-cycle-days-left">
               {daysLeft}
             </span>
             {/* The countdown measures the CYCLE, and on a skipped cycle its end is
                 not a charge - "days left" beside "nothing is collected" would read
                 as a countdown to money leaving. Same split as the app. */}
-            <span style={{ fontSize: 12, color: INK.muted }}>{skipped ? 'days left in cycle' : 'days left'}</span>
+            <span style={{ fontSize: 14, color: INK.muted }}>{skipped ? 'days left in cycle' : 'days left'}</span>
           </p>
         </div>
         <div style={{ background: '#f1f5f9', borderRadius: 999, height: 8, overflow: 'hidden' }}>
           <div style={{ width: `${cyclePct}%`, height: '100%', background: SERIES, borderRadius: 999 }} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontSize: 11.5, color: INK.muted }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontSize: 13.5, color: INK.muted }}>
           <span>Cycle start {cycleStartLabel}</span>
           <span>{skipped ? 'Skipped' : `Charge day ${nextChargeLabel()}`}</span>
         </div>
@@ -538,17 +538,17 @@ function EstimateCard({
              ≈ $14.89" directly under copy saying the charge was skipped. */
           <div style={row}>
             <span style={{ color: INK.primary, fontWeight: 700 }}>{SKIP_COLLECT_LABEL}</span>
-            <span style={{ color: '#b45309', fontWeight: 800, fontSize: 16 }} data-testid="web-estimate-total">{SKIP_COLLECT_AMOUNT}</span>
+            <span style={{ color: '#b45309', fontWeight: 800, fontSize: 18 }} data-testid="web-estimate-total">{SKIP_COLLECT_AMOUNT}</span>
           </div>
         ) : rollingOver ? (
           <div style={row}>
             <span style={{ color: INK.primary, fontWeight: 700 }}>Nothing charged yet</span>
-            <span style={{ color: '#b45309', fontWeight: 800, fontSize: 13.5 }} data-testid="web-estimate-rollover">
+            <span style={{ color: '#b45309', fontWeight: 800, fontSize: 15.5 }} data-testid="web-estimate-rollover">
               ${fmtMoney(pending)} so far  -  rolls over at month-end
             </span>
           </div>
         ) : (
-          <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 16 }} data-testid="web-estimate-total">≈ ${fmtMoney(total)}</span></div>
+          <div style={row}><span style={{ color: INK.primary, fontWeight: 700 }}>One charge from {npShort}</span><span style={{ color: '#003865', fontWeight: 800, fontSize: 18 }} data-testid="web-estimate-total">≈ ${fmtMoney(total)}</span></div>
         )}
       </div>
       {/* Says where the extra money lands. The cover is a donation to the
@@ -557,13 +557,13 @@ function EstimateCard({
           point at the control that changes it. Sentence for sentence the same as
           the shared ChargeReviewAlert's `charge-cover-note`. */}
       {!skipped && !rollingOver && processingCover > 0 && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: INK.muted }} data-testid="web-estimate-cover-note">
+        <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, color: INK.muted }} data-testid="web-estimate-cover-note">
           The ${fmtMoney(processingCover)} processing cover goes to {npShort}, not to PocketCache, so 100% of your round-ups reach them. Change it in Settings.
         </p>
       )}
       {/* Rollover explainer  -  the app Dashboard's below-minimum copy verbatim. */}
       {rollingOver && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.55, color: '#b45309' }}>
+        <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, color: '#b45309' }}>
           Not quite ${monthlyMinimum} yet  -  your round-ups carry forward. We settle every 3 months at most, so nothing&apos;s ever left behind.
           {' '}&middot; $1/month fee rolls too  -  {feeMonths} month{feeMonths !== 1 ? 's' : ''} so far (${feeMonths})  -  itemized on your charge.
         </p>
@@ -571,12 +571,12 @@ function EstimateCard({
       {/* Cap / adjustment notes  -  same precedence and wording as the app Dashboard.
           Suppressed while rolling over, exactly as the app suppresses them. */}
       {!skipped && !belowMinimum && capActive && !adjusted && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#b45309' }} data-testid="web-estimate-capped">
+        <p style={{ margin: '8px 0 0', fontSize: 14, color: '#b45309' }} data-testid="web-estimate-capped">
           Capped at ${fmtMoney(monthlyCap)}  -  the rest won&apos;t be charged.
         </p>
       )}
       {!skipped && !belowMinimum && adjusted && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 600, color: '#059669' }} data-testid="web-estimate-adjusted">
+        <p style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 600, color: '#059669' }} data-testid="web-estimate-adjusted">
           Adjusted to ${fmtMoney(chargeAdjustment)} for this month.
         </p>
       )}
@@ -589,7 +589,7 @@ function EstimateCard({
            Debit Card ····4242 on the 11th"). Settings owns the payment method -
            it is the only screen that can change it - so this sentence keeps the
            schedule and drops the instrument. */
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: INK.muted }} data-testid="web-estimate-schedule">
+        <p style={{ margin: '8px 0 0', fontSize: 14, color: INK.muted }} data-testid="web-estimate-schedule">
           Round-ups accrue through the last day of the month; the exact amount is emailed to you
           on the 1st and charged on the 11th. Demo data  -  no real charge is made.
         </p>
@@ -601,14 +601,14 @@ function EstimateCard({
         <button
           onClick={onAdjust}
           data-testid="web-adjust-charge-button"
-          style={{ width: '100%', marginTop: 12, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
+          style={{ width: '100%', marginTop: 12, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
         >
           Adjust this charge →
         </button>
       )}
       <button
         onClick={onGiveExtra}
-        style={{ width: '100%', marginTop: 8, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
+        style={{ width: '100%', marginTop: 8, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer' }}
       >
         💚 Give a little extra…
       </button>
@@ -667,8 +667,8 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
   return (
     <>
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Activity</h1>
-        <p style={{ margin: '3px 0 0', fontSize: 13.5, color: INK.secondary }}>
+        <h1 style={{ margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>Activity</h1>
+        <p style={{ margin: '3px 0 0', fontSize: 15.5, color: INK.secondary }}>
           {demoActive
             ? 'Your giving history  -  demo data.'
             : showRealLedger
@@ -684,16 +684,16 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
           <div style={{ ...CARD, padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
               <div>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
                   This month
                 </p>
-                <p style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px', color: INK.primary }} data-testid="web-activity-month-total">
+                <p style={{ margin: '4px 0 0', fontSize: 34, fontWeight: 800, letterSpacing: '-0.5px', color: INK.primary }} data-testid="web-activity-month-total">
                   ${fmtMoney(pending)}
                 </p>
                 {org && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                     <OrgLogo nonprofit={org} size={5} rounded="md" />
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: INK.secondary }}>{org.name}</span>
+                    <span style={{ fontSize: 14.5, fontWeight: 600, color: INK.secondary }}>{org.name}</span>
                   </span>
                 )}
               </div>
@@ -701,7 +701,7 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
                 <span
                   data-testid="web-activity-mom"
                   style={{
-                    fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', whiteSpace: 'nowrap',
+                    fontSize: 14, fontWeight: 700, borderRadius: 999, padding: '4px 11px', whiteSpace: 'nowrap',
                     color: momChange >= 0 ? '#047857' : '#b91c1c',
                     background: momChange >= 0 ? '#ecfdf5' : '#fef2f2',
                   }}
@@ -716,13 +716,13 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
               <>
                 <div style={{ height: 1, background: '#f1f5f9', margin: '16px 0 12px' }} />
                 <SectionTitle>Giving by month</SectionTitle>
-                <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
+                <p style={{ margin: '2px 0 10px', fontSize: 14.5, color: INK.muted }}>
                   Monthly round-up totals · {currentMonthLabel} still in progress
                 </p>
                 <GivingChart data={history} />
               </>
             ) : (
-              <p style={{ margin: '14px 0 0', paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 12.5, color: INK.muted }}>
+              <p style={{ margin: '14px 0 0', paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 14.5, color: INK.muted }}>
                 Your monthly chart builds as months complete  -  round-ups only count from the day you joined.
               </p>
             )}
@@ -732,19 +732,19 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
               the multiplied headline above is traceable. */}
           <div style={{ ...CARD, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }} data-testid="web-activity-month-summary">
             <span style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-              <span style={{ fontSize: 22 }}>🗓️</span>
+              <span style={{ fontSize: 26 }}>🗓️</span>
               <span style={{ minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK.primary }}>{currentMonthLabel}</span>
-                <span style={{ display: 'block', fontSize: 12, color: INK.muted }}>
+                <span style={{ display: 'block', fontSize: 15.5, fontWeight: 700, color: INK.primary }}>{currentMonthLabel}</span>
+                <span style={{ display: 'block', fontSize: 14, color: INK.muted }}>
                   {fmtCount(monthTxnCount)} transactions · ${fmtMoney(monthBaseAmount)} rounded up
                   {multiplier > 1 && ` × ${multiplier} boost`}
                 </span>
               </span>
             </span>
             <span style={{ textAlign: 'right', flexShrink: 0 }}>
-              <span style={{ display: 'block', fontSize: 16, fontWeight: 800, color: '#047857' }}>${fmtMoney(pending)}</span>
+              <span style={{ display: 'block', fontSize: 18, fontWeight: 800, color: '#047857' }}>${fmtMoney(pending)}</span>
               {multiplier > 1 && (
-                <span style={{ display: 'block', fontSize: 11.5, color: INK.muted }}>
+                <span style={{ display: 'block', fontSize: 13.5, color: INK.muted }}>
                   ${fmtMoney(monthBaseAmount)} × {multiplier}
                 </span>
               )}
@@ -753,7 +753,7 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
 
           <div style={{ ...CARD, padding: 20 }}>
             <SectionTitle>All activity</SectionTitle>
-            <p style={{ margin: '2px 0 10px', fontSize: 12.5, color: INK.muted }}>
+            <p style={{ margin: '2px 0 10px', fontSize: 14.5, color: INK.muted }}>
               {showRealLedger
                 // freshness already reads "as of X ago" (see fmtFreshness) - no
                 // second "as of" prefix here.
@@ -766,9 +766,9 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
               /* Friendly empty state - a brand-new real account has no
                  activity yet, and that is the honest story (item 12). */
               <div style={{ textAlign: 'center', padding: '28px 16px' }} data-testid="web-activity-empty-state">
-                <div style={{ fontSize: 30, marginBottom: 8 }}>🪙</div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: INK.primary }}>No round-ups yet</p>
-                <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                <div style={{ fontSize: 34, marginBottom: 8 }}>🪙</div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: INK.primary }}>No round-ups yet</p>
+                <p style={{ margin: '6px 0 0', fontSize: 14.5, lineHeight: 1.6, color: INK.secondary }}>
                   Your round-ups will appear here once your card starts making purchases. Every purchase rounds up to the next dollar  -  the spare change lands on this page.
                 </p>
               </div>
@@ -783,24 +783,24 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
           <div style={{ ...CARD, padding: 20 }} data-testid="web-taxyear">
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               <div>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
                   {taxYear} tax year
                 </p>
-                <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', color: INK.primary }} data-testid="web-taxyear-total">
+                <p style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px', color: INK.primary }} data-testid="web-taxyear-total">
                   ${fmtMoney(tax.donated)}
                 </p>
               </div>
               {demoActive && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
                   Demo data
                 </span>
               )}
             </div>
-            <p style={{ margin: '6px 0 0', fontSize: 12.5, color: INK.muted }} data-testid="web-taxyear-months">
+            <p style={{ margin: '6px 0 0', fontSize: 14.5, color: INK.muted }} data-testid="web-taxyear-months">
               {tax.months === 0 ? 'No completed months yet this year' : `Donated across ${taxMonthsLabel}`}
               {' · '}{currentMonthLabel} still in progress
             </p>
-            <p style={{ margin: '12px 0 0', paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+            <p style={{ margin: '12px 0 0', paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 14.5, lineHeight: 1.6, color: INK.secondary }}>
               Your round-ups are tax-deductible. The $1 monthly app fee is not (${fmtMoney(tax.feeMonths)} so far
               this year). {npShort} issues your receipt.
             </p>
@@ -809,7 +809,7 @@ function ActivityView({ pending, history, org, multiplier, onSettings, hasRealBa
               data-testid="web-taxyear-settings-link"
               style={{
                 width: '100%', marginTop: 14, padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1',
-                background: '#fff', fontSize: 13, fontWeight: 700, color: '#003865', cursor: 'pointer',
+                background: '#fff', fontSize: 15, fontWeight: 700, color: '#003865', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, textAlign: 'left',
               }}
             >
@@ -840,7 +840,7 @@ export default function WebDashboard() {
     monthlyCap, chargeAdjustment, setChargeAdjustment, roundUpMultiplier,
     coverProcessing,
     hasRealBankLinked, realRoundupsRecent, realRoundupsFreshness, realRoundupsCount,
-    demoActive, demoMode, demoLevel, demoData,
+    demoActive, demoMode, demoData,
     giveExtraPending,
   } = useApp();
   const brand = useTheme();
@@ -849,8 +849,7 @@ export default function WebDashboard() {
   const [giveExtra, setGiveExtra] = useState(false);
   const [adjustCharge, setAdjustCharge] = useState(false);
   const [transferOrg, setTransferOrg] = useState(false);
-  // Demo stats follow the active shake level's dataset (item 8b); level 3 is
-  // byte-identical to the retired data/derived constants.
+  // Demo stats - byte-identical to the retired data/derived constants.
   const { avgPerMonth, momChange, sinceLabel, monthsGiving } = demoData;
 
   // The donor's standing "cover the card-processing costs" consent, pre-checked
@@ -921,7 +920,7 @@ export default function WebDashboard() {
           not overlays: lib/overlay.js's Z scale starts at the sheet/modal layer
           and every scrim in this portal sits above both. Nothing to convert. */}
       <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px', height: 76, display: 'flex', alignItems: 'center', gap: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             {/* Brand-kit top bar (round-3 item 3a). Org bound: the nonprofit
                 is the primary brand, so its logo + app name lead and the
@@ -929,27 +928,27 @@ export default function WebDashboard() {
                 ("powered by P(coin)cketCache") - never a plain-text caption.
                 No org: the PocketCache wordmark alone carries the bar, with
                 no redundant "powered by" text beside its own logo. */}
-            {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : null}
+            {org ? <OrgLogo nonprofit={org} size={11} rounded="lg" /> : null}
             <div style={{ lineHeight: 1.2, minWidth: 0 }}>
               {org ? (
                 <>
-                  <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: 16.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {brand.appName ?? `${npShort} Round-Up`}
-                    {/* The subtle demo marker names the level (Settings toggle / phone shake). */}
+                    {/* The subtle demo marker (Settings toggle / phone shake). */}
                     {demoMode && (
-                      <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
-                        Demo {demoLevel}/3
+                      <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
+                        Demo
                       </span>
                     )}
                   </p>
-                  <PoweredByWordmark size={11} />
+                  <PoweredByWordmark size={13} />
                 </>
               ) : (
                 <>
-                  <PocketCacheWordmark size={20} />
+                  <PocketCacheWordmark size={24} />
                   {demoMode && (
-                    <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
-                      Demo {demoLevel}/3
+                    <span data-testid="web-demo-mode-pill" style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fde68a', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>
+                      Demo
                     </span>
                   )}
                 </>
@@ -965,7 +964,7 @@ export default function WebDashboard() {
                 // like the app's chrome does (item B: org theme parity).
                 style={{
                   border: 'none', background: navTab === t.id ? (brand.accentLight ?? '#eef4fa') : 'transparent', cursor: 'pointer',
-                  padding: '8px 14px', borderRadius: 10, fontSize: 13.5,
+                  padding: '10px 16px', borderRadius: 11, fontSize: 15.5,
                   fontWeight: navTab === t.id ? 700 : 500,
                   color: navTab === t.id ? (brand.primary ?? '#003865') : INK.secondary,
                 }}
@@ -979,7 +978,7 @@ export default function WebDashboard() {
             <button
               onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
               aria-label="Account menu"
-              style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid #dbe3ec', background: brand.gradient ?? 'linear-gradient(135deg, #003865, #0B2A4A)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              style={{ width: 44, height: 44, borderRadius: '50%', border: '1px solid #dbe3ec', background: brand.gradient ?? 'linear-gradient(135deg, #003865, #0B2A4A)', color: '#fff', fontWeight: 700, fontSize: 18, cursor: 'pointer' }}
             >
               {userName[0]}
             </button>
@@ -990,17 +989,17 @@ export default function WebDashboard() {
             {menuOpen && (
               <div
                 data-testid="web-account-dropdown"
-                style={{ position: 'absolute', right: 0, top: 46, width: 260, maxWidth: 'min(300px, calc(100vw - 32px))', ...CARD, boxShadow: '0 12px 32px rgba(11,42,74,0.16)', padding: 8, zIndex: 40, overflow: 'hidden' }}
+                style={{ position: 'absolute', right: 0, top: 54, width: 280, maxWidth: 'min(320px, calc(100vw - 32px))', ...CARD, boxShadow: '0 12px 32px rgba(11,42,74,0.16)', padding: 8, zIndex: 40, overflow: 'hidden' }}
                 onClick={e => e.stopPropagation()}
               >
                 <div style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', marginBottom: 4, minWidth: 0 }}>
-                  <p title={userName} style={{ margin: 0, fontWeight: 700, fontSize: 13.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</p>
-                  <p title={userEmail} style={{ margin: 0, fontSize: 12, color: INK.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail}</p>
+                  <p title={userName} style={{ margin: 0, fontWeight: 700, fontSize: 15.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</p>
+                  <p title={userEmail} style={{ margin: 0, fontSize: 14, color: INK.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail}</p>
                 </div>
                 {adminRole && (
                   <button
                     onClick={() => { setLastMode('admin'); setPage('np-dashboard'); }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 13, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 15, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
                   >
                     Switch to admin dashboard
                   </button>
@@ -1016,7 +1015,7 @@ export default function WebDashboard() {
                   <button
                     onClick={() => { setMenuOpen(false); goToOnboardingStep('nonprofit-signup'); }}
                     data-testid="web-create-nonprofit-page"
-                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 13, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 15, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
                   >
                     Create a nonprofit page
                   </button>
@@ -1032,14 +1031,14 @@ export default function WebDashboard() {
                   <button
                     onClick={() => { setMenuOpen(false); setTransferOrg(true); }}
                     data-testid="web-transfer-nonprofit"
-                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 13, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 15, fontWeight: 600, color: INK.primary, cursor: 'pointer', borderRadius: 8 }}
                   >
                     Transfer nonprofit page
                   </button>
                 )}
                 <button
                   onClick={() => signOut()}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 13, fontWeight: 600, color: '#b91c1c', cursor: 'pointer', borderRadius: 8 }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', fontSize: 15, fontWeight: 600, color: '#b91c1c', cursor: 'pointer', borderRadius: 8 }}
                 >
                   Sign out
                 </button>
@@ -1050,14 +1049,14 @@ export default function WebDashboard() {
       </header>
 
       {/* ── Body ── */}
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 24px 40px' }}>
+      <main style={{ maxWidth: 1180, margin: '0 auto', padding: '36px 32px 56px' }}>
         {navTab === 'overview' && (
           <>
             <div style={{ marginBottom: 20 }}>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>
                 {greeting}{greetName ? `, ${greetName}` : ''} 👋
               </h1>
-              <p style={{ margin: '4px 0 0', fontSize: 13.5, color: INK.secondary }}>
+              <p style={{ margin: '4px 0 0', fontSize: 15.5, color: INK.secondary }}>
                 Here&apos;s your giving with {org?.name ?? 'your nonprofit'}.
               </p>
             </div>
@@ -1193,7 +1192,7 @@ export default function WebDashboard() {
       </main>
 
       <footer style={{ padding: '0 24px 28px', textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: 12, color: INK.muted, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <p style={{ margin: 0, fontSize: 14, color: INK.muted, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <CoinMark size={14} />
           Powered by PocketCache ·{' '}
           <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Terms</a>{' '}

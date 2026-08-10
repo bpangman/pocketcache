@@ -16,6 +16,7 @@ import { WebPortalPrompt } from './components/WebPortalLinkModal';
 import { AppDownloadPrompt } from './components/AppDownloadQRModal';
 import { Z, scrim, centered, subscribeSheetOpen, isAnySheetOpen } from './lib/overlay';
 import { safeBottom } from './lib/safeArea';
+import { LaunchSplash } from './components/SplashAnimation';
 
 // ─── Route-level code splitting ───────────────────────────────────────────────
 //
@@ -351,7 +352,23 @@ function Toast({ message, nearSheet }) {
   );
 }
 
+// The phone-shaped app experience (native app, mobile web, and the desktop
+// PhoneFrame demo shell - never the desktop web pages). Wraps every surface
+// the app can open on with the once-per-launch coin splash (round-4 item 6):
+// a cold open plays the splash OVER whatever loads first - the join gate, a
+// signed-in donor dashboard, the admin shell, even the Face ID lock - and
+// then reveals it. LaunchSplash's module flag guarantees no replay on in-app
+// back-navigation or page hops (see SplashAnimation.jsx).
 function AppContent() {
+  return (
+    <div className="w-full h-full relative">
+      <AppSurfaces />
+      <LaunchSplash />
+    </div>
+  );
+}
+
+function AppSurfaces() {
   const { page, accountStatus, reactivateAccount, setPage, toast, trackedCard, paymentMethod, setTab, setPendingSettingsAction, selectedNonprofit } = useApp();
   const [showReactivateCheckin, setShowReactivateCheckin] = useState(false);
   const bioGate = useBiometricGate();

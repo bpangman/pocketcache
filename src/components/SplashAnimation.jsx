@@ -18,6 +18,25 @@ const ROLL_EASE = [0.22, 1, 0.36, 1]; // easeOutQuint-like
 // How high the coin pops above center (px)
 const POP_HEIGHT = 135;
 
+// ─── Once-per-launch wrapper ─────────────────────────────────────────────────
+// The coin splash plays on EVERY app open (round-4 item 6) - cold launch to
+// the gate AND cold launch straight to a signed-in dashboard - overlaying
+// whatever surface loads first, then revealing it. Module-level flag, not
+// component state: in-app navigation can remount whichever shell hosts this
+// (gate -> sign-in -> back, donor -> admin mode, etc.), and replaying the
+// whole coin roll on any of those hops reads as a bug. A true cold app open
+// starts a fresh JS context, which resets the flag - so the splash greets
+// every real launch exactly once. Mounted by App.jsx's AppContent (the
+// native/mobile app experience); the desktop web surfaces (WebExperience)
+// deliberately never render it.
+let launchSplashPlayed = false;
+
+export function LaunchSplash() {
+  const [done, setDone] = useState(() => launchSplashPlayed);
+  if (done) return null;
+  return <SplashAnimation onDone={() => { launchSplashPlayed = true; setDone(true); }} />;
+}
+
 export default function SplashAnimation({ onDone }) {
   const [coinScope, animateCoin] = useAnimate();
   // 'rolling' | 'revealing' | 'done'

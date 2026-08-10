@@ -13,7 +13,6 @@ import { saveCardWithSetupIntent, currentDonorEmail } from '../lib/stripeSetup';
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
-import SplashAnimation from '../components/SplashAnimation';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
@@ -2878,25 +2877,10 @@ function NonprofitSignupFlow({ onBack }) {
   );
 }
 
-// ─── Splash wrapper - plays the rolling coin entrance ONCE per cold open ─────
-// Module-level flag, not component state: navigating away from the gate and
-// back (intro slides -> back, sign-in -> back, wizard exit) remounts
-// GateWithSplash, and replaying the whole coin roll on every one of those
-// hops read as a bug. A true cold app open starts a fresh JS context, which
-// resets the flag - so the splash still greets every real launch exactly once.
-let splashPlayedThisLaunch = false;
-
-function GateWithSplash({ children }) {
-  const [splashDone, setSplashDone] = useState(() => splashPlayedThisLaunch);
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {children}
-      {!splashDone && (
-        <SplashAnimation onDone={() => { splashPlayedThisLaunch = true; setSplashDone(true); }} />
-      )}
-    </div>
-  );
-}
+// The cold-open coin splash used to live here (GateWithSplash), which meant a
+// signed-in cold open that skipped the gate never saw it. It now overlays
+// whatever surface loads first - gate OR dashboard - from App.jsx's
+// AppContent (see LaunchSplash in components/SplashAnimation.jsx).
 
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
@@ -3123,16 +3107,14 @@ export default function Onboarding() {
   }
 
   if (step === 'gate') return (
-    <GateWithSplash>
-      <OrgGateScreen
-        onBind={handleBind}
-        onNonprofitSignup={enterNonprofitSignup}
-        autoBindOrg={autoBindOrg}
-        hasAccount={hasAccount}
-        onWelcomeBack={resumeSession}
-        onUniversalSignIn={() => setStep('gate-signin')}
-      />
-    </GateWithSplash>
+    <OrgGateScreen
+      onBind={handleBind}
+      onNonprofitSignup={enterNonprofitSignup}
+      autoBindOrg={autoBindOrg}
+      hasAccount={hasAccount}
+      onWelcomeBack={resumeSession}
+      onUniversalSignIn={() => setStep('gate-signin')}
+    />
   );
   if (step === 'native-app-gate') return (
     <NativeAppGateScreen
