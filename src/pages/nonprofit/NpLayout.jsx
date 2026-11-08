@@ -122,13 +122,13 @@ export function NpSheet({ show, title, onClose, children, width = 560 }) {
           onClick={e => e.stopPropagation()}
           style={{
             width, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto',
-            background: '#fff', borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+            background: '#fff', borderRadius: 22, boxShadow: 'var(--shadow-3)',
             position: 'relative', zIndex: Z.modal,
           }}
         >
-          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
-            <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
-            <button onClick={onClose} aria-label="Close"><X size={20} className="text-gray-400" /></button>
+          <div className="flex items-center justify-between pl-6 pr-3 pt-3 pb-3 border-b border-line">
+            <h3 className="font-bold text-ink text-lg">{title}</h3>
+            <button type="button" onClick={onClose} aria-label="Close" className="flex items-center justify-center rounded-pill text-slate hover:bg-surface" style={{ width: 44, height: 44 }}><X size={20} /></button>
           </div>
           <div className="px-6 py-5 space-y-4">{children}</div>
         </div>
@@ -148,13 +148,13 @@ export function NpSheet({ show, title, onClose, children, width = 560 }) {
         key="sheet"
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[80%] flex flex-col"
-        style={{ zIndex: Z.sheet }}
+        className="absolute bottom-0 left-0 right-0 bg-white max-h-[80%] flex flex-col"
+        style={{ zIndex: Z.sheet, borderRadius: '22px 22px 0 0' }}
       >
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
-          <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
-          <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onClose} aria-label="Close">
-            <X size={20} className="text-gray-400" />
+        <div className="flex items-center justify-between pl-6 pr-3 pt-3 pb-3 border-b border-line shrink-0">
+          <h3 className="font-bold text-ink text-lg">{title}</h3>
+          <motion.button type="button" whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onClose} aria-label="Close" className="flex items-center justify-center rounded-pill text-slate" style={{ width: 44, height: 44 }}>
+            <X size={20} />
           </motion.button>
         </div>
         <div
@@ -180,7 +180,7 @@ export function NpOrgMark({ npOrg, size = 40, radius = 12, on = 'dark' }) {
   };
   if (src) {
     return (
-      <div style={{ ...box, background: '#fff', boxShadow: '0 4px 12px rgba(11,42,74,0.18)' }}>
+      <div style={{ ...box, background: '#fff', boxShadow: 'var(--shadow-2)' }}>
         <img src={src} alt={npOrg.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: size * 0.1, display: 'block' }} />
       </div>
     );
@@ -192,8 +192,8 @@ export function NpOrgMark({ npOrg, size = 40, radius = 12, on = 'dark' }) {
     <div style={{
       ...box,
       background: on === 'dark' ? 'rgba(255,255,255,0.25)' : (npOrg.color || '#003865'),
-      color: '#fff', fontWeight: 900, fontSize: size * 0.45,
-      boxShadow: on === 'dark' ? '0 4px 12px rgba(11,42,74,0.18)' : 'none',
+      color: '#fff', fontWeight: 800, fontSize: size * 0.45,
+      boxShadow: on === 'dark' ? 'var(--shadow-2)' : 'none',
     }}>
       {(npOrg.name || 'O')[0].toUpperCase()}
     </div>

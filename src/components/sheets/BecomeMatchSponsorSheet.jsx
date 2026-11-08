@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import Sheet from '../Sheet';
+import Button from '../ui/Button';
 import { useApp } from '../../store/AppContext';
 import { submitOrgContact } from '../../lib/engagement';
 
@@ -69,15 +69,15 @@ export default function BecomeMatchSponsorSheet({ show, onClose, nonprofit, bran
             <div className="text-5xl mb-4">🤝</div>
             {demoActive ? (
               <>
-                <p className="font-bold text-gray-900 text-lg">Application Sent!</p>
-                <p className="text-gray-500 text-sm mt-2">
+                <p className="font-bold text-ink text-lg">Application Sent!</p>
+                <p className="text-ink-2 text-sm mt-2">
                   {orgName}&apos;s corporate partnerships team will be in touch within 2 business days.
                 </p>
               </>
             ) : (
               <>
-                <p className="font-bold text-gray-900 text-lg">Sent to {sentOrgName}.</p>
-                <p className="text-gray-500 text-sm mt-2">
+                <p className="font-bold text-ink text-lg">Sent to {sentOrgName}.</p>
+                <p className="text-ink-2 text-sm mt-2">
                   They will reach out to you directly.
                 </p>
               </>
@@ -85,35 +85,34 @@ export default function BecomeMatchSponsorSheet({ show, onClose, nonprofit, bran
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm mb-2">
-              Partner with {orgName} this month. Your company sponsors the monthly round-up match  -  donors see your logo, you get a community impact report.
+            <p className="text-ink-2 text-sm mb-2">
+              Partner with {orgName} this month. Your company sponsors the monthly round-up match - donors see your logo, you get a community impact report.
             </p>
-            <p className="text-xs text-gray-400 mb-4 font-medium">
+            <p className="text-[13px] text-slate mb-4 font-medium">
               Flat campaign fee. 100% of your match goes to {orgName}.
             </p>
             <form onSubmit={handleSubmit} className="space-y-3">
-              <input type="text" placeholder="Company name" value={companyName}
+              <input type="text" placeholder="Company name" aria-label="Company name" value={companyName}
                 onChange={e => setCompanyName(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <input type="text" placeholder="Contact name" value={contactName}
+                className="w-full rounded-input px-4 text-ink outline-none" style={{ background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, minHeight: 48 }} />
+              <input type="text" placeholder="Contact name" aria-label="Contact name" value={contactName}
                 onChange={e => setContactName(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <input type="email" placeholder="Email" value={email}
+                className="w-full rounded-input px-4 text-ink outline-none" style={{ background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, minHeight: 48 }} />
+              <input type="email" placeholder="Email" aria-label="Email" value={email}
                 onChange={e => setEmail(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
-              <input type="text" placeholder="Budget (e.g. $10,000-$50,000)" value={budget}
+                className="w-full rounded-input px-4 text-ink outline-none" style={{ background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, minHeight: 48 }} />
+              <input type="text" placeholder="Budget (e.g. $10,000-$50,000)" aria-label="Budget" value={budget}
                 onChange={e => setBudget(e.target.value)}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400" />
+                className="w-full rounded-input px-4 text-ink outline-none" style={{ background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, minHeight: 48 }} />
               {error && (
-                <div className="rounded-2xl bg-red-50 border border-red-100 px-4 py-3" data-testid="sponsor-error">
-                  <p className="text-red-600 text-sm">{error}</p>
+                <div role="alert" className="rounded-input bg-danger-wash px-4 py-3" style={{ border: '1px solid rgba(220,38,38,0.25)' }} data-testid="sponsor-error">
+                  <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>
                 </div>
               )}
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: companyName && email && !sending ? 1 : 0.4 }}>
+              <Button type="submit" disabled={!(companyName && email)} loading={sending}
+                style={companyName && email && !sending ? { background: brand.gradient } : undefined}>
                 {sending ? 'Sending…' : `Submit to ${orgName} Partnerships`}
-              </motion.button>
+              </Button>
             </form>
           </>
         )}

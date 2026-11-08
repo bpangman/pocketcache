@@ -13,8 +13,10 @@
 
 import CoinMark from './CoinMark';
 
-const NAVY = '#0B2A4A';
-const TEAL = '#5EEAD4';
+// :root tokens from src/index.css, hex fallback for pages without them.
+const NAVY = 'var(--navy, #0B2A4A)';
+const TEAL = 'var(--teal-logo, #5EEAD4)';
+const SLATE = 'var(--slate, #5B6B80)';
 
 /**
  * @param {number} size  Font size in px (default 21, the marketing nav's).
@@ -25,6 +27,7 @@ export default function PocketCacheWordmark({ size = 21, tone = 'dark' }) {
   return (
     <span
       aria-label="PocketCache"
+      role="img"
       style={{
         fontWeight: 800,
         whiteSpace: 'nowrap',
@@ -55,8 +58,8 @@ export default function PocketCacheWordmark({ size = 21, tone = 'dark' }) {
  */
 export function PoweredByWordmark({ size = 12, tone = 'dark' }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-      <span style={{ fontSize: Math.round(size * 0.9), color: tone === 'light' ? 'rgba(255,255,255,0.7)' : '#94a3b8', fontWeight: 500 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: Math.round(size * 0.9), color: tone === 'light' ? 'rgba(255,255,255,0.7)' : SLATE, fontWeight: 500 }}>
         powered by
       </span>
       <PocketCacheWordmark size={size} tone={tone} />

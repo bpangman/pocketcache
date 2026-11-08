@@ -2,8 +2,8 @@
 // Closure bug fix: company name is captured at submit time in a separate state
 // variable (submittedCompany) so the success message can't show a stale value.
 import { useState } from 'react';
-import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import Sheet from '../Sheet';
+import Button from '../ui/Button';
 
 export default function CorporateMatchSheet({ show, onClose, nonprofit, brand }) {
   const [company, setCompany] = useState('');
@@ -36,15 +36,15 @@ export default function CorporateMatchSheet({ show, onClose, nonprofit, brand })
         {submitted ? (
           <div className="text-center py-8">
             <div className="text-5xl mb-4">&#127962;</div>
-            <p className="font-bold text-gray-900 text-lg">Inquiry Sent!</p>
-            <p className="text-gray-500 text-sm mt-2">
+            <p className="font-bold text-ink text-lg">Inquiry Sent!</p>
+            <p className="text-ink-2 text-sm mt-2">
               {orgName}&apos;s corporate partnerships team will follow up with{' '}
               <span className="font-semibold">{submittedCompany}</span> about sponsoring the monthly match.
             </p>
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm mb-5">
+            <p className="text-ink-2 text-sm mb-5">
               Know a company that should be matching round-ups for {orgName}? Let us know  - {' '}
               {orgName}&apos;s corporate partnerships team will reach out to them.
             </p>
@@ -55,16 +55,12 @@ export default function CorporateMatchSheet({ show, onClose, nonprofit, brand })
                 value={company}
                 onChange={e => setCompany(e.target.value)}
                 required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
+                aria-label="Company you'd like to suggest"
+                className="w-full rounded-input px-4 text-ink outline-none" style={{ background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, minHeight: 48 }}
               />
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                type="submit"
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: company ? 1 : 0.4 }}
-              >
+              <Button type="submit" disabled={!company.trim()} style={company.trim() ? { background: brand.gradient } : undefined}>
                 Send Suggestion
-              </motion.button>
+              </Button>
             </form>
           </>
         )}

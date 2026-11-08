@@ -8,13 +8,17 @@ export function ThemeProvider({ children }) {
   const { selectedNonprofit } = useApp();
   const brand = selectedNonprofit?.brand ?? DEFAULT_BRAND;
 
-  // Inject CSS custom properties onto :root so any component can use var(--brand-primary) etc.
+  // Inject CSS custom properties onto :root so any component can use
+  // var(--brand-primary) etc. (src/index.css also exposes them as the
+  // text-brand / bg-brand-tint utilities). --brand-tint is the 8% primary
+  // wash DESIGN.md uses for icon chips and the active tab.
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--brand-primary', brand.primary);
     root.style.setProperty('--brand-secondary', brand.secondary);
     root.style.setProperty('--brand-accent-light', brand.accentLight);
     root.style.setProperty('--brand-text-accent', brand.textAccent);
+    root.style.setProperty('--brand-tint', `${brand.primary}14`);
   }, [brand]);
 
   return (

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
-import { Plus, Sparkles, Building2, HandHeart } from 'lucide-react';
+import { Plus, Sparkles, Building2, HandHeart, ChevronRight } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
 import OrgLogo from '../components/OrgLogo';
@@ -15,18 +15,31 @@ import { submitGiveExtra } from '../lib/engagement';
 import { fmtMoneyCompact } from '../lib/format';
 // impactTier used to be a verbatim duplicate of the one in WebPortalPages.jsx.
 // Both surfaces now read the single implementation in lib/donorContent.
-import { impactTier } from '../lib/donorContent';
+import { impactTier, isMatchVisible } from '../lib/donorContent';
+import { safeBottomAtLeast } from '../lib/safeArea';
 
 /**
- * PocketCache teal, dark enough to carry small bold text on the teal-50 tile
- * (teal-700). The org's own brand colour is used for everything else in the
- * involvement group, but the two tiles need to be told apart at a glance and a
- * second org colour would just be more red under BGCA.
+ * PocketCache teal for the sponsor row's icon chip. The org's own brand colour
+ * is used for everything else in the involvement group, but the two rows need
+ * to be told apart at a glance and a second org colour would just be more red
+ * under BGCA.
  */
-const TEAL_INK = '#0f766e';
+const TEAL_INK = 'var(--teal-ui)';
+
+/**
+ * Horizontal room the hero header leaves free on the right for the global
+ * avatar button AppShell pins at the top-right of every tab: the 40px circle
+ * sits 20px from the edge, the header has its own 20px gutter, and 16px of
+ * gap keeps the title off it (20 + 40 + 16 - 20 = 56). Dashboard's title is
+ * short enough never to reach the circle; an org name is not.
+ */
+const AVATAR_CLEARANCE = 56;
 
 export default function MyCause() {
-  const { selectedNonprofit, boostDonation, totalDonated, demoActive, hasAccount, refreshRealRoundups } = useApp();
+  const { selectedNonprofit, boostDonation, totalDonated, demoActive, refreshRealRoundups, hasRealBankLinked } = useApp();
+  // A brand-new account with nothing linked is not rounding up yet; say so
+  // instead of claiming the round-ups are running (Home already says the same).
+  const roundupsRunning = demoActive || hasRealBankLinked;
   const brand = useTheme();
   const [showBoost, setShowBoost] = useState(false);
   const [showVolunteer, setShowVolunteer] = useState(false);
@@ -55,11 +68,13 @@ export default function MyCause() {
   // Deliberately NOT boostDonation: the lifetime total already folds in the
   // server-side give-extra lifetime figure (see AppContext), so bumping the
   // local total too would double-count. The sheet owns the success view.
+  // Identity is the session JWT only - with no session submitGiveExtra
+  // resolves { ok:false, reason:'no-session' } and the sheet shows its
+  // "Sign in to add a real gift." sentence; nothing is recorded.
   async function handleRealGiveExtra(amount) {
     const res = await submitGiveExtra({
       amountCents: Math.round(amount * 100),
       orgCode: selectedNonprofit?.shortName,
-      email: hasAccount?.email,
     });
     if (res?.ok) refreshRealRoundups();
     return res;
@@ -67,6 +82,10 @@ export default function MyCause() {
 
   const np = selectedNonprofit;
   const match = np.corporateMatch;
+  // BGCA's seed carries a SAMPLE match so the demo has something to show. A
+  // real account must never see a sponsor claim about a partnership that does
+  // not exist (lib/donorContent.isMatchVisible).
+  const matchVisible = isMatchVisible(match, demoActive);
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative">
@@ -107,11 +126,16 @@ export default function MyCause() {
         className="px-5 pb-6"
         style={{ paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
-        <div className="flex items-center gap-4">
-          <OrgLogo nonprofit={np} size={16} rounded="2xl" className="shrink-0 shadow-lg" />
+        {/* The right padding keeps the org name clear of the global avatar
+            button AppShell pins at the top-right of every tab (40px circle, 20px
+            from the edge). Without it a long name such as "Boys & Girls Clubs of
+            America" fits on one line at 390px and its last word renders under the
+            circle; with it the name wraps to two lines instead. */}
+        <div className="flex items-center gap-4" style={{ paddingRight: AVATAR_CLEARANCE }}>
+          <OrgLogo nonprofit={np} size={16} rounded="2xl" className="shrink-0 shadow-2" />
           <div className="flex-1 min-w-0">
-            <p className="text-white/70 text-xs font-semibold uppercase tracking-widest">Your Cause</p>
-            <h1 className="text-white font-bold text-xl leading-snug mt-0.5" style={{ letterSpacing: '-0.3px' }}>
+            <p className="text-white/70 text-[11px] font-semibold uppercase tracking-[0.06em]">Your Cause</p>
+            <h1 className="text-white font-bold text-xl leading-snug mt-0.5" style={{ letterSpacing: '-0.3px', textWrap: 'balance' }}>
               {np.name}
             </h1>
             {np.category && (
@@ -123,16 +147,16 @@ export default function MyCause() {
         </div>
       </motion.div>
 
-      <div className="flex-1 scrollable pc-scrollbar px-4 pb-28 space-y-4 pt-4">
+      <div className="flex-1 scrollable pc-scrollbar px-4 space-y-4 pt-4" style={{ paddingBottom: safeBottomAtLeast(112, 106) }}>
 
         {/* Mission / story */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl p-5 card-shadow"
+          className="bg-white rounded-card p-4 card-shadow"
         >
-          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-2">Mission</p>
-          <p className="text-gray-700 text-sm leading-relaxed">{np.description}</p>
+          <p className="text-slate text-[11px] font-semibold uppercase tracking-[0.06em] mb-2">Mission</p>
+          <p className="text-ink-2 text-sm leading-relaxed">{np.description}</p>
         </motion.div>
 
         {/* Impact stat */}
@@ -141,11 +165,11 @@ export default function MyCause() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.06 }}
-            className="rounded-3xl p-5 text-white relative overflow-hidden"
+            className="rounded-card p-4 text-white relative overflow-hidden pc-on-dark"
             style={{ background: brand.gradient }}
           >
             <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3" />
-            <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1 relative z-10">Impact</p>
+            <p className="text-white/70 text-[11px] font-semibold uppercase tracking-[0.06em] mb-1 relative z-10">Impact</p>
             {/* No org logo + name row here: the hero at the top of this same
                 screen already identifies the org. */}
             <p className="text-white font-bold text-base leading-snug relative z-10">&ldquo;{np.impact}&rdquo;</p>
@@ -167,70 +191,69 @@ export default function MyCause() {
 
             Colour: the old buttons used brand.textAccent / brand.accentLight,
             which under BGCA is #E8192C  -  three red-outlined buttons that read
-            as errors. Everything here now uses the calm product palette the rest
-            of the app already uses for primary actions: brand.gradient and
-            brand.primary (navy under BGCA, exactly as Settings and Home do it)
-            plus PocketCache teal for the sponsor tile. No brand.textAccent. */}
+            as errors. The lead action uses brand.gradient (navy under BGCA,
+            exactly as Settings and Home do it); the two secondary actions are
+            plain white rows with a tinted icon chip and a chevron, so the one
+            tinted surface on this screen is the Impact card. No brand.textAccent. */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08 }}
-          className="bg-white rounded-3xl p-5 card-shadow"
+          className="bg-white rounded-card p-4 card-shadow"
           data-testid="get-involved"
         >
-          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Get More Involved</p>
-          <p className="text-gray-500 text-xs mt-1 mb-4 leading-relaxed">
-            Your round-ups are already running. Here are three ways to do more for {np.shortName}.
+          <p className="text-slate text-[11px] font-semibold uppercase tracking-[0.06em]">Get More Involved</p>
+          <p className="text-ink-2 text-[13px] mt-1 mb-4 leading-relaxed">
+            {roundupsRunning
+              ? `Your round-ups are already running. Here are three ways to do more for ${np.shortName}.`
+              : `Link a card to start rounding up. In the meantime, here are three ways to help ${np.shortName}.`}
           </p>
 
-          {/* One lead action, then two equal-weight tiles. Not three identical
-              full-width bars: the tiles say what each one actually does, and the
-              48px+ tile height keeps every target comfortably tappable. */}
+          {/* One lead action, then two equal-weight rows. The rows say what each
+              one actually does, and the 56px row height keeps every target
+              comfortably tappable. */}
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => setShowBoost(true)}
-            className="w-full py-3.5 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2"
+            className="pc-btn w-full h-[52px] rounded-card text-white font-bold text-base flex items-center justify-center gap-2"
             style={{ background: brand.gradient }}
             data-testid="involve-give-extra"
           >
-            <Plus size={16} /> Give Extra Now
+            <Plus size={18} /> Give Extra Now
           </motion.button>
 
-          <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="mt-3 rounded-card overflow-hidden" style={{ border: '1px solid var(--line)' }}>
             <motion.button
-              whileTap={{ scale: 0.97 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => setShowSponsorSheet(true)}
-              className="rounded-2xl p-3 text-left flex flex-col gap-2 min-h-[104px]"
-              style={{ background: '#f0fdfa', border: '1.5px solid #99f6e4' }}
+              className="w-full px-3 py-3 min-h-[56px] text-left flex items-center gap-3 bg-white"
               data-testid="involve-become-sponsor"
             >
-              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#ccfbf1' }}>
-                <Building2 size={16} style={{ color: TEAL_INK }} />
+              <span className="w-9 h-9 rounded-input flex items-center justify-center shrink-0" style={{ background: 'rgba(13,148,136,0.08)' }}>
+                <Building2 size={18} style={{ color: TEAL_INK }} />
               </span>
-              <span className="font-bold text-sm leading-tight" style={{ color: TEAL_INK }}>
-                Become a Match Sponsor
+              <span className="flex-1 min-w-0">
+                <span className="block font-semibold text-sm text-ink leading-tight">Become a Match Sponsor</span>
+                <span className="block text-[13px] text-slate leading-snug mt-0.5">Your company funds the monthly match</span>
               </span>
-              <span className="text-xs leading-snug" style={{ color: '#0d9488' }}>
-                Your company funds the monthly match
-              </span>
+              <ChevronRight size={18} className="text-gray-400 shrink-0" />
             </motion.button>
 
             <motion.button
-              whileTap={{ scale: 0.97 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => setShowVolunteer(true)}
-              className="rounded-2xl p-3 text-left flex flex-col gap-2 min-h-[104px]"
-              style={{ background: brand.primary + '12', border: `1.5px solid ${brand.primary}40` }}
+              className="w-full px-3 py-3 min-h-[56px] text-left flex items-center gap-3 bg-white"
+              style={{ borderTop: '1px solid var(--line)' }}
               data-testid="involve-volunteer"
             >
-              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: brand.primary + '1F' }}>
-                <HandHeart size={16} style={{ color: brand.primary }} />
+              <span className="w-9 h-9 rounded-input flex items-center justify-center shrink-0" style={{ background: `${brand.primary}14` }}>
+                <HandHeart size={18} style={{ color: brand.primary }} />
               </span>
-              <span className="font-bold text-sm leading-tight" style={{ color: brand.primary }}>
-                Volunteer Opportunities
+              <span className="flex-1 min-w-0">
+                <span className="block font-semibold text-sm text-ink leading-tight">Volunteer Opportunities</span>
+                <span className="block text-[13px] text-slate leading-snug mt-0.5">Give time near you, not just money</span>
               </span>
-              <span className="text-xs leading-snug" style={{ color: brand.primary, opacity: 0.75 }}>
-                Give time near you, not just money
-              </span>
+              <ChevronRight size={18} className="text-gray-400 shrink-0" />
             </motion.button>
           </div>
         </motion.div>
@@ -240,15 +263,15 @@ export default function MyCause() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-3xl p-5 card-shadow flex items-start gap-3"
+          className="bg-white rounded-card p-4 card-shadow flex items-start gap-3"
         >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: brand.accentLight }}>
-            <Sparkles size={18} style={{ color: brand.textAccent }} />
+          <div className="w-9 h-9 rounded-input flex items-center justify-center shrink-0"
+            style={{ background: `${brand.primary}14` }}>
+            <Sparkles size={18} style={{ color: brand.primary }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-1">Your Impact</p>
-            <p className="text-gray-700 text-sm leading-relaxed" data-testid="impact-tier">
+            <p className="text-slate text-[11px] font-semibold uppercase tracking-[0.06em] mb-1">Your Impact</p>
+            <p className="text-ink-2 text-sm leading-relaxed" data-testid="impact-tier">
               {impactTier(totalDonated, np.shortName)}
             </p>
           </div>
@@ -272,17 +295,18 @@ export default function MyCause() {
                 (orgStats?.donors ?? np.donors) != null && { label: 'Donors', value: (orgStats?.donors ?? np.donors).toLocaleString() },
                 np.ein && { label: 'EIN', value: np.ein },
               ].filter(Boolean).map((stat) => (
-                <div key={stat.label} className="bg-white rounded-2xl px-4 py-3 card-shadow">
-                  <p className="text-gray-400 text-xs font-medium">{stat.label}</p>
-                  <p className="text-gray-900 font-bold text-base mt-0.5">{stat.value}</p>
+                <div key={stat.label} className="bg-white rounded-card px-4 py-3 card-shadow">
+                  <p className="text-slate text-xs font-medium">{stat.label}</p>
+                  <p className="text-ink font-bold text-base mt-0.5 tabular-nums">{stat.value}</p>
                 </div>
               ))}
             </div>
           </motion.div>
         )}
 
-        {/* Corporate match badge  -  "Example" tag shown when match.sample is true */}
-        {match?.active && (
+        {/* Corporate match badge  -  "Example" tag shown when match.sample is true.
+            Hidden entirely for a real account when the match is only a sample. */}
+        {matchVisible && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -290,8 +314,8 @@ export default function MyCause() {
           >
             {match.sample && (
               <div className="mb-1.5 px-1">
-                <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  Example partnership  -  demo
+                <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-pill px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  Example partnership - demo
                 </span>
               </div>
             )}

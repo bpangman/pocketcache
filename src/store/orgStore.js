@@ -5,17 +5,18 @@
 
 import { NONPROFITS } from '../data/nonprofits';
 import { fetchOrgPublicByCode } from '../lib/npApi';
+// The one pair of localStorage helpers, shared with AppContext/NpContext.
+// identityStore imports nothing, so this cannot form a cycle; AppContext is
+// never imported from here (it imports us).
+import { loadKey as lsGet, saveKey as lsSet } from './identityStore';
 
 const CUSTOM_ORGS_KEY = 'pc_custom_orgs';
 const BGCA_OVERRIDES_KEY = 'pc_bgca_overrides';
-
-function lsGet(key, fallback) {
-  try { const v = localStorage.getItem(key); return v != null ? JSON.parse(v) : fallback; }
-  catch { return fallback; }
-}
-function lsSet(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
-}
+// NpContext's persisted admin record and the donor's cause binding - touched
+// here ONLY by applyServerJoinCode, which has to move both when a join code
+// changes server-side.
+const NP_ORG_KEY = 'pc_np_org';
+const CAUSE_KEY = 'pc_cause_id';
 
 // ── Brand computation ─────────────────────────────────────────────────────────
 
@@ -178,8 +179,8 @@ export function cacheServerOrgLocally(serverOrg, adminEmail) {
     shortName,
     tagline: serverOrg.mission ? serverOrg.mission.slice(0, 80) : `Supporting ${serverOrg.name}`,
     description: serverOrg.mission || existing?.description || '',
-    longDescription: existing?.longDescription ?? (serverOrg.mission || ''),
-    logoUrl: existing?.logoUrl ?? null,
+    longDescription: serverOrg.long_description || existing?.longDescription || serverOrg.mission || '',
+    logoUrl: serverOrg.logo_url || existing?.logoUrl || null,
     monthlyMinimum: existing?.monthlyMinimum ?? 5,
     ein: existing?.ein ?? '',
     address: existing?.address ?? '',
@@ -227,6 +228,42 @@ export function renameCustomOrgCode(orgId, newCode) {
   const next = list.filter((o, i) => i !== idx && o.id !== newId);
   next.push(renamed);
   lsSet(CUSTOM_ORGS_KEY, next);
+  return renamed;
+}
+
+// A join code the SERVER has already renamed (org-signup confirmed the new
+// join_code for the signed-in admin). renameCustomOrgCode above is the
+// practice/local-org path and must stay local-only; this is the mirror step
+// for a real org, called by Grow only AFTER the server answered with the new
+// code - never before, because donors on other devices resolve codes through
+// orgs_public and a local-only rename would leave the QR and the widget
+// pointing at a code that resolves nowhere.
+//
+// Moves three things on this device: the pc_custom_orgs cache record (id is
+// the lowercase code, so the record changes id), the admin's pc_np_org
+// record when it is this org, and the donor-side pc_cause_id when this device
+// is also a donor bound to the org. `orgId` may be the local id (lowercase
+// old code) or the server uuid; `oldCode` is the fallback when neither hits.
+export function applyServerJoinCode(orgId, oldCode, newCode) {
+  const code = (newCode ?? '').trim().toUpperCase();
+  if (!JOIN_CODE_RE.test(code)) return null;
+  const oldId = (oldCode ?? '').trim().toLowerCase();
+  const list = listCustomOrgs();
+  const idx = list.findIndex(o => o.id === orgId || (orgId && o._serverId === orgId) || (oldId && o.id === oldId));
+  const newId = code.toLowerCase();
+  let renamed = null;
+  if (idx >= 0) {
+    renamed = { ...list[idx], id: newId, shortName: code };
+    const next = list.filter((o, i) => i !== idx && o.id !== newId);
+    next.push(renamed);
+    lsSet(CUSTOM_ORGS_KEY, next);
+  }
+  const fromId = idx >= 0 ? list[idx].id : oldId;
+  const npOrg = lsGet(NP_ORG_KEY, null);
+  if (npOrg && ((npOrg.joinCode ?? '').toUpperCase() === (oldCode ?? '').toUpperCase() || (fromId && npOrg._orgId === fromId))) {
+    lsSet(NP_ORG_KEY, { ...npOrg, joinCode: code, shortName: code, _orgId: newId });
+  }
+  if (fromId && lsGet(CAUSE_KEY, null) === fromId) lsSet(CAUSE_KEY, newId);
   return renamed;
 }
 
@@ -327,13 +364,27 @@ export function findOrgByCode(code) {
 // device now resolves it instantly and offline next time, same as any other
 // custom org), and only falls back to the local-only lookup - the BGCA seed,
 // or a previously cached org - if the server is unreachable or has no match.
-export async function resolveOrgByCode(code) {
-  if (!code) return null;
-  try {
-    const serverOrg = await fetchOrgPublicByCode(code);
-    if (serverOrg) return cacheServerOrgLocally(serverOrg);
-  } catch {
-    // network failure - fall through to the local-only lookup below
-  }
-  return findOrgByCode(code);
+//
+// IN-FLIGHT DEDUPE: a join-link open resolves the same code from two or three
+// places at once (App's pretty-URL effect, the gate's auto-bind, the desktop
+// entry effect), which used to be two or three identical orgs_public requests.
+// Concurrent callers now share one promise per normalised code; the entry is
+// dropped in `finally`, so a LATER lookup still fetches fresh server data.
+const inFlight = new Map();
+
+export function resolveOrgByCode(code) {
+  if (!code) return Promise.resolve(null);
+  const key = code.trim().toUpperCase();
+  if (inFlight.has(key)) return inFlight.get(key);
+  const p = (async () => {
+    try {
+      const serverOrg = await fetchOrgPublicByCode(code);
+      if (serverOrg) return cacheServerOrgLocally(serverOrg);
+    } catch {
+      // network failure - fall through to the local-only lookup below
+    }
+    return findOrgByCode(code);
+  })().finally(() => { inFlight.delete(key); });
+  inFlight.set(key, p);
+  return p;
 }

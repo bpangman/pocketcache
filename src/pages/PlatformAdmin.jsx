@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { IDENTITY_KEYS, loadKey, saveKey } from '../store/identityStore';
 import { listCustomOrgs, findOrgByCode, getAppleApproval, BGCA_DEMO_ADMIN_EMAIL } from '../store/orgStore';
 import { CURRENT_MONTH_PENDING } from '../data/transactions';
-import { chargeTotal, effectiveCharge, processingCoverFor, nextChargeLabel, monthKey } from '../lib/billing';
+import { chargeTotal, effectiveCharge, processingCoverFor, nextChargeLabel, monthKey, MONTHLY_FLOOR } from '../lib/billing';
 import { fmtMoney } from '../lib/format';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, FUNCTIONS_BASE } from '../lib/supa';
 import CoinMark from '../components/CoinMark';
 
 // src/pages/PlatformAdmin.jsx - platform-owner-only console.
@@ -21,12 +22,14 @@ const PLATFORM_ADMIN_EMAIL = 'info@pocketcache.app';
 const PADMIN_KEY = 'pc_padmin';
 const NTFY_TOPIC_URL = 'https://ntfy.sh/pocketcache-wl-x7k2m9q4';
 
-// Supabase events table - the permanent, PII-free activity log this console
-// reads directly from the browser. The anon key is public by design (meant
-// to ship in client-side source) and is scoped by row-level security on the
-// events table to insert + select only.
-const SUPABASE_EVENTS_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/events?select=*&order=created_at.desc&limit=100';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
+// Supabase events table - the permanent activity log this console reads
+// directly from the browser. Rows carry no names or emails, but the detail
+// blob of a charge-cycle event may hold Stripe ids (customer, payment intent,
+// connected account); formatSupabaseDetail below leaves those out of the
+// feed. The URL and anon key come from lib/supa.js - one project, one place -
+// the anon key is public by design (meant to ship in client-side source) and
+// is scoped by row-level security on the events table to insert + select only.
+const SUPABASE_EVENTS_URL = `${SUPABASE_URL}/rest/v1/events?select=*&order=created_at.desc&limit=100`;
 
 // ── Shared visual bits (same card language as the rest of the app: white
 //    rounded-2xl cards with card-shadow, gray-400 uppercase tracking-widest
@@ -85,11 +88,12 @@ function GateCard({ onUnlock }) {
           value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm mb-3 outline-none focus:border-gray-500"
+          className="w-full border border-gray-300 rounded-xl px-3 text-base mb-3 outline-none focus:border-gray-500"
+          style={{ minHeight: 44 }}
           autoFocus
         />
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-        <button type="submit" className="w-full bg-gray-900 text-white rounded-xl py-2.5 font-semibold text-sm">
+        <button type="submit" className="w-full bg-gray-900 text-white rounded-xl font-semibold text-sm" style={{ minHeight: 44 }}>
           Continue
         </button>
       </form>
@@ -113,12 +117,22 @@ function parseNdjson(text) {
   return out;
 }
 
+// Stripe identifiers never belong in a human-readable feed: they are not
+// useful at a glance and they tie a row to a specific donor's payment record.
+const HIDDEN_DETAIL_KEYS = new Set(['stripe_customer_id', 'payment_intent_id', 'connected_account']);
+// Shown first when present, so the cycle events line up by run and month.
+const LEADING_DETAIL_KEYS = ['cycle_id', 'month_key'];
+
 function formatSupabaseDetail(detail) {
   if (!detail || typeof detail !== 'object') return '';
-  return Object.entries(detail)
-    .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(', ');
+  // Older rows have no cycle_id / month_key and newer rows may carry nested
+  // objects; both have to render without blowing up the feed.
+  const entries = Object.entries(detail)
+    .filter(([k, v]) => !HIDDEN_DETAIL_KEYS.has(k) && v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)]);
+  const rank = ([k]) => { const i = LEADING_DETAIL_KEYS.indexOf(k); return i < 0 ? LEADING_DETAIL_KEYS.length : i; };
+  entries.sort((a, b) => rank(a) - rank(b));
+  return entries.map(([k, v]) => `${k}: ${v}`).join(', ');
 }
 
 function normalizeSupabaseRows(rows) {
@@ -176,7 +190,8 @@ function LiveActivityCard() {
       right={
         <button
           onClick={load}
-          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+          className="text-xs font-semibold px-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+          style={{ minHeight: 44 }}
         >
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -219,8 +234,8 @@ function LiveActivityCard() {
 // the key is asked for once and kept in sessionStorage only, so it survives
 // tab navigation but never lands in localStorage or the exported raw data.
 
-const SUPABASE_FUNCTIONS_BASE = 'https://yeptifozaytoglfwxksz.supabase.co/functions/v1';
-const SUPABASE_PENDING_ORGS_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/orgs_public?status=eq.pending_review&select=*&order=name.asc';
+const SUPABASE_FUNCTIONS_BASE = FUNCTIONS_BASE;
+const SUPABASE_PENDING_ORGS_URL = `${SUPABASE_URL}/rest/v1/orgs_public?status=eq.pending_review&select=*&order=name.asc`;
 const APPROVE_KEY_SESSION_KEY = 'pc_approve_key';
 
 function loadApproveKey() {
@@ -314,7 +329,8 @@ function PendingApprovalsCard() {
       right={
         <button
           onClick={load}
-          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+          className="text-xs font-semibold px-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+          style={{ minHeight: 44 }}
         >
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -336,9 +352,10 @@ function PendingApprovalsCard() {
               value={keyDraft}
               onChange={e => setKeyDraft(e.target.value)}
               placeholder="Approval key"
-              className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-500 bg-white"
+              className="flex-1 border border-amber-300 rounded-xl px-3 text-base outline-none focus:border-amber-500 bg-white"
+              style={{ minHeight: 44 }}
             />
-            <button type="submit" className="text-xs font-semibold px-3 py-2 rounded-xl bg-gray-900 text-white">
+            <button type="submit" className="text-xs font-semibold px-3 rounded-xl bg-gray-900 text-white" style={{ minHeight: 44 }}>
               Save key
             </button>
           </div>
@@ -361,7 +378,8 @@ function PendingApprovalsCard() {
               <button
                 onClick={() => approve(org)}
                 disabled={!approveKey || busyId === org.id}
-                className="text-xs font-bold px-4 py-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-40"
+                className="text-xs font-bold px-4 rounded-xl bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-40"
+                style={{ minHeight: 44 }}
                 title={approveKey ? undefined : 'Paste the approval key above first'}
               >
                 {busyId === org.id ? 'Approving…' : 'Approve'}
@@ -414,7 +432,8 @@ function OrgCard({ org }) {
           href={orgPublicUrl(org.shortName)}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs font-semibold text-teal-700 bg-teal-50 rounded-lg px-2.5 py-1 hover:bg-teal-100 transition-colors"
+          className="inline-flex items-center text-xs font-semibold text-teal-700 bg-teal-50 rounded-lg px-3 hover:bg-teal-100 transition-colors"
+          style={{ minHeight: 44 }}
         >
           View public page →
         </a>
@@ -481,7 +500,8 @@ function DonorCard() {
     : 0;
   const upcomingCharge = chargeTotal({ pendingRoundUps, monthlyCap, chargeAdjustment, feeMonths, processingCover });
   const roundUpsCharged = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
-  const monthlyMinimum = causeOrg?.monthlyMinimum ?? 5;
+  // One floor for every org (lib/billing); the per-org field is gone.
+  const monthlyMinimum = MONTHLY_FLOOR;
   const rollingOver = pendingRoundUps < monthlyMinimum && !skipNextCharge;
 
   return (
@@ -579,7 +599,8 @@ function RawDataCard() {
       right={
         <button
           onClick={exportAll}
-          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+          className="text-xs font-semibold px-3 rounded-xl bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+          style={{ minHeight: 44 }}
         >
           Export everything (JSON file)
         </button>

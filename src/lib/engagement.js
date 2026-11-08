@@ -7,7 +7,11 @@
 //     The pledge is NOT charged on the spot - it joins the donor's next
 //     monthly charge (cycle-lock folds it in on the 1st, charge-cycles-run
 //     bills it on the 11th), which is why the honest success copy on both
-//     surfaces is "Added to your next monthly charge".
+//     surfaces is "Added to your next monthly charge". It REQUIRES a real
+//     Supabase session: identity comes from the JWT only. The old email
+//     fallback let anyone who knew a donor's address pledge money on that
+//     donor's card, so it is gone on both ends - with no session this
+//     resolves { ok: false, reason: 'no-session' } without calling anything.
 //
 //   submitOrgContact({ orgCode, kind, fields }) -> org-contact edge function.
 //     kind is 'match_sponsor' or 'volunteer'. The server resolves the org's
@@ -23,28 +27,32 @@
 // nothing happened. So both resolve to { ok: true, ... } on success and
 // { ok: false, error } on any failure, with a plain-language default message,
 // and never throw.
-import { getSupabase } from './supa';
+import { getSupabase, SUPABASE_ANON_KEY, FUNCTIONS_BASE } from './supa';
 
-const SUPABASE_URL = 'https://yeptifozaytoglfwxksz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
-const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
 const TIMEOUT_MS = 10000;
 
 const GENERIC_GIVE_ERROR = 'Could not save your gift right now. Please try again.';
+const NO_SESSION_GIVE_ERROR = 'Sign in to add a real gift.';
 const GENERIC_CONTACT_ERROR = 'Could not send your message right now. Please try again.';
+
+/** The signed-in session's access token, or null. */
+async function sessionToken() {
+  try {
+    const supabase = getSupabase();
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function callFn(name, body, fallbackError) {
   try {
     const headers = { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY };
-    try {
-      const supabase = getSupabase();
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if (token) headers.Authorization = `Bearer ${token}`;
-    } catch {
-      // No session available - the functions accept their own fallbacks
-      // (give-extra: body email; org-contact: none needed).
-    }
+    const token = await sessionToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    // No session: org-contact needs none. give-extra never gets here without
+    // one (submitGiveExtra checks first).
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -64,17 +72,18 @@ async function callFn(name, body, fallbackError) {
 }
 
 /**
- * @param {{ amountCents: number, orgCode?: string, email?: string }} opts
+ * @param {{ amountCents: number, orgCode?: string }} opts
  *   amountCents - the gift in cents (server floor $1, ceiling $10,000).
  *   orgCode - the selected nonprofit's join code (optional; unknown codes are
  *     fine server-side, the pledge just is not attributed to an orgs row).
- *   email - fallback identity for a donor mid-signup without a session yet.
- * @returns {Promise<{ ok: true } | { ok: false, error: string }>}
+ *   (An `email` field is ignored: identity is the session JWT only.)
+ * @returns {Promise<{ ok: true } | { ok: false, reason?: 'no-session', error: string }>}
  */
-export function submitGiveExtra({ amountCents, orgCode, email }) {
+export async function submitGiveExtra({ amountCents, orgCode }) {
+  const token = await sessionToken();
+  if (!token) return { ok: false, reason: 'no-session', error: NO_SESSION_GIVE_ERROR };
   const body = { amount_cents: amountCents };
   if (orgCode) body.org_code = String(orgCode).toUpperCase();
-  if (email) body.email = email;
   return callFn('give-extra', body, GENERIC_GIVE_ERROR);
 }
 

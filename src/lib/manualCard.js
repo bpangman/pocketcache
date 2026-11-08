@@ -42,10 +42,10 @@
  */
 
 /** Shortest card number any real network issues. Demo floor, see header. */
-export const MIN_CARD_DIGITS = 13;
+const MIN_CARD_DIGITS = 13;
 
 /** Longest card number we let the user type (Visa/Mastercard length). */
-export const MAX_CARD_DIGITS = 16;
+const MAX_CARD_DIGITS = 16;
 
 /**
  * Digits-only, capped at 16, grouped in 4s separated by single spaces.

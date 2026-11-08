@@ -23,6 +23,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { Z, scrim } from '../lib/overlay';
 import AppleLogo from './AppleLogo';
+import { useShowDemoAffordances } from '../lib/demo';
+import { useApp } from '../store/AppContext';
 
 /** Where web Apple Pay could actually exist: Safari on Apple hardware.
  *  ApplePaySession's presence IS the check (Apple only ships it there); the
@@ -49,9 +51,13 @@ export const APPLE_PAY_UNAVAILABLE_NOTE = 'Apple Pay is available in Safari on A
  * @param {Function} onCancel
  * @param {Function} onSuccess     Called once with
  *                                 { type: 'apple_pay', label: 'Apple Pay', last4: null }.
+ * @param {boolean}  [showDemo]    Show the demo label and the sample Visa 4242 row.
+ *                                 Defaults to lib/demo's useShowDemoAffordances(demoMode).
  */
-export default function WebApplePayConfirm({ show, payee, contextLine, onCancel, onSuccess }) {
+export default function WebApplePayConfirm({ show, payee, contextLine, onCancel, onSuccess, showDemo }) {
   const [phase, setPhase] = useState('confirm'); // 'confirm' | 'processing' | 'success'
+  const demoMode = useApp()?.demoMode;
+  const demo = useShowDemoAffordances(showDemo || demoMode);
 
   function handleConfirm() {
     if (phase !== 'confirm') return;
@@ -95,13 +101,14 @@ export default function WebApplePayConfirm({ show, payee, contextLine, onCancel,
             style={{
               position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
               width: 420, maxWidth: 'calc(100vw - 32px)', zIndex: Z.blocking,
-              background: '#1c1c1e', borderRadius: 20, padding: 24,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
+              background: '#1c1c1e', borderRadius: 'var(--r-lg)', padding: 24,
+              boxShadow: 'var(--shadow-3)',
             }}
+            className="pc-on-dark"
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 18 }}>
               <AppleLogo size={18} color="#fff" />
-              <span style={{ color: '#fff', fontSize: 19, fontWeight: 700, letterSpacing: '-0.3px' }}>Pay</span>
+              <span style={{ color: '#fff', fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>Pay</span>
             </div>
 
             {phase === 'success' ? (
@@ -119,14 +126,16 @@ export default function WebApplePayConfirm({ show, payee, contextLine, onCancel,
               <>
                 <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: '14px 16px', marginBottom: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
-                    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12.5, flexShrink: 0 }}>Pay to</span>
+                    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, flexShrink: 0 }}>Pay to</span>
                     <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {payee || 'this nonprofit'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12.5 }}>Card</span>
-                    <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'ui-monospace, monospace' }}>Visa •••• 4242</span>
+                    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>Card</span>
+                    <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: demo ? 'ui-monospace, monospace' : undefined }}>
+                      {demo ? 'Visa •••• 4242' : 'Card in your Wallet'}
+                    </span>
                   </div>
                 </div>
                 {contextLine && (
@@ -138,10 +147,11 @@ export default function WebApplePayConfirm({ show, payee, contextLine, onCancel,
                   onClick={handleConfirm}
                   disabled={phase === 'processing'}
                   data-testid="web-apple-pay-confirm"
+                  className="pc-btn"
                   style={{
-                    width: '100%', padding: '13px 0', borderRadius: 12, border: 'none',
+                    width: '100%', minHeight: 44, padding: '12px 0', borderRadius: 'var(--r-pill)', border: 'none',
                     cursor: phase === 'processing' ? 'default' : 'pointer',
-                    background: '#fff', color: '#000', fontWeight: 700, fontSize: 15,
+                    background: '#fff', color: '#000', fontWeight: 700, fontSize: 16,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   }}
                 >
@@ -159,16 +169,19 @@ export default function WebApplePayConfirm({ show, payee, contextLine, onCancel,
                 <button
                   onClick={handleCancel}
                   disabled={phase === 'processing'}
+                  className="pc-btn"
                   style={{
-                    width: '100%', marginTop: 10, padding: '9px 0', border: 'none', background: 'transparent',
-                    cursor: phase === 'processing' ? 'default' : 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: 600,
+                    width: '100%', minHeight: 44, marginTop: 8, padding: '12px 0', border: 'none', background: 'transparent', borderRadius: 'var(--r-pill)',
+                    cursor: phase === 'processing' ? 'default' : 'pointer', color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: 600,
                   }}
                 >
                   Cancel
                 </button>
-                <p style={{ margin: '14px 0 0', color: 'rgba(255,255,255,0.35)', fontSize: 10.5, textAlign: 'center' }}>
-                  Simulated for this demo  -  no real Apple Pay session is created.
-                </p>
+                {demo && (
+                  <p style={{ margin: '14px 0 0', color: 'rgba(255,255,255,0.6)', fontSize: 11, textAlign: 'center' }}>
+                    Simulated for this demo - no real Apple Pay session is created.
+                  </p>
+                )}
               </>
             )}
           </motion.div>

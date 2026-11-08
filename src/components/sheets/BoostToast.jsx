@@ -1,34 +1,54 @@
 import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
-import { safeTopAtLeast } from '../../lib/safeArea';
+import { safeBottomAtLeast } from '../../lib/safeArea';
 import { Z } from '../../lib/overlay';
+import { fmtMoneyWhole } from '../../lib/format';
 
-// Offset by 60 rather than 12 so the toast clears the global avatar button
-// (safe-top + 12px, 40px tall = bottom at safe-top + 52). At the old value the
-// toast's X sat underneath the avatar on any notched device, so tapping it
-// opened the account sheet instead of dismissing the toast. The floor keeps the
-// toast near the top on devices with no inset at all. Z.pageToast is the
-// in-page celebration step: this confirmation belongs to the Dashboard, so it
-// sits BELOW an open bottom sheet rather than painting over its card.
-const TOAST_TOP = safeTopAtLeast(80, 60);
+/**
+ * Where an in-page toast sits: just above the tab bar, 12px clear of it.
+ *
+ * The tab bar is 4px top padding + a 55px tab + max(12px, safe-bottom - 6px)
+ * of bottom padding (TabBar.jsx), so its top edge is 71px up on a device with
+ * no inset and safe-bottom + 53px on a notched one; add the 12px gap. Toasts
+ * used to hang under the header instead, where on first open they painted
+ * over the hero's "Total donated" figure (Dashboard) or the Mission card (My
+ * Cause) until dismissed. Down here they cover nothing the screen is for and
+ * stay clear of the global avatar button. Shared with Dashboard's
+ * MilestoneToast so the two toasts land in the same place.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const TOAST_BOTTOM = safeBottomAtLeast(83, 65);
 
 export default function BoostToast({ amount, nonprofit, onClose }) {
   return (
     <motion.div
-      initial={{ y: -80, opacity: 0 }}
+      initial={{ y: 80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      exit={{ y: -80, opacity: 0 }}
-      className="absolute left-4 right-4 bg-white rounded-3xl p-4 shadow-2xl flex items-center gap-3"
-      style={{ top: TOAST_TOP, zIndex: Z.pageToast }}
+      exit={{ y: 80, opacity: 0 }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      role="status"
+      className="absolute left-4 right-4 bg-white rounded-panel p-4 flex items-center gap-3"
+      // Z.pageToast is the in-page celebration step: this confirmation belongs
+      // to the page, so it sits BELOW an open bottom sheet rather than
+      // painting over its card.
+      style={{ bottom: TOAST_BOTTOM, zIndex: Z.pageToast, boxShadow: 'var(--shadow-3)' }}
     >
+      {/* Celebration emoji - copy, not an icon. */}
       <div className="text-3xl">💚</div>
       <div className="flex-1">
-        <p className="font-bold text-gray-900 text-sm">
-          Extra ${typeof amount === 'number' && !Number.isInteger(amount) ? amount.toFixed(2) : amount} sent!
+        <p className="font-bold text-ink text-sm">
+          Extra ${fmtMoneyWhole(amount)} sent!
         </p>
-        <p className="text-gray-500 text-xs">Added to your {nonprofit?.shortName} donation</p>
+        <p className="text-slate text-[13px]">Added to your {nonprofit?.shortName} donation</p>
       </div>
-      <button onClick={onClose}><X size={16} className="text-gray-300" /></button>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Dismiss"
+        className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input shrink-0"
+      >
+        <X size={18} className="text-gray-400" />
+      </button>
     </motion.div>
   );
 }

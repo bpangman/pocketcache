@@ -64,12 +64,24 @@ export default function Sheet({ show, onClose, title, children, padBottom = true
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[85%] flex flex-col"
-            style={{ zIndex: Z.sheet }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={typeof title === 'string' ? title : undefined}
+            className="absolute bottom-0 left-0 right-0 bg-white max-h-[85%] flex flex-col"
+            style={{ zIndex: Z.sheet, borderTopLeftRadius: 'var(--r-lg)', borderTopRightRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-3)' }}
           >
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
+            <div className="flex items-center justify-between pl-6 pr-3 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--line)' }}>
               <h3 className="font-bold text-gray-900 text-lg">{title}</h3>
-              <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onClose}><X size={20} className="text-gray-400" /></motion.button>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.9 }}
+                onClick={onClose}
+                aria-label="Close"
+                className="w-11 h-11 -mr-1 rounded-full flex items-center justify-center shrink-0"
+                style={{ color: 'var(--slate)' }}
+              >
+                <X size={20} aria-hidden="true" />
+              </motion.button>
             </div>
             <div className="flex-1 scrollable pc-scrollbar" style={padBottom ? { paddingBottom: SHEET_PAD } : undefined}>{children}</div>
           </motion.div>

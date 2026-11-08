@@ -43,6 +43,7 @@ import { pcBeacon } from './beacon.js';
 import { useAdminAuth } from './adminAuth';
 import { orgSignup, orgConnectStripe, orgConnectStatus, fetchOrgPublicById, currentSessionEmail } from './npApi';
 import { useStepHistory } from './stepHistory';
+import { MONTHLY_FLOOR } from './billing';
 
 // ─── Apple app-listing (iPhone app only - never the web) ──────────────────────
 //
@@ -148,8 +149,9 @@ function einIsSeeded(einDigits) {
 //
 // DEMO: there is no real Candid API call. There is also no real ProPublica
 // call in a browser - projects.propublica.org sends no CORS headers, so
-// verifyEIN's fetch always throws and always falls back to the BGCA sample
-// org, no matter what EIN was actually typed (see EIN_DEMO_FALLBACK below).
+// verifyEIN's fetch always throws and always falls back to demo data: BGCA's
+// EIN resolves to the BGCA sample, any other EIN gets the editable
+// EIN_UNKNOWN_NAME ("Your Nonprofit") placeholder (see EIN_DEMO_FALLBACK below).
 // That means orgName can't be trusted to tell BGCA apart from "some unknown
 // org" once einDemoMode is true - it always reads as BGCA. The only signal
 // that survives the fallback untouched is the EIN digits the admin actually
@@ -210,7 +212,7 @@ export const NP_BRAND_COLORS = ['#003865', '#0D9488', '#059669', '#2563EB', '#4F
  *  says what the nonprofit actually nets if a donor declines. */
 export const NP_LICENSE_POINTS = [
   ['Always free for you.', 'You never pay PocketCache anything, and PocketCache never takes a percentage of a donation. You will never receive an invoice from us.'],
-  ['Donors pay a flat $1 app fee,', 'and only in the months a charge actually runs. A month where their card never rounds up carries no fee, and if a donor skips a month nothing at all is collected then  -  that $1 simply joins their next charge.'],
+  ['Donors pay a flat $1 app fee,', `for each month their card generates round-ups. A month with no round-ups carries no fee. When a month comes in under the $${MONTHLY_FLOOR} minimum or the donor skips it, nothing is collected then: the $1 rolls forward and is collected with their next charge, itemized as $1 x N.`],
   ["Covering your processing cost is the donor's choice.", 'It is pre-selected at checkout and most donors leave it on, which is how you net 100% of their round-ups, and every cent of it passes to you. A donor who unchecks it still gives: you receive their round-ups minus standard card-processing costs, the same as any card donation.'],
   ['You are the merchant of record.', 'Donations charge directly on your Stripe. PocketCache never holds donation funds.'],
   ['You issue tax receipts', 'directly to donors. PocketCache does not.'],
@@ -218,9 +220,31 @@ export const NP_LICENSE_POINTS = [
   ['California:', 'Not available at launch. Do not promote to CA residents until PocketCache confirms availability.'],
 ];
 
+/** Escape a value for an HTML attribute in the embed snippet. An org name
+ *  with an ampersand or a quote (Boys & Girls Clubs, "Friends" of ...) used to
+ *  land raw inside data-name and break the tag an admin pasted. */
+export function escAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** The widget's default button color; also the fallback for anything that is
+ *  not a plain 3-8 digit hex (widget.js only accepts that shape). */
+export const WIDGET_DEFAULT_COLOR = '#003865';
+const WIDGET_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+
+/** A widget color that is safe to put in data-color: a hex literal or the default. */
+export function safeWidgetColor(raw) {
+  const v = String(raw ?? '').trim();
+  return WIDGET_COLOR_RE.test(v) ? v : WIDGET_DEFAULT_COLOR;
+}
+
 /** The one-line embed an org pastes into their own website. */
 export function widgetSnippet(orgName, joinCode) {
-  return `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgName}"></script>`;
+  return `<script src="https://pocketcache.app/widget.js" data-org="${escAttr(joinCode)}" data-name="${escAttr(orgName)}"></script>`;
 }
 
 /** QR target for the donor join link. */
@@ -272,7 +296,9 @@ export function useNpGoLive() {
     if (config.orgId) {
       const res = await orgSignup({
         name: config.name,
-        ein: config.ein,
+        // Digits only, and only when we actually have a full EIN: org-signup
+        // patches whatever string it is sent, so '' would wipe the stored EIN.
+        ...einPayload(config.ein),
         mission: config.mission,
         color: config.color,
         joinCode: config.joinCode,
@@ -288,7 +314,9 @@ export function useNpGoLive() {
       story:          serverOrg?.mission ?? config.mission,
       color:          serverOrg?.brand_color ?? config.color,
       logoPreview:    config.logoPreview ?? null,
-      monthlyMinimum: config.monthlyMinimum,
+      // One fixed floor for every org (lib/billing MONTHLY_FLOOR); the
+      // per-org slider is gone, so the record just carries the constant.
+      monthlyMinimum: MONTHLY_FLOOR,
       ein:            config.ein,
       orgAddress:     config.orgAddress,
       joinCode:       serverOrg?.join_code ?? config.joinCode,
@@ -317,7 +345,6 @@ export function useNpGoLive() {
       color:          config.color,
       logoPreview:    org.logoUrl,
       mission:        org.description,
-      monthlyMinimum: org.monthlyMinimum,
       adminEmail:     org.adminEmail,
       joinCode:       org.shortName,
       _orgId:         org.id,
@@ -341,6 +368,21 @@ export function useNpGoLive() {
 }
 
 // ─── The wizard itself ────────────────────────────────────────────────────────
+
+/** Digits-only EIN for org-signup, as a spreadable fragment: `{ ein }` when a
+ *  full 9-digit EIN is in hand, `{}` otherwise. Every org-signup call goes
+ *  through this so the three writes (create, completion, go-live) can never
+ *  disagree on format, and so a blank value is never sent - the edge function
+ *  patches any string it receives and '' used to erase the stored EIN on the
+ *  Stripe-return resume. */
+function einPayload(ein) {
+  const digits = String(ein ?? '').replace(/\D/g, '');
+  return digits.length === 9 ? { ein: digits } : {};
+}
+
+/** Shown on the verify-email step when org-signup fails; the admin retries
+ *  from there instead of being pushed on with no server org. */
+const ORG_CREATE_ERROR_FALLBACK = "We couldn't create your organization on the server. Check your connection and try again.";
 
 /**
  * Headless nonprofit signup wizard.
@@ -422,10 +464,14 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // though stripeReturnParams() itself is not memoized.
   const [resume] = useState(stripeReturnParams);
   // A draft left by a prior mount of THIS wizard in the same tab (see the
-  // persistence effect and the NP_DRAFT_KEY comment below) - ignored during a
-  // real Stripe hosted-onboarding return, which reconstructs its own state
-  // from the server (the resume effect further down), not from a local draft.
-  const [draft] = useState(() => (resume ? null : loadNpDraft()));
+  // persistence effect and the NP_DRAFT_KEY comment below). It is loaded on a
+  // Stripe hosted-onboarding return too: that redirect is a same-tab
+  // navigation, so sessionStorage survives it, and the draft is the ONLY place
+  // the EIN, the Candid Seal result, the Benevity choice and the accepted
+  // license live - orgs_public does not expose any of them. The resume effect
+  // further down still lets the server win for name, mission, color, join
+  // code and status.
+  const [draft] = useState(loadNpDraft);
   const [step, setStep] = useState(() => (resume ? 'stripe' : (draft?.step ?? 'ein')));
 
   // EIN / org identity
@@ -483,7 +529,6 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // Branding
   const [story, setStory] = useState(() => draft?.story ?? '');
   const [color, setColor] = useState(() => draft?.color ?? '#003865');
-  const [monthlyMinimum, setMonthlyMinimum] = useState(() => draft?.monthlyMinimum ?? 5);
   // Not restored from the draft: a File-derived blob: URL only resolves for
   // this tab's current document, and while that still covers the in-session
   // remount this draft exists for, a logo the admin never changed already
@@ -498,6 +543,11 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   const [joinCodeCustom, setJoinCodeCustom] = useState(() => draft?.joinCodeCustom ?? '');
   const [joinCodeError, setJoinCodeError] = useState(null);
   const joinCode = joinCodeCustom || generateJoinCode(orgName);
+  // Set when org-signup reports the requested code was already taken and
+  // assigned a different one (its response's joinCodeTaken flag). The local
+  // availability check only knows this device's orgs, so this is the one
+  // place the admin learns their code was swapped server-side.
+  const [joinCodeTakenNotice, setJoinCodeTakenNotice] = useState(() => draft?.joinCodeTakenNotice ?? null);
 
   // License
   const [accepted, setAccepted] = useState(() => draft?.accepted ?? false);
@@ -524,14 +574,14 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     saveNpDraft({
       step, ein, einDemoMode, einNameEditable, orgName, orgAddress, org501c3,
       adminEmail, workEmail, codeSent, orgId, practiceMode, stripeConnected,
-      candidSeal, benevityChoice, story, color, monthlyMinimum,
-      joinCodeCustom, accepted, orgStatus,
+      candidSeal, benevityChoice, story, color,
+      joinCodeCustom, joinCodeTakenNotice, accepted, orgStatus,
     });
   }, [
     step, ein, einDemoMode, einNameEditable, orgName, orgAddress, org501c3,
     adminEmail, workEmail, codeSent, orgId, practiceMode, stripeConnected,
-    candidSeal, benevityChoice, story, color, monthlyMinimum,
-    joinCodeCustom, accepted, orgStatus,
+    candidSeal, benevityChoice, story, color,
+    joinCodeCustom, joinCodeTakenNotice, accepted, orgStatus,
   ]);
 
   // A draft saved mid candidSeal-check (the ~1.2s window confirmOrg's timeout
@@ -539,6 +589,8 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   // the timer lived on the unmounted instance. Repair it once, synchronously,
   // with the same inputs confirmOrg's own timeout would have used, instead of
   // leaving the license step waiting forever for a check that already ran.
+  // (A Stripe return with no draft at all is repaired by the resume effect
+  // below once the server has handed back the org name.)
   useEffect(() => {
     if (draft && candidSeal === 'checking' && step !== 'ein' && step !== 'confirm-org') {
       setCandidSeal(determineCandidSeal({ einDemoMode, einDigits: ein.replace(/\D/g, ''), orgName }));
@@ -572,7 +624,15 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       if (org.join_code) setJoinCodeCustom(org.join_code);
       if (org.status) setOrgStatus(org.status);
       setStripeConnected(!!org.stripe_connected);
-      setEinDemoMode(false);
+      setPracticeMode(false);
+      // The EIN, the demo flag and the seal result came back from the draft
+      // (see `draft` above). If the draft was gone - tab storage cleared - the
+      // seal check would otherwise sit at 'checking' forever and route every
+      // org, seal or not, onto the Benevity path; resolve it now with the
+      // same inputs confirmOrg uses, including the server's name.
+      setCandidSeal(prev => (prev === 'checking'
+        ? determineCandidSeal({ einDemoMode, einDigits: ein.replace(/\D/g, ''), orgName: org.name })
+        : prev));
       // By the time an admin reaches Stripe (and comes back from it), the org
       // name was already confirmed - either a real IRS match or, for an
       // unknown EIN, whatever the admin typed into the editable field on
@@ -586,6 +646,9 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       }
     })();
     return () => { cancelled = true; };
+    // Runs once per mount for the URL's resume params; the EIN fields it reads
+    // are the restored draft values, settled before this effect fires.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume]);
 
   function setEin(raw) {
@@ -713,12 +776,16 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
 
   /** Creates (or, on a retry, reuses) the server org the moment the work
    *  email verifies - see the ordering note atop this file and in
-   *  supabase/functions/org-signup/index.ts. Never blocks go-live: if the
-   *  server is unreachable, orgId stays null and practiceMode flips on so the
-   *  Stripe step falls back to a clearly-labeled local simulation instead of
-   *  stranding the admin mid-wizard. */
+   *  supabase/functions/org-signup/index.ts. A failure does NOT advance the
+   *  wizard any more: orgCreateError is set, the admin stays on the
+   *  verify-email step and retries with retryOrgCreate(). It used to flip
+   *  practiceMode on and carry on to Stripe with orgId null, which ended in a
+   *  "You're live" screen handing out a join code that resolved nowhere. */
+  const [creatingOrg, setCreatingOrg] = useState(false);
   async function ensureServerOrg() {
-    const res = await orgSignup({ name: orgName, ein: ein.replace(/\D/g, '') });
+    setCreatingOrg(true);
+    const res = await orgSignup({ name: orgName, ...einPayload(ein) });
+    setCreatingOrg(false);
     if (res.ok && res.data?.org?.id) {
       setOrgId(res.data.org.id);
       if (res.data.org.status) setOrgStatus(res.data.org.status);
@@ -727,8 +794,7 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
       return res.data.org;
     }
     console.error('npSignup: org-signup failed', res.status, res.data);
-    setOrgCreateError(res.data?.error || null);
-    setPracticeMode(true);
+    setOrgCreateError(res.data?.error || ORG_CREATE_ERROR_FALLBACK);
     return null;
   }
 
@@ -739,19 +805,34 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     if (!result.ok) { setCodeError(result.error); return; }
     setCodeError(null);
     setAdminEmail(email);
-    await ensureServerOrg();
+    const org = await ensureServerOrg();
+    if (!org) return; // stay here; the surface shows orgCreateError + Retry
     setStep('stripe');
+  }
+
+  /** "Try again" on the verify-email step after org creation failed. The
+   *  session already exists (the code was verified), so this only repeats the
+   *  org-signup call and moves on when it succeeds. */
+  async function retryOrgCreate(e) {
+    e?.preventDefault?.();
+    if (creatingOrg) return null;
+    const org = await ensureServerOrg();
+    if (org) setStep('stripe');
+    return org;
   }
 
   /** REAL Stripe Connect hosted onboarding (test mode): navigates the whole
    *  page to Stripe, which redirects back to ?npstripe=return&org=<id> (see
-   *  the resume effect above) once the admin finishes or bails. Falls back to
-   *  a clearly-labeled practice mode if org-connect-stripe can't be reached -
-   *  never a silent one: stripeError stays set so the surface can say why. */
+   *  the resume effect above) once the admin finishes or bails. Never falls
+   *  into practice mode on its own: stripeError is set so the surface can say
+   *  why, and the explicit "practice mode" link is the admin's choice. */
   async function connectStripe() {
     setStripeError(null);
     if (!orgId) {
-      practiceConnectStripe();
+      // Only reachable from a resume whose org lookup failed, or a stale
+      // draft from before org creation blocked the wizard. Say so instead of
+      // silently simulating a connection for an org that does not exist.
+      setStripeError("Your organization isn't saved on our server yet, so Stripe can't be connected. Go back a step and try again.");
       return;
     }
     setStripeConnecting(true);
@@ -767,7 +848,9 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
 
   /** Explicit escape hatch, only ever reached after a real attempt failed
    *  (see the stripeError branch in each surface) - the wizard never falls
-   *  into this silently. */
+   *  into this silently. A practice run creates nothing on the server, so the
+   *  completion step must say "nothing is live yet" rather than hand out a
+   *  link, QR or widget (see pendingReview / practiceMode on the surfaces). */
   function practiceConnectStripe() {
     setPracticeMode(true);
     setStripeError(null);
@@ -845,10 +928,12 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
   }
 
   function back() {
-    // The seal-found path skipped 'app-listing' on the way in, so going back
-    // from 'live' has to skip it too, or back() would land on a step that was
-    // never shown and dead-end the admin on a re-click of "Back".
-    if (step === 'live' && candidSeal === 'found') { setStep('license'); return; }
+    // 'live' is the end of the road: the org record is written and the
+    // completion org-signup call has fired, so stepping back into the license
+    // or app-listing step would only re-show choices that are already final.
+    // The web header hides its Back button here; this makes hardware and
+    // browser back (useStepHistory) and the phone header a no-op too.
+    if (step === 'live') return;
     const prev = NP_SIGNUP_PREV[step];
     if (prev) { setStep(prev); return; }
     // Leaving the wizard entirely from its first step - an explicit exit, not
@@ -892,16 +977,29 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     if (step !== 'live' || !orgId || practiceMode || finalizeRanRef.current) return;
     finalizeRanRef.current = true;
     (async () => {
+      const requested = joinCode;
       const res = await orgSignup({
         name: orgName,
-        ein,
+        ...einPayload(ein),
         mission: story,
         color,
-        joinCode,
+        joinCode: requested,
         appleApproval,
       });
-      if (res.ok && res.data?.org?.status) setOrgStatus(res.data.org.status);
-      else if (!res.ok) console.error('npSignup: completion org-signup failed', res.status, res.data);
+      if (!res.ok) { console.error('npSignup: completion org-signup failed', res.status, res.data); return; }
+      const serverOrg = res.data?.org;
+      if (serverOrg?.status) setOrgStatus(serverOrg.status);
+      // The server keeps its own code when the requested one is taken (two
+      // orgs asking for KIDS from two devices): adopt the code it actually
+      // assigned so the live screen, QR and widget never show one it did not,
+      // and tell the admin what happened.
+      const serverCode = serverOrg?.join_code;
+      if (res.data?.joinCodeTaken && serverCode && serverCode !== requested) {
+        setJoinCodeCustom(serverCode);
+        setJoinCodeTakenNotice(`${requested} was taken - your code is ${serverCode}`);
+      } else if (serverCode && serverCode !== requested) {
+        setJoinCodeCustom(serverCode);
+      }
     })();
     // Only the arrival on 'live' should fire this - the payload fields are
     // settled by then and must not re-trigger it.
@@ -931,7 +1029,6 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     color,
     logoPreview:    logoPreview !== defaultLogo ? logoPreview : null,
     mission:        story,
-    monthlyMinimum,
     adminEmail,
     joinCode,
     ein,
@@ -939,7 +1036,7 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     appleApproval,
     stripeConnected,
     orgId,
-  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, monthlyMinimum, adminEmail, ein, orgAddress, appleApproval, stripeConnected, orgId]);
+  }), [orgName, joinCode, color, logoPreview, defaultLogo, story, adminEmail, ein, orgAddress, appleApproval, stripeConnected, orgId]);
 
   return {
     step, setStep,
@@ -953,14 +1050,20 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     adminEmail, workEmail, setWorkEmail, emailError,
     codeSent, codeInput, setCodeInput, codeError, requiredDomain,
     sendingCode: adminAuth.sendingCode, verifyingCode: adminAuth.verifying,
-    // server org
-    orgId, orgCreateError, practiceMode,
+    // server org. orgCreateError is a string while the verify-email step is
+    // blocked on a failed org-signup; retryOrgCreate() repeats the call.
+    orgId, orgCreateError, retryOrgCreate, creatingOrg, practiceMode,
     // approval gate: 'pending_review' | 'approved' | null (no server org)
     orgStatus, pendingReview,
     // stripe
     stripeConnecting, stripeConnected, stripeError, practiceConnectStripe,
     // branding
-    story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
+    story, setStory, color, setColor,
+    // The monthly minimum is one fixed floor for every org (lib/billing
+    // MONTHLY_FLOOR), not a per-org setting any more. `monthlyMinimum` stays
+    // on the hook for the surfaces that still print it; the setter is a
+    // compatibility no-op for the phone wizard until its slider is removed.
+    monthlyMinimum: MONTHLY_FLOOR, setMonthlyMinimum: () => {},
     logoPreview: displayLogoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     // joinCode is the EFFECTIVE code (falls back to the generated suggestion
     // when the admin hasn't typed one) - use it for preview text and links.
@@ -969,6 +1072,9 @@ export function useNpSignup({ onExit, defaultLogo = null } = {}) {
     // the generated fallback text on every render and corrupts what gets typed
     // next (e.g. clearing then typing "UNKORG1" would land as "BGCA2UNK").
     joinCode, joinCodeCustom, joinCodeError,
+    // "KIDS was taken - your code is KIDS2", or null. Set from the completion
+    // org-signup response; the displayed code is already the server's.
+    joinCodeTakenNotice,
     // license
     accepted, setAccepted, showLicenseHint, showBrandingHint,
     // apple app-listing

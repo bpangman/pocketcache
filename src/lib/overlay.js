@@ -136,7 +136,10 @@ export const Z = {
 // navy scrims (all the app-surface ones) and 0.45 only by the three web copies,
 // which are the drift described above. blur(6px) is used by four sites, blur(8px)
 // by two, none by the web copies - 6px wins.
-const DIM_BG = 'rgba(0,0,0,0.5)';
+// Navy-900 rather than pure black (2026-11-07 design pass): every other dark
+// layer in the product - shadows, the blocking scrim, the splash - is navy
+// tinted, and a black dim read as a different product behind white sheets.
+const DIM_BG = 'rgba(0,26,51,0.5)';
 const BLOCKING_BG = 'rgba(11,42,74,0.55)';
 const BLOCKING_BLUR = 'blur(6px)';
 

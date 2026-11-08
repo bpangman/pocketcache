@@ -1,14 +1,16 @@
 import { useState } from 'react';
 
-// Maps the rounded prop to a pixel value so Tailwind purging can't remove it
+// Maps the rounded prop to a pixel value so Tailwind purging can't remove it.
+// Snapped to the DESIGN.md radius scale (8 / 12 / 16 / 22 / 28); `sm` stays 4
+// for the tiny inline logos where 8 would read as a circle.
 const RADIUS_MAP = {
   none: '0px',
   sm: '4px',
-  md: '6px',
+  md: '8px',
   lg: '8px',
   xl: '12px',
   '2xl': '16px',
-  '3xl': '24px',
+  '3xl': '22px',
   full: '9999px',
 };
 
@@ -29,7 +31,7 @@ export default function OrgLogo({ nonprofit, size = 14, className = '', rounded 
     return (
       <div
         className={`flex items-center justify-center overflow-hidden ${className}`}
-        style={{ width: px, height: px, minWidth: px, padding: pad, borderRadius, background: '#ffffff' }}
+        style={{ width: px, height: px, minWidth: px, padding: pad, borderRadius, background: 'var(--white)' }}
       >
         <img
           src={urls[urlIndex]}
@@ -45,9 +47,11 @@ export default function OrgLogo({ nonprofit, size = 14, className = '', rounded 
   return (
     <div
       className={`flex items-center justify-center ${className}`}
-      style={{ width: px, height: px, minWidth: px, background: nonprofit.brand?.accentLight ?? '#f3f4f6', borderRadius }}
+      role="img"
+      aria-label={nonprofit.name}
+      style={{ width: px, height: px, minWidth: px, background: nonprofit.brand?.accentLight ?? 'var(--surface)', borderRadius }}
     >
-      <span style={{ fontSize: px * 0.45 }}>{nonprofit.logo}</span>
+      <span aria-hidden="true" style={{ fontSize: px * 0.45 }}>{nonprofit.logo}</span>
     </div>
   );
 }

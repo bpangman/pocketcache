@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { X } from 'lucide-react';
 import { Z, scrim } from '../lib/overlay';
@@ -28,10 +28,10 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
         left: '50%',
         zIndex: Z.modal,
         background: '#fff',
-        borderRadius: 24,
+        borderRadius: 'var(--r-lg)',
         padding: '28px 24px 24px',
         width: 'min(320px, 90vw)',
-        boxShadow: '0 24px 64px rgba(11,42,74,0.25)',
+        boxShadow: 'var(--shadow-3)',
         textAlign: 'center',
       }
     : {
@@ -40,10 +40,10 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
         left: '50%',
         zIndex: Z.modal,
         background: '#fff',
-        borderRadius: 24,
+        borderRadius: 'var(--r-lg)',
         padding: '28px 24px 24px',
         width: 'min(320px, 88%)',
-        boxShadow: '0 24px 64px rgba(11,42,74,0.25)',
+        boxShadow: 'var(--shadow-3)',
         textAlign: 'center',
       };
 
@@ -70,17 +70,19 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
             transition={{ type: 'spring', damping: 22, stiffness: 280 }}
             style={cardStyle}
           >
+            {/* 44x44 hit area; the visible circle stays 30px */}
             <button
+              type="button"
               onClick={onDismiss}
               style={{
                 position: 'absolute',
-                top: 12,
-                right: 12,
-                background: '#f1f5f9',
+                top: 4,
+                right: 4,
+                background: 'none',
                 border: 'none',
-                borderRadius: '50%',
-                width: 30,
-                height: 30,
+                padding: 0,
+                width: 44,
+                height: 44,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -88,7 +90,9 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
               }}
               aria-label="Close"
             >
-              <X size={16} color="#64748b" />
+              <span aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={16} color="var(--slate)" />
+              </span>
             </button>
             <CoinMark size={40} className="" />
             <div style={{ height: 12 }} />
@@ -103,7 +107,7 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
               margin: '0 0 8px',
               fontSize: 17,
               fontWeight: 700,
-              color: '#0B2A4A',
+              color: 'var(--ink)',
               letterSpacing: '-0.2px',
             }}>
               Download the App
@@ -111,21 +115,24 @@ export default function AppDownloadQRModal({ show, onDismiss, fixed = false }) {
             <p style={{
               margin: '0 0 20px',
               fontSize: 13,
-              color: '#64748b',
+              color: 'var(--slate)',
               lineHeight: 1.55,
             }}>
               Prefer to manage this on our app? Scan the QR to download now!
             </p>
             <button
+              type="button"
               onClick={onDismiss}
               style={{
-                background: '#f1f5f9',
+                background: 'var(--surface)',
                 border: 'none',
-                borderRadius: 20,
-                padding: '10px 28px',
-                fontSize: 13,
+                borderRadius: 'var(--r-pill)',
+                padding: '0 28px',
+                minHeight: 44,
+                fontFamily: 'inherit',
+                fontSize: 14,
                 fontWeight: 600,
-                color: '#475569',
+                color: 'var(--ink-2)',
                 cursor: 'pointer',
               }}
             >
@@ -155,9 +162,16 @@ export function queueAppDownloadPrompt() {
 // flag set (non-native only), clears the flag on dismiss. Render inside a
 // position:relative app container - the modal uses position:absolute.
 export function AppDownloadPrompt({ fixed = false }) {
-  const [show, setShow] = useState(() => {
-    try { return !isNative() && localStorage.getItem(PROMPT_KEY) === '1'; } catch { return false; }
-  });
+  // Queued at signup, shown a beat later so the person sees their own page
+  // before being asked to download the app.
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    let queued = false;
+    try { queued = !isNative() && localStorage.getItem(PROMPT_KEY) === '1'; } catch { queued = false; }
+    if (!queued) return undefined;
+    const t = setTimeout(() => setShow(true), 2500);
+    return () => clearTimeout(t);
+  }, []);
   function dismiss() {
     try { localStorage.removeItem(PROMPT_KEY); } catch { /* ignore */ }
     setShow(false);

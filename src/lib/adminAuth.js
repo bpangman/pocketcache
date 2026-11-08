@@ -18,21 +18,22 @@
 // WebPortalPages.jsx's WebAdminSignIn).
 import { useCallback, useState } from 'react';
 import { getSupabase } from './supa';
+import { emailDomain } from './emailChange';
+
+// One emailDomain for the whole lib - emailChange.js owns it; re-exported here
+// so existing importers keep working.
+export { emailDomain };
 
 const REMEMBERED_EMAIL_KEY = 'pc_np_admin_email_hint';
 
 // Kept in sync by hand with supabase/functions/_shared/org.ts FREE_MAIL - one
 // is browser JS, the other Deno/TS, so they can't literally share a module.
-export const FREE_MAIL_DOMAINS = [
+const FREE_MAIL_DOMAINS = [
   'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com',
   'aol.com', 'proton.me', 'protonmail.com', 'live.com', 'msn.com', 'me.com',
 ];
 
-export function emailDomain(email) {
-  return (email || '').trim().toLowerCase().split('@')[1] || '';
-}
-
-export function isFreeMailDomain(domain) {
+function isFreeMailDomain(domain) {
   return FREE_MAIL_DOMAINS.includes(domain);
 }
 
@@ -41,7 +42,7 @@ export function freeMailRejection(email) {
   const domain = emailDomain(email);
   if (!domain || domain.indexOf('.') < 1) return 'Enter a valid email address.';
   if (isFreeMailDomain(domain)) {
-    return "Use your organization's work email  -  personal addresses (Gmail, Yahoo, iCloud…) can't administer a nonprofit.";
+    return "Use your organization's work email - personal addresses (Gmail, Yahoo, iCloud…) can't administer a nonprofit.";
   }
   return null;
 }
@@ -66,7 +67,7 @@ export function forgetAdminEmail() {
 function friendlySendError(err) {
   const msg = (err?.message || '').toLowerCase();
   if (err?.status === 429 || msg.includes('rate limit') || msg.includes('email_send_rate_limit')) {
-    return "We've sent a few codes recently  -  give it a few minutes and try again.";
+    return "We've sent a few codes recently - give it a few minutes and try again.";
   }
   return "We couldn't send that code. Check the email address and try again.";
 }

@@ -14,7 +14,7 @@ export const NONPROFITS = [
     categoryColor: '#003865',
     logo: '🏀',
     logoUrl: bgcaLogoUrl,
-    // sampleStats: demo figures for the pitch  -  production reads real totals from
+    // sampleStats: demo figures for the pitch - production reads real totals from
     // the backend (charge history) once live
     sampleStats: true,
     raised: 3841209,
@@ -37,15 +37,15 @@ export const NONPROFITS = [
       maxAmount: 50000,
       matched: 23400,
       active: true,
-      // sample: true  -  this is a demo partnership used to illustrate the corporate
+      // sample: true - this is a demo partnership used to illustrate the corporate
       // match feature. In production, match terms come from signed partner agreements.
       sample: true,
-      description: 'GM is matching every donor round-up dollar-for-dollar, up to $50,000 total  -  an example of a corporate match partnership.',
+      description: 'GM is matching every donor round-up dollar-for-dollar, up to $50,000 total - an example of a corporate match partnership.',
       logoUrl: gmLogoUrl,
       impactUrl: 'https://www.gm.com/commitments',
-      // impactReport is illustrative  -  specific club counts and city names are
+      // impactReport is illustrative - specific club counts and city names are
       // example equivalencies for demo purposes, not verified program figures.
-      impactReport: "This sample match illustrates how a corporate partner can amplify donor impact. In this example, $23,400 of the $50,000 match pool has been claimed  -  representing thousands of additional after-school hours that could be funded across BGCA Club locations. Match partners receive a quarterly impact report directly from BGCA.",
+      impactReport: "This sample match illustrates how a corporate partner can amplify donor impact. In this example, $23,400 of the $50,000 match pool has been claimed - representing thousands of additional after-school hours that could be funded across BGCA Club locations. Match partners receive a quarterly impact report directly from BGCA.",
     },
     brand: {
       appName: 'BGCA Round-Up',
@@ -54,8 +54,12 @@ export const NONPROFITS = [
       secondary: '#E8192C',     // BGCA red
       gradient: 'linear-gradient(135deg, #003865 0%, #002244 100%)',
       headerGradient: 'linear-gradient(135deg, #003865, #001a33)',
-      accentLight: '#E8192C22',
-      textAccent: '#E8192C',
+      // Navy, not BGCA red: red as accent text / nav state / tints collides
+      // with the app's error and destructive red (a positive count in red
+      // reads as a loss). The red stays on `secondary` for the logo and
+      // occasional accents. Same derivation orgStore uses for self-serve orgs.
+      accentLight: '#00386514',
+      textAccent: '#003865',
       logoEmoji: '🏀',
       brandLogoUrl: bgcaLogoUrl,
     },

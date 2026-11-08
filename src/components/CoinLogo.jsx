@@ -1,11 +1,13 @@
 /**
- * CoinLogo — logo image + optional "PocketCache" wordmark.
+ * CoinLogo - logo image + optional "PocketCache" wordmark.
+ * Legacy wrapper (see BRANDING.md Step 2): new code uses CoinMark or
+ * PocketCacheWordmark.
  *
  * Props:
- *   size      — pixel width of the logo image (default 180)
- *   animate   — unused (kept for API compatibility)
- *   showName  — whether to render the "PocketCache" cursive wordmark below (default true)
- *   className — extra CSS classes
+ *   size      - pixel width of the logo image (default 180)
+ *   animate   - unused (kept for API compatibility)
+ *   showName  - whether to render the "PocketCache" cursive wordmark below (default true)
+ *   className - extra CSS classes
  */
 import logo from '../assets/logo.png';
 
@@ -14,11 +16,12 @@ export default function CoinLogo({ size = 180, animate = true, showName = true, 
   return (
     <div
       className={`inline-flex flex-col items-center select-none ${className}`}
-      style={{ gap: showName ? Math.round(size * 0.08) : 0 }}
+      style={{ gap: showName ? Math.round((size * 0.08) / 4) * 4 : 0 }}
     >
       <img
         src={logo}
-        alt="PocketCache logo"
+        // The visible name below already says "PocketCache"; announce it once.
+        alt={showName ? '' : 'PocketCache'}
         width={size}
         height={size}
         style={{ objectFit: 'contain' }}

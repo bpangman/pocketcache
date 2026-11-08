@@ -1,18 +1,25 @@
 /**
  * src/lib/billing.js - SINGLE SOURCE OF TRUTH for charge dates and charge amounts.
  *
- * The billing model (Blake, 2026-07-06):
+ * The billing model (Blake, 2026-07-06; floor and fee status confirmed 2026-11-07):
  *   1. Round-ups accrue across a calendar month.
- *   2. On the 1st of the following month the amount LOCKS and the donor gets a
- *      10-day review window (days 1 to 10) to review or adjust it.
- *   3. The charge runs on the 11th. That is 10 full days' notice, the classic
- *      Reg E timing.
- *   4. A flat $1/month app fee rides along. `feeMonths` is how many months of
- *      that fee are on the next charge (normally 1).
- *   5. "Skip a month" means that month's round-ups are NEVER charged - they do
+ *   2. On the 1st of the following month (LOCK_DAY) the amount LOCKS and the
+ *      donor gets a 10-day review window (days 1 to 10) to review or adjust it.
+ *   3. The charge runs on the 11th (CHARGE_DAY). That is 10 full days' notice,
+ *      the classic Reg E timing.
+ *   4. One fixed $5 floor for everyone (MONTHLY_FLOOR, the same number as the
+ *      cycle-lock function's MINIMUM_CENTS). A locked total under the floor is
+ *      not charged - it rolls forward until the balance reaches $5. There is no
+ *      per-nonprofit minimum and no forced settle-up after N months.
+ *   5. A flat $1/month app fee is part of the model, but it is NOT collected by
+ *      the server yet (APP_FEE_LIVE is false). `feeMonths` is how many months of
+ *      that fee are pending (normally 1). While the fee is not live, surfaces
+ *      show it as a pending line and leave it OUT of any total presented as
+ *      "what will be charged" for a real account - see chargeTotal's includeFee.
+ *   6. "Skip a month" means that month's round-ups are NEVER charged - they do
  *      not roll over and they never come out later - but the $1 fee DOES roll
  *      over, so the next charge carries $1 x 2.
- *   6. A `monthlyCap` caps the round-up portion, and a `chargeAdjustment` is a
+ *   7. A `monthlyCap` caps the round-up portion, and a `chargeAdjustment` is a
  *      one-time donor-set amount for this month that beats everything else.
  *
  * Because the review window straddles the charge date, "the next charge date"
@@ -22,15 +29,41 @@
  * must use these helpers instead of doing its own date math. Future changes to
  * the schedule or the amount precedence happen HERE and nowhere else.
  *
+ * MONTH BOUNDARIES ARE UTC. The server (cycle-lock, roundups-me) keys cycles by
+ * UTC month, and roundups.month_key comes from the Plaid transaction date, so
+ * monthKey() and inReviewWindow() read UTC getters to agree with it. The
+ * display helpers (nextChargeDate and friends) keep local dates: they label a
+ * calendar day for a human, and a local midnight is the right thing to show.
+ *
  * Pure functions only - no React, no localStorage. Every function takes an
  * injectable date so callers (and tests) can pass a fixed "now".
  */
+
+/** Day of the month the locked amount is emailed and the review window opens. */
+export const LOCK_DAY = 1;
 
 /** Day of the month the charge actually runs. */
 export const CHARGE_DAY = 11;
 
 /** Last day of the lock-and-review window (window is days 1 to this, inclusive). */
 export const REVIEW_WINDOW_LAST_DAY = 10;
+
+/**
+ * The one fixed monthly floor, in dollars and in cents. Must stay equal to
+ * MINIMUM_CENTS in supabase/functions/cycle-lock - the server is what actually
+ * decides whether a cycle charges or rolls forward.
+ */
+export const MONTHLY_FLOOR = 5;
+export const MONTHLY_FLOOR_CENTS = 500;
+
+/**
+ * Is the $1 app fee collected on real charges yet? False until the Stripe
+ * application-fee routing is switched on server-side. Callers pass
+ * `includeFee: APP_FEE_LIVE || demoActive` to chargeTotal so the demo keeps
+ * its full itemized total while real accounts never see the fee inside a
+ * number that claims to be the charge.
+ */
+export const APP_FEE_LIVE = false;
 
 /**
  * Highest number of $1 fee months we will ever stack onto one charge.
@@ -42,23 +75,34 @@ export const MAX_FEE_MONTHS = 12;
 
 /**
  * Canonical cycle identifier: the zero-padded calendar month a set of round-ups
- * belongs to. Used as the key for "which month did the donor skip" and "which
- * cycle has the app already settled".
+ * belongs to, in UTC to match the server. Used as the key for "which month did
+ * the donor skip" and "which cycle has the app already settled".
  * @param {Date} [d] - the moment to read; defaults to now.
  * @returns {string} e.g. '2026-07'
  */
 export function monthKey(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 /**
- * True while the locked amount is under review, i.e. days 1 to 10 inclusive.
+ * True while the locked amount is under review, i.e. UTC days 1 to 10 inclusive.
  * @param {Date} [d] - the moment to read; defaults to now.
  * @returns {boolean}
  */
 export function inReviewWindow(d = new Date()) {
-  const day = d.getDate();
-  return day >= 1 && day <= REVIEW_WINDOW_LAST_DAY;
+  const day = d.getUTCDate();
+  return day >= LOCK_DAY && day <= REVIEW_WINDOW_LAST_DAY;
+}
+
+/**
+ * Below the fixed floor? The server tests the LOCKED total (round-ups after
+ * cap/adjust, plus any rolled-in balance and extra pledges) against the same
+ * number, so pass that combined figure, not raw round-ups alone.
+ * @param {number} totalDollars
+ * @returns {boolean}
+ */
+export function isBelowFloor(totalDollars) {
+  return Math.round((totalDollars || 0) * 100) < MONTHLY_FLOOR_CENTS;
 }
 
 /**
@@ -132,6 +176,31 @@ export function roundUpMonthName(d = new Date()) {
 }
 
 /**
+ * The cycle a "Skip a month" actually applies to, keyed the way the server
+ * keys cycles (UTC month) and labeled to match.
+ *
+ * During the review window (UTC days 1 to 10) the charge coming up on the
+ * 11th is LAST month's locked cycle, so that is the one a skip can still
+ * stop. From the 11th onward the only cycle a donor can still skip is the
+ * month accruing right now. One helper so the Settings row, the confirm
+ * modal, the dashboard, the review alert and the server request body all
+ * name the same month.
+ *
+ * @param {Date} [now] - the moment to read; defaults to now.
+ * @returns {{ monthKey: string, label: string }} e.g. { monthKey: '2026-10', label: 'October' }
+ */
+export function skipTargetMonth(now = new Date()) {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const inWindow = now.getUTCDate() <= REVIEW_WINDOW_LAST_DAY;
+  const target = new Date(Date.UTC(y, inWindow ? m - 1 : m, 1));
+  return {
+    monthKey: monthKey(target),
+    label: target.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' }),
+  };
+}
+
+/**
  * The charge day BEFORE the upcoming one - i.e. the start of the cycle the
  * donor is currently inside. Needed so progress bars can measure charge-day to
  * charge-day instead of assuming a 30 day month.
@@ -175,23 +244,59 @@ export function chargeAfterNextLabel(d = new Date()) {
 }
 
 /**
- * Card-processing cost on a given amount, at standard US card rates.
+ * The first charge date that can actually include a donor's own round-ups.
  *
- * A donor can choose to add this on top so the nonprofit receives 100% of the
- * round-ups instead of netting the processor's cut. The formula was copy-pasted
- * into six files; it lives here now so a rate change is one edit.
+ * nextChargeDate() knows nothing about when the donor joined. A donor who
+ * signs up on Nov 7 sees "Next charge Nov 11", but the Nov 11 charge is
+ * October's cycle, locked on Nov 1 before they existed - nothing of theirs can
+ * be in it. Their first possible charge is Dec 11 (and only if the balance
+ * reaches the floor). So: if the donor joined after the most recent lock (the
+ * 1st of the month the upcoming charge belongs to), the first eligible charge
+ * is the one after next; otherwise it is the upcoming one.
+ *
+ * @param {string|Date|null} joinedAt - identity.joinedAt (ISO string) or a Date;
+ *   null/invalid falls back to nextChargeDate.
+ * @param {Date} [now] - the moment to read; defaults to now.
+ * @returns {Date} midnight local time on the first eligible charge day.
+ */
+export function firstEligibleChargeDate(joinedAt, now = new Date()) {
+  const next = nextChargeDate(now);
+  if (!joinedAt) return next;
+  const joined = joinedAt instanceof Date ? joinedAt : new Date(joinedAt);
+  if (Number.isNaN(joined.getTime())) return next;
+  const lastLock = new Date(next.getFullYear(), next.getMonth(), LOCK_DAY);
+  return joined > lastLock ? chargeAfterNextDate(now) : next;
+}
+
+/**
+ * Card-processing cover for a given donation, as a TRUE GROSS-UP in integer
+ * cents: the amount to add so that, after the processor takes RATE of the
+ * whole charge plus the fixed fee, the nonprofit nets the full donation.
+ *
+ *   cover = ceil((R + fixed) / (1 - rate)) - R        (R = donation in cents)
+ *
+ * The old formula (amount x rate + fixed) was taken on the donation alone, so
+ * the processor's cut of the cover itself was never covered and the nonprofit
+ * came out a few cents short. Check: processingCoverFor(10) === 0.54.
+ *
+ * Only the round-up portion is grossed up. Give Extra pledges compute their
+ * own cover in their sheet, and the $1 app fee is not in the numerator until
+ * it is actually collected as a Stripe application fee (APP_FEE_LIVE).
  *
  * @param {number} amount - the donation the processor would take its cut from.
  * @returns {number} dollars, rounded to cents.
  */
 export function processingCoverFor(amount) {
   if (!amount || amount <= 0) return 0;
-  return parseFloat((amount * PROCESSING_RATE + PROCESSING_FIXED).toFixed(2));
+  const R = Math.round(amount * 100);
+  const fixed = Math.round(PROCESSING_FIXED * 100);
+  const cover = Math.ceil((R + fixed) / (1 - PROCESSING_RATE)) - R;
+  return cover / 100;
 }
 
-/** Standard US card rate PocketCache quotes donors: 2.2% + 30c. */
-export const PROCESSING_RATE = 0.022;
-export const PROCESSING_FIXED = 0.30;
+/** Standard US nonprofit card rate PocketCache quotes donors: 2.2% + 30c. */
+const PROCESSING_RATE = 0.022;
+const PROCESSING_FIXED = 0.30;
 
 /**
  * A one-off "give extra" gift at or above this many dollars gets an extra
@@ -233,37 +338,56 @@ export function effectiveCharge({ pendingRoundUps, monthlyCap = null, chargeAdju
  *   - A cycle elapsed and it was charged normally: `feeMonths` returns to 1.
  *   - Either way the skip is cleared, because "skip your next charge" is one
  *     month only and must never silently repeat.
+ *   - `serverFeeMonths`, when given, WINS over the local count in every branch:
+ *     the fee ledger belongs on the server (charge_cycles.fee_months), and a
+ *     number from roundups-me beats whatever this browser remembered.
  *
  * @param {object} args
  * @param {string|null} args.lastCycle - month key the app last settled, or null.
  * @param {string|null} args.skipMonth - month key the donor chose to skip, or null.
  * @param {number} [args.feeMonths] - months of $1 fee currently pending.
+ * @param {number|null} [args.serverFeeMonths] - the server's fee-month count, if known.
  * @param {Date} [args.now] - the moment to settle against; defaults to now.
  * @returns {{changed: boolean, lastCycle: string, skipMonth: string|null, feeMonths: number}}
  */
-export function settleCycle({ lastCycle, skipMonth, feeMonths = 1, now = new Date() }) {
+export function settleCycle({ lastCycle, skipMonth, feeMonths = 1, serverFeeMonths = null, now = new Date() }) {
   const cycle = monthKey(now);
+  const serverWins = Number.isFinite(serverFeeMonths) && serverFeeMonths >= 0;
+  const clampServer = () => Math.min(Math.round(serverFeeMonths), MAX_FEE_MONTHS);
   if (!lastCycle) {
-    return { changed: true, lastCycle: cycle, skipMonth, feeMonths };
+    return { changed: true, lastCycle: cycle, skipMonth, feeMonths: serverWins ? clampServer() : feeMonths };
   }
   if (lastCycle === cycle) {
+    if (serverWins && clampServer() !== feeMonths) {
+      return { changed: true, lastCycle, skipMonth, feeMonths: clampServer() };
+    }
     return { changed: false, lastCycle, skipMonth, feeMonths };
   }
   const wasSkipped = skipMonth === lastCycle;
-  const nextFeeMonths = wasSkipped ? Math.min(feeMonths + 1, MAX_FEE_MONTHS) : 1;
-  return { changed: true, lastCycle: cycle, skipMonth: null, feeMonths: nextFeeMonths };
+  const localFeeMonths = wasSkipped ? Math.min(feeMonths + 1, MAX_FEE_MONTHS) : 1;
+  return { changed: true, lastCycle: cycle, skipMonth: null, feeMonths: serverWins ? clampServer() : localFeeMonths };
 }
 
 /**
- * Everything on the next charge: round-ups (after cap/adjustment) plus $1 per
- * fee month plus any optional processing-fee cover the donor opted into.
+ * Everything on the next charge: round-ups (after cap/adjustment), plus any
+ * Give Extra pledges, plus $1 per fee month when the fee is being collected,
+ * plus any optional processing-fee cover the donor opted into.
  * Callers should use this instead of re-deriving the total.
+ *
+ * `extras` are added AFTER cap/adjust (a pledge is never capped away) and
+ * count toward the floor test alongside the round-ups. `includeFee` defaults
+ * to true so existing demo callers keep their itemized total; real-account
+ * surfaces pass `includeFee: APP_FEE_LIVE || demoActive` so the $1 never
+ * appears inside a number presented as what will actually be charged.
+ *
  * @param {object} args
  * @param {number} args.pendingRoundUps - round-ups accrued this cycle.
  * @param {number|null} [args.monthlyCap] - donor's ceiling, or null for none.
  * @param {number|null} [args.chargeAdjustment] - donor's one-time override, or null.
  * @param {number} [args.feeMonths] - months of $1 app fee on this charge.
  * @param {number} [args.processingCover] - dollars the donor chose to cover.
+ * @param {number} [args.extras] - Give Extra pledges joining this charge.
+ * @param {boolean} [args.includeFee] - false leaves the fee months out of the total.
  * @returns {number} total dollars, rounded to cents.
  */
 export function chargeTotal({
@@ -272,7 +396,10 @@ export function chargeTotal({
   chargeAdjustment = null,
   feeMonths = 1,
   processingCover = 0,
+  extras = 0,
+  includeFee = true,
 }) {
   const roundUps = effectiveCharge({ pendingRoundUps, monthlyCap, chargeAdjustment });
-  return parseFloat((roundUps + feeMonths + processingCover).toFixed(2));
+  const fee = includeFee ? feeMonths : 0;
+  return parseFloat((roundUps + (extras || 0) + fee + processingCover).toFixed(2));
 }

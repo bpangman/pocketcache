@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Must match .phone-frame { width } in src/index.css — the reference design width.
-const REF_W = 390;
+// Must match .phone-frame { width } in src/index.css - the reference design width.
+// Exported so the desktop demo frame (App.jsx PhoneFrame) can size itself to
+// render the app at 1:1 CSS px.
+export const REF_W = 390;
 
 // Cap so tablets / large phones don't balloon. At 1.15 the visual width is
 // 390 * 1.15 = 448.5 px; anything wider gets navy gradient on the sides.

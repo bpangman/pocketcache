@@ -22,11 +22,78 @@
 // form falls back to the old simulated save - clearly flagged simulated - so
 // signup never dead-ends. Genuine card problems (declines, bad numbers) are
 // surfaced to the donor instead.
-import { getSupabase } from './supa';
+import { loadStripe } from '@stripe/stripe-js/pure';
+import { getSupabase, SUPABASE_ANON_KEY, FUNCTIONS_BASE } from './supa';
+import { STRIPE_PUBLISHABLE_KEY } from './stripeKey';
 
-const SUPABASE_URL = 'https://yeptifozaytoglfwxksz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
-const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
+// Stripe.js is loaded lazily, once, and ONLY from here.
+//
+// Why not `const stripePromise = loadStripe(KEY)` at module scope (the pattern
+// the card forms used to carry): the `@stripe/stripe-js` main entry injects
+// the js.stripe.com script the moment it is imported, and loadStripe() rejects
+// with 'Failed to load Stripe.js' when that script cannot be fetched. Nothing
+// caught it, so a flaky network put an unhandled rejection in the console of
+// every surface that merely imported a card form - the phone app, the
+// dashboards, the nonprofit admin - pages that never needed Stripe. The `pure`
+// entry has no import-time side effect, the script is requested when a card
+// form actually mounts, and a failed load resolves to null so the form can
+// show its practice-mode note instead of the console turning red.
+let stripePromise = null;
+
+// How long a card form waits for js.stripe.com before it gives up and runs
+// in practice mode. Generous enough for a slow phone connection; short enough
+// that a blocked script does not leave the donor staring at an empty box.
+const STRIPE_LOAD_TIMEOUT_MS = 12000;
+
+// The script URLs stripe-js itself recognises (its findScript() uses the same
+// shapes): the classic /v3 and the versioned release trains (/dahlia/stripe.js).
+const STRIPE_SCRIPT_RE = /^https:\/\/js\.stripe\.com\/(v3\/?|[a-z0-9]+\/stripe\.js)(\?.*)?$/;
+
+/**
+ * Remove a Stripe.js <script> tag that is on the page without having produced
+ * window.Stripe. A screen that still carries the old module-level
+ * `loadStripe()` (the main @stripe/stripe-js entry injects at import time)
+ * leaves exactly that behind when the script fails: stripe-js's loader then
+ * finds the dead tag, listens on it for a load/error event that already fired,
+ * and never settles. With the tag gone it injects a fresh one and gets a real
+ * answer. A script that already loaded is left alone (window.Stripe exists).
+ */
+function dropDeadStripeScripts() {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || window.Stripe) return;
+  for (const el of document.querySelectorAll('script[src^="https://js.stripe.com/"]')) {
+    if (STRIPE_SCRIPT_RE.test(el.src)) el.parentNode?.removeChild(el);
+  }
+}
+
+/**
+ * The shared Stripe.js promise for <Elements stripe={...}>. Resolves to the
+ * Stripe instance, or to null when js.stripe.com could not be reached (or did
+ * not answer within STRIPE_LOAD_TIMEOUT_MS) - it never rejects. Memoised so
+ * every card form on the page shares one instance and <Elements> never sees
+ * its `stripe` prop change between renders. A null outcome is forgotten, so
+ * the next card form to mount (or getStripePromise(true)) tries the script
+ * again instead of replaying the failure.
+ *
+ * @param {boolean} [retry=false]
+ * @returns {Promise<import('@stripe/stripe-js').Stripe|null>}
+ */
+export function getStripePromise(retry = false) {
+  if (retry || !stripePromise) {
+    dropDeadStripeScripts();
+    const attempt = Promise.race([
+      loadStripe(STRIPE_PUBLISHABLE_KEY),
+      new Promise(resolve => setTimeout(() => resolve(null), STRIPE_LOAD_TIMEOUT_MS)),
+    ]).catch(() => null).then(stripe => {
+      if (!stripe && stripePromise === attempt) stripePromise = null;
+      return stripe;
+    });
+    stripePromise = attempt;
+  }
+  return stripePromise;
+}
+
+/** Alias of getStripePromise for callers that prefer the shorter name. */
+export const getStripe = getStripePromise;
 
 const BRAND_NAMES = {
   visa: 'Visa',
@@ -79,7 +146,7 @@ export async function currentDonorEmail() {
 }
 
 /** Ask stripe-setup-intent for a fresh SetupIntent. Throws on any failure. */
-export async function fetchSetupIntent(email) {
+async function fetchSetupIntent(email) {
   const headers = await authHeaders();
   const res = await fetch(`${FUNCTIONS_BASE}/stripe-setup-intent`, {
     method: 'POST',
@@ -94,12 +161,13 @@ export async function fetchSetupIntent(email) {
 }
 
 /** Tell stripe-setup-complete the card is attached; get the verified brand/last4 back. */
-export async function completeSetup({ customerId, paymentMethodId }) {
+async function completeSetup({ customerId, paymentMethodId, setupIntentId }) {
   const headers = await authHeaders();
   const res = await fetch(`${FUNCTIONS_BASE}/stripe-setup-complete`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ customer_id: customerId, payment_method_id: paymentMethodId }),
+    // setup_intent_id lets the server cross-check against the intent it minted.
+    body: JSON.stringify({ customer_id: customerId, payment_method_id: paymentMethodId, setup_intent_id: setupIntentId ?? null }),
   });
   const data = await res.json().catch(() => null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || 'setup-complete request failed');
@@ -144,7 +212,7 @@ export async function saveCardWithSetupIntent(stripe, cardElement, email) {
   }
 
   // 3. Server-side verification + the real brand/last4.
-  const done = await completeSetup({ customerId, paymentMethodId });
+  const done = await completeSetup({ customerId, paymentMethodId, setupIntentId: result.setupIntent?.id });
   const brand = prettyBrand(done.brand);
 
   return {

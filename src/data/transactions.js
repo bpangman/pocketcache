@@ -38,11 +38,11 @@ export const CURRENT_MONTH_PENDING = parseFloat(
 // Build MONTHLY_DATA dynamically: 6 entries ending with the current calendar
 // month. Labels are derived from the actual date so they never go stale.
 // The current month's value equals CURRENT_MONTH_PENDING. All prior completed
-// months are ≥ $10, consistent with the $10 monthly minimum — any month that
-// accumulated less than $10 would have rolled its balance into the next month.
+// months are >= $5, consistent with the fixed $5 monthly floor - any month that
+// accumulated less than $5 would have rolled its balance into the next month.
 function buildMonthlyData() {
   const now = new Date();
-  // Five prior completed months, all ≥ $5
+  // Five prior completed months, all >= $5
   const priorValues = [11.18, 14.03, 10.55, 11.82, 13.47];
   return Array.from({ length: 6 }, (_, i) => {
     const offset = 5 - i; // 5 months ago … current month
@@ -58,7 +58,7 @@ function buildMonthlyData() {
 
 export const MONTHLY_DATA = buildMonthlyData();
 
-// Sum of prior completed months only — used as the initial totalDonated value
+// Sum of prior completed months only - used as the initial totalDonated value
 // in AppContext. "Donated" means actually charged; the pending current month
 // is NOT counted until it clears at month-end.
 export const PRIOR_MONTHS_SUM = parseFloat(

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import Sheet from '../Sheet';
+import Button from '../ui/Button';
 import { useApp } from '../../store/AppContext';
 import { submitOrgContact } from '../../lib/engagement';
 
@@ -68,8 +68,9 @@ export default function VolunteerSheet({ show, onClose, nonprofit, brand }) {
     }
   }
 
-  const inputCls = 'w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400';
-  const canSend = interest && (demoActive || (name && email));
+  const inputCls = 'w-full rounded-input px-4 py-3 text-ink outline-none';
+  const inputStyle = { background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, minHeight: 48 };
+  const canSend = !!interest.trim() && (demoActive || !!(name.trim() && email.trim()));
 
   return (
     <Sheet show={show} onClose={handleClose} title="Volunteer Opportunities">
@@ -80,15 +81,15 @@ export default function VolunteerSheet({ show, onClose, nonprofit, brand }) {
             <div className="text-5xl mb-4">&#128588;</div>
             {demoActive ? (
               <>
-                <p className="font-bold text-gray-900 text-lg">Interest Noted!</p>
-                <p className="text-gray-500 text-sm mt-2">
+                <p className="font-bold text-ink text-lg">Interest Noted!</p>
+                <p className="text-ink-2 text-sm mt-2">
                   {nonprofit?.shortName} will reach out about volunteer opportunities near you.
                 </p>
               </>
             ) : (
               <>
-                <p className="font-bold text-gray-900 text-lg">Sent to {sentOrgName}.</p>
-                <p className="text-gray-500 text-sm mt-2">
+                <p className="font-bold text-ink text-lg">Sent to {sentOrgName}.</p>
+                <p className="text-ink-2 text-sm mt-2">
                   They will reach out to you directly.
                 </p>
               </>
@@ -96,38 +97,39 @@ export default function VolunteerSheet({ show, onClose, nonprofit, brand }) {
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm mb-5">
+            <p className="text-ink-2 text-sm mb-5">
               Express your interest in volunteering with {nonprofit?.shortName}.
             </p>
             <form onSubmit={handleSubmit} className="space-y-3">
               {!demoActive && (
                 <>
-                  <input type="text" placeholder="Your name" value={name}
+                  <input type="text" placeholder="Your name" aria-label="Your name" value={name}
                     onChange={e => setName(e.target.value)} required
-                    className={inputCls} />
-                  <input type="email" placeholder="Your email" value={email}
+                    className={inputCls} style={inputStyle} />
+                  <input type="email" placeholder="Your email" aria-label="Your email" value={email}
                     onChange={e => setEmail(e.target.value)} required
-                    className={inputCls} />
+                    className={inputCls} style={inputStyle} />
                 </>
               )}
               <textarea
                 placeholder="Tell us how you'd like to help..."
+                aria-label="How you'd like to help"
                 value={interest}
                 onChange={e => setInterest(e.target.value)}
                 required
                 rows={3}
                 className={`${inputCls} resize-none`}
+                style={inputStyle}
               />
               {error && (
-                <div className="rounded-2xl bg-red-50 border border-red-100 px-4 py-3" data-testid="volunteer-error">
-                  <p className="text-red-600 text-sm">{error}</p>
+                <div role="alert" className="rounded-input bg-danger-wash px-4 py-3" style={{ border: '1px solid rgba(220,38,38,0.25)' }} data-testid="volunteer-error">
+                  <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>
                 </div>
               )}
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: brand.gradient, opacity: canSend && !sending ? 1 : 0.4 }}>
+              <Button type="submit" disabled={!canSend} loading={sending}
+                style={canSend && !sending ? { background: brand.gradient } : undefined}>
                 {sending ? 'Sending…' : 'Express Interest'}
-              </motion.button>
+              </Button>
             </form>
           </>
         )}

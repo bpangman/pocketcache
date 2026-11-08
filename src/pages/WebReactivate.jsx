@@ -1,13 +1,17 @@
 import { useState } from 'react';
+import { Check, CreditCard, Landmark, Lock } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useTheme } from '../store/ThemeContext';
-import { fmtMoney } from '../lib/format';
+import { useNp } from '../store/NpContext';
+import { fmtMoney, memberSinceLabel } from '../lib/format';
 import { nextChargeLabel } from '../lib/billing';
-import { monthsGiving, sinceLabel } from '../data/derived';
+import { monthsGiving } from '../data/derived';
 import { greetingNameFor } from '../lib/donorAuth';
 import OrgLogo from '../components/OrgLogo';
 import CoinMark from '../components/CoinMark';
 import AppleLogo from '../components/AppleLogo';
+import PlaidBankConnect from '../components/PlaidBankConnect';
+import Button from '../components/ui/Button';
 import { ChangePaymentModal } from './WebPortalPages';
 import { INK, NAVY, PANEL, RADIUS } from '../lib/webTheme';
 
@@ -43,31 +47,19 @@ import { INK, NAVY, PANEL, RADIUS } from '../lib/webTheme';
 // Ink, panel and depth tokens come from the shared web design vocabulary
 // (lib/webTheme), imported above with the other libs.
 
-const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' };
+const ICON_PROPS = { size: 26, color: 'var(--navy)', 'aria-hidden': 'true' };
+const PAYMENT_TYPE_ICON = {
+  ach: <Landmark {...ICON_PROPS} />,
+  apple_pay: <AppleLogo size={16} />,
+  card: <CreditCard {...ICON_PROPS} />,
+};
 
 function PanelTitle({ title, sub }) {
   return (
     <div style={{ marginBottom: 18 }}>
       <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{title}</h2>
-      {sub && <p style={{ margin: '5px 0 0', fontSize: 15.5, color: INK.secondary, lineHeight: 1.55 }}>{sub}</p>}
+      {sub && <p style={{ margin: '5px 0 0', fontSize: 15, color: INK.secondary, lineHeight: 1.55 }}>{sub}</p>}
     </div>
-  );
-}
-
-function PrimaryButton({ children, onClick, disabled, testId }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      data-testid={testId}
-      style={{
-        width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: disabled ? 'default' : 'pointer',
-        background: disabled ? 'linear-gradient(135deg, #d1d5db, #9ca3af)' : `linear-gradient(135deg, ${NAVY}, #001a33)`,
-        color: '#fff', fontWeight: 700, fontSize: 17,
-      }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -75,10 +67,10 @@ function PrimaryButton({ children, onClick, disabled, testId }) {
 // width is the thing a phone modal cannot do: prove the reassurance.
 function StatTile({ label, value, sub, testId }) {
   return (
-    <div data-testid={testId} style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 14, padding: '14px 16px' }}>
-      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>
-      <p style={{ margin: '6px 0 0', fontSize: 21, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{value}</p>
-      {sub && <p style={{ margin: '3px 0 0', fontSize: 13.5, lineHeight: 1.45, color: INK.muted }}>{sub}</p>}
+    <div data-testid={testId} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: RADIUS.md, padding: '14px 16px' }}>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.subtle }}>{label}</p>
+      <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{value}</p>
+      {sub && <p style={{ margin: '3px 0 0', fontSize: 13, lineHeight: 1.45, color: INK.subtle }}>{sub}</p>}
     </div>
   );
 }
@@ -86,19 +78,20 @@ function StatTile({ label, value, sub, testId }) {
 // A labelled review block: the two things the check-in asks the donor to look
 // at. Full page width, label above, detail and action on one row - the desktop
 // version of the phone's stacked grey cards.
-function ReviewBlock({ label, icon, title, meta, note, action, testId }) {
+function ReviewBlock({ label, icon, title, meta, note, action, below, testId }) {
   return (
-    <div data-testid={testId} style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 16, marginBottom: 12 }}>
-      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>{label}</p>
+    <div data-testid={testId} style={{ border: '1px solid var(--line)', borderRadius: RADIUS.md, padding: 16, marginBottom: 12 }}>
+      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.subtle }}>{label}</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
+        <span style={{ width: 44, height: 44, borderRadius: RADIUS.sm, background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</span>
         <span style={{ flex: 1, minWidth: 180 }}>
-          <span style={{ display: 'block', fontWeight: 700, fontSize: 16.5, color: INK.primary }}>{title}</span>
-          {meta && <span style={{ display: 'block', fontSize: 14.5, color: INK.muted, marginTop: 1 }}>{meta}</span>}
-          {note && <span style={{ display: 'block', fontSize: 14.5, lineHeight: 1.5, color: '#b45309', marginTop: 4 }}>{note}</span>}
+          <span style={{ display: 'block', fontWeight: 700, fontSize: 16, color: INK.primary }}>{title}</span>
+          {meta && <span style={{ display: 'block', fontSize: 14, color: INK.subtle, marginTop: 1 }}>{meta}</span>}
+          {note && <span style={{ display: 'block', fontSize: 14, lineHeight: 1.5, color: 'var(--warning)', marginTop: 4 }}>{note}</span>}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>{action}</span>
       </div>
+      {below && <div style={{ marginTop: 14 }}>{below}</div>}
     </div>
   );
 }
@@ -108,23 +101,24 @@ function RailFact({ tone, children }) {
   return (
     <li style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '5px 0' }}>
       <span style={{
-        width: 17, height: 17, borderRadius: '50%', flexShrink: 0, marginTop: 1, display: 'inline-flex',
+        width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 2, display: 'inline-flex',
         alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
-        background: teal ? '#0D9488' : '#e2e8f0', color: teal ? '#fff' : INK.muted,
+        background: teal ? 'var(--teal-ui)' : 'var(--line)', color: teal ? '#fff' : INK.subtle,
       }}>
-        {teal ? '✓' : '-'}
+        {teal ? <Check size={12} strokeWidth={3} aria-hidden="true" /> : '-'}
       </span>
-      <span style={{ fontSize: 15, lineHeight: 1.5, color: teal ? INK.secondary : INK.muted }}>{children}</span>
+      <span style={{ fontSize: 15, lineHeight: 1.5, color: teal ? INK.secondary : INK.subtle }}>{children}</span>
     </li>
   );
 }
 
 export default function WebReactivate() {
   const {
-    selectedNonprofit, trackedCard, paymentMethod, setPaymentMethod,
-    totalDonated, reactivateAccount, setPage, setLastMode, signOut, hasAccount,
+    selectedNonprofit, trackedCard, setTrackedCard, paymentMethod, setPaymentMethod,
+    totalDonated, reactivateAccount, setPage, setLastMode, signOut, hasAccount, demoActive,
   } = useApp();
   const brand = useTheme();
+  const np = useNp();
 
   // 'closed' → 'checkin'. The phone swaps one blocking scrim for another; on a
   // page these are two states of the same panel, which is also what gives the
@@ -136,15 +130,28 @@ export default function WebReactivate() {
 
   const org = selectedNonprofit;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
-  const card = trackedCard ?? { name: 'Chase Sapphire', last4: '4242' };
-  const pay = paymentMethod ?? { type: 'card', label: 'Credit or Debit Card', last4: '4242' };
+  // No stored card or payment method means exactly that - the tiles say so
+  // instead of inventing a Chase ····4242 that the donor never had.
+  const card = trackedCard;
+  const pay = paymentMethod;
   const chargeOn = nextChargeLabel();
+  // The two history tiles: the join month is real for every account; the
+  // months-giving count is a demo-dataset figure, so a real account reads "--".
+  const since = memberSinceLabel(hasAccount, demoActive);
+  const monthsGivingLabel = demoActive ? String(monthsGiving) : '--';
 
+  // Demo mode keeps the short simulated re-link so the pitch flow still
+  // completes offline. A real account re-authenticates through Plaid Link
+  // (PlaidBankConnect, below) - the item was removed at cancellation and
+  // nothing can round up until it returns.
   function handleRelink() {
     setRelinking(true);
-    // production: the Plaid item was removed at cancellation  -  this is a real
-    // Plaid Link re-authentication, and nothing can round up until it returns.
     setTimeout(() => { setRelinking(false); setRelinked(true); }, 1200);
+  }
+
+  function handleConnected(nextCard) {
+    setRelinked(true);
+    setTrackedCard?.(nextCard);
   }
 
   function handleRestart() {
@@ -158,8 +165,15 @@ export default function WebReactivate() {
     setPage('home');
   }
 
+  // Sign out clears the nonprofit admin context too (the last admin's org
+  // record and tab), which AppContext.signOut cannot reach on its own.
+  function handleSignOut() {
+    np?.resetNpContent?.();
+    signOut();
+  }
+
   return (
-    <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }} data-testid="web-reactivate">
+    <div style={{ minHeight: '100dvh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }} data-testid="web-reactivate">
       <ChangePaymentModal
         show={changePayment}
         onClose={() => setChangePayment(false)}
@@ -167,18 +181,18 @@ export default function WebReactivate() {
       />
 
       {/* Top nav  -  same webpage chrome as the wizard and the dashboard */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+      <header style={{ background: '#fff', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px', height: 76, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {org ? <OrgLogo nonprofit={org} size={9} rounded="lg" /> : <CoinMark size={30} />}
             <div style={{ lineHeight: 1.15 }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 16.5, color: INK.primary }}>{brand.appName ?? 'PocketCache'}</p>
-              <p style={{ margin: 0, fontSize: 12.5, color: INK.muted }}>powered by PocketCache</p>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary }}>{brand.appName ?? 'PocketCache'}</p>
+              <p style={{ margin: 0, fontSize: 12, color: INK.subtle }}>powered by PocketCache</p>
             </div>
           </div>
           {org && (
             <a href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
-              style={{ fontSize: 15, fontWeight: 600, color: NAVY, textDecoration: 'none' }}>
+              style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, fontSize: 15, fontWeight: 600, color: NAVY, textDecoration: 'none' }}>
               About {npShort} →
             </a>
           )}
@@ -195,17 +209,17 @@ export default function WebReactivate() {
                 <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary, lineHeight: 1.25 }}>
                   {org?.name ?? 'Your giving'}
                 </p>
-                <p style={{ margin: 0, fontSize: 14, color: INK.muted }}>
+                <p style={{ margin: 0, fontSize: 14, color: INK.subtle }}>
                   {stage === 'closed' ? 'Your account is closed.' : 'One check and you are back.'}
                 </p>
               </div>
             </div>
-            <p style={{ margin: '0 0 16px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>
+            <p style={{ margin: '0 0 16px', fontSize: 15, lineHeight: 1.6, color: INK.secondary }}>
               {stage === 'closed'
                 ? `You closed your round-up giving to ${npShort}. Nothing was deleted  -  reactivating picks up exactly where you left off.`
                 : `Reactivating restarts tracking today. Round-ups total through the end of the month, and one charge from ${npShort} follows on ${chargeOn}.`}
             </p>
-            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.subtle }}>
               While it is closed
             </p>
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px' }}>
@@ -213,8 +227,9 @@ export default function WebReactivate() {
               <RailFact>No charge runs, this month or any month.</RailFact>
               <RailFact tone="kept">Your donation history, receipts and settings stay exactly as they were.</RailFact>
             </ul>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.muted }}>
-              🔒 We disconnected your card from Plaid the day you closed the account, so re-linking it is the one step reactivation cannot skip.
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.subtle, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <Lock size={16} color={INK.subtle} aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }} />
+              <span>We disconnected your card from Plaid the day you closed the account, so re-linking it is the one step reactivation cannot skip.</span>
             </p>
           </aside>
 
@@ -231,22 +246,22 @@ export default function WebReactivate() {
                     testId="web-reactivate-total"
                     label="Total donated"
                     value={`$${fmtMoney(totalDonated)}`}
-                    sub={`${sinceLabel} · kept in full`}
+                    sub={`Since ${since} · kept in full`}
                   />
                   <StatTile
                     label="Months giving"
-                    value={monthsGiving}
-                    sub="every receipt still on file"
+                    value={monthsGivingLabel}
+                    sub={demoActive ? 'every receipt still on file' : 'receipts stay on file'}
                   />
                   <StatTile
                     label="Card we watched"
-                    value={`····${card.last4 ?? '4242'}`}
-                    sub={`${card.name ?? 'Your card'} · disconnected at closure`}
+                    value={card ? `····${card.last4 ?? '????'}` : 'No card linked yet'}
+                    sub={card ? `${card.name ?? 'Your card'} · disconnected at closure` : 'Link one when you reactivate'}
                   />
                 </div>
-                <PrimaryButton testId="web-reactivate-start" onClick={() => setStage('checkin')}>
+                <Button variant="primary" size="lg" surface="web" data-testid="web-reactivate-start" onClick={() => setStage('checkin')}>
                   Reactivate my account
-                </PrimaryButton>
+                </Button>
 
                 {/* ── The secondary action ──
                     The phone's "Back to start" only changes what sits BEHIND the
@@ -258,18 +273,18 @@ export default function WebReactivate() {
                     device (sign out, which is also the dashboard's own wording),
                     or leave for the marketing site. */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0 14px' }}>
-                  <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                  <span style={{ fontSize: 14, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>Not now?</span>
-                  <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                  <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+                  <span style={{ fontSize: 14, fontWeight: 500, color: INK.subtle, whiteSpace: 'nowrap' }}>Not now?</span>
+                  <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
                 </div>
-                <button
-                  onClick={() => signOut()}
+                <Button
+                  variant="secondary" size="lg" surface="web"
+                  onClick={handleSignOut}
                   data-testid="web-reactivate-signout"
-                  style={{ width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: INK.primary, fontWeight: 700, fontSize: 16.5 }}
                 >
                   Sign out{greetingNameFor(hasAccount) ? ` of ${greetingNameFor(hasAccount)}'s account` : ''}
-                </button>
-                <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
+                </Button>
+                <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.subtle, textAlign: 'center' }}>
                   Your account stays closed either way  -  signing out just closes this browser session.{' '}
                   <a href="/" style={{ color: NAVY, fontWeight: 600 }}>Return to pocketcache.app</a>
                 </p>
@@ -281,83 +296,92 @@ export default function WebReactivate() {
                   sub="Two quick things before your round-ups start again."
                 />
 
-                {/* ── 1. The mandatory re-link ── */}
+                {/* ── 1. The mandatory re-link ──
+                    Demo mode: the simulated Re-link button. Real account: the
+                    embedded Plaid Link flow, whose connected card becomes the
+                    new tracked card. */}
                 <ReviewBlock
                   testId="web-reactivate-card-block"
                   label="Card we track"
-                  icon="🏦"
-                  title={card.name ?? 'Your card'}
-                  meta={`····${card.last4 ?? '4242'}`}
+                  icon={<Landmark {...ICON_PROPS} />}
+                  title={card?.name ?? (relinked ? 'Your card' : 'No card linked yet')}
+                  meta={card ? `····${card.last4 ?? '????'}` : 'Connect the card you want us to round up'}
                   note={relinked ? null : 'We disconnected this from Plaid when you left, so nothing can round up until it is re-linked.'}
                   action={relinked ? (
-                    <span data-testid="web-reactivate-relinked" style={{ fontSize: 15, fontWeight: 700, color: '#0f766e' }}>Connected ✓</span>
+                    <span data-testid="web-reactivate-relinked" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: 'var(--teal-700)' }}>
+                      Connected <Check size={16} strokeWidth={3} aria-hidden="true" />
+                    </span>
                   ) : (
                     <>
-                      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '4px 9px' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--warning)', background: 'var(--warning-50)', border: '1px solid #fde68a', borderRadius: RADIUS.pill, padding: '4px 9px' }}>
                         Required
                       </span>
-                      <button
-                        onClick={handleRelink}
-                        disabled={relinking}
-                        data-testid="web-reactivate-relink"
-                        style={{
-                          border: 'none', borderRadius: 12, padding: '10px 16px', fontSize: 15.5, fontWeight: 700, color: '#fff',
-                          background: relinking ? '#9ca3af' : 'linear-gradient(135deg, #0d9488, #003865)',
-                          cursor: relinking ? 'default' : 'pointer',
-                        }}
-                      >
-                        {relinking ? 'Linking…' : 'Re-link'}
-                      </button>
+                      {demoActive && (
+                        <Button
+                          variant="primary" size="md" surface="web" fullWidth={false}
+                          onClick={handleRelink}
+                          loading={relinking}
+                          data-testid="web-reactivate-relink"
+                        >
+                          {relinking ? 'Linking…' : 'Re-link'}
+                        </Button>
+                      )}
                     </>
                   )}
+                  below={!relinked && !demoActive ? (
+                    <div data-testid="web-reactivate-relink">
+                      <PlaidBankConnect variant="web" onConnected={handleConnected} />
+                    </div>
+                  ) : null}
                 />
 
                 {/* ── 2. The payment review ── */}
                 <ReviewBlock
                   testId="web-reactivate-payment-block"
                   label="How you pay"
-                  icon={PAYMENT_TYPE_ICON[pay.type] ?? '💳'}
-                  title={pay.label ?? 'Credit or Debit Card'}
-                  meta={pay.last4 ? `····${pay.last4}` : 'One charge a month, collected by ' + npShort}
+                  icon={PAYMENT_TYPE_ICON[pay?.type] ?? <CreditCard {...ICON_PROPS} />}
+                  title={pay ? (pay.label ?? 'Credit or Debit Card') : 'No payment method yet'}
+                  meta={pay?.last4 ? `····${pay.last4}` : 'One charge a month, collected by ' + npShort}
                   action={(
                     <>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: '#0f766e' }}>Keep</span>
-                      <span style={{ color: '#cbd5e1' }}>·</span>
-                      <button
+                      {pay && <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--teal-700)' }}>Keep</span>}
+                      {pay && <span style={{ color: INK.muted }}>·</span>}
+                      <Button
+                        variant="secondary" size="md" surface="web" fullWidth={false}
                         onClick={() => setChangePayment(true)}
                         data-testid="web-reactivate-change-payment"
-                        style={{ border: '1px solid #dbe3ec', background: '#fff', borderRadius: 12, padding: '9px 14px', fontSize: 15.5, fontWeight: 700, color: NAVY, cursor: 'pointer' }}
                       >
-                        Change
-                      </button>
+                        {pay ? 'Change' : 'Add'}
+                      </Button>
                     </>
                   )}
                 />
 
-                <p style={{ margin: '0 0 16px', fontSize: 14.5, lineHeight: 1.6, color: INK.muted }}>
+                <p style={{ margin: '0 0 16px', fontSize: 14, lineHeight: 1.6, color: INK.subtle }}>
                   Tracking restarts the moment you confirm. Your round-ups total through the last day of the
                   month, we email the exact amount on the 1st, and {npShort} charges you on {chargeOn}. Nothing
                   from while you were away is ever charged.
                 </p>
 
                 {/* production: Plaid item removed at cancellation  -  a real
-                    disabled button, so the gate holds for keyboard and script
-                    just as it does for a mouse. */}
-                <PrimaryButton testId="web-reactivate-restart" disabled={!relinked} onClick={handleRestart}>
+                    disabled state (aria-disabled, no gradient), so the gate holds
+                    for keyboard and script just as it does for a mouse. */}
+                <Button variant="primary" size="lg" surface="web" data-testid="web-reactivate-restart" disabled={!relinked} onClick={handleRestart}>
                   Restart my round-ups
-                </PrimaryButton>
+                </Button>
                 {!relinked && (
-                  <p data-testid="web-reactivate-gate-note" style={{ margin: '8px 0 0', fontSize: 14.5, color: '#b45309', textAlign: 'center' }}>
-                    Re-link {card.name ?? 'your card'} first  -  round-ups cannot resume without it.
+                  <p data-testid="web-reactivate-gate-note" style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--warning)', textAlign: 'center' }}>
+                    Re-link {card?.name ?? 'your card'} first  -  round-ups cannot resume without it.
                   </p>
                 )}
-                <button
+                <Button
+                  variant="tertiary" size="md" surface="web"
                   onClick={() => setStage('closed')}
                   data-testid="web-reactivate-back"
-                  style={{ width: '100%', marginTop: 10, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, fontWeight: 600, color: INK.muted }}
+                  style={{ marginTop: 10, fontSize: 14, color: INK.subtle }}
                 >
                   ← Not yet, leave my account closed
-                </button>
+                </Button>
               </div>
             )}
           </section>
@@ -365,7 +389,7 @@ export default function WebReactivate() {
       </main>
 
       <footer style={{ padding: '0 24px 20px', textAlign: 'center' }}>
-        <p style={{ color: INK.muted, fontSize: 14, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <p style={{ color: INK.subtle, fontSize: 14, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <CoinMark size={14} />
           Powered by PocketCache ·{' '}
           <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Terms</a>{' '}

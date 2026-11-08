@@ -16,11 +16,16 @@
 //      sends that to our plaid-exchange edge function, which swaps it for a
 //      real access_token server-side (never sent to the browser) and stores
 //      it in the RLS-protected plaid_items table.
-import { getSupabase } from './supa';
-
-const SUPABASE_URL = 'https://yeptifozaytoglfwxksz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
-const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
+//
+// WHO MAY CALL
+//   Both wizards put the verified account step BEFORE connect-card, so every
+//   real Plaid call here has a Supabase session behind it. There is no anon-key
+//   fallback any more: with no session fetchPlaidLinkToken rejects with
+//   reason 'no-session', and PlaidBankConnect shows its labeled practice-mode
+//   fallback instead - which is exactly what the marketing PhoneFrame demo
+//   (never signed in) should get. The edge function is expected to 401
+//   anything without a valid JWT; that path lands in the same fallback.
+import { getSupabase, SUPABASE_ANON_KEY, FUNCTIONS_BASE } from './supa';
 const PLAID_LINK_SCRIPT_SRC = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
 
 let plaidScriptPromise = null;
@@ -49,20 +54,29 @@ export function loadPlaidLinkScript() {
   return plaidScriptPromise;
 }
 
+/** Session-only auth headers. Rejects with an Error whose `reason` (and
+ *  message) is 'no-session' when there is no signed-in donor - never falls
+ *  back to the anon key. */
 async function authHeaders() {
-  const headers = { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY };
+  let token = null;
   try {
     const supabase = getSupabase();
     const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    headers['Authorization'] = `Bearer ${token ?? SUPABASE_ANON_KEY}`;
+    token = data?.session?.access_token ?? null;
   } catch {
-    headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
+    token = null;
   }
-  return headers;
+  if (!token) {
+    const err = new Error('no-session');
+    err.reason = 'no-session';
+    throw err;
+  }
+  return { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` };
 }
 
-/** Asks our edge function for a fresh Plaid Link token (sandbox). Throws on any failure. */
+/** Asks our edge function for a fresh Plaid Link token (sandbox). Throws on
+ *  any failure, including 'no-session' when nobody is signed in and a 401 from
+ *  the function - PlaidBankConnect turns either into its practice fallback. */
 export async function fetchPlaidLinkToken() {
   const headers = await authHeaders();
   const res = await fetch(`${FUNCTIONS_BASE}/plaid-link-token`, { method: 'POST', headers });
@@ -77,7 +91,7 @@ export async function fetchPlaidLinkToken() {
  * plaid-exchange edge function. Resolves to { institution, account_name,
  * account_mask } - the access token itself never comes back to the browser.
  */
-export async function exchangePlaidPublicToken({ publicToken, institution, accountName, accountMask }) {
+async function exchangePlaidPublicToken({ publicToken, institution, accountName, accountMask }) {
   const headers = await authHeaders();
   const res = await fetch(`${FUNCTIONS_BASE}/plaid-exchange`, {
     method: 'POST',
@@ -101,10 +115,14 @@ export async function exchangePlaidPublicToken({ publicToken, institution, accou
  * practice-mode list) apart from a "donor closed the window" or "Plaid itself
  * errored" outcome (stays on the real flow, lets them retry).
  *
- * Resolves with the connected card info ({ name, last4, brand, institution })
- * on success, matching the shape pc_tracked_card already expects. Rejects
- * with an Error whose message is 'cancelled' when the donor simply closed
- * the window without an error, so the caller can treat that quietly.
+ * Resolves with the connected card info ({ name, last4, brand, institution,
+ * source: 'plaid', accountType, accountSubtype }) on success - a superset of
+ * the shape pc_tracked_card already expects. `source` and the Plaid account
+ * type/subtype are what lets a payment screen tell a real depository account
+ * (debitable) apart from a tracked credit card or a typed-in card; see
+ * isDebitableBank. Rejects with an Error whose message is 'cancelled' when the
+ * donor simply closed the window without an error, so the caller can treat
+ * that quietly.
  */
 export async function openPlaidLinkWithToken(linkToken) {
   const Plaid = await loadPlaidLinkScript();
@@ -131,6 +149,9 @@ export async function openPlaidLinkWithToken(linkToken) {
             last4: accountMask,
             brand: institutionName,
             institution: institutionName,
+            source: 'plaid',
+            accountType: account?.type ?? null,       // 'depository' | 'credit' | ...
+            accountSubtype: account?.subtype ?? null, // 'checking' | 'savings' | 'credit card' | ...
           });
         } catch (err) {
           reject(err);
@@ -143,4 +164,17 @@ export async function openPlaidLinkWithToken(linkToken) {
     });
     handler.open();
   });
+}
+
+/**
+ * Can this linked account be DEBITED for the monthly charge? Only a real Plaid
+ * connection to a depository account (checking / savings) qualifies. A typed-in
+ * card (source 'manual'), the offline practice fallback (source 'practice') and
+ * a Plaid-tracked credit card are all tracking sources, never a bank to debit.
+ * Payment screens pass BankPaymentAuth `linkedBank` only when this is true.
+ * @param {object|null|undefined} linked - what ConnectCardScreen produced.
+ * @returns {boolean}
+ */
+export function isDebitableBank(linked) {
+  return linked?.source === 'plaid' && linked?.accountType === 'depository';
 }

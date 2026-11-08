@@ -1,17 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronDown, Info } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import {
+  CheckCircle, ArrowRight, Lock, ArrowLeft, ChevronDown, Info,
+  ScanLine, Hourglass, AlertTriangle, Coffee, ShoppingCart, Car, Landmark, CreditCard, Mail,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import bgcaLogoUrl from '../assets/bgca-logo.png';
 
-import { STRIPE_PUBLISHABLE_KEY } from '../lib/stripeKey';
-import { saveCardWithSetupIntent, currentDonorEmail } from '../lib/stripeSetup';
-
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
-import CoinLogo from '../components/CoinLogo';
 import CoinMark from '../components/CoinMark';
 import PocketCacheLogo from '../components/PocketCacheLogo';
 import { useApp } from '../store/AppContext';
@@ -23,12 +19,14 @@ import {
   APPLE_TEAM_ID, BENEVITY_PORTAL_URL,
 } from '../lib/npSignup';
 import { useAdminAuth, getRememberedAdminEmail, rememberAdminEmail, forgetAdminEmail } from '../lib/adminAuth';
-import { orgAdminLookup } from '../lib/npApi';
+import { orgAdminLookup, orgConnectStripe, orgConnectStatus } from '../lib/npApi';
 import { loadKey, saveKey, IDENTITY_KEYS } from '../store/identityStore';
 import { useDonorAuth, nativeSSOAvailable, greetingNameFor } from '../lib/donorAuth';
 import { fetchRoundupsMe, pushDonorProfile } from '../lib/roundupsMe';
+import { isDebitableBank } from '../lib/plaid';
+import { useShowDemoAffordances } from '../lib/demo';
 import BankPaymentAuth from '../components/BankPaymentAuth';
-import { DEMO_USER } from '../data/derived';
+import Button from '../components/ui/Button';
 import OrgLogo from '../components/OrgLogo';
 import SsoButtons from '../components/SsoButtons';
 import { useHeroCollapse } from '../lib/useHeroCollapse';
@@ -37,39 +35,54 @@ import { queueWebPortalPrompt } from '../components/WebPortalLinkModal';
 import HeroBackButton from '../components/HeroBackButton';
 import ManualCardForm from '../components/ManualCardForm';
 import PlaidBankConnect from '../components/PlaidBankConnect';
+import StripeCardForm from '../components/StripeCardForm';
 import ApplePaySheet from '../components/ApplePaySheet';
 import AppleLogo from '../components/AppleLogo';
-import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, chargeAfterNextLabel, chargeTotal, nextChargeLabel, processingCoverFor } from '../lib/billing';
-import { EXAMPLE_MONTH_ROUNDUPS, EXAMPLE_DISCLAIMER } from '../lib/donorContent';
+import { CHARGE_DAY, REVIEW_WINDOW_LAST_DAY, MONTHLY_FLOOR, chargeTotal, nextChargeLabel, processingCoverFor } from '../lib/billing';
+import { EXAMPLE_MONTH_ROUNDUPS, EXAMPLE_DISCLAIMER, ROLL_FORWARD_NOTE } from '../lib/donorContent';
 import { Z, scrim } from '../lib/overlay';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { pcBeacon } from '../lib/beacon.js';
 import { copyText } from '../lib/clipboard';
 import { useStepHistory } from '../lib/stepHistory';
-import { loadDonorDraft, saveDonorDraft, clearDonorDraft, WEB_STEP_TO_APP_STEP } from '../lib/donorDraft';
+import { loadDonorDraft, saveDonorDraft, clearDonorDraft, saveDonorProgress, loadDonorProgress, WEB_STEP_TO_APP_STEP } from '../lib/donorDraft';
 
+// ─── Shared class strings (DESIGN.md type scale) ─────────────────────────────
+// 11px caps label and 13px helper copy, in --slate so both clear AA on white
+// and on the --surface sheets. Kept as constants so the many labels below stay
+// identical instead of drifting apart again.
+const CAPS = 'text-[11px] font-semibold uppercase tracking-[0.06em] text-[color:var(--slate)]';
+const HELP = 'text-[13px] text-[color:var(--slate)]';
+// Inputs: 48px tall, 16px text (no iOS zoom), radius 12, 1px --line border.
+// Focus ring comes from the global input:focus-visible rule in index.css.
+const INPUT = 'w-full bg-white rounded-xl px-4 min-h-12 text-base outline-none border border-[color:var(--line)] text-[color:var(--ink)]';
+// Text-only buttons: 44px hit area without changing their visual weight.
+const TEXT_BTN = 'min-h-11 px-2 text-sm font-medium text-[color:var(--slate)]';
+
+// Every slide shares the one navy gradient (DESIGN.md: no other full-screen
+// washes) - the teal wash slide 2 used to carry appeared nowhere else.
+const SLIDE_BG = { background: 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)' };
 
 const SLIDES = [
   {
     id: 0,
     bg: '',
-    bgStyle: { background: '#003865' },
+    bgStyle: SLIDE_BG,
     illustration: null,
-    title: 'Your App,\nYour Cause',
-    // Dynamic subtitle injected in render
-    subtitle: '',
+    // Title and subtitle are rendered dynamically from the bound nonprofit
+    // (see the slide === 0 branch in Onboarding below).
     cta: 'Next',
   },
   {
     id: 1,
     bg: '',
-    bgStyle: { background: 'linear-gradient(135deg, #0B2A4A 0%, #0D9488 100%)' },
+    bgStyle: SLIDE_BG,
     illustration: (
       <div className="relative flex flex-col items-center gap-3">
         {[
-          { icon: '☕', amount: '$4.75', round: '+$0.25', delay: 0 },
-          { icon: '🛒', amount: '$23.40', round: '+$0.60', delay: 0.1 },
-          { icon: '🚗', amount: '$11.85', round: '+$0.15', delay: 0.2 },
+          { Icon: Coffee, label: 'Coffee', amount: '$4.75', round: '+$0.25', delay: 0 },
+          { Icon: ShoppingCart, label: 'Groceries', amount: '$23.40', round: '+$0.60', delay: 0.1 },
+          { Icon: Car, label: 'Gas', amount: '$11.85', round: '+$0.15', delay: 0.2 },
         ].map((item, i) => (
           <motion.div
             key={i}
@@ -78,9 +91,11 @@ const SLIDES = [
             transition={{ delay: item.delay + 0.3, duration: 0.4 }}
             className="flex items-center gap-3 bg-white/20 rounded-2xl px-5 py-3 w-72"
           >
-            <span className="text-2xl">{item.icon}</span>
+            <span className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0" aria-label={item.label} role="img">
+              <item.Icon size={18} color="#fff" aria-hidden />
+            </span>
             <span className="text-white font-medium flex-1">{item.amount}</span>
-            <span className="text-white/90 font-bold text-sm bg-white/25 rounded-full px-2.5 py-1">{item.round}</span>
+            <span className="text-white/90 font-bold text-sm bg-white/25 rounded-full px-3 py-1">{item.round}</span>
           </motion.div>
         ))}
         <motion.div
@@ -89,8 +104,8 @@ const SLIDES = [
           transition={{ delay: 0.8 }}
           className="mt-2 flex items-center gap-2 bg-white rounded-2xl px-6 py-3"
         >
-          <span className="font-bold text-lg" style={{ color: '#0D9488' }}>$1.00</span>
-          <span className="text-gray-500 text-sm">donated ❤️</span>
+          <span className="font-bold text-lg" style={{ color: 'var(--green)' }}>$1.00</span>
+          <span className="text-sm" style={{ color: 'var(--ink-2)' }}>donated ❤️</span>
         </motion.div>
       </div>
     ),
@@ -101,7 +116,7 @@ const SLIDES = [
   {
     id: 2,
     bg: '',
-    bgStyle: { background: 'linear-gradient(135deg, #003865 0%, #0B2A4A 100%)' },
+    bgStyle: SLIDE_BG,
     illustration: (
       <div className="flex flex-col items-center gap-4">
         <motion.div
@@ -128,11 +143,11 @@ const SLIDES = [
               className="bg-white/20 rounded-2xl px-5 py-3 text-center"
             >
               <div className="text-white font-bold text-xl">{stat.value}</div>
-              <div className="text-white/70 text-xs mt-0.5">{stat.label}</div>
+              <div className="text-white/70 text-xs mt-1">{stat.label}</div>
             </motion.div>
           ))}
         </div>
-        <p className="text-white/50 text-xs mt-3">Example  -  your numbers grow from zero.</p>
+        <p className="text-white/70 text-[13px] mt-3">Example  -  your numbers grow from zero.</p>
       </div>
     ),
     title: 'Watch Your\nImpact Grow',
@@ -228,7 +243,7 @@ function ScrollFadeEdge({ show, rgb }) {
 // ─── Org Gate Screen ─────────────────────────────────────────────────────────
 // Layout (per founder direction): nonprofit entry first, donor entry below.
 
-function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onWelcomeBack, onUniversalSignIn }) {
+function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onWelcomeBack, onUniversalSignIn, showDemo, notice: noticeProp }) {
   // If a join link carried a code this device can't resolve (demo caveat:
   // custom orgs live in the creator's localStorage), prefill it in the input
   // rather than failing silently.
@@ -238,10 +253,24 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
   const [scanned, setScanned] = useState(false);
   const [autoBound, setAutoBound] = useState(false);
   const [boundNp, setBoundNp] = useState(null);
+  // Inline message under the welcome-back button when a returning donor has
+  // no nonprofit bound anywhere (local or server). The identity is kept; the
+  // code field below is the way forward, so it gets focus.
+  const [notice, setNotice] = useState(noticeProp ?? null);
+  const [resuming, setResuming] = useState(false);
+  const codeInputRef = useRef(null);
+
+  const NO_BINDING_NOTICE = 'We could not find your nonprofit - enter their code below to continue.';
+  // Arrived here from the gate sign-in with the same notice: focus the code
+  // field so the way forward is obvious without another tap.
+  useEffect(() => {
+    if (noticeProp) codeInputRef.current?.focus();
+  }, [noticeProp]);
 
   useEffect(() => {
     if (!autoBindOrg) return;
     let cancelled = false;
+    let timer = null;
     resolveOrgByCode(autoBindOrg).then(np => {
       if (cancelled) return;
       if (np && isOrgPending(np)) {
@@ -253,19 +282,21 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
       } else if (np) {
         setAutoBound(true);
         setBoundNp(np);
-        setTimeout(() => onBind(np), 800);
+        timer = setTimeout(() => onBind(np), 800);
       } else {
         setCode(autoBindOrg);
         setError('Code not found. Ask your nonprofit for their PocketCache code.');
       }
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoBindOrg]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const np = await resolveOrgByCode(code);
+    const c = code.trim();
+    if (!c) { setError("Enter your nonprofit's code."); return; }
+    const np = await resolveOrgByCode(c);
     if (!np) {
       setError('Code not found. Ask your nonprofit for their PocketCache code.');
       return;
@@ -277,6 +308,22 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
     onBind(np);
   }
 
+  // Welcome back: resumeSession reports 'no-binding' when neither this device
+  // nor the server knows the donor's nonprofit. That used to be a silent
+  // no-op (it re-set the step we were already on).
+  async function handleWelcomeBack() {
+    if (resuming) return;
+    setResuming(true);
+    const result = await onWelcomeBack?.();
+    setResuming(false);
+    if (result === 'no-binding') {
+      setNotice(NO_BINDING_NOTICE);
+      codeInputRef.current?.focus();
+    }
+  }
+
+  // Demo only: a fake scan that resolves to the seed org after a short delay.
+  // Hidden outside demo (showDemo) - there is no real scanner behind it.
   function handleScan() {
     setScanning(true);
     setTimeout(() => {
@@ -298,7 +345,7 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
         className="flex flex-col h-full items-center justify-center gap-4 px-8"
         style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)' }}
       >
-        {boundNp ? <OrgLogo nonprofit={boundNp} size={16} rounded="2xl" /> : <div className="text-6xl">🏀</div>}
+        {boundNp ? <OrgLogo nonprofit={boundNp} size={16} rounded="2xl" /> : <CoinMark size={56} />}
         <p className="text-white font-bold text-xl text-center">Setting up your program…</p>
         <p className="text-white/70 text-sm text-center">Just a moment</p>
         <motion.div
@@ -337,132 +384,131 @@ function OrgGateScreen({ onBind, onNonprofitSignup, autoBindOrg, hasAccount, onW
         <p className="text-white font-semibold text-sm text-center leading-relaxed mb-1 px-2">
           Your own round-up app. Live in minutes!
         </p>
-        <p className="text-white/70 text-xs text-center leading-relaxed mb-4 px-2">
+        <p className="text-white/80 text-[13px] text-center leading-relaxed mb-4 px-2">
           Checkout round-ups raise hundreds of millions for causes every year  -  this puts that power in your nonprofit&apos;s pocket.
         </p>
       </div>
 
       {/* Bottom sheet */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-hidden">
-        <div className="flex-1 px-5 pt-5 pb-2 overflow-y-auto space-y-4">
+        <div className="flex-1 px-5 pt-5 overflow-y-auto flex flex-col space-y-4">
 
           {/* ── FOR NONPROFITS (primary) ── */}
           <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">For Nonprofits</p>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={onNonprofitSignup}
-              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-base mb-2"
-              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', color: '#fff' }}
-            >
+            <p className={`${CAPS} mb-2`}>For Nonprofits</p>
+            <Button onClick={onNonprofitSignup} className="mb-2">
               Create your nonprofit page
-            </motion.button>
+            </Button>
           </div>
 
           {/* Divider */}
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-gray-100" />
-            <p className="text-gray-400 text-xs font-medium">Looking to support a nonprofit?</p>
-            <div className="flex-1 h-px bg-gray-100" />
+            <div className="flex-1 h-px bg-[color:var(--line)]" />
+            <p className={`${HELP} font-medium`}>Looking to support a nonprofit?</p>
+            <div className="flex-1 h-px bg-[color:var(--line)]" />
           </div>
 
           {/* ── FOR DONORS (secondary) ── */}
           <form onSubmit={handleSubmit} className="space-y-3">
             {/* Welcome back shortcut */}
             {hasAccount && (
-              <motion.button
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileTap={{ scale: 0.97 }}
-                type="button"
-                onClick={onWelcomeBack}
-                className="w-full flex items-center gap-2 px-3 py-3 rounded-2xl border text-left mb-1"
-                style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
-              >
-                <span className="text-amber-500">👋</span>
-                {/* Never the guessed email-local-part name (item 7c): a real
-                    stored name, else the email itself - both truthful. */}
-                <span className="text-amber-800 text-sm font-semibold flex-1 min-w-0 truncate">
-                  Welcome back  -  continue as {greetingNameFor(hasAccount) ?? hasAccount.email} →
-                </span>
-              </motion.button>
+              <div className="mb-1">
+                <motion.button
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  onClick={handleWelcomeBack}
+                  aria-busy={resuming ? 'true' : undefined}
+                  className="w-full flex items-center gap-2 px-3 min-h-12 rounded-2xl border text-left"
+                  style={{ borderColor: 'var(--gold)', background: 'var(--warning-50)' }}
+                >
+                  <span className="text-amber-500" aria-hidden>👋</span>
+                  {/* Never the guessed email-local-part name (item 7c): a real
+                      stored name, else the email itself - both truthful. */}
+                  <span className="text-amber-800 text-sm font-semibold flex-1 min-w-0 truncate">
+                    {resuming ? 'One moment…' : <>Welcome back  -  continue as {greetingNameFor(hasAccount) ?? hasAccount.email} →</>}
+                  </span>
+                </motion.button>
+                {notice && (
+                  <p role="status" className="text-[13px] mt-2 px-1" style={{ color: 'var(--warning)' }}>{notice}</p>
+                )}
+              </div>
             )}
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nonprofit Code</label>
-              {/* Code input with the QR scanner tucked inside as a trailing button */}
+              <label htmlFor="gate-code" className={`${CAPS} mb-1 block`}>Nonprofit Code</label>
+              {/* Code input; in demo the fake QR scanner sits inside it as a trailing button */}
               <div
-                className="relative w-full rounded-2xl border-2 transition-colors bg-gray-50"
-                style={{ borderColor: error ? '#ef4444' : scanned ? '#4ade80' : code ? '#FBBF24' : '#e5e7eb' }}
+                className="relative w-full rounded-xl border transition-colors bg-white"
+                style={{ borderColor: error ? 'var(--danger)' : scanned ? 'var(--green)' : code ? 'var(--teal-ui)' : 'var(--line)' }}
               >
                 <input
+                  id="gate-code"
+                  ref={codeInputRef}
                   type="text"
-                  placeholder="Enter code (e.g. BGCA)"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="Enter your nonprofit's code"
                   value={code}
                   onChange={e => { setCode(e.target.value); setError(null); }}
-                  className="w-full bg-transparent rounded-2xl pl-4 pr-14 py-3.5 text-sm outline-none font-mono uppercase"
+                  className={`w-full bg-transparent rounded-xl pl-4 ${showDemo ? 'pr-14' : 'pr-4'} min-h-12 text-base outline-none uppercase placeholder:normal-case placeholder:text-[color:var(--muted)]`}
                 />
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  type="button"
-                  onClick={handleScan}
-                  aria-label="Scan QR code"
-                  title="Scan QR code"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: scanned ? '#dcfce7' : '#FEF3C7' }}
-                >
-                  {scanning ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
-                      className="w-4 h-4 rounded-full border-2 border-amber-200 border-t-amber-500"
-                    />
-                  ) : scanned ? (
-                    <CheckCircle size={18} className="text-green-500" />
-                  ) : (
-                    <span className="text-lg" aria-hidden>📷</span>
-                  )}
-                </motion.button>
+                {showDemo && (
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    type="button"
+                    onClick={handleScan}
+                    aria-label="Scan QR code (demo)"
+                    title="Scan QR code (demo)"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg flex items-center justify-center"
+                    style={{ background: scanned ? 'var(--green-50)' : 'var(--gold-50)' }}
+                  >
+                    {scanning ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                        className="w-4 h-4 rounded-full border-2 border-amber-200 border-t-amber-500"
+                      />
+                    ) : scanned ? (
+                      <CheckCircle size={20} style={{ color: 'var(--green)' }} />
+                    ) : (
+                      <ScanLine size={20} style={{ color: 'var(--gold-700)' }} aria-hidden />
+                    )}
+                  </motion.button>
+                )}
               </div>
-              {error && <p className="text-red-500 text-xs mt-1 px-1">{error}</p>}
-              <p className="text-gray-400 text-xs mt-1 px-1">
-                {scanned ? 'QR scanned ✓' : 'Demo code: BGCA · tap 📷 to scan a QR instead'}
+              {error && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{error}</p>}
+              <p className={`${HELP} mt-1 px-1`}>
+                {scanned ? 'QR scanned' : <>Enter the code from your nonprofit{showDemo ? ' · Demo code: BGCA' : ''}</>}
               </p>
             </div>
 
-            <motion.button
-              whileTap={{ scale: 0.97 }}
+            <Button
               type="submit"
-              className="w-full py-4 rounded-2xl font-bold text-base"
-              style={{
-                background: code ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-                color: code ? '#0B2A4A' : '#fff',
-                cursor: code ? 'pointer' : 'default',
-              }}
+              disabled={!code.trim()}
+              onDisabledPress={() => setError("Enter your nonprofit's code.")}
             >
               Continue →
-            </motion.button>
+            </Button>
           </form>
-        </div>
 
-        {/* "Already have an account?"  -  full-size, visible even without local identity (fresh device / new phone) */}
-        <div className="px-5 pb-1">
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            type="button"
-            onClick={onUniversalSignIn}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-base"
-            style={{ background: '#f0f4f8', color: '#0B2A4A' }}
-          >
+        {/* "Already have an account?"  -  full-size, visible even without local identity (fresh device / new phone).
+            Inside the scroll area (mt-auto keeps it at the bottom on tall phones) so a short
+            phone like the iPhone SE scrolls the whole sheet instead of clipping Continue. */}
+        <div className="mt-auto pt-2">
+          <Button variant="secondary" onClick={onUniversalSignIn}>
             Already have an account? Sign in
-          </motion.button>
+          </Button>
         </div>
 
         {/* Bottom-most block on the gate, so this is the one that owes the home
             indicator its clearance. */}
-        <div className="px-5 pt-0" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
-          <p className="text-center text-gray-400 text-xs">
+        <div style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+          <p className={`text-center ${HELP}`}>
             PocketCache  -  round-up giving software for nonprofits
           </p>
+        </div>
         </div>
       </div>
     </motion.div>
@@ -485,29 +531,27 @@ function NativeAppGateScreen({ nonprofit, onBack }) {
       className="flex flex-col h-full items-center justify-center gap-4 px-8 text-center"
       style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', paddingTop: 'var(--pc-safe-top)' }}
     >
-      {nonprofit ? <OrgLogo nonprofit={nonprofit} size={18} rounded="2xl" /> : <div className="text-6xl">🏀</div>}
-      <h1 className="text-white font-bold text-2xl leading-tight">
+      {nonprofit ? <OrgLogo nonprofit={nonprofit} size={18} rounded="2xl" /> : <CoinMark size={56} />}
+      <h1 className="text-white font-bold text-2xl leading-tight" style={{ textWrap: 'balance' }}>
         {nonprofit?.name ?? 'This nonprofit'} is almost in the iPhone app
       </h1>
-      <p className="text-white/70 text-sm leading-relaxed">
+      <p className="text-white/80 text-sm leading-relaxed">
         Apple is still verifying {nonprofit?.name ? `${nonprofit.name}'s` : 'their'} listing before it can appear
         inside the PocketCache app. That&apos;s an app-only step  -  their giving page works today.
       </p>
       <div className="w-full bg-white/10 rounded-2xl p-4 mt-2">
-        <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-1">Join today on the web</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-white/70 mb-1">Join today on the web</p>
         <p className="text-white text-sm font-mono break-all">{webUrl}</p>
       </div>
-      <motion.button
-        whileTap={{ scale: 0.97 }}
-        onClick={() => window.open(webUrl, '_blank', 'noopener')}
-        className="w-full py-4 rounded-2xl font-bold text-base mt-1"
-        style={{ background: 'linear-gradient(135deg, #FBBF24, #E5A800)', color: '#0B2A4A' }}
-      >
+      {/* window.open kept on purpose: to be tested on TestFlight before it is
+          routed through the Capacitor Browser plugin (see Stripe Connect in
+          NonprofitSignupFlow for the pattern). */}
+      <Button onDark onClick={() => window.open(webUrl, '_blank', 'noopener')} className="mt-1">
         Open their webpage →
-      </motion.button>
-      <button onClick={onBack} className="text-white/60 text-sm font-semibold py-2">
+      </Button>
+      <Button variant="tertiary" onDark onClick={onBack} className="text-white/80">
         ← Back
-      </button>
+      </Button>
     </motion.div>
   );
 }
@@ -515,8 +559,6 @@ function NativeAppGateScreen({ nonprofit, onBack }) {
 // ─── Nonprofit Sign-In Screen (SSO → demo BGCA or custom-org admin dashboard) ──
 
 // ─── Sign-up screen ──────────────────────────────────────────────────────────
-
-const BASE = import.meta.env.BASE_URL ?? '/';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const US_STATES = [
@@ -539,7 +581,7 @@ export const US_STATES = [
   { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
 ];
 
-function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen, onIdentityVerified }) {
+function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, onGoToDashboard, onProviderChosen, onIdentityVerified, interceptBackRef }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -668,6 +710,26 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
     donorAuth.resetToEmail();
   }
 
+  // Back (hero chevron or hardware/browser back) steps INSIDE this screen
+  // first: out of sign-in mode, or from the code stage back to the email
+  // stage. Only when there is nothing left to unwind does the parent fall
+  // back to the intro slides. The parent calls this through interceptBackRef
+  // and treats `true` as "handled". The draft is never cleared here.
+  function interceptBack() {
+    if (signInMode) { exitSignInMode(); return true; }
+    if (donorAuth.stage === 'code') { donorAuth.resetToEmail(); return true; }
+    return false;
+  }
+  useEffect(() => {
+    if (!interceptBackRef) return;
+    interceptBackRef.current = interceptBack;
+    return () => { interceptBackRef.current = null; };
+  });
+  function handleBack() {
+    if (interceptBack()) return;
+    onBack?.();
+  }
+
   function handleSendCode(e) {
     e?.preventDefault?.();
     if (hasAccount) return handleSignIn();
@@ -743,7 +805,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)',
           }}
         >
-          <span className="text-white font-bold text-sm px-6 truncate max-w-full">Create Your Account</span>
+          <span className="text-white font-bold text-sm px-6 truncate max-w-full">{signInMode ? 'Welcome back' : 'Create Your Account'}</span>
         </div>
         {/* Hero  -  scrolls away 1:1 with the sheet, like native */}
         <div
@@ -751,7 +813,7 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
           className="flex flex-col items-center justify-end px-8 pb-8"
           style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)', minHeight: heroMinHeight ?? '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)', position: 'relative' }}
         >
-        <HeroBackButton onClick={onBack} />
+        <HeroBackButton onClick={handleBack} />
         {/* Expanded content */}
         <div
           className="w-full flex flex-col items-center"
@@ -760,24 +822,24 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
           <motion.div className="mb-3 flex flex-col items-center gap-2">
             {nonprofit
               ? <OrgLogo nonprofit={nonprofit} size={14} rounded="2xl" className="bg-white/20" />
-              : <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-3xl">&#127952;</div>
+              : <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center"><CoinMark size={40} /></div>
             }
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="bg-white/20 rounded-xl px-3 py-1.5"
+              className="bg-white/20 rounded-xl px-3 py-2"
             >
               <p className="text-white text-xs font-semibold text-center">
                 Supporting {npName}
               </p>
             </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
-            Create Your{'\n'}Account
+          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px', textWrap: 'balance' }}>
+            {signInMode ? 'Welcome back' : <>Create Your{'\n'}Account</>}
           </h1>
-          <p className="text-white/80 text-xs mt-1 text-center">
-            Sign up in seconds. No payment required yet.
+          <p className="text-white/80 text-[13px] mt-1 text-center">
+            {signInMode ? 'Sign in with your email' : 'Sign up in seconds. No payment required yet.'}
           </p>
         </div>
       </div>
@@ -786,21 +848,27 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
         <div className="bg-white rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
           <div className="px-4 pt-10 space-y-3" style={{ paddingBottom: sheetPadBottom }}>
 
-          {/* State selector */}
-          <div>
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-1 block">Your State</label>
-            <select
-              value={selectedState}
-              onChange={e => setSelectedState(e.target.value)}
-              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
-              style={{ appearance: 'none', WebkitAppearance: 'none' }}
-            >
-              <option value="">Select your state…</option>
-              {US_STATES.map(s => (
-                <option key={s.code} value={s.code}>{s.name}</option>
-              ))}
-            </select>
-          </div>
+          {/* State selector - a signup question, so hidden in sign-in mode */}
+          {!signInMode && (
+            <div>
+              <label htmlFor="signup-state" className={`${CAPS} px-1 mb-1 block`}>Your State</label>
+              <div className="relative">
+                <select
+                  id="signup-state"
+                  value={selectedState}
+                  onChange={e => setSelectedState(e.target.value)}
+                  className={`${INPUT} pr-10`}
+                  style={{ appearance: 'none', WebkitAppearance: 'none' }}
+                >
+                  <option value="">Select your state…</option>
+                  {US_STATES.map(s => (
+                    <option key={s.code} value={s.code}>{s.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={18} aria-hidden className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--slate)' }} />
+              </div>
+            </div>
+          )}
 
           {/* Signed-in users never see this section again: the auto-advance
               effect above adopts a live session and moves on, so there is no
@@ -817,30 +885,29 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             </div>
           ) : donorAuth.stage === 'code' ? (
             <form onSubmit={handleVerifyCode} className="space-y-3">
-              <p className="text-gray-500 text-sm px-1">
-                We sent a 6-digit code to <strong className="text-gray-900">{donorAuth.email}</strong>.
+              <p className="text-sm px-1" style={{ color: 'var(--ink-2)' }}>
+                We sent a 6-digit code to <strong style={{ color: 'var(--ink)' }}>{donorAuth.email}</strong>.
               </p>
               <input
                 type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                aria-label="6-digit code" autoComplete="one-time-code"
                 onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
-                style={{ borderColor: donorAuth.codeError ? '#ef4444' : '#e5e7eb' }}
+                className={`${INPUT} font-mono text-center text-xl tracking-[0.5em]`}
+                style={{ borderColor: donorAuth.codeError ? 'var(--danger)' : 'var(--line)' }}
               />
-              {donorAuth.codeError && <p className="text-red-500 text-xs px-1">{donorAuth.codeError}</p>}
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                className="w-full py-4 rounded-2xl font-bold text-base text-white"
-                style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: donorAuth.codeInput.length === 6 && !donorAuth.verifying ? 1 : 0.4 }}>
+              {donorAuth.codeError && <p role="alert" className="text-[13px] px-1" style={{ color: 'var(--danger)' }}>{donorAuth.codeError}</p>}
+              <Button type="submit" disabled={donorAuth.codeInput.length !== 6} loading={donorAuth.verifying}>
                 {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
-              </motion.button>
-              <div className="flex justify-center gap-4">
+              </Button>
+              <div className="flex justify-center gap-4 -my-2">
                 <button type="button" disabled={donorAuth.sendingCode}
                   onClick={() => handleResend(donorAuth.email)}
-                  className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                  className={`${TEXT_BTN} disabled:opacity-50`}>
                   {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
                 </button>
-                <button type="button" onClick={donorAuth.resetToEmail} className="text-sm text-gray-400 font-medium">Change email</button>
+                <button type="button" onClick={donorAuth.resetToEmail} className={TEXT_BTN}>Change email</button>
               </div>
-              {donorAuth.sendError && <p className="text-red-500 text-xs px-1 text-center">{donorAuth.sendError}</p>}
+              {donorAuth.sendError && <p role="alert" className="text-[13px] px-1 text-center" style={{ color: 'var(--danger)' }}>{donorAuth.sendError}</p>}
             </form>
           ) : (
             <>
@@ -849,39 +916,58 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
                     local part - an Apple relay address must not become
                     "Hello safjbdwkfbd". Optional on purpose. */}
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">What should we call you?</label>
+                  <label htmlFor="signup-name" className={`${CAPS} mb-1 block`}>What should we call you?</label>
                   <input
+                    id="signup-name"
                     type="text"
                     value={displayName}
                     maxLength={60}
+                    autoComplete="given-name"
                     onChange={e => setDisplayName(e.target.value)}
                     placeholder="Your first name (optional)"
                     data-testid="signup-name-input"
-                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                    className={`${INPUT} placeholder:text-[color:var(--muted)]`}
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
+                  <label htmlFor="signup-email" className={`${CAPS} mb-1 block`}>Your Email</label>
                   <input
+                    id="signup-email"
                     type="email"
                     value={emailInput}
+                    autoComplete="email"
                     onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
                     placeholder="you@example.com"
-                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
-                    style={{ borderColor: emailInputError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
+                    className={`${INPUT} placeholder:text-[color:var(--muted)]`}
+                    style={{ borderColor: emailInputError || donorAuth.sendError ? 'var(--danger)' : 'var(--line)' }}
                   />
-                  {emailInputError && <p className="text-red-500 text-xs mt-1 px-1">{emailInputError}</p>}
-                  {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
+                  {emailInputError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{emailInputError}</p>}
+                  {donorAuth.sendError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{donorAuth.sendError}</p>}
                 </div>
-                {/* Dimmed until the state + both consent boxes below are done
-                    (item 4); tapping it early only surfaces the subtle hint. */}
-                <motion.button whileTap={canContinue ? { scale: 0.97 } : {}} type="submit"
+                {/* Disabled (one token, aria-disabled) until the state + both
+                    consent boxes below are done (item 4); tapping it early
+                    surfaces the hint right here, under the button. */}
+                <Button type="submit"
                   data-testid="signup-email-code-button"
-                  aria-disabled={!canContinue || donorAuth.sendingCode}
-                  className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
-                  style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: canContinue && !donorAuth.sendingCode ? 1 : 0.4, cursor: canContinue ? 'pointer' : 'default' }}>
+                  disabled={!canContinue}
+                  loading={donorAuth.sendingCode}
+                  onDisabledPress={() => { if (!canContinue) setShowTermsHint(true); }}>
                   {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
-                </motion.button>
+                </Button>
+                {/* What still gates the button (item 4): state first, then
+                    whichever box is still unchecked. Always on while gated;
+                    turns amber after an early tap. */}
+                {!canContinue && !isCA && (
+                  <p
+                    className="text-[13px] text-center"
+                    data-testid="signup-gate-hint"
+                    style={{ color: showTermsHint ? 'var(--warning)' : 'var(--slate)', fontWeight: showTermsHint ? 500 : 400 }}
+                  >
+                    {selectedState === ''
+                      ? 'Select your state above to continue'
+                      : 'Check both boxes below to continue'}
+                  </p>
+                )}
               </form>
 
               {/* SSO shows on the web AND on native shells that can run the
@@ -893,21 +979,21 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
               {(!isNative() || nativeSSOAvailable()) && (
                 <>
                   <div className="flex items-center gap-3 py-1">
-                    <div className="flex-1 h-px bg-gray-100" />
-                    <p className="text-gray-400 text-xs font-medium">or</p>
-                    <div className="flex-1 h-px bg-gray-100" />
+                    <div className="flex-1 h-px bg-[color:var(--line)]" />
+                    <p className={`${HELP} font-medium`}>or</p>
+                    <div className="flex-1 h-px bg-[color:var(--line)]" />
                   </div>
 
                   <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} errors={donorAuth.oauthErrors} />
                 </>
               )}
 
-              <p className="text-gray-400 text-xs text-center px-2 pt-1">
+              <p className={`${HELP} text-center px-2 pt-1`}>
                 {isNative() && !nativeSSOAvailable()
                   ? "Sign in with your email  -  we'll send you a 6-digit code, no password needed."
                   : "No passwords here  -  we'll email you a one-time code, or use Apple or Google."}
               </p>
-              <p className="text-gray-400 text-xs text-center px-2">
+              <p className={`${HELP} text-center px-2`}>
                 Tax receipts from {nonprofit?.shortName ?? 'your nonprofit'} go to your sign-in email.
               </p>
             </>
@@ -919,64 +1005,63 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             <div className="space-y-3 pt-1">
               {donorAuth.stage === 'code' ? (
                 <form onSubmit={handleVerifySignInCode} className="space-y-3">
-                  <p className="text-gray-500 text-sm px-1">
-                    We sent a 6-digit code to <strong className="text-gray-900">{donorAuth.email}</strong>.
+                  <p className="text-sm px-1" style={{ color: 'var(--ink-2)' }}>
+                    We sent a 6-digit code to <strong style={{ color: 'var(--ink)' }}>{donorAuth.email}</strong>.
                   </p>
                   <input
                     type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                    aria-label="6-digit code" autoComplete="one-time-code"
                     onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
-                    style={{ borderColor: donorAuth.codeError ? '#ef4444' : '#e5e7eb' }}
+                    className={`${INPUT} font-mono text-center text-xl tracking-[0.5em]`}
+                    style={{ borderColor: donorAuth.codeError ? 'var(--danger)' : 'var(--line)' }}
                   />
-                  {donorAuth.codeError && <p className="text-red-500 text-xs px-1">{donorAuth.codeError}</p>}
-                  <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                    className="w-full py-4 rounded-2xl font-bold text-base text-white"
-                    style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: donorAuth.codeInput.length === 6 && !donorAuth.verifying ? 1 : 0.4 }}>
+                  {donorAuth.codeError && <p role="alert" className="text-[13px] px-1" style={{ color: 'var(--danger)' }}>{donorAuth.codeError}</p>}
+                  <Button type="submit" disabled={donorAuth.codeInput.length !== 6} loading={donorAuth.verifying}>
                     {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
-                  </motion.button>
-                  <div className="flex justify-center gap-4">
+                  </Button>
+                  <div className="flex justify-center gap-4 -my-2">
                     <button type="button" disabled={donorAuth.sendingCode}
                       onClick={() => handleResend(donorAuth.email, { shouldCreateUser: false })}
-                      className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                      className={`${TEXT_BTN} disabled:opacity-50`}>
                       {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
                     </button>
-                    <button type="button" onClick={() => donorAuth.resetToEmail()} className="text-sm text-gray-400 font-medium">Change email</button>
+                    <button type="button" onClick={() => donorAuth.resetToEmail()} className={TEXT_BTN}>Change email</button>
                   </div>
-                  {donorAuth.sendError && <p className="text-red-500 text-xs px-1 text-center">{donorAuth.sendError}</p>}
+                  {donorAuth.sendError && <p role="alert" className="text-[13px] px-1 text-center" style={{ color: 'var(--danger)' }}>{donorAuth.sendError}</p>}
                 </form>
               ) : (
                 <form onSubmit={handleSendSignInCode} className="space-y-2">
                   <div>
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
+                    <label htmlFor="signin-email" className={`${CAPS} mb-1 block`}>Your Email</label>
                     <input
+                      id="signin-email"
                       type="email"
                       value={signInEmail}
+                      autoComplete="email"
                       onChange={e => { setSignInEmail(e.target.value); setSignInEmailError(null); }}
                       placeholder="you@example.com"
-                      className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
-                      style={{ borderColor: signInEmailError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
+                      className={`${INPUT} placeholder:text-[color:var(--muted)]`}
+                      style={{ borderColor: signInEmailError || donorAuth.sendError ? 'var(--danger)' : 'var(--line)' }}
                     />
-                    {signInEmailError && <p className="text-red-500 text-xs mt-1 px-1">{signInEmailError}</p>}
-                    {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
+                    {signInEmailError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{signInEmailError}</p>}
+                    {donorAuth.sendError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{donorAuth.sendError}</p>}
                   </div>
-                  <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                    className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
-                    style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: signInEmail.trim() && !donorAuth.sendingCode ? 1 : 0.4 }}>
+                  <Button type="submit" disabled={!signInEmail.trim()} loading={donorAuth.sendingCode}>
                     {donorAuth.sendingCode ? 'Sending…' : 'Email me a sign-in code →'}
-                  </motion.button>
+                  </Button>
                 </form>
               )}
-              <button onClick={exitSignInMode} className="w-full text-center py-2 text-sm text-gray-400">
+              <Button variant="tertiary" size="md" onClick={exitSignInMode}>
                 ← Back
-              </button>
+              </Button>
             </div>
           ) : (
             <button
               onClick={() => setSignInMode(true)}
-              className="w-full text-center py-2"
+              className="w-full text-center min-h-11 py-2"
             >
-              <span className="text-gray-400 text-sm">Already have an account? </span>
-              <span className="text-sm font-semibold underline" style={{ color: '#003865' }}>Sign in</span>
+              <span className="text-sm" style={{ color: 'var(--slate)' }}>Already have an account? </span>
+              <span className="text-sm font-semibold underline" style={{ color: 'var(--navy-deep)' }}>Sign in</span>
             </button>
           )}
           </div>
@@ -996,80 +1081,79 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             style={{ ...scrim('opaque'), zIndex: Z.blockingScrim }}
           >
             <div className="text-center">
-              <div className="text-5xl mb-4">&#127968;</div>
-              <h2 className="text-white font-bold text-xl mb-3">Not Available in California Yet</h2>
-              <p className="text-white/75 text-sm leading-relaxed mb-6">
-                PocketCache isn&apos;t available in California yet. We&apos;re working on it! Ask your favorite nonprofit for updates.
+              <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4"><Info size={32} color="#fff" aria-hidden /></div>
+              <h2 className="text-white font-bold text-xl mb-3" style={{ textWrap: 'balance' }}>Not Available in California Yet</h2>
+              <p className="text-white/80 text-sm leading-relaxed mb-6">
+                PocketCache isn&apos;t available in California yet. We&apos;re working on it! Ask your nonprofit for updates.
               </p>
-              <motion.button
-                whileTap={{ scale: 0.9, opacity: 0.6 }}
-                onClick={() => setSelectedState('')}
-                className="bg-white/20 text-white font-semibold px-6 py-3 rounded-2xl text-sm"
-              >
+              <Button variant="secondary" size="md" fullWidth={false} onClick={() => setSelectedState('')} className="px-6">
                 ← Go Back
-              </motion.button>
+              </Button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Consent checkbox  -  pinned below the scroll area */}
-      <div className="bg-white px-5 pt-3 space-y-3" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
+      {/* Consent checkboxes  -  pinned below the scroll area. Signup only: a
+          returning donor signing in is not making a new commitment (see
+          signInMode). Both boxes stay REQUIRED (owner decision). A visually
+          hidden native checkbox inside each label does the toggling, so the
+          label, keyboard and screen readers all agree on the state. */}
+      {!signInMode && (
+      <div className="bg-white px-5 pt-3 space-y-2" style={{ paddingBottom: safeBottomAtLeast(32, 12) }}>
           <label
-            className="flex items-start gap-3 cursor-pointer"
-            onClick={e => { if (e.target.tagName !== 'A') { setAgreedTerms(v => !v); setShowTermsHint(false); } }}
-            style={showTermsHint && !agreedTerms ? { outline: '2px solid #f59e0b', borderRadius: 8, padding: 4 } : {}}
+            className="flex items-start gap-3 cursor-pointer min-h-11 rounded-lg"
+            style={showTermsHint && !agreedTerms ? { outline: '2px solid var(--warning)', outlineOffset: 2 } : {}}
           >
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={agreedTerms}
+              onChange={e => { setAgreedTerms(e.target.checked); setShowTermsHint(false); }}
+              data-testid="signup-terms-checkbox"
+            />
             <div
-              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-              style={{ borderColor: agreedTerms ? '#003865' : '#d1d5db', background: agreedTerms ? '#003865' : '#fff' }}
+              aria-hidden="true"
+              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all peer-focus-visible:ring-[3px] peer-focus-visible:ring-[color:rgba(13,148,136,0.35)]"
+              style={{ borderColor: agreedTerms ? 'var(--navy-deep)' : 'var(--muted)', background: agreedTerms ? 'var(--navy-deep)' : '#fff' }}
             >
               {agreedTerms && <CheckCircle size={12} className="text-white" />}
             </div>
-            <span className="text-xs text-gray-500 leading-relaxed">
+            <span className="text-[13px] leading-relaxed" style={{ color: 'var(--ink-2)' }}>
               I am at least 18 years old and agree to the{' '}
-              <a href="/legal/terms/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Terms of Service</a>
+              <a href="/legal/terms/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: 'var(--navy-deep)' }}>Terms of Service</a>
               {' '}and{' '}
-              <a href="/legal/privacy/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Privacy Policy</a>.
+              <a href="/legal/privacy/" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: 'var(--navy-deep)' }}>Privacy Policy</a>.
             </span>
           </label>
           <label
-            className="flex items-start gap-3 cursor-pointer"
-            onClick={e => { if (e.target.tagName !== 'A') setCommsOptin(v => !v); }}
+            className="flex items-start gap-3 cursor-pointer min-h-11 rounded-lg"
+            style={showTermsHint && !commsOptin ? { outline: '2px solid var(--warning)', outlineOffset: 2 } : {}}
           >
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={commsOptin}
+              onChange={e => { setCommsOptin(e.target.checked); setShowTermsHint(false); }}
+              data-testid="signup-comms-checkbox"
+            />
             <div
-              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-              style={{ borderColor: commsOptin ? '#003865' : '#d1d5db', background: commsOptin ? '#003865' : '#fff' }}
+              aria-hidden="true"
+              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all peer-focus-visible:ring-[3px] peer-focus-visible:ring-[color:rgba(13,148,136,0.35)]"
+              style={{ borderColor: commsOptin ? 'var(--navy-deep)' : 'var(--muted)', background: commsOptin ? 'var(--navy-deep)' : '#fff' }}
             >
               {commsOptin && <CheckCircle size={12} className="text-white" />}
             </div>
-            <span className="text-xs text-gray-500 leading-relaxed">
+            <span className="text-[13px] leading-relaxed" style={{ color: 'var(--ink-2)' }}>
               {/* Tokenized to the joined nonprofit's FULL name (item 9a) -
                   never a hardcoded org, and a graceful fallback before one
                   is bound. */}
               PocketCache and {nonprofit?.name ?? 'your chosen nonprofit partner'} may contact me with account and giving updates  -  details in our{' '}
-              <a href="/legal/terms/#communications" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: '#003865' }}>Terms</a>.
+              <a href="/legal/terms/#communications" target="_blank" rel="noopener" className="font-semibold underline" style={{ color: 'var(--navy-deep)' }}>Terms</a>.
             </span>
           </label>
-          {/* Subtle always-on hint about what still gates the buttons above
-              (item 4): state first, then whichever box is still unchecked. */}
-          {!canContinue && !isCA && (
-            <p className="text-xs text-center text-gray-400" data-testid="signup-gate-hint">
-              {selectedState === ''
-                ? 'Select your state above to continue'
-                : 'Check both boxes above to continue'}
-            </p>
-          )}
-          {showTermsHint && !canContinue && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs text-amber-600 font-medium text-center"
-            >
-              Please complete this to continue
-            </motion.p>
-          )}
       </div>
+      )}
       {/* Welcome back overlay */}
       <AnimatePresence>
         {welcomeBack && (
@@ -1079,9 +1163,9 @@ function SignUpScreen({ onNext, onBack, nonprofit, hasAccount, accountStatus, on
             className="flex flex-col items-center justify-center gap-4 px-8"
             style={{ ...scrim('opaque'), zIndex: Z.blocking }}
           >
-            <div className="text-5xl">👋</div>
-            <p className="text-white font-bold text-2xl text-center">Welcome back{greetingNameFor(hasAccount) ? `, ${greetingNameFor(hasAccount)}` : ''}!</p>
-            <p className="text-white/70 text-sm text-center">Taking you to your dashboard…</p>
+            <div className="text-5xl" aria-hidden>👋</div>
+            <p className="text-white font-bold text-2xl text-center" style={{ textWrap: 'balance' }}>Welcome back{greetingNameFor(hasAccount) ? `, ${greetingNameFor(hasAccount)}` : ''}!</p>
+            <p className="text-white/80 text-sm text-center">Taking you to your dashboard…</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1158,66 +1242,64 @@ function AdminSignInScreen({ onBack, onComplete }) {
         className="flex flex-col justify-end px-8 pb-8 shrink-0"
         style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
-        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
-          <ArrowLeft size={14} /> Back
+        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/80 text-sm font-semibold mb-2 -ml-2 px-2 min-h-11 self-start flex items-center gap-1">
+          <ArrowLeft size={16} aria-hidden /> Back
         </motion.button>
         <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
           Nonprofit{'\n'}Admin
         </h1>
-        <p className="text-white/70 text-xs mt-2 leading-relaxed">
+        <p className="text-white/80 text-[13px] mt-2 leading-relaxed">
           Sign in with your organization&apos;s work email. No password  -  we email you a fresh code each time.
         </p>
       </div>
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10">
         {!sent ? (
           <form onSubmit={send} className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Work email</label>
+            <label htmlFor="admin-email" className={`${CAPS} block`}>Work email</label>
             <input
-              type="email" required value={email}
+              id="admin-email"
+              type="email" required value={email} autoComplete="email"
               onChange={e => { setEmail(e.target.value); setError(null); }}
               placeholder="you@yourorg.org"
-              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400"
-              style={{ borderColor: error ? '#ef4444' : '#e5e7eb' }}
+              className={`${INPUT} placeholder:text-[color:var(--muted)]`}
+              style={{ borderColor: error ? 'var(--danger)' : 'var(--line)' }}
             />
             {remembered && (
-              <button type="button" onClick={notYou} className="text-xs text-gray-400 font-medium underline px-1">Not you?</button>
+              <button type="button" onClick={notYou} className={`${TEXT_BTN} underline -my-2`}>Not you?</button>
             )}
-            {error && <p className="text-red-500 text-xs px-1">{error}</p>}
-            <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={!email || auth.sendingCode}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: email && !auth.sendingCode ? 1 : 0.4 }}>
+            {error && <p role="alert" className="text-[13px] px-1" style={{ color: 'var(--danger)' }}>{error}</p>}
+            <Button type="submit" disabled={!email} loading={auth.sendingCode}>
               {auth.sendingCode ? 'Sending…' : 'Email me a sign-in code →'}
-            </motion.button>
-            <p className="text-gray-400 text-xs leading-relaxed px-1">
+            </Button>
+            <p className={`${HELP} leading-relaxed px-1`}>
               Your admin sign-in is the work email verified when your page was created.
               Nothing to remember, nothing to steal.
             </p>
           </form>
         ) : (
           <form onSubmit={verify} className="space-y-3">
-            <p className="text-gray-500 text-sm">
-              We sent a 6-digit code to <strong className="text-gray-900">{email}</strong>. Enter it to continue.
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
+              We sent a 6-digit code to <strong style={{ color: 'var(--ink)' }}>{email}</strong>. Enter it to continue.
             </p>
             <input
               type="text" inputMode="numeric" maxLength={6} value={codeInput}
+              aria-label="6-digit code" autoComplete="one-time-code"
               onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '')); setCodeError(null); }}
-              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
-              style={{ borderColor: codeError ? '#ef4444' : '#e5e7eb' }}
+              className={`${INPUT} font-mono text-center text-xl tracking-[0.5em]`}
+              style={{ borderColor: codeError ? 'var(--danger)' : 'var(--line)' }}
             />
-            {codeError && <p className="text-red-500 text-xs px-1">{codeError}</p>}
-            <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={codeInput.length !== 6 || auth.verifying || resolving}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: codeInput.length === 6 && !auth.verifying && !resolving ? 1 : 0.4 }}>
+            {codeError && <p role="alert" className="text-[13px] px-1" style={{ color: 'var(--danger)' }}>{codeError}</p>}
+            <Button type="submit" disabled={codeInput.length !== 6} loading={auth.verifying || resolving}>
               {auth.verifying || resolving ? 'Signing in…' : 'Sign in →'}
-            </motion.button>
-            <div className="flex justify-center gap-4">
+            </Button>
+            <div className="flex justify-center gap-4 -my-2">
               <button type="button" disabled={auth.sendingCode} onClick={send}
-                className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                className={`${TEXT_BTN} disabled:opacity-50`}>
                 {auth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
               </button>
-              <button type="button" onClick={() => { setSent(false); setCodeInput(''); setCodeError(null); }} className="text-sm text-gray-400 font-medium">Change email</button>
+              <button type="button" onClick={() => { setSent(false); setCodeInput(''); setCodeError(null); }} className={TEXT_BTN}>Change email</button>
             </div>
-            {error && <p className="text-red-500 text-xs px-1 text-center">{error}</p>}
+            {error && <p role="alert" className="text-[13px] px-1 text-center" style={{ color: 'var(--danger)' }}>{error}</p>}
           </form>
         )}
       </div>
@@ -1236,13 +1318,17 @@ function AdminSignInScreen({ onBack, onComplete }) {
 // On success: onIdentityVerified adopts the identity (pc_identity + app-level
 // hasAccount), then onSignIn() routes by role - donor-only → giving,
 // admin-only → dashboard, both → last-used mode.
-function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, onAdminSignIn }) {
+function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, onAdminSignIn, showDemo }) {
   const donorAuth = useDonorAuth({ resumeKey: 'app' });
   const [chosen, setChosen] = useState(null);
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState(null);
   // "Code sent" feedback for the Resend code button below - auto-clears.
   const [justResent, setJustResent] = useState(false);
+  // Set when the sign-in succeeded but no nonprofit is bound anywhere for
+  // this donor (onSignIn resolved 'no-binding'): the parent moves back to the
+  // gate with the same notice, so this just stops the screen looking stuck.
+  const [notice, setNotice] = useState(null);
   async function handleResend(addr, opts) {
     const ok = await donorAuth.sendCode(addr, opts);
     if (ok) {
@@ -1253,7 +1339,10 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
 
   function finishSignIn(identity) {
     onIdentityVerified?.(identity);
-    setTimeout(() => onSignIn?.(), 500);
+    setTimeout(async () => {
+      const result = await onSignIn?.();
+      if (result === 'no-binding') setNotice('Signed in - we could not find your nonprofit yet. Enter their code to continue.');
+    }, 500);
   }
 
   function handleSendCode(e) {
@@ -1297,25 +1386,25 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
         className="flex flex-col justify-end px-8 pb-8 shrink-0"
         style={{ background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}
       >
-        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/60 text-sm font-semibold mb-4 self-start flex items-center gap-1">
-          <ArrowLeft size={14} /> Back
+        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={onBack} className="text-white/80 text-sm font-semibold mb-2 -ml-2 px-2 min-h-11 self-start flex items-center gap-1">
+          <ArrowLeft size={16} aria-hidden /> Back
         </motion.button>
         <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
           Welcome{'\n'}Back
         </h1>
-        <p className="text-white/70 text-xs mt-2 leading-relaxed">
+        <p className="text-white/80 text-[13px] mt-2 leading-relaxed">
           Sign in with the account you used before.
         </p>
       </div>
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 flex flex-col overflow-y-auto px-6 pt-6 pb-10 gap-4">
         {!donorAuth.checkingSession && donorAuth.existingSession && (
           <motion.button
-            whileTap={{ scale: 0.97 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => finishSignIn(donorAuth.existingSession)}
-            className="w-full flex items-center gap-2 px-3 py-3 rounded-2xl border text-left"
-            style={{ borderColor: '#FBBF24', background: '#FFFBEB' }}
+            className="w-full flex items-center gap-2 px-3 min-h-12 rounded-2xl border text-left"
+            style={{ borderColor: 'var(--gold)', background: 'var(--warning-50)' }}
           >
-            <span className="text-amber-500">👋</span>
+            <span className="text-amber-500" aria-hidden>👋</span>
             {/* truncate: a long email must never wrap this button onto three
                 awkward lines - the middle of the address is the part that can
                 go missing without losing meaning. */}
@@ -1324,54 +1413,56 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
             </span>
           </motion.button>
         )}
+        {notice && (
+          <p role="status" className="text-[13px] px-1 -mt-2" style={{ color: 'var(--warning)' }}>{notice}</p>
+        )}
 
         {donorAuth.stage === 'code' ? (
           <form onSubmit={handleVerifyCode} className="space-y-3">
-            <p className="text-gray-500 text-sm px-1">
-              We sent a 6-digit code to <strong className="text-gray-900">{donorAuth.email}</strong>.
+            <p className="text-sm px-1" style={{ color: 'var(--ink-2)' }}>
+              We sent a 6-digit code to <strong style={{ color: 'var(--ink)' }}>{donorAuth.email}</strong>.
             </p>
             <input
               type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+              aria-label="6-digit code" autoComplete="one-time-code"
               onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-blue-400 font-mono text-center text-xl tracking-[0.5em]"
-              style={{ borderColor: donorAuth.codeError ? '#ef4444' : '#e5e7eb' }}
+              className={`${INPUT} font-mono text-center text-xl tracking-[0.5em]`}
+              style={{ borderColor: donorAuth.codeError ? 'var(--danger)' : 'var(--line)' }}
             />
-            {donorAuth.codeError && <p className="text-red-500 text-xs px-1">{donorAuth.codeError}</p>}
-            <motion.button whileTap={{ scale: 0.97 }} type="submit"
-              className="w-full py-4 rounded-2xl font-bold text-base text-white"
-              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: donorAuth.codeInput.length === 6 && !donorAuth.verifying ? 1 : 0.4 }}>
+            {donorAuth.codeError && <p role="alert" className="text-[13px] px-1" style={{ color: 'var(--danger)' }}>{donorAuth.codeError}</p>}
+            <Button type="submit" disabled={donorAuth.codeInput.length !== 6} loading={donorAuth.verifying}>
               {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
-            </motion.button>
-            <div className="flex justify-center gap-4">
+            </Button>
+            <div className="flex justify-center gap-4 -my-2">
               <button type="button" disabled={donorAuth.sendingCode}
                 onClick={() => handleResend(donorAuth.email, { shouldCreateUser: false })}
-                className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                className={`${TEXT_BTN} disabled:opacity-50`}>
                 {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
               </button>
-              <button type="button" onClick={() => donorAuth.resetToEmail()} className="text-sm text-gray-400 font-medium">Change email</button>
+              <button type="button" onClick={() => donorAuth.resetToEmail()} className={TEXT_BTN}>Change email</button>
             </div>
-            {donorAuth.sendError && <p className="text-red-500 text-xs px-1 text-center">{donorAuth.sendError}</p>}
+            {donorAuth.sendError && <p role="alert" className="text-[13px] px-1 text-center" style={{ color: 'var(--danger)' }}>{donorAuth.sendError}</p>}
           </form>
         ) : (
           <form onSubmit={handleSendCode} className="space-y-2">
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Email</label>
+              <label htmlFor="gate-signin-email" className={`${CAPS} mb-1 block`}>Your Email</label>
               <input
+                id="gate-signin-email"
                 type="email"
                 value={email}
+                autoComplete="email"
                 onChange={e => { setEmail(e.target.value); setEmailError(null); }}
                 placeholder="you@example.com"
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
-                style={{ borderColor: emailError || donorAuth.sendError ? '#ef4444' : '#e5e7eb' }}
+                className={`${INPUT} placeholder:text-[color:var(--muted)]`}
+                style={{ borderColor: emailError || donorAuth.sendError ? 'var(--danger)' : 'var(--line)' }}
               />
-              {emailError && <p className="text-red-500 text-xs mt-1 px-1">{emailError}</p>}
-              {donorAuth.sendError && <p className="text-red-500 text-xs mt-1 px-1">{donorAuth.sendError}</p>}
+              {emailError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{emailError}</p>}
+              {donorAuth.sendError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{donorAuth.sendError}</p>}
             </div>
-            <motion.button whileTap={{ scale: 0.97 }} type="submit"
-              className="w-full py-3.5 rounded-2xl font-bold text-sm text-white"
-              style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)', opacity: email.trim() && !donorAuth.sendingCode ? 1 : 0.4 }}>
+            <Button type="submit" disabled={!email.trim()} loading={donorAuth.sendingCode}>
               {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
-            </motion.button>
+            </Button>
           </form>
         )}
 
@@ -1380,30 +1471,34 @@ function GateSignInScreen({ onBack, onSignIn, onIdentityVerified, onDemoAdmin, o
         {(!isNative() || nativeSSOAvailable()) && (
           <>
             <div className="flex items-center gap-3 py-1">
-              <div className="flex-1 h-px bg-gray-100" />
-              <p className="text-gray-400 text-xs font-medium">or</p>
-              <div className="flex-1 h-px bg-gray-100" />
+              <div className="flex-1 h-px bg-[color:var(--line)]" />
+              <p className={`${HELP} font-medium`}>or</p>
+              <div className="flex-1 h-px bg-[color:var(--line)]" />
             </div>
             <SsoButtons onPress={handleSSO} chosen={chosen} errors={donorAuth.oauthErrors} />
           </>
         )}
-        <p className="text-gray-400 text-xs text-center leading-relaxed px-2">
+        <p className={`${HELP} text-center leading-relaxed px-2`}>
           {isNative() && !nativeSSOAvailable()
             ? "Sign in with your email  -  we'll send you a 6-digit code, no password needed."
             : 'No passwords here  -  we\'ll email you a one-time code, or use Apple or Google.'}
         </p>
         {onAdminSignIn && (
-          <button onClick={onAdminSignIn} className="text-sm text-gray-400 text-center py-1">
-            Nonprofit admin? <span className="font-semibold underline" style={{ color: '#003865' }}>Sign in with your work email</span>
+          <button onClick={onAdminSignIn} className="text-sm text-center min-h-11 py-1" style={{ color: 'var(--slate)' }}>
+            Nonprofit admin? <span className="font-semibold underline" style={{ color: 'var(--navy-deep)' }}>Sign in with your work email</span>
           </button>
         )}
-        {/* Demo-only shortcut so prospects can see the admin side without creating an org */}
-        <button
-          onClick={onDemoAdmin}
-          className="w-full text-center pb-1 text-xs text-gray-400"
-        >
-          Demo: preview the BGCA admin dashboard →
-        </button>
+        {/* Demo-only shortcut so prospects can see the admin side without
+            creating an org. Hidden outside demo (showDemo). */}
+        {showDemo && (
+          <button
+            onClick={onDemoAdmin}
+            className="w-full text-center min-h-11 text-[13px]"
+            style={{ color: 'var(--slate)' }}
+          >
+            Demo: preview the BGCA admin dashboard →
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -1419,7 +1514,7 @@ export const BANKS = [
   { id: 'bofa',    name: 'Bank of America', sub: 'Customized Cash, Travel', color: '#e31837', emoji: '🏦' },
 ];
 
-function ConnectCardScreen({ onNext, onBack }) {
+function ConnectCardScreen({ onNext, onBack, showDemo }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -1481,31 +1576,31 @@ function ConnectCardScreen({ onNext, onBack }) {
               <p className="text-white/80 font-mono whitespace-nowrap" style={{ fontSize: 10, letterSpacing: '0.16em' }}>•••• •••• •••• ••••</p>
             </motion.div>
           </motion.div>
-          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px', textWrap: 'balance' }}>
             Which card should{'\n'}we track?
           </h1>
-          <p className="text-white/80 text-xs mt-2 text-center leading-relaxed">
+          <p className="text-white/80 text-[13px] mt-2 text-center leading-relaxed">
             Every purchase rounds up  -  the change goes straight to your cause. This card is never charged, we only watch it.
           </p>
         </div>
       </div>
 
-        <div className="rounded-t-3xl -mt-4" style={{ background: '#f0fdfb', minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-10 space-y-2.5" style={{ paddingBottom: sheetPadBottom }}>
+        <div className="rounded-t-3xl -mt-4" style={{ background: 'var(--teal-50)', minHeight: sheetMinHeight }}>
+          <div className="px-4 pt-10 space-y-3" style={{ paddingBottom: sheetPadBottom }}>
 
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Connect your bank  -  never charged</p>
+          <p className={`${CAPS} px-1 pb-1`}>Connect your bank  -  never charged</p>
 
           {connected ? (
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="rounded-2xl p-4 flex items-center gap-3"
-              style={{ background: '#f0fdfa', border: '1px solid #99f6e4' }}
+              className="rounded-2xl p-4 flex items-center gap-3 bg-white"
+              style={{ border: '1px solid var(--teal-100)', boxShadow: 'var(--shadow-1)' }}
             >
-              <CheckCircle size={22} className="shrink-0" style={{ color: '#0D9488' }} />
+              <CheckCircle size={22} className="shrink-0" style={{ color: 'var(--teal-ui)' }} />
               <div>
-                <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{connected.name} ····{connected.last4} connected</p>
-                <p className="text-xs mt-0.5" style={{ color: '#0f766e' }}>We&apos;ll track your purchases and calculate round-ups as they happen</p>
+                <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>{connected.name} ····{connected.last4} connected</p>
+                <p className="text-[13px] mt-1" style={{ color: 'var(--teal-700)' }}>We&apos;ll track your purchases and calculate round-ups as they happen</p>
               </div>
             </motion.div>
           ) : showManualEntry ? (
@@ -1516,45 +1611,47 @@ function ConnectCardScreen({ onNext, onBack }) {
             />
           ) : (
             <>
-              <PlaidBankConnect variant="app" onConnected={card => setConnected(card)} />
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                className="w-full flex items-center gap-3 p-4 rounded-2xl text-left border-2 border-dashed border-gray-200 bg-white mt-2.5"
-                onClick={() => setShowManualEntry(true)}
-              >
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-teal-50">
-                  <Lock size={18} className="text-teal-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-700 text-sm">Enter your card manually</p>
-                  <p className="text-gray-400 text-xs">Type your card number  -  encrypted via Plaid</p>
-                </div>
-                <ArrowRight size={16} className="text-gray-300 shrink-0" />
-              </motion.button>
+              <PlaidBankConnect variant="app" showDemo={showDemo} onConnected={card => setConnected(card)} />
+              {/* Typed-in card: demo scaffolding only (nothing is encrypted or
+                  sent anywhere - see lib/manualCard.js). Real donors link a
+                  card through Plaid Link above. */}
+              {showDemo && (
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  className="w-full flex items-center gap-3 p-4 rounded-2xl text-left border border-dashed bg-white mt-3"
+                  style={{ borderColor: 'var(--muted)' }}
+                  onClick={() => setShowManualEntry(true)}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--teal-50)' }}>
+                    <CreditCard size={18} style={{ color: 'var(--teal-700)' }} aria-hidden />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm" style={{ color: 'var(--ink)' }}>Enter your card manually</p>
+                    <p className={HELP}>Demo only - type a card number (we keep just the last 4)</p>
+                  </div>
+                  <ArrowRight size={16} className="shrink-0" style={{ color: 'var(--muted)' }} aria-hidden />
+                </motion.button>
+              )}
             </>
           )}
 
           <div className="flex items-center gap-2 px-1 pt-1">
-            <Lock size={12} className="text-gray-400 shrink-0" />
-            <p className="text-gray-400 text-xs">Read-only access via Plaid · Never charged · Your credentials are never stored by PocketCache</p>
+            <Lock size={13} className="shrink-0" style={{ color: 'var(--slate)' }} aria-hidden />
+            <p className={HELP}>Read-only access via Plaid · Never charged · Your credentials are never stored by PocketCache</p>
           </div>
           </div>
         </div>
-        <ScrollFadeEdge show={showFade} rgb="240,253,251" />
+        <ScrollFadeEdge show={showFade} rgb="232,251,247" />
       </div>
 
-      <div className="px-4 pt-3 border-t border-teal-100" style={{ background: '#f0fdfb', paddingBottom: safeBottomAtLeast(40, 12) }}>
-          <motion.button
-            whileTap={connected ? { scale: 0.97 } : {}}
+      <div className="px-4 pt-3 border-t" style={{ background: 'var(--teal-50)', borderColor: 'var(--teal-100)', paddingBottom: safeBottomAtLeast(40, 12) }}>
+          <Button
+            disabled={!connected}
             onClick={() => connected && onNext(connected)}
-            className="w-full py-4 rounded-2xl text-white font-bold text-base"
-            style={{
-              background: connected ? 'linear-gradient(135deg, #0d9488, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-              cursor: connected ? 'pointer' : 'default',
-            }}
           >
             {connected ? 'Continue →' : 'Select a card to continue'}
-          </motion.button>
+          </Button>
       </div>
     </motion.div>
   );
@@ -1566,10 +1663,13 @@ function ConnectCardScreen({ onNext, onBack }) {
 export const PAYMENT_OPTIONS = [
   {
     id: 'ach',
-    icon: '🏦',
+    icon: <Landmark size={22} aria-hidden />,
     label: 'Bank Account',
     sub: 'Direct bank transfer · Includes flat $1/month app fee',
     badge: null,
+    // Bank debit stays demo-only until the Stripe bank-debit authorization
+    // exists (see BankPaymentAuth.jsx and PRELAUNCH.md).
+    demoOnly: true,
   },
   {
     id: 'apple_pay',
@@ -1580,14 +1680,14 @@ export const PAYMENT_OPTIONS = [
   },
   {
     id: 'card',
-    icon: '💳',
+    icon: <CreditCard size={22} aria-hidden />,
     label: 'Credit or Debit Card',
     sub: 'Visa, Mastercard, Amex, or Discover · Includes flat $1/month app fee',
     badge: null,
   },
 ];
 
-function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
+function PaymentMethodScreen({ onNext, onBack, linkedBank, showDemo }) {
   const {
     frameRef, scrollRef, heroRef, onScroll,
     heroMinHeight, heroExpandedOpacity, heroCompactOpacity, sheetMinHeight, barHeight,
@@ -1606,6 +1706,11 @@ function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
   const achReady = selected !== 'ach' || !!achSource;
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
+  // Only a real Plaid depository account may be offered as the debit source.
+  // A typed-in card, the practice fallback or a Plaid-tracked credit card is a
+  // tracking source, never a bank to charge (lib/plaid.js isDebitableBank).
+  const debitableBank = isDebitableBank(linkedBank) ? linkedBank : null;
+  const options = PAYMENT_OPTIONS.filter(o => showDemo || !o.demoOnly);
 
   function handleContinue() {
     if (!selected) return;
@@ -1656,15 +1761,15 @@ function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
         >
           <motion.div className="mb-2 flex flex-col items-center gap-2">
             <div className="flex gap-2">
-              {['🏦', <AppleLogo key="apple-hero-icon" size={22} color="#fff" />, '💳'].map((icon, i) => (
+              {options.map((opt, i) => (
                 <motion.div
-                  key={i}
+                  key={opt.id}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: i * 0.1 + 0.2, type: 'spring', stiffness: 280 }}
-                  className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl"
+                  className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-white"
                 >
-                  {icon}
+                  {opt.id === 'apple_pay' ? <AppleLogo size={22} color="#fff" /> : opt.icon}
                 </motion.div>
               ))}
             </div>
@@ -1672,9 +1777,9 @@ function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-1.5"
+              className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2"
             >
-              <span className="text-white text-xs font-semibold">Charged once a month · $5 minimum</span>
+              <span className="text-white text-xs font-semibold">Charged once a month · ${MONTHLY_FLOOR} minimum</span>
             </motion.div>
           </motion.div>
           {/* Hard break, and both halves must fit 329px at text-3xl: "How should
@@ -1683,34 +1788,38 @@ function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
           <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
             How do we collect{'\n'}your round-ups?
           </h1>
-          <p className="text-white/80 text-xs mt-1 text-center leading-relaxed">
+          <p className="text-white/80 text-[13px] mt-1 text-center leading-relaxed">
             One monthly charge  -  your choice of payment method.
           </p>
         </div>
       </div>
 
-        <div className="bg-gray-50 rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
-          <div className="px-4 pt-10 space-y-2.5" style={{ paddingBottom: sheetPadBottom }}>
+        <div className="rounded-t-3xl -mt-4" style={{ background: 'var(--surface)', minHeight: sheetMinHeight }}>
+          <div className="px-4 pt-10 space-y-3" style={{ paddingBottom: sheetPadBottom }}>
 
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest px-1 pb-1">Choose your payment method</p>
+          <p className={`${CAPS} px-1 pb-1`}>Choose your payment method</p>
 
-          {PAYMENT_OPTIONS.map(opt => (
+          <div role="radiogroup" aria-label="Payment method" className="space-y-3">
+          {options.map(opt => (
             <motion.button
               key={opt.id}
-              whileTap={{ scale: 0.97 }}
+              type="button"
+              role="radio"
+              aria-checked={selected === opt.id}
+              whileTap={{ scale: 0.98 }}
               onClick={() => setSelected(opt.id)}
               className="w-full flex items-center gap-3 p-4 rounded-2xl text-left transition-all"
               style={selected === opt.id
-                ? { background: '#FEF3C7', border: '2px solid #FBBF24' }
-                : { background: '#fff', border: '1.5px solid #e5e7eb' }
+                ? { background: 'var(--gold-50)', border: '2px solid var(--gold)' }
+                : { background: '#fff', border: '1px solid var(--line)', boxShadow: 'var(--shadow-1)' }
               }
             >
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-2xl bg-gray-50">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--brand-accent-light, #00386514)', color: 'var(--brand-primary, #003865)' }}>
                 {opt.icon}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-bold text-gray-900 text-sm">{opt.label}</p>
+                  <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>{opt.label}</p>
                   {opt.badge && (
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white"
                       style={{ background: opt.badgeColor }}>
@@ -1718,29 +1827,32 @@ function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
                     </span>
                   )}
                 </div>
-                <p className="text-gray-400 text-xs mt-0.5">{opt.sub}</p>
+                <p className={`${HELP} mt-1`}>{opt.sub}</p>
               </div>
               <div
+                aria-hidden
                 className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
                 style={selected === opt.id
-                  ? { borderColor: '#FBBF24', background: '#FBBF24' }
-                  : { borderColor: '#d1d5db', background: 'transparent' }
+                  ? { borderColor: 'var(--gold-700)', background: 'var(--gold-700)' }
+                  : { borderColor: 'var(--muted)', background: 'transparent' }
                 }
               >
                 {selected === opt.id && <div className="w-2 h-2 rounded-full bg-white" />}
               </div>
             </motion.button>
           ))}
+          </div>
 
           {/* Bank account authorization panel (item 2) - appears the moment
               the option is picked; Continue stays gated until a source is
-              explicitly authorized. */}
+              explicitly authorized. Only a debitable Plaid bank is offered as
+              the pre-linked source (debitableBank above). */}
           {selected === 'ach' && (
-            <div className="rounded-2xl p-4 bg-white" style={{ border: '1.5px solid #e5e7eb' }}>
-              <p className="text-gray-400 text-xs font-bold uppercase tracking-widest pb-2">Bank account to charge</p>
+            <div className="rounded-2xl p-4 bg-white" style={{ border: '1px solid var(--line)', boxShadow: 'var(--shadow-1)' }}>
+              <p className={`${CAPS} pb-2`}>Bank account to charge</p>
               <BankPaymentAuth
                 variant="app"
-                linkedBank={linkedBank}
+                linkedBank={debitableBank}
                 authorized={achSource}
                 onAuthorized={src => setAchSource(src)}
                 onClear={() => setAchSource(null)}
@@ -1748,68 +1860,68 @@ function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
             </div>
           )}
 
-          <p className="text-gray-400 text-xs text-center px-2 pt-1">
+          <p className={`${HELP} text-center px-2 pt-1`}>
             Change this anytime in Settings. Payments are processed by Stripe  -  not us.
           </p>
 
           {/* Quiet monthly-max opt-in  -  deliberately understated (adjust later in Settings) */}
-          <div className="rounded-2xl p-4 bg-white" style={{ border: '1.5px solid #e5e7eb' }}>
-            <label
-              className="flex items-start gap-3 cursor-pointer"
-              onClick={() => setMonthlyCap(monthlyCap === null ? 20 : null)}
-            >
+          <div className="rounded-2xl p-4 bg-white" style={{ border: '1px solid var(--line)', boxShadow: 'var(--shadow-1)' }}>
+            <label className="flex items-start gap-3 cursor-pointer min-h-11">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={monthlyCap !== null}
+                onChange={e => setMonthlyCap(e.target.checked ? 20 : null)}
+              />
               <div
-                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-                style={{ borderColor: monthlyCap !== null ? '#003865' : '#d1d5db', background: monthlyCap !== null ? '#003865' : '#fff' }}
+                aria-hidden="true"
+                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all peer-focus-visible:ring-[3px] peer-focus-visible:ring-[color:rgba(13,148,136,0.35)]"
+                style={{ borderColor: monthlyCap !== null ? 'var(--navy-deep)' : 'var(--muted)', background: monthlyCap !== null ? 'var(--navy-deep)' : '#fff' }}
               >
                 {monthlyCap !== null && <CheckCircle size={12} className="text-white" />}
               </div>
-              <span className="text-xs text-gray-500 leading-relaxed">
+              <span className="text-[13px] leading-relaxed" style={{ color: 'var(--ink-2)' }}>
                 Set a monthly maximum (optional)  -  round-ups above it are simply never charged.
               </span>
             </label>
             {monthlyCap !== null && (
               <div className="mt-3">
                 <div className="text-center py-1">
-                  <span className="text-2xl font-bold text-gray-900">${monthlyCap}</span>
-                  <span className="text-gray-400 text-sm ml-1">/month</span>
+                  <span className="text-2xl font-bold tabular-nums" style={{ color: 'var(--ink)' }}>${monthlyCap}</span>
+                  <span className="text-sm ml-1" style={{ color: 'var(--slate)' }}>/month</span>
                 </div>
                 <input
                   type="range" min={5} max={200} step={5} value={monthlyCap}
+                  aria-label="Monthly maximum"
                   onChange={e => setMonthlyCap(Number(e.target.value))}
                   className="w-full accent-teal-600"
                 />
-                <div className="flex justify-between text-xs text-gray-400"><span>$5</span><span>$200</span></div>
+                <div className={`flex justify-between ${HELP}`}><span>$5</span><span>$200</span></div>
               </div>
             )}
           </div>
           </div>
         </div>
-        <ScrollFadeEdge show={showFade} rgb="249,250,251" />
+        <ScrollFadeEdge show={showFade} rgb="246,248,251" />
       </div>
 
-      <div className="px-4 pt-3 bg-gray-50 border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
-          <motion.button
-            whileTap={selected && achReady ? { scale: 0.97 } : {}}
+      <div className="px-4 pt-3 border-t" style={{ background: 'var(--surface)', borderColor: 'var(--line)', paddingBottom: safeBottomAtLeast(40, 12) }}>
+          <Button
+            disabled={!selected || !achReady}
             onClick={handleContinue}
-            className="w-full py-4 rounded-2xl text-white font-bold text-base"
-            style={{
-              background: selected && achReady ? 'linear-gradient(135deg, #FBBF24, #E5A800)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-              color: selected && achReady ? '#0B2A4A' : '#fff',
-              cursor: selected && achReady ? 'pointer' : 'default',
-            }}
           >
             {!selected ? 'Choose a payment method'
               : selected === 'apple_pay' ? 'Pay with Apple Pay →'
                 : !achReady ? 'Authorize a bank account above'
                   : 'Continue →'}
-          </motion.button>
-          <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
+          </Button>
+          <p className={`text-center ${HELP} leading-relaxed px-2 mt-3`}>
             Your round-ups charge once a month through {npName}&apos;s Stripe. You&apos;ll see &ldquo;{npShort}&rdquo; on your statement. They issue your receipt.
           </p>
       </div>
       <ApplePaySheet
         show={showApplePay}
+        showDemo={showDemo}
         payee={npName}
         contextLine="Charged once a month for your round-ups  -  set up now, nothing charges today."
         onCancel={() => setShowApplePay(false)}
@@ -1820,107 +1932,10 @@ function PaymentMethodScreen({ onNext, onBack, linkedBank }) {
 }
 
 // ─── Step 3 (CC path): Enter card via Stripe Elements ───────────────────────
-
-const CARD_ELEMENT_OPTIONS = {
-  style: {
-    base: {
-      fontSize: '16px',
-      color: '#111827',
-      fontFamily: '"Inter", system-ui, sans-serif',
-      '::placeholder': { color: '#9ca3af' },
-    },
-    invalid: { color: '#ef4444' },
-  },
-  hidePostalCode: false,
-};
-
-function CardEntryForm({ onSuccess }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [cardComplete, setCardComplete] = useState(false);
-  const [practice, setPractice] = useState(false);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-    setLoading(true);
-    setError(null);
-
-    // The real save: SetupIntent from our stripe-setup-intent edge function,
-    // confirmCardSetup in the browser (card number goes straight to Stripe),
-    // then stripe-setup-complete verifies server-side and returns the true
-    // brand/last4. See src/lib/stripeSetup.js.
-    try {
-      const element = elements.getElement(CardElement);
-      const email = await currentDonorEmail();
-      const result = await saveCardWithSetupIntent(stripe, element, email);
-      setLoading(false);
-      if (result.error) { setError(result.error); return; } // decline/bad number - donor retries
-      onSuccess(result.card);
-      return;
-    } catch {
-      // Backend or Stripe unreachable before the card was involved: fall back
-      // to the old simulated save so signup never dead-ends, shown as
-      // practice mode (same pattern as the Plaid bank fallback).
-    }
-
-    setPractice(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    const last4 = String(Math.floor(1000 + Math.random() * 9000));
-    onSuccess({ last4, simulated: true });
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div
-        className="bg-white rounded-2xl px-4 py-4 border"
-        style={{ borderColor: error ? '#ef4444' : '#e5e7eb' }}
-      >
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Card details</p>
-        <CardElement
-          options={CARD_ELEMENT_OPTIONS}
-          onChange={e => {
-            setCardComplete(e.complete);
-            setError(e.error?.message ?? null);
-          }}
-        />
-      </div>
-
-      {error && <p className="text-red-500 text-xs px-1">{error}</p>}
-      {practice && (
-        <p className="text-xs rounded-xl px-3 py-2" style={{ color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a' }}>
-          Practice mode  -  we could not reach the real card service right now, so this step is simulated.
-        </p>
-      )}
-
-      <div className="flex items-center gap-2 px-1">
-        <Lock size={13} className="text-gray-400 shrink-0" />
-        <p className="text-gray-400 text-xs">
-          Card details secured by <span className="font-semibold">Stripe</span>. PocketCache never sees your card number.
-        </p>
-      </div>
-
-      <motion.button
-        type="submit"
-        whileTap={cardComplete && !loading ? { scale: 0.97 } : {}}
-        disabled={!cardComplete || loading || !stripe}
-        className="w-full py-4 rounded-2xl text-white font-bold text-base"
-        style={{
-          background: cardComplete && !loading
-            ? 'linear-gradient(135deg, #FBBF24, #E5A800)'
-            : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-          color: cardComplete && !loading ? '#0B2A4A' : '#fff',
-          cursor: cardComplete && !loading ? 'pointer' : 'default',
-        }}
-      >
-        {loading ? 'Saving card securely…' : 'Save Card →'}
-      </motion.button>
-    </form>
-  );
-}
+// The form itself is the shared StripeCardForm (components/StripeCardForm.jsx):
+// real SetupIntent save with server-verified brand/last4, practice-mode
+// fallback when Stripe or the backend is unreachable, { last4, brand,
+// simulated } in onSuccess - the same shape the local copy used to produce.
 
 function CardEntryScreen({ onNext, onBack }) {
   // Same collapsing hero as its siblings in this flow - it was the only
@@ -1933,7 +1948,6 @@ function CardEntryScreen({ onNext, onBack }) {
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
 
   return (
-    <Elements stripe={stripePromise}>
       <motion.div
         initial={{ opacity: 0, x: 30 }}
         animate={{ opacity: 1, x: 0 }}
@@ -1972,30 +1986,29 @@ function CardEntryScreen({ onNext, onBack }) {
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.15, type: 'spring', stiffness: 280 }}
-                className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl mb-5"
+                className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mb-5"
               >
-                💳
+                <CreditCard size={32} color="#fff" aria-hidden />
               </motion.div>
-              <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px' }}>
+              <h1 className="text-white font-bold text-3xl leading-tight text-center" style={{ letterSpacing: '-0.5px', textWrap: 'balance' }}>
                 Add your payment card
               </h1>
-              <p className="text-white/80 text-xs mt-2 text-center leading-relaxed">
-                This is the card we actually charge. Stripe handles it  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
+              <p className="text-white/80 text-[13px] mt-2 text-center leading-relaxed">
+                This is the card {npShort} charges once a month for your round-ups. Stripe handles it  -  PocketCache never sees the number.
               </p>
             </div>
           </div>
 
-          <div className="bg-gray-50 rounded-t-3xl -mt-4" style={{ minHeight: sheetMinHeight }}>
+          <div className="rounded-t-3xl -mt-4" style={{ background: 'var(--surface)', minHeight: sheetMinHeight }}>
             <div className="px-4 pt-8" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
-              <CardEntryForm onSuccess={(info) => onNext(info)} />
-              <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-4">
-                Round-ups collect monthly on {npShort}&apos;s behalf. They issue your tax receipt directly.
+              <StripeCardForm variant="app" onSuccess={(info) => onNext(info)} />
+              <p className={`text-center ${HELP} leading-relaxed px-2 mt-4`}>
+                Round-ups are charged once a month by {npShort}, on their own Stripe account. They issue your tax receipt directly.
               </p>
             </div>
           </div>
         </div>
       </motion.div>
-    </Elements>
   );
 }
 
@@ -2042,7 +2055,6 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
     setCoverProcessing(coverProcessing);
     onConfirm();
   }
-  const rolloverCharge = chargeAfterNextLabel();
 
   const npName  = selectedNonprofit?.name      ?? 'your nonprofit';
   const npShort = selectedNonprofit?.shortName ?? 'your nonprofit';
@@ -2088,11 +2100,11 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
               </p>
             </div>
           </motion.div>
-          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
+          <h1 className="text-white font-bold text-3xl leading-tight text-center whitespace-pre-line" style={{ letterSpacing: '-0.5px', textWrap: 'balance' }}>
             Review &amp;{'\n'}Confirm
           </h1>
-          <p className="text-white/80 text-xs mt-2 text-center">
-            Your round-ups are collected monthly by {npName}.
+          <p className="text-white/80 text-[13px] mt-2 text-center">
+            Your round-ups are charged once a month by {npName}.
           </p>
         </div>
       </div>
@@ -2104,41 +2116,41 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
           {/* Example card - an ILLUSTRATION, never the donor's own total.
               Same framing, same sample figure and same disclaimer as the web
               review step (lib/donorContent EXAMPLE_*). */}
-          <div className="rounded-2xl p-4" style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5' }}>
+          <div className="rounded-2xl p-4 bg-white" style={{ border: '1px solid var(--line)', boxShadow: 'var(--shadow-2)' }}>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Here is how a month could look</p>
-              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">Example</span>
+              <p className={CAPS}>Here is how a month could look</p>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--warning-50)', color: 'var(--warning)' }}>Example</span>
             </div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-700">Round-ups in a sample month</span>
-              <span className="font-bold text-gray-900" data-testid="confirm-roundups">${exampleRoundUps.toFixed(2)}</span>
+              <span className="text-sm" style={{ color: 'var(--ink-2)' }}>Round-ups in a sample month</span>
+              <span className="font-bold tabular-nums" style={{ color: 'var(--green)' }} data-testid="confirm-roundups">${exampleRoundUps.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-500">App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
-              <span className="text-sm text-gray-500">+${appFee.toFixed(2)}</span>
+              <span className="text-sm" style={{ color: 'var(--slate)' }}>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
+              <span className="text-sm tabular-nums" style={{ color: 'var(--slate)' }}>+${appFee.toFixed(2)}</span>
             </div>
             {feeMonths > 1 && (
-              <p className="text-xs text-gray-500 mb-2">
+              <p className={`${HELP} mb-2`}>
                 {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
               </p>
             )}
             {coverProcessing && (
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-500">Processing cover (goes to {npShort})</span>
-                <span className="text-sm text-gray-500">+${processingCover.toFixed(2)}</span>
+                <span className="text-sm" style={{ color: 'var(--slate)' }}>Processing cover (goes to {npShort})</span>
+                <span className="text-sm tabular-nums" style={{ color: 'var(--slate)' }}>+${processingCover.toFixed(2)}</span>
               </div>
             )}
-            <div className="h-px bg-slate-200 my-2" />
+            <div className="h-px my-2" style={{ background: 'var(--line)' }} />
             <div className="flex justify-between items-center">
-              <span className="font-bold text-gray-900">One charge from {npShort}</span>
-              <span className="font-bold text-xl" style={{ color: '#003865' }}>${total.toFixed(2)}</span>
+              <span className="font-bold" style={{ color: 'var(--ink)' }}>One charge from {npShort}</span>
+              <span className="font-bold text-xl tabular-nums" style={{ color: 'var(--ink)' }}>${total.toFixed(2)}</span>
             </div>
             {monthlyCap !== null && monthlyCap !== undefined && (
-              <p className="text-xs mt-2" style={{ color: '#b45309' }} data-testid="confirm-cap-note">
+              <p className="text-[13px] mt-2" style={{ color: 'var(--warning)' }} data-testid="confirm-cap-note">
                 Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
               </p>
             )}
-            <p className="text-xs text-gray-400 mt-2 italic" data-testid="confirm-example-note">
+            <p className={`${HELP} mt-2 italic`} data-testid="confirm-example-note">
               {EXAMPLE_DISCLAIMER}
             </p>
           </div>
@@ -2146,21 +2158,28 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
           {/* Processing cover toggle */}
           {/* Writes through to AppContext, so the answer survives onboarding and
               every later charge bills from it. `setCoverProcessing` persists a
-              boolean - it is not a useState setter, so no updater function. */}
+              boolean - it is not a useState setter, so no updater function. A
+              visually hidden native checkbox inside the label does the toggling. */}
           <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl"
             data-testid="cover-processing-toggle"
-            onClick={() => setCoverProcessing(!coverProcessing)}
-            style={{ background: coverProcessing ? '#d1fae5' : '#f9fafb', border: coverProcessing ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb' }}>
+            style={{ background: coverProcessing ? 'var(--green-50)' : '#fff', border: coverProcessing ? '1px solid #6ee7b7' : '1px solid var(--line)', boxShadow: 'var(--shadow-1)' }}>
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={!!coverProcessing}
+              onChange={e => setCoverProcessing(e.target.checked)}
+            />
             <div
-              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
-              style={{ borderColor: coverProcessing ? '#059669' : '#d1d5db', background: coverProcessing ? '#059669' : '#fff' }}>
+              aria-hidden="true"
+              className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all peer-focus-visible:ring-[3px] peer-focus-visible:ring-[color:rgba(13,148,136,0.35)]"
+              style={{ borderColor: coverProcessing ? 'var(--green)' : 'var(--muted)', background: coverProcessing ? 'var(--green)' : '#fff' }}>
               {coverProcessing && <CheckCircle size={12} className="text-white" />}
             </div>
             <div>
-              <span className="text-sm font-semibold text-gray-900">
+              <span className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
                 Cover {npShort}&apos;s card-processing costs too, so 100% of my round-ups reach them.
               </span>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className={`${HELP} mt-1`}>
                 {coverProcessing
                   ? `The ~$${processingCover.toFixed(2)} in the example goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation and scales with your actual round-ups.`
                   : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
@@ -2169,19 +2188,19 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
           </label>
 
           {/* One-charge explanation */}
-          <div className="rounded-2xl p-4 bg-gray-50">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">How charges work</p>
-            <p className="text-sm text-gray-600 leading-relaxed">
+          <div className="rounded-2xl p-4" style={{ background: 'var(--surface)' }}>
+            <p className={`${CAPS} mb-2`}>How charges work</p>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--ink-2)' }}>
               Once a month, {npName} bundles your round-ups into one charge. You&apos;ll see{' '}
               <strong>&ldquo;{npShort}&rdquo;</strong> on your statement  -  not PocketCache.
             </p>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className={`${HELP} mt-2`}>
               {npShort} sends your tax receipt  -  they&apos;re the ones receiving your donation.
             </p>
-            <p className="text-xs text-gray-400 mt-1">
-              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. Months under ${selectedNonprofit?.monthlyMinimum ?? 5} roll forward to the {rolloverCharge} charge instead  -  we settle up within 3 months at most.
+            <p className={`${HELP} mt-1`}>
+              The flat $1/month app fee isn&apos;t tax-deductible, but your round-ups are. When you cover card-processing costs, that amount counts as part of your donation too. {ROLL_FORWARD_NOTE}
             </p>
-            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+            <p className={`${HELP} mt-2 leading-relaxed`}>
               Tracking starts the moment your card is linked. Your round-ups total up through the last day of the month, we email your <strong>exact amount on the 1st</strong>, and the <strong>charge runs on the {CHARGE_DAY}th</strong>  -  next one {chargeOn}, a full {REVIEW_WINDOW_LAST_DAY} days to review it, and nothing before today ever counts.
             </p>
           </div>
@@ -2190,13 +2209,11 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
         <ScrollFadeEdge show={showFade} rgb="255,255,255" />
       </div>
 
-      <div className="px-4 pt-3 bg-white border-t border-gray-100" style={{ paddingBottom: safeBottomAtLeast(40, 12) }}>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={confirm}
-            className="w-full py-4 rounded-2xl text-white font-bold text-base"
-            style={{ background: 'linear-gradient(135deg, #003865, #001a33)' }}>
+      <div className="px-4 pt-3 bg-white border-t" style={{ borderColor: 'var(--line)', paddingBottom: safeBottomAtLeast(40, 12) }}>
+          <Button onClick={confirm}>
             Start Giving to {npShort}
-          </motion.button>
-          <p className="text-center text-gray-400 text-xs leading-relaxed px-2 mt-3">
+          </Button>
+          <p className={`text-center ${HELP} leading-relaxed px-2 mt-3`}>
             <span className="inline-flex items-center gap-1 justify-center">
               <CoinMark size={14} />
               Powered by PocketCache, LLC. You can cancel anytime in Settings.
@@ -2220,17 +2237,17 @@ function CheckoutConfirmScreen({ onConfirm, onBack }) {
 // three things that fill that space: brand mark, title, and a one-line subtitle
 // that says what this step actually does.
 const NP_SIGNUP_HEADER = {
-  ein:            { title: 'Verify Your\nNonprofit',   sub: 'We check your 501(c)(3) status against public IRS records. Takes a few seconds.' },
+  ein:            { title: 'Verify Your\nNonprofit',   sub: 'Enter your EIN. We confirm your 501(c)(3) status before your page goes live.' },
   'confirm-org':  { title: 'Confirm\nYour Org',        sub: 'Make sure this is the right organization before we set anything up.' },
   'verify-email': { title: 'Verify Your\nWork Email',  sub: 'An email on your own domain proves you can act for the organization. It becomes your admin sign-in.' },
   stripe:         { title: 'Connect\nStripe',          sub: 'Donations charge on your Stripe account. You stay the merchant of record.' },
   branding:       { title: 'Customize\nYour Page',     sub: 'This is what donors see when they scan your code or open your link.' },
   license:        { title: 'License\nAgreement',       sub: 'Always free for your nonprofit. Never a percentage of donations.' },
-  'app-listing':  { title: 'One Last Thing\nfor the App', sub: 'Your webpage and widget are already live  -  this is only about the iPhone app.' },
+  'app-listing':  { title: 'One Last Thing\nfor the App', sub: 'Your webpage and widget go live at approval - this is only about the iPhone app.' },
   live:           { title: "You're\nLive! 🎉",         sub: 'Share your join code and donors can start rounding up today.' },
 };
 
-function NonprofitSignupFlow({ onBack }) {
+function NonprofitSignupFlow({ onBack, showDemo }) {
   const {
     step,
     ein, setEin, einError, verifying, einDemoMode, einNameEditable,
@@ -2239,8 +2256,12 @@ function NonprofitSignupFlow({ onBack }) {
     adminEmail, workEmail, setWorkEmail, emailError,
     codeSent, codeInput, setCodeInput, codeError, requiredDomain,
     sendingCode, verifyingCode,
-    stripeConnecting, stripeConnected, stripeError, practiceMode, practiceConnectStripe,
-    story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
+    // orgId is null until org-signup succeeds; orgCreateError says why it did
+    // not. retryOrgCreate and joinCodeTakenNotice are read defensively - the
+    // hook keeps both but does not return them yet (see foundation request).
+    orgId, orgCreateError, retryOrgCreate, joinCodeTakenNotice,
+    stripeConnecting, stripeConnected: hookStripeConnected, stripeError, practiceMode, practiceConnectStripe,
+    story, setStory, color, setColor,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeCustom, joinCodeError, showBrandingHint,
     accepted, setAccepted, showLicenseHint,
@@ -2255,6 +2276,57 @@ function NonprofitSignupFlow({ onBack }) {
   } = useNpSignup({ onExit: onBack, defaultLogo: bgcaLogoUrl });
   const goLive = useNpGoLive();
   const fileInputRef = useRef(null);
+
+  // Stripe Connect inside the iPhone shell. The hook's connectStripe() does
+  // window.location.assign(url), which in the Capacitor WKWebView replaces the
+  // app with Stripe's page and leaves no way back to this wizard. Native opens
+  // the hosted onboarding in the Capacitor Browser sheet instead and re-checks
+  // org-connect-status when the sheet closes or the app resumes; the web keeps
+  // the hook's own redirect/resume path (?npstripe=return).
+  const [nativeStripeConnected, setNativeStripeConnected] = useState(false);
+  const [nativeStripeBusy, setNativeStripeBusy] = useState(false);
+  const [nativeStripeError, setNativeStripeError] = useState(null);
+  const nativeListenersRef = useRef([]);
+  const stripeConnected = hookStripeConnected || nativeStripeConnected;
+  const nativeBrowser = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()
+    ? window.Capacitor?.Plugins?.Browser : null;
+  async function refreshNativeStripeStatus() {
+    if (!orgId) return;
+    const res = await orgConnectStatus(orgId);
+    if (res.ok && res.data?.connected) {
+      setNativeStripeConnected(true);
+      setNativeStripeBusy(false);
+    }
+  }
+  function dropNativeListeners() {
+    const handles = nativeListenersRef.current;
+    nativeListenersRef.current = [];
+    handles.forEach(h => { Promise.resolve(h).then(x => x?.remove?.()).catch(() => {}); });
+  }
+  useEffect(() => dropNativeListeners, []);
+  async function handleConnectStripe() {
+    if (!nativeBrowser || !orgId) { connectStripe(); return; }
+    setNativeStripeError(null);
+    setNativeStripeBusy(true);
+    const res = await orgConnectStripe(orgId);
+    if (!res.ok || !res.data?.url) {
+      setNativeStripeBusy(false);
+      setNativeStripeError(res.data?.error || 'Could not reach Stripe. Try again, or continue in practice mode.');
+      return;
+    }
+    dropNativeListeners();
+    const CapApp = window.Capacitor?.Plugins?.App;
+    nativeListenersRef.current = [
+      nativeBrowser.addListener?.('browserFinished', () => { refreshNativeStripeStatus(); }),
+      CapApp?.addListener?.('appStateChange', ({ isActive }) => { if (isActive) refreshNativeStripeStatus(); }),
+    ].filter(Boolean);
+    try {
+      await nativeBrowser.open({ url: res.data.url });
+    } catch {
+      setNativeStripeBusy(false);
+      setNativeStripeError('Could not open Stripe. Try again.');
+    }
+  }
   // Scroll the sheet back to the top on every step change - the same `step`
   // this wizard's own back-button wiring (useStepHistory, inside
   // useNpSignup) already tracks. Without this, advancing off a long step
@@ -2292,7 +2364,13 @@ function NonprofitSignupFlow({ onBack }) {
       {/* Header */}
       <div className="flex flex-col justify-end px-8 pb-8 shrink-0"
         style={{ background: 'linear-gradient(135deg, #0d9488 0%, #003865 100%)', minHeight: '38%', paddingTop: 'calc(var(--pc-safe-top) + 12px)' }}>
-        <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={back} className="text-white/60 text-sm font-semibold mb-4 self-start">← Back</motion.button>
+        {/* 'live' is the end of the road (back() in useNpSignup is a no-op
+            there too), so the header offers no Back on that step. */}
+        {step !== 'live' ? (
+          <motion.button whileTap={{ scale: 0.9, opacity: 0.6 }} onClick={back} className="text-white/80 text-sm font-semibold mb-2 -ml-2 px-2 min-h-11 self-start flex items-center gap-1">
+            <ArrowLeft size={16} aria-hidden /> Back
+          </motion.button>
+        ) : <div className="mb-2 min-h-11" aria-hidden />}
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -2301,13 +2379,17 @@ function NonprofitSignupFlow({ onBack }) {
         >
           <CoinMark size={40} />
         </motion.div>
-        <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
-          {step === 'live' && pendingReview ? 'Almost\nThere!' : NP_SIGNUP_HEADER[step]?.title}
+        <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px', textWrap: 'balance' }}>
+          {step === 'live' && practiceMode ? 'Practice\nRun Done'
+            : step === 'live' && pendingReview ? 'Almost\nThere!'
+              : NP_SIGNUP_HEADER[step]?.title}
         </h1>
-        <p className="text-white/80 text-xs mt-2 leading-relaxed">
-          {step === 'live' && pendingReview
-            ? "Your organization is in review. Your launch kit arrives by email the moment you're approved."
-            : NP_SIGNUP_HEADER[step]?.sub}
+        <p className="text-white/80 text-[13px] mt-2 leading-relaxed">
+          {step === 'live' && practiceMode
+            ? 'Nothing is live yet - this was a practice run.'
+            : step === 'live' && pendingReview
+              ? "Your organization is in review. Your launch kit arrives by email as soon as you're approved."
+              : NP_SIGNUP_HEADER[step]?.sub}
         </p>
       </div>
 
@@ -2316,48 +2398,40 @@ function NonprofitSignupFlow({ onBack }) {
 
         {step === 'ein' && (
           <form onSubmit={verifyEIN} className="space-y-4">
-            <p className="text-gray-500 text-sm">
-              Enter your organization&apos;s EIN. We&apos;ll verify your 501(c)(3) status with IRS data from ProPublica.
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
+              Enter your organization&apos;s EIN. Your 501(c)(3) status is reviewed before approval.
             </p>
             <div>
+              <label htmlFor="np-ein" className={`${CAPS} mb-1 block`}>EIN</label>
               <input
+                id="np-ein"
                 type="text"
+                inputMode="numeric"
                 placeholder="XX-XXXXXXX"
                 value={ein}
                 onChange={e => setEin(e.target.value)}
                 required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono"
-                style={{ borderColor: einError ? '#ef4444' : '#e5e7eb' }}
+                className={`${INPUT} font-mono placeholder:text-[color:var(--muted)]`}
+                style={{ borderColor: einError ? 'var(--danger)' : 'var(--line)' }}
               />
-              {einError && <p className="text-red-500 text-xs mt-1 px-1">{einError}</p>}
-              <p className="text-gray-400 text-xs mt-1 px-1">Format: XX-XXXXXXX (9 digits)</p>
+              {einError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{einError}</p>}
+              <p className={`${HELP} mt-1 px-1`}>Format: XX-XXXXXXX (9 digits)</p>
             </div>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              type="submit"
-              disabled={verifying}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: ein ? 1 : 0.4 }}>
-              {verifying ? (
-                <span className="flex items-center justify-center gap-2">
-                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                    className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white" />
-                  Verifying…
-                </span>
-              ) : 'Verify EIN →'}
-            </motion.button>
-            <p className="text-gray-400 text-xs text-center px-2">
-              We only use this to confirm your 501(c)(3) status. Takes a few seconds.
+            <Button type="submit" disabled={!ein} loading={verifying}>
+              {verifying ? 'Verifying…' : 'Verify EIN →'}
+            </Button>
+            <p className={`${HELP} text-center px-2`}>
+              We only use this to confirm your 501(c)(3) status before your page goes live.
             </p>
           </form>
         )}
 
         {step === 'confirm-org' && (
           <div className="space-y-4">
-            <p className="text-gray-500 text-sm">We found a match. Is this your organization?</p>
-            <div className="rounded-2xl p-5 bg-gray-50 border border-gray-200 space-y-3">
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>We found a match. Is this your organization?</p>
+            <div className="rounded-2xl p-5 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}>
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-white flex items-center justify-center border border-gray-100">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-white flex items-center justify-center" style={{ border: '1px solid var(--line)' }}>
                   {/* Only a genuinely seeded org (BGCA's real EIN) may show a
                       real logo here - an unknown or unverifiable EIN gets the
                       neutral PocketCache mark, never another org's branding. */}
@@ -2372,45 +2446,45 @@ function NonprofitSignupFlow({ onBack }) {
                       value={orgName}
                       onChange={e => setOrgName(e.target.value)}
                       placeholder="Your Nonprofit"
-                      className="w-full font-bold text-gray-900 text-base bg-white rounded-lg px-2 py-1 outline-none border border-gray-200 focus:border-teal-400"
+                      aria-label="Organization name"
+                      className="w-full font-bold text-base bg-white rounded-lg px-2 min-h-11 outline-none border"
+                      style={{ color: 'var(--ink)', borderColor: 'var(--line)' }}
                     />
                   ) : (
-                    <p className="font-bold text-gray-900 text-base">{orgName}</p>
+                    <p className="font-bold text-base" style={{ color: 'var(--ink)' }}>{orgName}</p>
                   )}
-                  {orgAddress && <p className="text-gray-500 text-xs">{orgAddress}</p>}
+                  {orgAddress && <p className={HELP}>{orgAddress}</p>}
                 </div>
               </div>
               {einDemoMode ? (
                 <div className="flex items-center gap-2">
-                  <Info size={14} className="text-amber-500 shrink-0" />
-                  <p className="text-amber-700 text-xs font-semibold">
-                    Demo preview  -  IRS verification runs at launch · EIN {ein}
+                  <Info size={14} className="shrink-0" style={{ color: 'var(--warning)' }} aria-hidden />
+                  <p className="text-[13px] font-semibold" style={{ color: 'var(--warning)' }}>
+                    Reviewed before approval · EIN {ein}
                   </p>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-500 shrink-0" />
-                  <p className="text-green-700 text-xs font-semibold">
+                  <CheckCircle size={14} className="shrink-0" style={{ color: 'var(--green)' }} aria-hidden />
+                  <p className="text-[13px] font-semibold" style={{ color: 'var(--green)' }}>
                     {org501c3 ? '501(c)(3) Verified' : 'Organization found'} · EIN {ein}
                   </p>
                 </div>
               )}
               {einDemoMode && (
-                <p className="text-xs text-amber-600 italic">
+                <p className="text-[13px] italic" style={{ color: 'var(--warning)' }}>
                   {einNameEditable
                     ? "We couldn't match this EIN  -  enter your organization's name."
-                    : 'This EIN matches a sample organization used for the demo.'}
+                    : showDemo ? 'This EIN matches a sample organization used for the demo.' : 'We confirm your 501(c)(3) status before your page goes live.'}
                 </p>
               )}
             </div>
-            <motion.button whileTap={{ scale: 0.97 }} onClick={confirmOrg}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
+            <Button onClick={confirmOrg}>
               Confirm  -  this is us →
-            </motion.button>
-            <button onClick={reenterEIN} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
+            </Button>
+            <Button variant="tertiary" size="md" onClick={reenterEIN}>
               No, re-enter EIN
-            </button>
+            </Button>
           </div>
         )}
 
@@ -2418,63 +2492,81 @@ function NonprofitSignupFlow({ onBack }) {
           <div className="space-y-4">
             {!codeSent ? (
               <form onSubmit={sendCode} className="space-y-4">
-                <p className="text-gray-500 text-sm">
+                <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
                   Prove you work at {orgName}: enter your work email on your organization&apos;s
                   own domain and we&apos;ll send a 6-digit code. This address becomes your admin sign-in.
                 </p>
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your work email</label>
+                  <label htmlFor="np-work-email" className={`${CAPS} mb-1 block`}>Your work email</label>
                   <input
+                    id="np-work-email"
                     type="email"
                     required
+                    autoComplete="email"
                     value={workEmail}
                     onChange={e => setWorkEmail(e.target.value)}
                     placeholder={requiredDomain ? `you@${requiredDomain}` : 'you@yourorg.org'}
-                    className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
-                    style={{ borderColor: emailError ? '#ef4444' : '#e5e7eb' }}
+                    className={`${INPUT} placeholder:text-[color:var(--muted)]`}
+                    style={{ borderColor: emailError ? 'var(--danger)' : 'var(--line)' }}
                   />
-                  {emailError && <p className="text-red-500 text-xs mt-1 px-1">{emailError}</p>}
+                  {emailError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{emailError}</p>}
                 </div>
-                <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={!workEmail || sendingCode}
-                  className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: workEmail && !sendingCode ? 1 : 0.4 }}>
+                <Button type="submit" disabled={!workEmail} loading={sendingCode}>
                   {sendingCode ? 'Sending…' : 'Email me a verification code →'}
-                </motion.button>
-                <p className="text-gray-400 text-xs px-1 leading-relaxed">
+                </Button>
+                <p className={`${HELP} px-1 leading-relaxed`}>
                   Personal addresses (Gmail, Yahoo, iCloud…) can&apos;t manage a nonprofit.
                   No password is ever created  -  admin sign-in works by emailed code, so there&apos;s
                   nothing for anyone to steal.
                 </p>
               </form>
+            ) : orgCreateError ? (
+              /* The code verified but org-signup failed: the wizard stays here
+                 (useNpSignup no longer slides into practice mode) and the
+                 admin retries the server call. Nothing downstream can work
+                 without the server org, so this card blocks until it exists. */
+              <div className="space-y-4">
+                <div role="alert" className="rounded-2xl p-4 space-y-2" style={{ background: 'var(--danger-50)', border: '1px solid var(--danger)' }}>
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="shrink-0" style={{ color: 'var(--danger)' }} aria-hidden />
+                    <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>We couldn&apos;t create your organization yet</p>
+                  </div>
+                  <p className="text-[13px] leading-relaxed" style={{ color: 'var(--ink-2)' }}>{orgCreateError}</p>
+                </div>
+                <Button onClick={() => (retryOrgCreate ? retryOrgCreate() : changeEmail())}>
+                  {retryOrgCreate ? 'Try again' : 'Start over with your email'}
+                </Button>
+                <p className={`${HELP} text-center px-2`}>Your email is verified - only the server step needs to be repeated.</p>
+              </div>
             ) : (
               <form onSubmit={verifyCode} className="space-y-4">
-                <p className="text-gray-500 text-sm">
-                  We sent a 6-digit code to <strong className="text-gray-900">{workEmail}</strong>. Enter it to continue.
+                <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
+                  We sent a 6-digit code to <strong style={{ color: 'var(--ink)' }}>{workEmail}</strong>. Enter it to continue.
                 </p>
                 <input
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
                   value={codeInput}
+                  aria-label="6-digit code"
+                  autoComplete="one-time-code"
                   onChange={e => setCodeInput(e.target.value)}
                   placeholder="······"
-                  className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 outline-none border border-gray-200 focus:border-teal-400 font-mono text-center text-xl tracking-[0.5em]"
-                  style={{ borderColor: codeError ? '#ef4444' : '#e5e7eb' }}
+                  className={`${INPUT} font-mono text-center text-xl tracking-[0.5em]`}
+                  style={{ borderColor: codeError ? 'var(--danger)' : 'var(--line)' }}
                 />
-                {codeError && <p className="text-red-500 text-xs px-1">{codeError}</p>}
-                <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={codeInput.length !== 6 || verifyingCode}
-                  className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                  style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: codeInput.length === 6 && !verifyingCode ? 1 : 0.4 }}>
+                {codeError && <p role="alert" className="text-[13px] px-1" style={{ color: 'var(--danger)' }}>{codeError}</p>}
+                <Button type="submit" disabled={codeInput.length !== 6} loading={verifyingCode}>
                   {verifyingCode ? 'Verifying…' : 'Verify & continue →'}
-                </motion.button>
-                <div className="flex justify-center gap-4">
+                </Button>
+                <div className="flex justify-center gap-4 -my-2">
                   <button type="button" disabled={sendingCode} onClick={handleResend}
-                    className="text-sm text-gray-400 font-medium disabled:opacity-50">
+                    className={`${TEXT_BTN} disabled:opacity-50`}>
                     {sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
                   </button>
-                  <button type="button" onClick={changeEmail} className="text-sm text-gray-400 font-medium">Change email</button>
+                  <button type="button" onClick={changeEmail} className={TEXT_BTN}>Change email</button>
                 </div>
-                {emailError && <p className="text-red-500 text-xs px-1 text-center">{emailError}</p>}
+                {emailError && <p role="alert" className="text-[13px] px-1 text-center" style={{ color: 'var(--danger)' }}>{emailError}</p>}
               </form>
             )}
           </div>
@@ -2482,114 +2574,142 @@ function NonprofitSignupFlow({ onBack }) {
 
         {step === 'stripe' && (
           <div className="space-y-4">
-            <p className="text-gray-500 text-sm">
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
               Connect your Stripe account. Donations charge directly on your Stripe  -  you&apos;re the merchant of record the whole time.
             </p>
-            {stripeConnected ? (
-              <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
-                <p className="text-green-800 text-sm font-bold">&#10003; Stripe Connected</p>
-                <p className="text-green-700 text-xs mt-1">You are the merchant of record for all donations</p>
+            {!orgId && !stripeConnected ? (
+              /* Reachable only from a stale draft or a resume whose org lookup
+                 failed: there is no server org to connect, so say so instead
+                 of offering a Stripe button that cannot work. */
+              <div className="space-y-3">
+                <div role="alert" className="rounded-2xl p-4 space-y-2" style={{ background: 'var(--danger-50)', border: '1px solid var(--danger)' }}>
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="shrink-0" style={{ color: 'var(--danger)' }} aria-hidden />
+                    <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Your organization isn&apos;t saved on our server yet</p>
+                  </div>
+                  <p className="text-[13px] leading-relaxed" style={{ color: 'var(--ink-2)' }}>
+                    {orgCreateError || "We couldn't create your organization on our server, so Stripe can't be connected yet."}
+                  </p>
+                </div>
+                <Button onClick={() => (retryOrgCreate ? retryOrgCreate() : back())}>
+                  {retryOrgCreate ? 'Try again' : 'Go back and try again'}
+                </Button>
+              </div>
+            ) : stripeConnected ? (
+              <div className="rounded-2xl p-4" style={{ background: 'var(--green-50)', border: '1px solid #6ee7b7' }}>
+                <p className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--ink)' }}>
+                  <CheckCircle size={16} style={{ color: 'var(--green)' }} aria-hidden /> Stripe Connected
+                </p>
+                <p className="text-[13px] mt-1" style={{ color: 'var(--ink-2)' }}>You are the merchant of record for all donations</p>
               </div>
             ) : (
-              <motion.button whileTap={{ scale: 0.97 }} onClick={connectStripe} disabled={stripeConnecting}
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: 'linear-gradient(135deg, #635bff, #4b45c6)' }}>
-                {stripeConnecting ? 'Connecting…' : 'Connect with Stripe'}
-              </motion.button>
+              <Button
+                onClick={handleConnectStripe}
+                loading={stripeConnecting || nativeStripeBusy}
+                style={stripeConnecting || nativeStripeBusy ? undefined : { background: '#635BFF', color: '#fff' }}
+              >
+                {stripeConnecting || nativeStripeBusy ? 'Connecting…' : 'Connect with Stripe'}
+              </Button>
             )}
-            {stripeError && (
-              <div className="rounded-2xl p-3 bg-red-50 border border-red-200 space-y-2">
-                <p className="text-red-600 text-xs">{stripeError}</p>
-                <button type="button" onClick={practiceConnectStripe} className="text-xs font-semibold text-gray-500 underline">
+            {(stripeError || nativeStripeError) && (
+              <div role="alert" className="rounded-2xl p-3 space-y-2" style={{ background: 'var(--danger-50)', border: '1px solid var(--danger)' }}>
+                <p className="text-[13px]" style={{ color: 'var(--danger)' }}>{stripeError || nativeStripeError}</p>
+                <button type="button" onClick={practiceConnectStripe} className={`${TEXT_BTN} underline font-semibold -ml-2`}>
                   Continue in practice mode instead
                 </button>
               </div>
             )}
             {practiceMode && stripeConnected && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                Practice mode: Stripe wasn&apos;t reachable, so this connection is simulated. Reconnect for real anytime from your dashboard.
+              <p className="text-[13px] rounded-xl px-3 py-2" style={{ color: 'var(--warning)', background: 'var(--warning-50)', border: '1px solid var(--gold)' }}>
+                Practice mode: your organization was not created on our server, so this connection is simulated. Nothing goes live from a practice run.
               </p>
             )}
             {stripeConnected && (
-              <motion.button whileTap={{ scale: 0.97 }} onClick={stripeNext}
-                className="w-full py-4 rounded-2xl text-white font-bold text-base"
-                style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
+              <Button onClick={stripeNext}>
                 Continue →
-              </motion.button>
+              </Button>
             )}
-            <p className="text-gray-400 text-xs text-center px-2">PocketCache never touches the money  -  it goes straight from donors into your Stripe account. Test mode  -  no real money moves.</p>
+            <p className={`${HELP} text-center px-2`}>
+              PocketCache never touches the money  -  it goes straight from donors into your Stripe account.{showDemo ? ' Test mode  -  no real money moves.' : ''}
+            </p>
           </div>
         )}
 
         {step === 'branding' && (
           <form onSubmit={submitBranding} className="space-y-4">
-            <p className="text-gray-500 text-sm">Customize how your page looks to donors.</p>
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>Customize how your page looks to donors.</p>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Organization Name</label>
-              <input type="text" value={orgName} onChange={e => setOrgName(e.target.value)} required
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400" />
+              <label htmlFor="np-org-name" className={`${CAPS} mb-1 block`}>Organization Name</label>
+              <input id="np-org-name" type="text" value={orgName} onChange={e => setOrgName(e.target.value)} required
+                className={INPUT} />
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Donor Join Code</label>
-              <input type="text" value={joinCodeCustom} onChange={e => changeJoinCode(e.target.value)}
+              <label htmlFor="np-join-code" className={`${CAPS} mb-1 block`}>Your Donor Join Code</label>
+              <input id="np-join-code" type="text" value={joinCodeCustom} onChange={e => changeJoinCode(e.target.value)}
                 placeholder={joinCode}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono uppercase tracking-widest"
-                style={{ borderColor: joinCodeError ? '#ef4444' : '#e5e7eb' }} />
-              {joinCodeError && <p className="text-red-500 text-xs mt-1 px-1">{joinCodeError}</p>}
-              <p className="text-gray-400 text-xs mt-1">
+                className={`${INPUT} font-mono uppercase tracking-widest placeholder:text-[color:var(--muted)]`}
+                style={{ borderColor: joinCodeError ? 'var(--danger)' : 'var(--line)' }} />
+              {joinCodeError && <p role="alert" className="text-[13px] mt-1 px-1" style={{ color: 'var(--danger)' }}>{joinCodeError}</p>}
+              {joinCodeTakenNotice && (
+                <p role="status" className="text-[13px] mt-1 px-1 font-medium" style={{ color: 'var(--warning)' }}>{joinCodeTakenNotice}</p>
+              )}
+              <p className={`${HELP} mt-1`}>
                 Letters, numbers, dashes (2-8)  -  short enough to say out loud. This becomes your link  -  pocketcache.app/{joinCode || 'CODE'}  -  plus your QR code and widget. You can change it later in your dashboard.
               </p>
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Admin Contact Email</label>
+              <p className={`${CAPS} mb-1 block`}>Admin Contact Email</p>
               {adminEmail ? (
-                <div className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm border border-gray-200 flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-500 shrink-0" />
-                  <span className="text-gray-900 truncate">{adminEmail}</span>
-                  <span className="text-xs text-green-700 font-semibold ml-auto shrink-0">Verified</span>
+                <div className={`${INPUT} flex items-center gap-2`} style={{ background: 'var(--surface)' }}>
+                  <CheckCircle size={14} className="shrink-0" style={{ color: 'var(--green)' }} aria-hidden />
+                  <span className="truncate text-sm" style={{ color: 'var(--ink)' }}>{adminEmail}</span>
+                  <span className="text-xs font-semibold ml-auto shrink-0" style={{ color: 'var(--green)' }}>Verified</span>
                 </div>
               ) : (
-                <div className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm border border-gray-200 flex items-center gap-2">
-                  <Info size={14} className="text-amber-500 shrink-0" />
-                  <span className="text-gray-400">Not available</span>
+                <div className={`${INPUT} flex items-center gap-2`} style={{ background: 'var(--surface)' }}>
+                  <Info size={14} className="shrink-0" style={{ color: 'var(--warning)' }} aria-hidden />
+                  <span className="text-sm" style={{ color: 'var(--slate)' }}>Not available</span>
                 </div>
               )}
-              <p className="text-gray-400 text-xs mt-1">
+              <p className={`${HELP} mt-1`}>
                 {adminEmail ? 'Verified in the previous step  -  this is your admin sign-in.' : "We couldn't load your verified email  -  go back a step or refresh to try again."}
               </p>
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Your Mission (shown to donors)</label>
-              <textarea value={story} onChange={e => setStory(e.target.value)} rows={4} maxLength={600} placeholder="Tell donors what you do…"
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border border-gray-200 focus:border-teal-400 resize-none" />
-              <p className="text-gray-400 text-xs mt-1">Keep it concise  -  this shows on your public donor page.</p>
-              <p className="text-gray-400 text-xs text-right mt-0.5">{story.length}/600</p>
+              <label htmlFor="np-story" className={`${CAPS} mb-1 block`}>Your Mission (shown to donors)</label>
+              <textarea id="np-story" value={story} onChange={e => setStory(e.target.value)} rows={4} maxLength={600} placeholder="Tell donors what you do…"
+                className={`${INPUT} py-3 resize-none placeholder:text-[color:var(--muted)]`} />
+              <div className="flex justify-between gap-3 mt-1">
+                <p className={HELP}>Keep it concise  -  this shows on your public donor page.</p>
+                <p className={`${HELP} shrink-0 tabular-nums`}>{story.length}/600</p>
+              </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Brand Color</label>
-              <div className="flex flex-wrap gap-3">
+              <p className={`${CAPS} mb-2 block`}>Brand Color</p>
+              <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Brand color">
                 {NP_BRAND_COLORS.map(c => (
                   <button key={c} type="button" onClick={() => setColor(c)}
-                    className="w-10 h-10 rounded-xl border-2 transition-all"
-                    style={{ background: c, borderColor: color === c ? '#111' : 'transparent' }} />
+                    role="radio" aria-checked={color === c} aria-label={`Brand color ${c}`}
+                    className="w-11 h-11 rounded-xl border-2 transition-all"
+                    style={{ background: c, borderColor: color === c ? 'var(--ink)' : 'transparent' }} />
                 ))}
-                <label className="flex flex-col items-center justify-center w-10 h-10 rounded-xl border-2 cursor-pointer transition-all overflow-hidden"
-                  style={{ borderColor: !NP_BRAND_COLORS.includes(color) ? '#111' : 'transparent', background: color }}>
-                  <input type="color" value={color} onChange={e => setColor(e.target.value)} className="opacity-0 w-0 h-0 absolute" />
-                  <span className="text-white text-xs font-bold leading-none" style={{ textShadow: '0 0 3px rgba(0,0,0,0.5)' }}>+</span>
+                <label className="flex flex-col items-center justify-center w-11 h-11 rounded-xl border-2 cursor-pointer transition-all overflow-hidden"
+                  style={{ borderColor: !NP_BRAND_COLORS.includes(color) ? 'var(--ink)' : 'transparent', background: color }}>
+                  <input type="color" value={color} aria-label="Custom brand color" onChange={e => setColor(e.target.value)} className="opacity-0 w-0 h-0 absolute" />
+                  <span className="text-white text-xs font-bold leading-none" aria-hidden style={{ textShadow: '0 0 3px rgba(0,0,0,0.5)' }}>+</span>
                 </label>
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logo</label>
+              <p className={`${CAPS} mb-1 block`}>Logo</p>
               <div className="flex items-center gap-3 mb-2">
                 {/* logoPreview is null for an unknown org that hasn't uploaded
                     one yet (see displayLogoPreview in lib/npSignup.js) - show
                     the neutral PocketCache mark, never another org's logo. */}
                 {logoPreview
-                  ? <img src={logoPreview} alt="Logo preview" className="h-10 object-contain rounded-lg bg-gray-100 px-2 py-1" />
-                  : <div className="h-10 w-14 rounded-lg bg-gray-100 flex items-center justify-center"><CoinMark size={24} /></div>}
-                <span className="text-xs text-gray-500">Preview: your uploaded logo becomes the app mark for donors.</span>
+                  ? <img src={logoPreview} alt="Logo preview" className="h-10 object-contain rounded-lg px-2 py-1" style={{ background: 'var(--surface)' }} />
+                  : <div className="h-10 w-14 rounded-lg flex items-center justify-center" style={{ background: 'var(--surface)' }}><CoinMark size={24} /></div>}
+                <span className={HELP}>Preview: your uploaded logo becomes the app mark for donors.</span>
               </div>
               <input
                 type="file"
@@ -2598,62 +2718,54 @@ function NonprofitSignupFlow({ onBack }) {
                 className="hidden"
                 onChange={e => setLogoFile(e.target.files?.[0])}
               />
-              <button type="button" onClick={() => fileInputRef.current?.click()}
-                className="w-full py-3 rounded-2xl border-2 border-dashed border-teal-300 text-teal-600 text-sm font-semibold mb-2">
+              <Button variant="secondary" size="md" onClick={() => fileInputRef.current?.click()} className="mb-2">
                 Upload image
-              </button>
+              </Button>
               <input
                 type="url"
+                aria-label="Logo URL"
                 placeholder="or paste a logo URL"
                 value={logoUrlInput}
                 onChange={e => setLogoUrlInput(e.target.value)}
                 onBlur={e => applyLogoUrl(e.target.value)}
-                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none border border-gray-200 focus:border-teal-400"
+                className={`${INPUT} placeholder:text-[color:var(--muted)]`}
               />
-              {logoUrlError && <p className="text-red-500 text-xs mt-1">{logoUrlError}</p>}
-              <p className="text-gray-400 text-xs mt-1">If you skip this, a default emoji is used as your app mark.</p>
+              {logoUrlError && <p role="alert" className="text-[13px] mt-1" style={{ color: 'var(--danger)' }}>{logoUrlError}</p>}
+              <p className={`${HELP} mt-1`}>If you skip this, the PocketCache mark is used as your app mark.</p>
             </div>
-            <div>
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">
-                Monthly Minimum  -  ${monthlyMinimum} <span className="text-gray-400 font-normal normal-case">(default $5)</span>
-              </label>
-              <input
-                type="range"
-                min={5}
-                max={50}
-                step={5}
-                value={monthlyMinimum}
-                onChange={e => setMonthlyMinimum(Number(e.target.value))}
-                className="w-full accent-teal-600"
-              />
-              <p className="text-gray-400 text-xs mt-1">Donors below this in a month roll over to the next month.</p>
+            <div className="rounded-2xl p-4" style={{ background: 'var(--surface)' }}>
+              <p className={`${CAPS} mb-1`}>Monthly minimum</p>
+              {/* One platform-wide floor (lib/billing.js MONTHLY_FLOOR): the
+                  charge job and the donor copy both use it, so it is stated
+                  here rather than offered as a per-org setting. */}
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--ink-2)' }}>
+                Monthly minimum: ${MONTHLY_FLOOR}. Donors under ${MONTHLY_FLOOR} in a month roll forward to the next charge.
+              </p>
             </div>
-            <motion.button whileTap={{ scale: 0.97 }} type="submit"
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}>
+            <Button type="submit">
               Continue →
-            </motion.button>
+            </Button>
             {/* submitBranding() refuses on a bad join code. Without this the
                 button just did nothing, which reads as broken. */}
             {showBrandingHint && joinCodeError && (
-              <p className="text-red-500 text-xs text-center">{joinCodeError}</p>
+              <p role="alert" className="text-[13px] text-center" style={{ color: 'var(--danger)' }}>{joinCodeError}</p>
             )}
           </form>
         )}
 
         {step === 'license' && (
           <form onSubmit={acceptLicense} className="space-y-4">
-            <p className="text-gray-500 text-sm">Review and accept the Nonprofit Software License Agreement before going live.</p>
-            <div className="rounded-2xl p-4 bg-gray-50 border border-gray-200 space-y-2 text-xs text-gray-600">
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>Review and accept the Nonprofit Software License Agreement before going live.</p>
+            <div className="rounded-2xl p-4 space-y-2 text-[13px] leading-relaxed" style={{ background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink-2)' }}>
               {NP_LICENSE_POINTS.map(([heading, body]) => (
-                <p key={heading}><strong>{heading}</strong> {body}</p>
+                <p key={heading}><strong style={{ color: 'var(--ink)' }}>{heading}</strong> {body}</p>
               ))}
             </div>
             <a href="/legal/nonprofit-license/" target="_blank" rel="noopener"
-              className="block text-center text-sm font-semibold underline" style={{ color: '#003865' }}>
+              className="flex items-center justify-center min-h-11 text-sm font-semibold underline" style={{ color: 'var(--navy-deep)' }}>
               Read full license →
             </a>
-            <label className="flex items-start gap-3 cursor-pointer">
+            <label className="flex items-start gap-3 cursor-pointer min-h-11">
               <input
                 type="checkbox"
                 checked={accepted}
@@ -2662,82 +2774,73 @@ function NonprofitSignupFlow({ onBack }) {
               />
               <div
                 aria-hidden="true"
-                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-teal-400 peer-focus-visible:ring-offset-1"
-                style={{ borderColor: accepted ? '#059669' : '#d1d5db', background: accepted ? '#059669' : '#fff' }}>
+                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all peer-focus-visible:ring-[3px] peer-focus-visible:ring-[color:rgba(13,148,136,0.35)]"
+                style={{ borderColor: accepted ? 'var(--green)' : showLicenseHint ? 'var(--warning)' : 'var(--muted)', background: accepted ? 'var(--green)' : '#fff' }}>
                 {accepted && <CheckCircle size={12} className="text-white" />}
               </div>
-              <span className="text-xs text-gray-600 leading-relaxed">I accept the Nonprofit Software License Agreement on behalf of this organization.</span>
+              <span className="text-[13px] leading-relaxed" style={{ color: 'var(--ink-2)' }}>I accept the Nonprofit Software License Agreement on behalf of this organization.</span>
             </label>
             {showLicenseHint && !accepted && (
               <motion.p
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-xs text-amber-600 font-medium"
+                role="alert"
+                className="text-[13px] font-medium"
+                style={{ color: 'var(--warning)' }}
               >
                 Please accept the license to continue
               </motion.p>
             )}
-            <motion.button whileTap={{ scale: 0.97 }} type="submit"
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)', opacity: accepted ? 1 : 0.4 }}>
+            <Button type="submit" disabled={!accepted} onDisabledPress={() => acceptLicense()}>
               Accept &amp; Go Live →
-            </motion.button>
+            </Button>
           </form>
         )}
 
         {step === 'app-listing' && (
           <div className="space-y-4">
-            <div className="rounded-2xl p-4 bg-green-50 border border-green-200">
-              <p className="text-green-800 text-sm font-bold">Your webpage and widget go live today</p>
-              <p className="text-green-700 text-xs mt-1">
+            <div className="rounded-2xl p-4" style={{ background: 'var(--green-50)', border: '1px solid #6ee7b7' }}>
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Your webpage and widget go live at approval</p>
+              <p className="text-[13px] mt-1" style={{ color: 'var(--ink-2)' }}>
                 This next part only affects whether donors can find you inside the PocketCache iPhone app  -  everything else about your program is already set.
               </p>
             </div>
-            <p className="text-gray-500 text-sm">
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
               Apple asks every nonprofit to be verified once before it can appear inside the iPhone app.
               Your organization doesn&apos;t have a Candid Seal of Transparency on file, so the fastest path
               is to register  -  free  -  at the Benevity Causes Portal, using your organization&apos;s
               details and the ID below.
             </p>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">PocketCache Developer ID</p>
-              <div className="flex items-center gap-2 bg-gray-900 rounded-2xl p-3">
-                <code className="text-green-400 text-sm font-mono flex-1 truncate">{APPLE_TEAM_ID}</code>
+              <p className={`${CAPS} mb-2`}>PocketCache Developer ID</p>
+              <div className="flex items-center gap-2 rounded-2xl p-3" style={{ background: 'var(--navy-deep)' }}>
+                <code className="text-sm font-mono flex-1 truncate" style={{ color: 'var(--teal-logo)' }}>{APPLE_TEAM_ID}</code>
                 <button
+                  type="button"
                   onClick={copyTeamId}
-                  className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-xl"
+                  className="shrink-0 text-xs font-semibold px-3 min-h-11 rounded-xl"
                   style={{
-                    background: teamIdCopied ? '#d1fae5' : teamIdCopyFailed ? '#fee2e2' : 'rgba(255,255,255,0.12)',
-                    color: teamIdCopied ? '#065f46' : teamIdCopyFailed ? '#fecaca' : '#fff',
+                    background: teamIdCopied ? 'var(--green-50)' : teamIdCopyFailed ? 'var(--danger-50)' : 'rgba(255,255,255,0.12)',
+                    color: teamIdCopied ? 'var(--green)' : teamIdCopyFailed ? 'var(--danger)' : '#fff',
                   }}
                   title={teamIdCopyFailed ? 'Copy failed  -  select and copy manually' : undefined}
                 >
                   {teamIdCopied ? 'Copied!' : teamIdCopyFailed ? 'Try again' : 'Copy'}
                 </button>
               </div>
-              <p className="text-gray-400 text-xs mt-1">Benevity will ask for this alongside your organization&apos;s own details.</p>
+              <p className={`${HELP} mt-1`}>Benevity will ask for this alongside your organization&apos;s own details.</p>
             </div>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={openBenevityPortal}
-              className="w-full py-4 rounded-2xl font-bold text-base border-2"
-              style={{ borderColor: '#003865', color: '#003865', background: '#fff' }}
-            >
+            <Button variant="secondary" onClick={openBenevityPortal}>
               Open the Benevity portal →
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={confirmBenevityRegistered}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
-            >
+            </Button>
+            <Button onClick={confirmBenevityRegistered}>
               I have registered →
-            </motion.button>
-            <button onClick={deferBenevity} className="w-full text-center text-sm text-gray-400 py-1 font-medium">
+            </Button>
+            <Button variant="tertiary" size="md" onClick={deferBenevity}>
               I&apos;ll do this later
-            </button>
-            <p className="text-gray-400 text-xs text-center px-2">
-              Either choice takes you live right now. Nothing here blocks your webpage, your widget, or your donors.
+            </Button>
+            <p className={`${HELP} text-center px-2`}>
+              Either choice finishes your signup right now. Nothing here blocks your webpage, your widget, or your donors.
             </p>
           </div>
         )}
@@ -2749,77 +2852,100 @@ function NonprofitSignupFlow({ onBack }) {
             QR codes that point at a held-back page. */}
         {step === 'live' && pendingReview && (
           <div className="space-y-4">
-            <div className="rounded-2xl p-5 text-center" style={{ background: '#fffbeb', border: '2px solid #fde68a' }}>
-              <p className="text-3xl mb-1" aria-hidden>⏳</p>
-              <p className="font-bold text-base mb-1" style={{ color: '#92400e' }}>Almost there - awaiting review</p>
-              <p className="text-sm leading-relaxed" style={{ color: '#b45309' }}>
+            <div className="rounded-2xl p-5 text-center" style={{ background: 'var(--warning-50)', border: '1px solid var(--gold)' }}>
+              <div className="flex justify-center mb-2"><Hourglass size={28} className="text-amber-500" aria-hidden /></div>
+              <p className="font-bold text-base mb-1" style={{ color: 'var(--ink)' }}>Almost there - awaiting review</p>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--ink-2)' }}>
                 {orgName || 'Your organization'} is set up and PocketCache is reviewing your signup.
                 You&apos;ll get your launch kit by email once approved.
               </p>
             </div>
-            <div className="rounded-2xl p-4 bg-gray-50 border border-gray-100">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">What happens next</p>
-              <ul className="text-gray-600 text-sm space-y-2">
+            <div className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}>
+              <p className={`${CAPS} mb-2`}>What happens next</p>
+              <ul className="text-sm space-y-2" style={{ color: 'var(--ink-2)' }}>
                 <li>1. PocketCache reviews your organization - usually quick.</li>
                 <li>2. Your launch kit lands at {adminEmail || 'your verified admin email'}: your page link, donor join code, QR code, and website widget.</li>
                 <li>3. Your page goes live and donors can start rounding up.</li>
               </ul>
             </div>
-            <p className="text-gray-400 text-xs px-1">
+            <p className={`${HELP} px-1`}>
               Your dashboard is ready now - donor tools unlock automatically the moment you&apos;re approved.
               Nothing else is needed from you.
             </p>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={async () => { await goLive(config); clearDraft(); }}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
-            >
+            <Button onClick={async () => { await goLive(config); clearDraft(); }}>
               Open your dashboard →
-            </motion.button>
+            </Button>
           </div>
         )}
 
-        {step === 'live' && !pendingReview && (
+        {/* Practice run: the server never heard of this org, so there is no
+            page, QR or widget to hand out - handing out a code that resolves
+            nowhere is exactly the failure this screen used to produce. */}
+        {step === 'live' && !pendingReview && practiceMode && (
           <div className="space-y-4">
-            <p className="text-xs font-bold text-teal-700 uppercase tracking-widest">Live right now</p>
-            <div className="rounded-2xl p-4 bg-green-50 border border-green-200 text-center">
-              <p className="text-green-800 font-bold text-base mb-1">Your page is live!</p>
-              <p className="text-green-700 text-sm font-mono">
-                pocketcache.app/{joinCode.toLowerCase()}
+            <div className="rounded-2xl p-5 text-center" style={{ background: 'var(--warning-50)', border: '1px solid var(--gold)' }}>
+              <div className="flex justify-center mb-2"><AlertTriangle size={28} className="text-amber-500" aria-hidden /></div>
+              <p className="font-bold text-base mb-1" style={{ color: 'var(--ink)' }}>Nothing is live yet - this was a practice run.</p>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--ink-2)' }}>
+                Your organization was not created on our server, so no page, join code, QR code or widget exists yet.
+                Run the signup again when you are ready to go live for real.
               </p>
             </div>
+            <p className={`${HELP} rounded-xl px-3 py-2`} style={{ background: 'var(--surface)' }}>
+              Practice mode: nothing is sent; your launch kit is shown on this page.
+            </p>
+            {joinCodeTakenNotice && (
+              <p role="status" className="text-[13px] px-1 font-medium" style={{ color: 'var(--warning)' }}>{joinCodeTakenNotice}</p>
+            )}
+            <Button onClick={async () => { await goLive(config); clearDraft(); }}>
+              Open your dashboard →
+            </Button>
+          </div>
+        )}
+
+        {step === 'live' && !pendingReview && !practiceMode && (
+          <div className="space-y-4">
+            <p className={CAPS} style={{ color: 'var(--teal-700)' }}>Live right now</p>
+            <div className="rounded-2xl p-4 text-center" style={{ background: 'var(--green-50)', border: '1px solid #6ee7b7' }}>
+              <p className="font-bold text-base mb-1" style={{ color: 'var(--ink)' }}>Your page is live!</p>
+              <p className="text-sm font-mono" style={{ color: 'var(--green)' }}>
+                pocketcache.app/{joinCode}
+              </p>
+            </div>
+            {joinCodeTakenNotice && (
+              <p role="status" className="text-[13px] px-1 font-medium" style={{ color: 'var(--warning)' }}>{joinCodeTakenNotice}</p>
+            )}
             {/* Join code  -  primary thing to share */}
-            <div className="rounded-2xl p-5 text-center" style={{ background: '#f0fdf4', border: '2px solid #86efac' }}>
-              <p className="text-xs font-bold text-green-700 uppercase tracking-widest mb-1">Your Donor Join Code</p>
-              <p className="text-5xl font-black tracking-wider mb-2" style={{ color: '#065f46' }}>{joinCode}</p>
-              <p className="text-green-700 text-xs">Donors enter this in the PocketCache app to join your program</p>
+            <div className="rounded-2xl p-5 text-center" style={{ background: 'var(--green-50)', border: '2px solid #6ee7b7' }}>
+              <p className={`${CAPS} mb-1`} style={{ color: 'var(--green)' }}>Your Donor Join Code</p>
+              <p className="text-5xl font-extrabold tracking-wider mb-2 tabular-nums" style={{ color: 'var(--ink)' }}>{joinCode}</p>
+              <p className="text-[13px]" style={{ color: 'var(--ink-2)' }}>Donors enter this in the PocketCache app to join your program</p>
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">QR Code</p>
-              <div className="bg-white rounded-xl p-3 inline-block border border-gray-100">
+              <p className={`${CAPS} mb-2`}>QR Code</p>
+              <div className="bg-white rounded-xl p-3 inline-block" style={{ border: '1px solid var(--line)' }}>
                 <QRCodeSVG value={joinQrValue(joinCode)} size={96} level="M" includeMargin />
               </div>
-              <p className="text-gray-400 text-xs mt-1">Donors scan this to join <strong>{orgName || 'your program'}</strong></p>
+              <p className={`${HELP} mt-1`}>Donors scan this to join <strong>{orgName || 'your program'}</strong></p>
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Embed Widget</p>
-              <div className="bg-gray-900 rounded-xl p-3 max-w-full overflow-x-auto">
-                <code className="text-green-400 text-xs whitespace-pre-wrap break-all">
+              <p className={`${CAPS} mb-2`}>Embed Widget</p>
+              <div className="rounded-xl p-3 max-w-full overflow-x-auto" style={{ background: 'var(--navy-deep)' }}>
+                <code className="text-xs whitespace-pre-wrap break-all" style={{ color: 'var(--teal-logo)' }}>
                   {widgetSnippet(orgName, joinCode)}
                 </code>
               </div>
-              <p className="text-gray-400 text-xs mt-1">See a live preview anytime in your dashboard → Grow tab.</p>
+              <p className={`${HELP} mt-1`}>See a live preview anytime in your dashboard → Grow tab.</p>
             </div>
 
             {/* iPhone app listing  -  its own zone, on purpose: Apple has no say
                 over the webpage/QR/widget above, so this status never delays it. */}
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest pt-1">PocketCache iPhone app</p>
-            <div className="rounded-2xl p-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+            <p className={`${CAPS} pt-1`}>PocketCache iPhone app</p>
+            <div className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}>
               {appleApproval.status === 'approved' ? (
                 <div className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-500 shrink-0" />
-                  <p className="text-gray-700 text-xs">
+                  <CheckCircle size={16} className="shrink-0" style={{ color: 'var(--green)' }} aria-hidden />
+                  <p className="text-[13px]" style={{ color: 'var(--ink-2)' }}>
                     {appleApproval.method === 'candid_seal'
                       ? 'Verified through your Candid Seal of Transparency  -  nothing to do.'
                       : 'Approved and ready to appear in the app.'}
@@ -2827,46 +2953,42 @@ function NonprofitSignupFlow({ onBack }) {
                 </div>
               ) : appleApproval.status === 'benevity_submitted' ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-amber-500 shrink-0">⏳</span>
-                  <p className="text-gray-700 text-xs">We&apos;ll list you in the iPhone app once Benevity approval comes through.</p>
+                  <Hourglass size={16} className="text-amber-500 shrink-0" aria-hidden />
+                  <p className="text-[13px]" style={{ color: 'var(--ink-2)' }}>We&apos;ll list you in the iPhone app once Benevity approval comes through.</p>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-amber-500 shrink-0">⚠️</span>
-                  <p className="text-gray-700 text-xs">Register with Benevity when you&apos;re ready  -  it&apos;s in your dashboard.</p>
+                  <AlertTriangle size={16} className="text-amber-500 shrink-0" aria-hidden />
+                  <p className="text-[13px]" style={{ color: 'var(--ink-2)' }}>Register with Benevity when you&apos;re ready  -  it&apos;s in your dashboard.</p>
                 </div>
               )}
             </div>
 
-            {/* Launch kit  -  auto-sent to the verified admin email at go-live;
-                this button forwards a copy to a colleague (recipient left blank) */}
+            {/* Launch kit  -  sent to the verified admin email at approval
+                (org-approve); this link forwards a copy to a colleague
+                (recipient left blank). */}
             <a
               href={launchKitMailto(orgName, joinCode)}
-              className="block w-full py-4 rounded-2xl font-bold text-base text-center"
-              style={{ background: '#f0fdf4', border: '2px solid #86efac', color: '#065f46', textDecoration: 'none' }}
+              className="pc-btn flex items-center justify-center gap-2 w-full min-h-13 rounded-2xl font-bold text-base text-center"
+              style={{ background: '#fff', border: '1px solid var(--navy-deep)', color: 'var(--navy-deep)', textDecoration: 'none' }}
             >
-              📧 Send the launch kit to a colleague
+              <Mail size={18} aria-hidden /> Send the launch kit to a colleague
             </a>
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-              Your launch kit is emailed to {adminEmail || 'your verified admin address'} automatically
-              the moment you go live (demo: shown on this page instead). Use the button above to
-              forward it to a colleague  -  just add their address.
+            <p className={`${HELP} rounded-xl px-3 py-2`} style={{ background: 'var(--surface)' }}>
+              Your launch kit is emailed to {adminEmail || 'your verified admin address'} as soon as your
+              organization is approved. Use the button above to forward it to a colleague  -  just add their address.
             </p>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={async () => { await goLive(config); clearDraft(); }}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base"
-              style={{ background: 'linear-gradient(135deg, #0d9488, #003865)' }}
-            >
+            <Button onClick={async () => { await goLive(config); clearDraft(); }}>
               Open your dashboard →
-            </motion.button>
+            </Button>
           </div>
         )}
 
-        <div className="pt-2 text-center border-t border-gray-100">
+        <div className="pt-2 text-center border-t" style={{ borderColor: 'var(--line)' }}>
           <a
             href="mailto:support@pocketcache.app"
-            className="text-xs text-gray-400 hover:text-gray-600"
+            className="inline-flex items-center min-h-11 text-[13px] underline"
+            style={{ color: 'var(--slate)' }}
           >
             Stuck? Email us  -  support@pocketcache.app
           </a>
@@ -2885,17 +3007,43 @@ function NonprofitSignupFlow({ onBack }) {
 // ─── Main onboarding shell ───────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus, initialOnboardingStep, clearInitialOnboardingStep, goToOnboardingStep, returnFromOnboarding, adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod } = useApp();
+  const app = useApp();
+  const {
+    setPage, setSelectedNonprofit, selectedNonprofit, hasAccount, accountStatus, setHasAccount, setAccountStatus,
+    initialOnboardingStep, clearInitialOnboardingStep, goToOnboardingStep, returnFromOnboarding,
+    adminRole, setAdminRole, lastMode, setLastMode, setTrackedCard, setPaymentMethod,
+    demoMode, startAdminPreview,
+  } = app;
+  // Demo-only controls (scan button, demo code hint, admin preview link, typed
+  // card entry, bank-debit option) show in the demo build, inside the website's
+  // phone frame, or when the donor's own demo toggle is on - never on a real
+  // native install (lib/demo.js). demoMode, not demoActive: the latter is also
+  // true for every not-yet-signed-up donor, which is exactly who must not see
+  // the scaffolding.
+  const showDemo = useShowDemoAffordances(demoMode);
+  // Parks a join code for a signed-in donor bound to a different nonprofit so
+  // PendingOrgPrompt asks before anything is re-bound. AppContext does not yet
+  // expose its setter, so the key is written directly and the prompt appears on
+  // the next load (foundation request: export setPendingOrgCode).
+  const parkPendingOrg = app.setPendingOrgCode ?? (code => saveKey('pc_pending_org', code));
   const { adoptOrgById, adoptServerOrg } = useNp();
   const [slide, setSlide] = useState(0);
-  const [signupProvider, setSignupProvider] = useState('demo');
-  const [connectedBank, setConnectedBank] = useState(null);
+  // Same-tab progress past the account step (see donorDraft.js
+  // saveDonorProgress): the linked card's display fields and the verified
+  // identity, so a breakpoint remount or reload mid-signup resumes at the
+  // payment-method step instead of asking the donor to relink the card.
+  const [donorProgress] = useState(loadDonorProgress);
+  const [connectedBank, setConnectedBank] = useState(() => donorProgress?.connectedBank ?? null);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
   // True when the nonprofit wizard was entered from the gate, which is the one
   // entry point whose "back" target is the gate itself rather than a page the
   // user came from. See enterNonprofitSignup below.
   const [npFromGate, setNpFromGate] = useState(false);
-  const [signupIdentity, setSignupIdentity] = useState(null);
+  const [signupIdentity, setSignupIdentity] = useState(() => donorProgress?.identity ?? null);
+  // SignUpScreen's in-screen back steps (code entry -> email, sign-in mode ->
+  // signup) - the parent's hardware back and the hero chevron both ask it
+  // first, so neither drops the donor back to the slides mid-form.
+  const signupBackRef = useRef(null);
   // A draft left by WebOnboarding's 'account' step in the same tab (see
   // src/lib/donorDraft.js) - only consulted when it maps to a step this
   // surface understands (today, just 'signup') and only once selectedNonprofit
@@ -2919,6 +3067,13 @@ export default function Onboarding() {
     // (the plain 'gate' step, same as the default below) for join.
     if (urlP.get('signin') === '1') return 'gate-signin';
     if (urlP.get('join') === '1') return 'gate';
+    // Mid-signup progress (card linked, account verified) in this tab: resume
+    // at the payment-method step. Needs the cause still bound and an identity
+    // (the draft's own or the stored one) - otherwise the normal entry applies.
+    if (donorProgress?.appStep === 'payment-method' && donorProgress.connectedBank
+      && (donorProgress.identity || loadKey(IDENTITY_KEYS.identity)) && loadKey('pc_cause_id')) {
+      return 'payment-method';
+    }
     const mappedDraftStep = donorDraft?.step && WEB_STEP_TO_APP_STEP[donorDraft.step];
     if (mappedDraftStep && selectedNonprofit) return mappedDraftStep;
     if (loadKey('pc_account_status', 'active') === 'cancelled') return 'gate';
@@ -2926,7 +3081,12 @@ export default function Onboarding() {
   }); // 'gate' | 'gate-signin' | 'slides' | 'signup' | 'connect-card' | 'payment-method' | 'card-entry' | 'checkout-confirm' | 'nonprofit-signup'
 
   const urlParams = new URLSearchParams(window.location.search);
-  const autoBindOrg = urlParams.get('org') || new URLSearchParams(window.location.hash.replace('#', '?')).get('org') || null;
+  // ?org= is a donor join link EXCEPT on the Stripe Connect return
+  // (/demo/?npstripe=return&org=<uuid>), where it names the admin's org id -
+  // resolving that as a join code would try to bind the admin as a donor.
+  const autoBindOrg = urlParams.get('npstripe')
+    ? null
+    : (urlParams.get('org') || new URLSearchParams(window.location.hash.replace('#', '?')).get('org') || null);
 
   // Handle deep-link from other screens (Feature 3)
   useEffect(() => {
@@ -2972,6 +3132,16 @@ export default function Onboarding() {
     setStep('signup');
   }
 
+  // Back from the account step: SignUpScreen gets first refusal (code entry
+  // returns to the email field, sign-in mode returns to signup); only then do
+  // we leave for the slides. The draft is kept either way - what was typed
+  // must still be there on re-entry; it is cleared once signup completes.
+  function backFromSignup() {
+    if (signupBackRef.current?.()) return;
+    setSlide(2);
+    setStep('slides');
+  }
+
   // Hardware/browser back for this wizard's OWN step transitions - mirrors
   // exactly what each screen's own onBack prop already does below, so this is
   // never a new "back" meaning, only the same one reachable through hardware
@@ -2983,13 +3153,13 @@ export default function Onboarding() {
   function stepBack() {
     switch (step) {
       case 'native-app-gate': setSelectedNonprofit(null); setStep('gate'); break;
-      case 'admin-signin': setStep('gate'); break;
+      case 'admin-signin': if (!returnFromOnboarding()) setStep('gate'); break;
       case 'gate-signin': setStep('gate'); break;
       case 'checkout-confirm': setStep('payment-method'); break;
       case 'card-entry': setStep('payment-method'); break;
       case 'payment-method': setStep('connect-card'); break;
       case 'connect-card': backFromConnectCard(); break;
-      case 'signup': clearDonorDraft(); setSlide(2); setStep('slides'); break;
+      case 'signup': backFromSignup(); break;
       // The intro carousel has no in-UI back control of its own (only Next /
       // dot navigation) - 'gate' is exactly where it came from, whether by
       // scanning a code or by handleBind, so that is where hardware back
@@ -3008,6 +3178,17 @@ export default function Onboarding() {
   // downstream has to know this check exists. Native only: Apple has no say
   // over the web, so a browser donor is never shown this screen.
   function handleBind(np) {
+    // A signed-in donor already bound to a DIFFERENT nonprofit is asked, never
+    // silently re-bound: donor_profiles.org_join_code decides where their next
+    // charge goes, so the code is parked and PendingOrgPrompt offers the switch
+    // (EDGE-CASES D12/C12) - the same rule App.jsx applies to ?org= links.
+    const currentId = loadKey('pc_cause_id');
+    if (hasAccount && currentId && currentId !== np.id) {
+      parkPendingOrg(np.shortName ?? np.id);
+      setLastMode('giving');
+      setPage('home');
+      return;
+    }
     setSelectedNonprofit(np);
     if (isNative() && getAppleApproval(np).status !== 'approved') {
       setStep('native-app-gate');
@@ -3020,9 +3201,14 @@ export default function Onboarding() {
     setStep('slides');
   }
 
+  // "Demo: preview the BGCA admin dashboard" (gate sign-in, demo only). A
+  // read-only look through AppContext's startAdminPreview: nothing persisted -
+  // no admin role, no mode, no page - so a prospect's phone never ends up
+  // signed in as BGCA's admin. The old role-writing fallback survives only in
+  // the demo build for a shell without startAdminPreview.
   function handleNpSignIn() {
-    // Production: backend verifies the SSO token and returns the org linked to this identity.
-    // Demo: use an existing custom-org admin role if one was created; otherwise default to BGCA.
+    if (typeof startAdminPreview === 'function') { startAdminPreview(); return; }
+    if (!showDemo) return;
     const orgId = adminRole?.orgId ?? 'bgca';
     if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
     adoptOrgById(orgId);
@@ -3068,23 +3254,36 @@ export default function Onboarding() {
     return np;
   }
 
+  // Resolves to 'no-binding' when the identity is good but neither this device
+  // nor the server knows their nonprofit: the caller (gate or gate sign-in)
+  // then says so inline and asks for the code, instead of a silent bounce back
+  // to a gate that looks like the tap did nothing.
   async function resumeSession() {
     const donorOnly = hasAccount && !adminRole;
     const adminOnly = adminRole && !hasAccount;
-    if (adminOnly) { setLastMode('admin'); setPage('np-dashboard'); return; }
+    if (adminOnly) { setLastMode('admin'); setPage('np-dashboard'); return 'ok'; }
     if (donorOnly) {
       if (!selectedNonprofit) {
-        if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return; }
-        setStep('gate'); return;
+        if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return 'ok'; }
+        setStep('gate'); return 'no-binding';
       }
-      setLastMode('giving'); setPage('home'); return;
+      setLastMode('giving'); setPage('home'); return 'ok';
     }
-    if (lastMode === 'admin' && adminRole) { setPage('np-dashboard'); return; }
+    if (lastMode === 'admin' && adminRole) { setPage('np-dashboard'); return 'ok'; }
     if (!selectedNonprofit) {
-      if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return; }
-      setStep('gate'); return;
+      if (await bindFromServer()) { setLastMode('giving'); setPage('home'); return 'ok'; }
+      setStep('gate'); return 'no-binding';
     }
     setPage('home');
+    return 'ok';
+  }
+  // Gate sign-in that ends with no binding lands on the gate with the notice
+  // already showing (the sign-in screen itself unmounts on the step change).
+  const [gateNotice, setGateNotice] = useState(null);
+  async function resumeFromGateSignIn() {
+    const result = await resumeSession();
+    if (result === 'no-binding') setGateNotice('We could not find your nonprofit - enter their code below to continue.');
+    return result;
   }
 
   const current = SLIDES[slide];
@@ -3113,7 +3312,9 @@ export default function Onboarding() {
       autoBindOrg={autoBindOrg}
       hasAccount={hasAccount}
       onWelcomeBack={resumeSession}
-      onUniversalSignIn={() => setStep('gate-signin')}
+      onUniversalSignIn={() => { setGateNotice(null); setStep('gate-signin'); }}
+      showDemo={showDemo}
+      notice={gateNotice}
     />
   );
   if (step === 'native-app-gate') return (
@@ -3131,16 +3332,17 @@ export default function Onboarding() {
   if (step === 'gate-signin') return (
     <GateSignInScreen
       onBack={() => setStep('gate')}
-      onSignIn={resumeSession}
+      onSignIn={resumeFromGateSignIn}
       onIdentityVerified={identity => { setHasAccount(identity); setAccountStatus('active'); }}
       onDemoAdmin={handleNpSignIn}
       onAdminSignIn={() => setStep('admin-signin')}
+      showDemo={showDemo}
     />
   );
   if (step === 'nonprofit-signup') return (
     // Exit-back returns to wherever the user jumped in from (e.g. their donor
     // dashboard); falls back to the gate for cold visitors.
-    <NonprofitSignupFlow onBack={exitNonprofitSignup} />
+    <NonprofitSignupFlow onBack={exitNonprofitSignup} showDemo={showDemo} />
   );
   if (step === 'checkout-confirm') return (
     <CheckoutConfirmScreen
@@ -3148,14 +3350,12 @@ export default function Onboarding() {
       onConfirm={() => {
         // A real signup already wrote the verified identity (email code or
         // Apple/Google) in SignUpScreen - use it here rather than overwrite it.
-        // The DEMO_USER fallback only covers the old, no-longer-reachable
-        // placeholder path so this never leaves hasAccount empty.
-        setHasAccount(signupIdentity ?? {
-          name: DEMO_USER.name,
-          email: DEMO_USER.email,
-          provider: signupProvider || 'demo',
-          joinedAt: new Date().toISOString(),
-        });
+        // No identity at all (a stale draft restored past the account step)
+        // means there is nobody to open an account for: back to signup, never
+        // a placeholder person.
+        const identity = signupIdentity ?? hasAccount;
+        if (!identity) { setStep('signup'); return; }
+        setHasAccount(identity);
         setAccountStatus('active');
         setLastMode('giving');
         if (connectedBank) {
@@ -3194,17 +3394,28 @@ export default function Onboarding() {
     />
   );
   if (step === 'card-entry') return <CardEntryScreen onBack={() => setStep('payment-method')} onNext={(cardInfo) => { setPendingPaymentMethod({ type: 'card', label: 'Credit or Debit Card', last4: cardInfo?.last4 ?? null, ...(cardInfo?.brand ? { brand: cardInfo.brand } : {}), ...(cardInfo?.simulated ? { simulated: true } : {}) }); setStep('checkout-confirm'); }} />;
-  if (step === 'payment-method') return <PaymentMethodScreen linkedBank={connectedBank} onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
-  if (step === 'connect-card') return <ConnectCardScreen onBack={backFromConnectCard} onNext={(bank) => { setConnectedBank(bank); setStep('payment-method'); }} />;
+  if (step === 'payment-method') return <PaymentMethodScreen linkedBank={connectedBank} showDemo={showDemo} onBack={() => setStep('connect-card')} onNext={(method, methodInfo) => { setPendingPaymentMethod(methodInfo); setStep(method === 'card' ? 'card-entry' : 'checkout-confirm'); }} />;
+  if (step === 'connect-card') return <ConnectCardScreen
+    showDemo={showDemo}
+    onBack={backFromConnectCard}
+    onNext={(bank) => {
+      setConnectedBank(bank);
+      // Display fields only (no Plaid tokens) - see donorDraft.js. The pending
+      // payment method is deliberately NOT saved: an authorization must be
+      // given again, never restored.
+      saveDonorProgress({ appStep: 'payment-method', connectedBank: bank, identity: signupIdentity });
+      setStep('payment-method');
+    }}
+  />;
   if (step === 'signup') return <SignUpScreen
-    onBack={() => { clearDonorDraft(); setSlide(2); setStep('slides'); }}
+    onBack={backFromSignup}
     onNext={() => setStep('connect-card')}
     nonprofit={selectedNonprofit}
     hasAccount={hasAccount}
     accountStatus={accountStatus}
     onGoToDashboard={resumeSession}
-    onProviderChosen={p => setSignupProvider(p)}
     onIdentityVerified={identity => setSignupIdentity(identity)}
+    interceptBackRef={signupBackRef}
   />;
 
   return (
@@ -3251,45 +3462,55 @@ export default function Onboarding() {
                 auto-bind and manual entry both go through resolveOrgByCode,
                 the server-first lookup), so the fallback line below only
                 covers a state that should not occur. */}
+            {/* The short name ("BGCA", not the full legal name) keeps the
+                greeting to three lines on a 390px screen; the full name is
+                already shown with the logo above. */}
             {slide === 0 ? (
-              <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
+              <h1 className="text-white font-bold text-3xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px', textWrap: 'balance' }}>
                 {selectedNonprofit
-                  ? `Welcome to the\n${selectedNonprofit.name}\nround-up app`
+                  ? `Welcome to the\n${selectedNonprofit.shortName || selectedNonprofit.name}\nround-up app`
                   : 'Welcome to your\nround-up app'}
               </h1>
             ) : current.title ? (
-              <h1 className="text-white font-bold text-4xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px' }}>
+              <h1 className="text-white font-bold text-4xl leading-tight whitespace-pre-line" style={{ letterSpacing: '-0.5px', textWrap: 'balance' }}>
                 {current.title}
               </h1>
             ) : null}
-            <p className="text-white/80 text-base mt-4 leading-relaxed">
+            <p className="text-white/80 text-base mt-4 leading-relaxed" style={{ textWrap: 'balance' }}>
               {slide === 0 ? slide2Subtitle() : current.subtitle}
             </p>
           </div>
 
-          {/* Dots */}
-          <div className="flex gap-2 mt-8">
+          {/* Dots: 44px targets around 8px marks */}
+          <div className="flex mt-4" role="tablist" aria-label="Intro slides">
             {SLIDES.map((_, i) => (
               <button
                 key={i}
+                type="button"
+                role="tab"
+                aria-selected={i === slide}
+                aria-label={`Slide ${i + 1} of ${SLIDES.length}`}
                 onClick={() => setSlide(i)}
-                className={`rounded-full transition-all duration-300 ${
-                  i === slide ? 'w-6 h-2 bg-white' : 'w-2 h-2 bg-white/40'
-                }`}
-              />
+                className="min-w-11 min-h-11 flex items-center justify-center"
+              >
+                <span
+                  aria-hidden
+                  className={`block rounded-full transition-all duration-300 ${
+                    i === slide ? 'w-6 h-2 bg-white' : 'w-2 h-2 bg-white/40'
+                  }`}
+                />
+              </button>
             ))}
           </div>
 
           {/* CTA */}
-          <div className="w-full mt-8 flex flex-col gap-3">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
+          <div className="w-full mt-4 flex flex-col gap-3">
+            <Button
               onClick={advance}
-              className="w-full py-4 rounded-2xl bg-white font-bold text-base shadow-lg"
-              style={{ color: '#0B2A4A' }}
+              style={{ background: '#fff', color: 'var(--navy-deep)', boxShadow: 'var(--shadow-2)' }}
             >
               {current.cta}
-            </motion.button>
+            </Button>
             <div style={{ height: 48 }} />
           </div>
 

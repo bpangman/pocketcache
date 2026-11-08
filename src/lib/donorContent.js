@@ -18,8 +18,12 @@
  */
 
 import { MONTHLY_DATA, TRANSACTIONS, CURRENT_MONTH_PENDING, PRIOR_MONTHS_SUM } from '../data/transactions';
-import { MAX_FEE_MONTHS, chargeAfterNextLabel, nextChargeLabel } from './billing';
+import {
+  MAX_FEE_MONTHS, MONTHLY_FLOOR, LOCK_DAY, REVIEW_WINDOW_LAST_DAY, CHARGE_DAY,
+  chargeAfterNextLabel, nextChargeLabel,
+} from './billing';
 import { fmtMoney } from './format';
+import { Sprout, Star, Trophy, Gem, Sparkles, Rocket, Medal, Crown, Target, Award } from 'lucide-react';
 
 // ─── The demo dataset ────────────────────────────────────────────────────────
 //
@@ -153,13 +157,30 @@ export function matchProgress(match) {
   };
 }
 
+/**
+ * Should a corporate match render on this surface at all?
+ *
+ * BGCA's seed carries a SAMPLE match (GM, $50K) so the PhoneFrame demo and
+ * demo mode have something to show. A real account with $0 donated must never
+ * see a sponsor claim about a partnership that does not exist, so every
+ * surface gates on this one helper instead of on `match.active` alone:
+ * active, and either a real (non-sample) match or demo data is on.
+ *
+ * @param {{active?:boolean, sample?:boolean}|null|undefined} match
+ * @param {boolean} demo - demoActive / demoMode on the calling surface.
+ * @returns {boolean}
+ */
+export function isMatchVisible(match, demo) {
+  return !!match?.active && (!match.sample || !!demo);
+}
+
 // ─── "Your impact" equivalency ───────────────────────────────────────────────
 
 const IMPACT_TIERS = [
-  { min: 100, text: 'About $%T% might cover roughly a month of after-school programming for a Club member  -  example equivalency.' },
-  { min: 60, text: 'About $%T% might cover approximately 2 weeks of after-school snacks for a Club member  -  example equivalency.' },
-  { min: 25, text: 'About $%T% might cover art supplies for a small group project  -  example equivalency.' },
-  { min: 0, text: 'Every round-up adds up  -  your giving is already on its way to %ORG%.' },
+  { min: 100, text: 'About $%T% might cover roughly a month of after-school programming for a Club member - example equivalency.' },
+  { min: 60, text: 'About $%T% might cover approximately 2 weeks of after-school snacks for a Club member - example equivalency.' },
+  { min: 25, text: 'About $%T% might cover art supplies for a small group project - example equivalency.' },
+  { min: 0, text: 'Every round-up adds up - your giving is already on its way to %ORG%.' },
 ];
 
 /**
@@ -175,7 +196,26 @@ export function impactTier(total, orgShortName = 'your cause') {
 
 // ─── Milestones ──────────────────────────────────────────────────────────────
 
-const MILESTONE_EMOJIS = ['🌱', '⭐', '🏆', '💎', '🦸', '🚀', '🌟', '👑', '🎯', '🔮'];
+/**
+ * One lucide glyph per milestone tier, cycling. These replaced the emoji
+ * ladder (seedling, star, trophy...) because emoji render differently on every
+ * OS and read as icons, which the design direction reserves for lucide.
+ * Surfaces render `<m.Icon size={20} />` inside a tinted disc; `iconName` is
+ * the stable string for tests, analytics and anything that cannot hold a
+ * component reference.
+ */
+export const MILESTONE_ICONS = [
+  { name: 'sprout', Icon: Sprout },
+  { name: 'star', Icon: Star },
+  { name: 'trophy', Icon: Trophy },
+  { name: 'gem', Icon: Gem },
+  { name: 'sparkles', Icon: Sparkles },
+  { name: 'rocket', Icon: Rocket },
+  { name: 'medal', Icon: Medal },
+  { name: 'crown', Icon: Crown },
+  { name: 'target', Icon: Target },
+  { name: 'award', Icon: Award },
+];
 
 /**
  * The milestone tier at a given index. Tiers step 1x / 2.5x / 5x within each
@@ -186,18 +226,19 @@ const MILESTONE_EMOJIS = ['🌱', '⭐', '🏆', '💎', '🦸', '🚀', '🌟',
  * silently disagree about what a donor had achieved. Both import it now.
  *
  * @param {number} index - zero-based tier index.
- * @returns {{amount:number,label:string,emoji:string,index:number}}
+ * @returns {{amount:number,label:string,Icon:Function,iconName:string,index:number}}
+ *   `Icon` is a lucide component; the old `emoji` string is gone.
  */
-export function getMilestoneAt(index) {
+function getMilestoneAt(index) {
   const tier = Math.floor(index / 3);
   const pos = index % 3;
   const multiplier = pos === 0 ? 1 : pos === 1 ? 2.5 : 5;
   const amount = Math.round(10 * Math.pow(10, tier) * multiplier);
-  const emoji = MILESTONE_EMOJIS[index % MILESTONE_EMOJIS.length];
+  const { name: iconName, Icon } = MILESTONE_ICONS[index % MILESTONE_ICONS.length];
   const label = amount >= 1000
     ? `$${(amount / 1000 % 1 === 0 ? amount / 1000 : (amount / 1000).toFixed(1))}K club`
     : `$${amount} club`;
-  return { amount, label, emoji, index };
+  return { amount, label, Icon, iconName, index };
 }
 
 /**
@@ -227,17 +268,65 @@ export function getMilestonesUpTo(total) {
  * $0.00 from one and not the other, and $4.63 from one but only $4.50 from the
  * other. Both now import this.
  *
- * The floor is $0 on purpose: setting this month's round-ups to zero is a
- * legitimate thing to want, and the review alert already allowed it.
+ * The floor is the fixed $5 minimum, not $0: a charge under $5 never runs
+ * (it rolls forward), so a slider that offered $0.01 to $4.99 was promising a
+ * charge the server would refuse to make. A donor who wants less than the
+ * floor this month uses Skip instead - Skip is the one control that means
+ * "charge me nothing".
  */
-export const ADJUST_MIN = 0;
-export const ADJUST_STEP = 0.01;
+export const ADJUST_MIN = MONTHLY_FLOOR;
+const ADJUST_STEP = 0.01;
 
 /**
  * @param {number} accrued - this month's accrued round-ups (the ceiling).
+ * @returns {{ min: number, max: number, step: number, belowFloor: boolean }}
+ *   belowFloor is true when the accrued amount itself is under the floor, in
+ *   which case there is nothing adjustable and the surface shows the rollover
+ *   note instead of a slider.
  */
 export function adjustBounds(accrued) {
-  return { min: ADJUST_MIN, max: accrued, step: ADJUST_STEP };
+  return { min: ADJUST_MIN, max: accrued, step: ADJUST_STEP, belowFloor: accrued < MONTHLY_FLOOR };
+}
+
+// ─── Notes shared by every donor surface ─────────────────────────────────────
+//
+// Hand-typed variants of these sentences disagreed across the app, the web
+// portal and the Terms (three days vs ten, three-month settle-up vs roll
+// forward). They are built from the billing constants so a schedule change is
+// one edit, and every surface renders the same string.
+
+const ord = n => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
+
+/** What happens to a month under the floor. Replaces every "settle within
+ *  three months" sentence - there is no forced settle-up. */
+export const ROLL_FORWARD_NOTE = `Under $${MONTHLY_FLOOR} nothing is charged - the balance (and the $1 app fee) rolls forward until it reaches $${MONTHLY_FLOOR}, then the full amount is charged.`;
+
+/** The adjust-this-charge explainer, with the real schedule. */
+export const ADJUST_NOTE = `One-time adjustment for this month's charge only. We email your exact amount on the ${ord(LOCK_DAY)}, and you can adjust it until the ${ord(REVIEW_WINDOW_LAST_DAY)}. The charge runs on the ${ord(CHARGE_DAY)}.`;
+
+/** When a multiplier change takes effect (lock-time, whole month). */
+export const MULTIPLIER_NOTE = `Your multiplier applies to the whole month's round-ups when the month closes on the ${ord(LOCK_DAY)}.`;
+
+/** Tag beside a Skip/Cap/Adjust/Cover control whose value has not reached the
+ *  server for this account yet. Use it where ONE such control stands alone
+ *  (the charge review alert, the dashboard monthly card). */
+export const PREVIEW_NOTE = 'Preview - not yet applied to real charges';
+
+/** The section-level version for Round-up settings: one 13px --slate helper
+ *  line at the top of the section instead of an amber pill under every row
+ *  (Skip a month, Monthly cap, Cover processing costs). A settings page stays
+ *  calm with at most one tinted callout. */
+export const PREVIEWS_NOTE = 'Previews - not yet applied to real charges';
+
+/**
+ * The $1 app fee line for a real account while the fee is not collected
+ * (billing.APP_FEE_LIVE false): shown outside the total, never inside it.
+ * @param {number} n - fee months pending.
+ * @returns {string} e.g. 'App fee $1 x 2 months - starts at launch, not charged yet'
+ */
+export function appFeePendingLine(n) {
+  const months = Math.max(1, Math.round(n || 1));
+  return `App fee $1 x ${months} ${months === 1 ? 'month' : 'months'} - starts at launch, not charged yet`;
 }
 
 // ─── Skipping a month: THE canonical wording ─────────────────────────────────
@@ -278,7 +367,7 @@ export const SKIP_COLLECT_AMOUNT = '$0.00';
 /** When the normal lock-on-the-1st / charge-on-the-11th rhythm picks back up.
  *  Says "next month's round-ups" deliberately: this month's are gone, so the
  *  resumed schedule is about money the donor has not rounded up yet. */
-export const SKIP_RESUME_LINE = "Normal timing resumes with next month's round-ups  -  exact amount emailed on the 1st, charged on the 11th.";
+export const SKIP_RESUME_LINE = "Normal timing resumes with next month's round-ups - exact amount emailed on the 1st, charged on the 11th.";
 
 /** How a donor gets out of the skip. */
 export const SKIP_UNDO_LINE = 'Un-skip anytime in Settings.';
@@ -307,7 +396,7 @@ export function skipStatusLine(now = new Date()) {
  * @returns {string}
  */
 export function skipAccruedLine(pendingRoundUps) {
-  return `Your $${fmtMoney(pendingRoundUps)} of round-ups this month is never charged  -  it does not roll over and it will not be collected later.`;
+  return `Your $${fmtMoney(pendingRoundUps)} of round-ups this month is never charged - it does not roll over and it will not be collected later.`;
 }
 
 /**
@@ -377,7 +466,7 @@ export function skipRowSub({ monthName, feeMonths, now = new Date() }) {
  * @returns {string}
  */
 export function skipRowOfferSub(monthName) {
-  return `Need a breather? Skip ${monthName}'s round-ups  -  the $1 app fee still rolls forward to your next charge.`;
+  return `Need a breather? Skip ${monthName}'s round-ups - the $1 app fee still rolls forward to your next charge.`;
 }
 
 /**
@@ -391,7 +480,7 @@ export function skipRowOfferSub(monthName) {
  */
 export function skipConfirmParagraphs({ monthName, feeMonths, now = new Date() }) {
   return [
-    `You're only charged in the months you give, so ${monthName}'s round-ups are simply never charged  -  they don't roll over and they don't come out later.`,
+    `You're only charged in the months you give, so ${monthName}'s round-ups are simply never charged - they don't roll over and they don't come out later.`,
     `Nothing is collected on ${nextChargeLabel(now)}. ${skipFeeLine(feeMonths, now)}`,
     `Changed your mind? Tap Undo on this screen any time before ${nextChargeLabel(now)}.`,
   ];
@@ -411,11 +500,12 @@ export function skipConfirmParagraphs({ monthName, feeMonths, now = new Date() }
  *
  * @param {object} o
  * @param {string} o.orgShort - nonprofit short name.
- * @param {number} o.minimum - the nonprofit's monthly minimum.
  * @param {number} o.chargeDay - day of month the charge runs.
  * @param {number} o.reviewDays - length of the review window in days.
+ *   (A `minimum` field is still accepted and ignored: the floor is the fixed
+ *   MONTHLY_FLOOR for every nonprofit, never a per-org setting.)
  */
-export function billingExplainer({ orgShort, minimum, chargeDay, reviewDays }) {
+export function billingExplainer({ orgShort, chargeDay, reviewDays }) {
   const ord = chargeDay === 1 ? '1st' : chargeDay === 11 ? '11th' : `${chargeDay}th`;
   return [
     `Your round-ups add up all month. The exact amount is emailed to you on the 1st and charged on the ${ord}, so you get ${reviewDays} full days to review or adjust it.`,
@@ -423,10 +513,10 @@ export function billingExplainer({ orgShort, minimum, chargeDay, reviewDays }) {
     `A flat $1 app fee is included in that charge. ${orgShort} never pays PocketCache anything, and PocketCache never takes a percentage of your donation.`,
     // The skip paragraph. The timing claim and the fee fact are one paragraph on
     // purpose: split across two, a donor stops reading after the good news.
-    `Skip a month and you're only charged in the months you give: nothing at all is collected on that charge date, and that month's round-ups are never collected later. The $1 app fee is not waived, though  -  it rolls forward and joins your next charge.`,
-    // The fee rolls over with a below-minimum balance too (Terms section 7).
-    // This paragraph used to name only the balance, which read as a free month.
-    `Months under $${minimum} are not charged; the balance and the $1 app fee carry forward and settle within three months at most.`,
+    `Skip a month and you're only charged in the months you give: nothing at all is collected on that charge date, and that month's round-ups are never collected later. The $1 app fee is not waived, though - it rolls forward and joins your next charge.`,
+    // The fee rolls over with a below-floor balance too (Terms section 7).
+    // There is no forced settle-up: the balance rolls until it reaches $5.
+    ROLL_FORWARD_NOTE,
     `Your round-ups are tax-deductible. The $1 app fee is not.`,
   ];
 }

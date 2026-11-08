@@ -1,26 +1,50 @@
 import { useState, useEffect } from 'react';
+import { Smartphone, Mail, Share2, Check, Hourglass } from 'lucide-react';
 import { findOrgByCode, resolveOrgByCode, isOrgPending } from '../store/orgStore';
 import { fmtMoney, fmtCount } from '../lib/format';
 import { getOrgStats } from '../lib/orgStats';
+import { isMatchVisible } from '../lib/donorContent';
+import { useShowDemoAffordances } from '../lib/demo';
+import { RADIUS } from '../lib/webTheme';
 import CoinMark from '../components/CoinMark';
 import OrgLogo from '../components/OrgLogo';
 
 // OrgLandingPage  -  public micro-site for a nonprofit's vanity URL.
 // Rendered full-viewport (not inside the phone shell) when ?orgpage=CODE is in the URL.
 // This is a normal web page with a simple responsive max-width column layout.
+//
+// It mounts OUTSIDE AppProvider (App.jsx ?orgpage= branch), so there is no
+// donor demo toggle here: "demo" on this surface means the demo build or the
+// marketing PhoneFrame shell (lib/demo.js). A stranger landing from a QR code
+// is the real public, and sample figures are labelled for them.
+
+// Mobile user agents are the ones where an sms: link opens a real composer.
+// On a desktop browser it is a dead control (or an app picker at best), so the
+// email button carries the "send it to my phone" job there.
+const TOUCH_UA = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 function DemoPill() {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
-      fontSize: 11, fontWeight: 600, padding: '2px 8px',
-      borderRadius: 99, background: '#fef3c7', color: '#92400e',
-      verticalAlign: 'middle', marginLeft: 6,
+      fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+      padding: '2px 8px', minHeight: 20, lineHeight: 1.2,
+      borderRadius: RADIUS.pill, background: 'var(--gold-50)', color: 'var(--warning)',
+      verticalAlign: 'middle',
     }}>
       Demo data
     </span>
   );
 }
+
+// Secondary share pills: --surface fill, --ink-2 label, 44px tall so each is a
+// full hit target, pill radius like every other web button.
+const SHARE_BTN = {
+  flex: '1 1 110px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  minHeight: 44, padding: '0 16px', borderRadius: RADIUS.pill, border: '1px solid var(--line)',
+  background: 'var(--surface)', color: 'var(--ink-2)', fontWeight: 600, fontSize: 14,
+  textDecoration: 'none', cursor: 'pointer', fontFamily: 'inherit',
+};
 
 export default function OrgLandingPage({ code }) {
   // Initial sync value covers the BGCA seed and any org this device already
@@ -31,6 +55,7 @@ export default function OrgLandingPage({ code }) {
   const [org, setOrg] = useState(() => findOrgByCode(code));
   const [shareClicked, setShareClicked] = useState(false);
   const [orgStats, setOrgStats] = useState(null);
+  const demoActive = useShowDemoAffordances(false);
   useEffect(() => {
     let cancelled = false;
     resolveOrgByCode(code).then(resolved => {
@@ -42,15 +67,24 @@ export default function OrgLandingPage({ code }) {
     if (!org) return;
     getOrgStats(org).then(setOrgStats);
   }, [org]);
+  // The tab reads as the nonprofit's own page, and the previous title comes
+  // back if this page unmounts in-tab (it never does today, but it is cheap).
+  const orgName = org?.name;
+  useEffect(() => {
+    if (!orgName) return;
+    const prev = document.title;
+    document.title = `${orgName} - Round-up giving`;
+    return () => { document.title = prev; };
+  }, [orgName]);
 
   if (!org) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B2A4A', color: '#fff', textAlign: 'center', padding: '2rem' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--navy)', color: '#fff', textAlign: 'center', padding: '2rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Org not found</h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1.5rem' }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.2, marginBottom: 8 }}>Org not found</h1>
+          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>
             We couldn&apos;t find &ldquo;{code}&rdquo;. Double-check the link or{' '}
-            <a href="/" style={{ color: '#FBBF24', fontWeight: 600 }}>go to PocketCache</a>.
+            <a href="/" style={{ color: 'var(--gold)', fontWeight: 600 }}>go to PocketCache</a>.
           </p>
         </div>
       </div>
@@ -62,15 +96,17 @@ export default function OrgLandingPage({ code }) {
   // printed or shared early lands donors on a page that cannot enroll them.
   if (isOrgPending(org)) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B2A4A', color: '#fff', textAlign: 'center', padding: '2rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
+      <div className="pc-on-dark" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--navy)', color: '#fff', textAlign: 'center', padding: '2rem' }}>
         <div style={{ maxWidth: 420 }}>
-          <div style={{ fontSize: '2.4rem', marginBottom: '0.75rem' }} aria-hidden>⏳</div>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>This nonprofit&apos;s page is almost ready</h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }} aria-hidden>
+            <Hourglass size={36} color="var(--gold)" />
+          </div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.2, marginBottom: 8, textWrap: 'balance' }}>This nonprofit&apos;s page is almost ready</h1>
+          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>
             {org.name} is finishing setup with PocketCache. Check back soon - donations open the
             moment their page is approved.
           </p>
-          <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#FBBF24', fontWeight: 600, textDecoration: 'none' }}>
+          <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '0 12px', color: 'var(--gold)', fontWeight: 600, textDecoration: 'none' }}>
             <CoinMark size={18} /> Go to PocketCache
           </a>
         </div>
@@ -82,17 +118,24 @@ export default function OrgLandingPage({ code }) {
   const brandColor = org.brand?.primary || '#003865';
   const orgCode = org.shortName || org.id.toUpperCase();
   const joinUrl = `/demo/?org=${encodeURIComponent(orgCode)}`;
+  // A returning supporter goes through the wizard's own sign-in door, not back
+  // into account creation (WebOnboarding reads entryIntent before org).
+  const signInUrl = `${joinUrl}&signin=1`;
   const adminSignInUrl = `/demo/?npsignin=1`;
   const vanityUrl = `https://pocketcache.app/${orgCode}`;
   const shareText = `Join ${org.name} on PocketCache: ${vanityUrl}`;
 
   // Public stats: live data when VITE_API_BASE is set (orgStats.isDemo=false);
-  // seeded demo numbers otherwise. matchStatus always comes from org metadata.
+  // seeded demo numbers otherwise. matchStatus always comes from org metadata,
+  // but BGCA's seed match is a SAMPLE (GM, $50K) and the public never sees a
+  // sponsor claim that does not exist: isMatchVisible hides it outside demo.
   const displayRaised = orgStats?.raised ?? (isBgca ? (org.raised ?? 3841209) : null);
   const displayDonors = orgStats?.donors ?? null;
   const totalDonors  = displayDonors != null ? fmtCount(displayDonors) : null;
   const totalRaised  = displayRaised != null ? `$${fmtMoney(displayRaised)}` : null;
-  const matchStatus  = isBgca ? (org.corporateMatch?.active ? 'Active' : 'None') : null;
+  // The match tile only renders while a match is live: a big-number slot that
+  // reads "None" is a stat about nothing, so the tile is dropped instead.
+  const matchStatus  = isBgca && isMatchVisible(org.corporateMatch, demoActive) ? 'Active' : null;
   const showDemoPill = orgStats != null ? orgStats.isDemo : isBgca;
 
   const storyText = org.longDescription || org.description || '';
@@ -109,104 +152,123 @@ export default function OrgLandingPage({ code }) {
 
   // Inline styles only (no Tailwind  -  this page lives outside the phone shell and
   // should be self-contained and responsive without fighting phone-frame CSS).
+  // Values come from the shared tokens in src/index.css so the micro-site
+  // reads as the same product as the portal it links into.
   const card = {
-    background: '#fff', borderRadius: 20, padding: '1.5rem',
-    marginBottom: '1.25rem', boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
-    border: '1px solid #e5e7eb',
+    background: '#fff', borderRadius: RADIUS.lg, padding: 24,
+    marginBottom: 20, boxShadow: 'var(--shadow-1)',
+    border: '1px solid var(--line)',
   };
 
   return (
-    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif', minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ fontFamily: 'inherit', minHeight: '100vh', background: 'var(--surface)', color: 'var(--ink)' }}>
 
       {/* Hero */}
-      <div style={{ background: `linear-gradient(135deg, ${brandColor} 0%, #001a33 100%)`, paddingBottom: '3rem' }}>
+      <div className="pc-on-dark" style={{ background: `linear-gradient(135deg, ${brandColor} 0%, #001a33 100%)`, paddingBottom: 48 }}>
         {/* Nav */}
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, textDecoration: 'none' }}>
             <CoinMark size={26} />
-            <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13, fontWeight: 600 }}>PocketCache</span>
+            <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 600 }}>PocketCache</span>
           </a>
           <a
             href={adminSignInUrl}
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, fontWeight: 600, padding: '0.45rem 0.9rem', borderRadius: 20, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.25)', whiteSpace: 'nowrap' }}
+            style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, fontWeight: 600, padding: '0 16px', borderRadius: RADIUS.pill, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.25)', whiteSpace: 'nowrap' }}
           >
             Nonprofit admin? Sign in
           </a>
         </div>
 
-        {/* Hero content */}
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '1.5rem 1.5rem 0', textAlign: 'center' }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}>
-            <OrgLogo nonprofit={org} size={20} rounded="2xl" />
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 24px 0', textAlign: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+            <OrgLogo nonprofit={org} size={20} rounded="3xl" />
           </div>
-          <h1 style={{ color: '#fff', fontSize: 'clamp(1.75rem, 5vw, 2.5rem)', fontWeight: 800, margin: '0 0 0.5rem', letterSpacing: '-0.5px', lineHeight: 1.15 }}>
+          <h1 style={{ color: '#fff', fontSize: 34, fontWeight: 800, margin: '0 0 8px', letterSpacing: '-0.5px', lineHeight: 1.2, textWrap: 'balance' }}>
             {org.name}
           </h1>
-          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1rem', lineHeight: 1.6, margin: '0 auto', maxWidth: 480 }}>
+          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16, lineHeight: 1.6, margin: '0 auto', maxWidth: 480 }}>
             Welcome to the {org.name} round-up microsite
           </p>
         </div>
       </div>
 
-      {/* Stats band */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '1.25rem 0' }}>
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 1.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {[
-            { label: 'Total donors',     value: totalDonors,   showPill: showDemoPill },
-            { label: 'Total donated',    value: totalRaised,   showPill: showDemoPill },
-            { label: 'Corporate match',  value: matchStatus,   showPill: showDemoPill },
-          ].map(({ label, value, showPill }) => (
-            <div key={label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: value ? brandColor : '#9ca3af' }}>
-                {value ?? '--'}
-                {showPill && value && <DemoPill />}
-              </div>
-              <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, marginTop: 2 }}>{label}</div>
+      {/* Stats band. One "Demo data" label for the whole row - the figures are
+          seeded sample numbers until live stats arrive, and saying so once is
+          enough for the public to read them correctly. */}
+      <div style={{ background: '#fff', borderBottom: '1px solid var(--line)', padding: '20px 0' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 24px' }}>
+          {showDemoPill && (
+            <div style={{ textAlign: 'center', marginBottom: 8 }} data-testid="orgpage-demo-pill">
+              <DemoPill />
             </div>
-          ))}
+          )}
+          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {[
+              { label: 'Total donors',     value: totalDonors },
+              { label: 'Total raised',     value: totalRaised },
+              ...(matchStatus ? [{ label: 'Corporate match', value: matchStatus }] : []),
+            ].map(({ label, value }) => (
+              <div key={label} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums', color: value ? brandColor : 'var(--muted)' }}>
+                  {value ?? '--'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--slate)', fontWeight: 600, marginTop: 4 }}>{label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Body */}
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '32px 24px 64px' }}>
 
         {/* Start giving  -  the app runs right here on the web */}
         <div style={card}>
-          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827', margin: '0 0 0.4rem' }}>Start giving in under a minute</h2>
-          <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '1rem', lineHeight: 1.55 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.2, color: 'var(--ink)', margin: '0 0 8px' }}>Start giving in under a minute</h2>
+          <p style={{ color: 'var(--ink-2)', fontSize: 15, margin: '0 0 16px', lineHeight: 1.55 }}>
             Round up your everyday purchases  -  spare change goes straight to {org.name}.
             Nothing to download: sign in, link a card, and you&apos;re giving, right from your browser.
           </p>
           <a
             href={joinUrl}
-            style={{ display: 'block', background: `linear-gradient(135deg, ${brandColor}, #001a33)`, color: '#fff', textAlign: 'center', padding: '0.85rem', borderRadius: 14, fontWeight: 700, fontSize: '0.95rem', textDecoration: 'none', marginBottom: '0.5rem' }}
+            className="pc-btn"
+            data-variant="primary"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 52, background: `linear-gradient(135deg, ${brandColor}, #001a33)`, color: '#fff', textAlign: 'center', padding: '0 20px', borderRadius: RADIUS.pill, fontWeight: 700, fontSize: 16, textDecoration: 'none', marginBottom: 8 }}
           >
             Start giving to {orgCode} →
           </a>
-          <p style={{ color: '#9ca3af', fontSize: 12, margin: '0 0 1rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--slate)', fontSize: 13, margin: '0 0 16px', textAlign: 'center' }}>
             Already a supporter?{' '}
-            <a href={joinUrl} style={{ color: brandColor, fontWeight: 600 }}>Open your giving dashboard</a>
+            <a href={signInUrl} data-testid="orgpage-signin" style={{ display: 'inline-block', padding: '12px 4px', margin: '-12px -4px', color: brandColor, fontWeight: 600 }}>Open your giving dashboard</a>
           </p>
-          <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: '0.6rem', textAlign: 'center' }}>Or send it to your phone:</p>
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <a
-              href={`sms:?&body=${encodeURIComponent(shareText)}`}
-              style={{ flex: '1 1 110px', background: '#f3f4f6', color: '#374151', textAlign: 'center', padding: '0.6rem 0.75rem', borderRadius: 10, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}
-            >
-              📱 Text me the link
-            </a>
+          <p style={{ color: 'var(--slate)', fontSize: 13, margin: '0 0 8px', textAlign: 'center' }}>Or send it to your phone:</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {TOUCH_UA && (
+              <a
+                href={`sms:?&body=${encodeURIComponent(shareText)}`}
+                data-testid="orgpage-sms"
+                style={SHARE_BTN}
+              >
+                <Smartphone size={16} aria-hidden /> Text me the link
+              </a>
+            )}
             <a
               href={`mailto:?subject=${encodeURIComponent(`Join ${org.name} on PocketCache`)}&body=${encodeURIComponent(shareText)}`}
-              style={{ flex: '1 1 110px', background: '#f3f4f6', color: '#374151', textAlign: 'center', padding: '0.6rem 0.75rem', borderRadius: 10, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}
+              style={SHARE_BTN}
             >
-              ✉️ Email me the link
+              <Mail size={16} aria-hidden /> Email me the link
             </a>
             {canShare && (
               <button
+                type="button"
                 onClick={handleShare}
-                style={{ flex: '1 1 110px', background: shareClicked ? '#d1fae5' : '#f3f4f6', color: shareClicked ? '#065f46' : '#374151', textAlign: 'center', padding: '0.6rem 0.75rem', borderRadius: 10, fontWeight: 600, fontSize: 13, border: 'none', cursor: 'pointer' }}
+                style={{
+                  ...SHARE_BTN,
+                  ...(shareClicked ? { background: 'var(--green-50)', color: 'var(--green-700)', borderColor: 'transparent' } : {}),
+                }}
               >
-                {shareClicked ? '✓ Shared' : '🔗 Share'}
+                {shareClicked ? <Check size={16} aria-hidden /> : <Share2 size={16} aria-hidden />}
+                {shareClicked ? 'Shared' : 'Share'}
               </button>
             )}
           </div>
@@ -215,8 +277,8 @@ export default function OrgLandingPage({ code }) {
         {/* Story */}
         {storyText && (
           <div style={card}>
-            <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827', margin: '0 0 0.75rem' }}>Our story</h2>
-            <p style={{ color: '#374151', fontSize: '0.925rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.2, color: 'var(--ink)', margin: '0 0 12px' }}>Our story</h2>
+            <p style={{ color: 'var(--ink-2)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>
               {storyText}
             </p>
           </div>
@@ -224,8 +286,8 @@ export default function OrgLandingPage({ code }) {
       </div>
 
       {/* Footer */}
-      <div style={{ background: '#f3f4f6', borderTop: '1px solid #e5e7eb', padding: '1.5rem', textAlign: 'center' }}>
-        <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: '#6b7280', fontSize: 13 }}>
+      <div style={{ background: '#fff', borderTop: '1px solid var(--line)', padding: 24, textAlign: 'center' }}>
+        <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, textDecoration: 'none', color: 'var(--slate)', fontSize: 13 }}>
           <CoinMark size={16} />
           Powered by PocketCache  -  round-up giving software
         </a>

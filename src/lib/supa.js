@@ -7,10 +7,17 @@
 // ship inside client-side apps - it only lets a visitor do what the sign-in
 // screen already lets them do (ask for a login code, start a login). It is
 // not a secret and is safe to see in this file or in the built app.
+//
+// These three constants are THE copy for the whole src/ tree: roundupsMe.js,
+// plaid.js, beacon.js, npApi.js, stripeSetup.js, engagement.js and the
+// platform admin console all import them from here, so a project move or key
+// rotation is one edit. (landing/index.html keeps its own copy - it is a
+// static page with no bundler.)
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://yeptifozaytoglfwxksz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
+export const SUPABASE_URL = 'https://yeptifozaytoglfwxksz.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
+export const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
 
 // Lazy singleton - created on first use, not at module load, so importing
 // this file never has side effects on its own (safe for build tooling and

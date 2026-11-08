@@ -1,4 +1,4 @@
-// demoData.js — Seeded, coherent fake data for the PocketCache Nonprofit Dashboard demo.
+// demoData.js - Seeded, coherent fake data for the PocketCache Nonprofit Dashboard demo.
 // All dates are derived from new Date() so the demo never goes stale.
 
 // ── Deterministic pseudo-random ───────────────────────────────────────────────
@@ -122,7 +122,13 @@ export const CHARGE_HISTORY = Array.from({ length: 6 }, (_, m) => {
   const processingCovered  = parseFloat((coveringProcessing * avgProcessing).toFixed(2));
   const processingAbsorbed = parseFloat((optOutProcessing   * avgProcessing).toFixed(2));
   const appFees            = parseFloat((eligibleDonors.length * 1.00).toFixed(2)); // donor-paid, to PocketCache
-  const netToStripe        = parseFloat((gross + processingCovered - processingAbsorbed).toFixed(2));
+  // Direct charges: Stripe takes its fee on EVERY charge, whether the donor
+  // covered it or not. The covered amount exists only to offset that fee, so
+  // it is a wash: net = gross + covered - (covered + absorbed) = gross - absorbed.
+  // It used to add the covered amount without the fee it pays, overstating
+  // the org's net by exactly processingCovered.
+  const stripeFees         = parseFloat((processingCovered + processingAbsorbed).toFixed(2));
+  const netToStripe        = parseFloat((gross + processingCovered - stripeFees).toFixed(2));
 
   return {
     period,
@@ -132,6 +138,7 @@ export const CHARGE_HISTORY = Array.from({ length: 6 }, (_, m) => {
     gross,
     processingCovered,
     processingAbsorbed,
+    stripeFees,
     appFees,
     netToStripe,
     failures:       failureCount,

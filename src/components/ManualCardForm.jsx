@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { Lock } from 'lucide-react';
 import { formatCardNumber, cardDigits, isValidCardNumber, last4, formatExpiry, isValidExpiry, isValidCvv } from '../lib/manualCard';
+import { INK } from '../lib/webTheme';
 
 /**
  * ManualCardForm - the "type your card number" form, once instead of three times.
@@ -73,13 +74,15 @@ import { formatCardNumber, cardDigits, isValidCardNumber, last4, formatExpiry, i
  * `cardShape` to override.
  *
  * ---------------------------------------------------------------------------
- * KNOWN QUIRK PRESERVED ON PURPOSE: the cardholder name is collected and thrown
- * away. All three copies rendered a "Cardholder name" input, stored it, and then
- * hardcoded `name: 'My Card'` in the payload anyway. Passing
- * `applyEnteredName` makes the typed name win (falling back to 'My Card' when
- * blank), which is what the field obviously intends - but it changes the visible
- * "<name> ····1234 connected" confirmation text, so it is OFF by default to keep
- * this a pure refactor. Flip it deliberately, in its own change.
+ * NO CARDHOLDER NAME FIELD. The three originals collected a name and threw it
+ * away (the payload hardcoded 'My Card'); the field was pure friction on a demo
+ * form, so it is gone. `applyEnteredName` and the hook's name/setName stay for
+ * API compatibility with a caller that passes its own `entry` and sets a name
+ * programmatically - the form itself never asks for one.
+ *
+ * Every payload carries `source: 'manual', kind: 'card'` so downstream code
+ * (BankPaymentAuth, the payment step) can tell a typed-in demo card apart from
+ * a real Plaid connection without guessing from the shape.
  *
  * @param {object}   props
  * @param {'app'|'web'} [props.variant='app']  Visual language + payload shape.
@@ -109,7 +112,7 @@ export default function ManualCardForm({
   // Always call the hook (rules-of-hooks); prefer the caller's state if given.
   const internal = useManualCardEntry();
   const entry = entryProp ?? internal;
-  const { name, setName, number, setNumber, connecting, setConnecting } = entry;
+  const { name, number, setNumber, connecting, setConnecting } = entry;
   // Expiry + CVV: newer fields, so an older caller-provided `entry` object
   // without them still works (internal state covers the gap).
   const expiry = entry.expiry ?? internal.expiry;
@@ -142,8 +145,8 @@ export default function ManualCardForm({
         cardShape
           ? cardShape(digits, resolved)
           : variant === 'web'
-            ? { name: resolved, last4: last4(digits), brand: 'Card', institution: 'Manual' }
-            : { id: 'manual', name: resolved, emoji: '💳', last4: last4(digits) },
+            ? { name: resolved, last4: last4(digits), brand: 'Card', institution: 'Manual', source: 'manual', kind: 'card' }
+            : { id: 'manual', name: resolved, emoji: '💳', last4: last4(digits), source: 'manual', kind: 'card' },
       );
     }, delayMs);
   }
@@ -151,73 +154,75 @@ export default function ManualCardForm({
   if (variant === 'web') {
     return (
       <div style={{ display: 'grid', gap: 12 }}>
-        <p style={{ margin: 0, fontSize: 13, color: WEB_INK.secondary }}>
-          This is the card we <strong>watch</strong> for round-ups  -  it is never charged. Read-only, encrypted via Plaid.
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: WEB_INK.secondary }}>
+          This is the card we <strong>watch</strong> for round-ups - it is never charged.
         </p>
         <div>
-          <label style={WEB_LABEL}>Cardholder name</label>
+          <label style={WEB_LABEL} htmlFor="manual-card-number">Card number</label>
           <input
-            type="text"
-            placeholder="Name on card"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 13, outline: 'none', background: '#f9fafb' }}
-          />
-        </div>
-        <div>
-          <label style={WEB_LABEL}>Card number</label>
-          <input
+            id="manual-card-number"
             type="text"
             inputMode="numeric"
+            autoComplete="off"
             placeholder="XXXX XXXX XXXX XXXX"
             value={number}
             onChange={e => setNumber(formatCardNumber(e.target.value))}
-            style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', letterSpacing: '0.1em', outline: 'none', background: '#f9fafb' }}
+            style={{ ...WEB_INPUT, letterSpacing: '0.1em' }}
           />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <label style={WEB_LABEL}>Expiration</label>
+            <label style={WEB_LABEL} htmlFor="manual-card-expiry">Expiration</label>
             <input
+              id="manual-card-expiry"
               type="text"
               inputMode="numeric"
+              autoComplete="off"
               placeholder="MM/YY"
               maxLength={5}
               value={expiry}
               onChange={e => setExpiry(formatExpiry(e.target.value))}
-              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', outline: 'none', background: '#f9fafb' }}
+              style={WEB_INPUT}
             />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={WEB_LABEL}>CVV</label>
+            <label style={WEB_LABEL} htmlFor="manual-card-cvv">CVV</label>
             <input
+              id="manual-card-cvv"
               type="text"
               inputMode="numeric"
+              autoComplete="off"
               placeholder="123"
               maxLength={4}
               value={cvv}
               onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'monospace', outline: 'none', background: '#f9fafb' }}
+              style={WEB_INPUT}
             />
           </div>
         </div>
-        <p style={{ margin: 0, fontSize: 11.5, color: WEB_INK.muted, display: 'flex', alignItems: 'center', gap: 6 }}>
-          🔒 {REASSURANCE}
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: WEB_INK.subtle, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <Lock size={12} style={{ flexShrink: 0, marginTop: 3 }} aria-hidden="true" />
+          <span>{REASSURANCE}</span>
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
           {onCancel && (
             <button
+              type="button"
               onClick={onCancel}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: WEB_INK.secondary }}
+              className="pc-btn"
+              style={{ flex: 1, minHeight: 44, padding: '0 12px', borderRadius: 'var(--r-pill)', border: '1px solid var(--line)', background: 'var(--white)', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--navy)' }}
             >Cancel</button>
           )}
           <button
+            type="button"
             onClick={handleConnect}
-            disabled={!ready}
+            aria-disabled={!ready ? 'true' : undefined}
+            aria-busy={connecting ? 'true' : undefined}
+            className="pc-btn"
             style={{
-              flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: ready ? 'pointer' : 'default',
-              background: ready ? 'linear-gradient(135deg, #0d9488, #003865)' : '#d1d5db',
-              color: '#fff', fontSize: 13, fontWeight: 700,
+              flex: 1, minHeight: 44, padding: '0 12px', borderRadius: 'var(--r-pill)', border: 'none', cursor: ready ? 'pointer' : 'not-allowed',
+              background: ready ? 'var(--grad-primary)' : 'var(--disabled-bg)',
+              color: ready ? 'var(--white)' : 'var(--disabled-text)', fontSize: 14, fontWeight: 600,
             }}
           >{connecting ? 'Connecting…' : 'Connect'}</button>
         </div>
@@ -231,77 +236,80 @@ export default function ManualCardForm({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl p-4 space-y-3"
-      style={{ background: '#fff', border: '1.5px solid #99f6e4' }}
+      style={{ background: 'var(--white)', border: '1px solid var(--teal-200)' }}
     >
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Enter card details</p>
-      <p className="text-xs text-gray-500">This is the card we <strong>watch</strong> for round-ups  -  it is never charged.</p>
+      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--slate)' }}>Enter card details</p>
+      <p className="text-xs" style={{ color: 'var(--slate)' }}>This is the card we <strong>watch</strong> for round-ups - it is never charged.</p>
       <div>
-        <label className="text-xs text-gray-400 font-semibold mb-1 block">Cardholder name</label>
+        <label className={APP_LABEL} style={{ color: 'var(--slate)' }} htmlFor="manual-card-number-app">Card number</label>
         <input
-          type="text"
-          placeholder="Name on card"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400"
-        />
-      </div>
-      <div>
-        <label className="text-xs text-gray-400 font-semibold mb-1 block">Card number</label>
-        <input
+          id="manual-card-number-app"
           type="text"
           inputMode="numeric"
+          autoComplete="off"
           placeholder="XXXX XXXX XXXX XXXX"
           value={number}
           onChange={e => setNumber(formatCardNumber(e.target.value))}
-          className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono tracking-wider"
+          className={`${APP_INPUT} tracking-wider`}
+          style={APP_INPUT_STYLE}
         />
       </div>
       <div className="flex gap-2.5">
         <div className="flex-1">
-          <label className="text-xs text-gray-400 font-semibold mb-1 block">Expiration</label>
+          <label className={APP_LABEL} style={{ color: 'var(--slate)' }} htmlFor="manual-card-expiry-app">Expiration</label>
           <input
+            id="manual-card-expiry-app"
             type="text"
             inputMode="numeric"
+            autoComplete="off"
             placeholder="MM/YY"
             maxLength={5}
             value={expiry}
             onChange={e => setExpiry(formatExpiry(e.target.value))}
-            className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono"
+            className={APP_INPUT}
+            style={APP_INPUT_STYLE}
           />
         </div>
         <div className="flex-1">
-          <label className="text-xs text-gray-400 font-semibold mb-1 block">CVV</label>
+          <label className={APP_LABEL} style={{ color: 'var(--slate)' }} htmlFor="manual-card-cvv-app">CVV</label>
           <input
+            id="manual-card-cvv-app"
             type="text"
             inputMode="numeric"
+            autoComplete="off"
             placeholder="123"
             maxLength={4}
             value={cvv}
             onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-teal-400 font-mono"
+            className={APP_INPUT}
+            style={APP_INPUT_STYLE}
           />
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Lock size={12} className="text-gray-400 shrink-0" />
-        <p className="text-gray-400 text-xs">{REASSURANCE}</p>
+      <div className="flex items-start gap-2" style={{ color: 'var(--slate)' }}>
+        <Lock size={12} className="shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-xs leading-relaxed">{REASSURANCE}</p>
       </div>
       <div className="flex gap-2">
         {onCancel && (
           <button
+            type="button"
             onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-500 border border-gray-200"
+            className="flex-1 min-h-[44px] rounded-2xl text-sm font-semibold"
+            style={{ color: 'var(--navy)', border: '1px solid var(--line)', background: 'var(--white)' }}
           >Cancel</button>
         )}
         <motion.button
-          whileTap={ready ? { scale: 0.97 } : {}}
+          type="button"
+          whileTap={ready ? { scale: 0.98 } : {}}
           onClick={handleConnect}
-          disabled={!ready}
-          className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+          aria-disabled={!ready ? 'true' : undefined}
+          aria-busy={connecting ? 'true' : undefined}
+          className="flex-1 min-h-[44px] rounded-2xl text-sm font-semibold"
           style={{
-            background: ready
-              ? 'linear-gradient(135deg, #0d9488, #003865)'
-              : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
+            background: ready ? 'var(--grad-primary)' : 'var(--disabled-bg)',
+            color: ready ? 'var(--white)' : 'var(--disabled-text)',
+            cursor: ready ? 'pointer' : 'not-allowed',
           }}
         >
           {connecting ? (
@@ -317,24 +325,36 @@ export default function ManualCardForm({
   );
 }
 
-// Copy shared by both variants, byte-for-byte what the three forms rendered.
-// The double-space-hyphen-double-space is the repo's house dash; HTML collapses
-// it to a single spaced hyphen on screen.
-const REASSURANCE = 'Encrypted via Plaid  -  PocketCache never stores your full card number';
+// Copy shared by both variants. Honest about what this form is: a demo entry
+// that keeps the last 4 digits and nothing else. (The old line claimed Plaid
+// encryption for a form that never talks to Plaid.)
+const REASSURANCE = 'Demo only - we keep just the last 4 digits. Real accounts link a card through Plaid.';
 
-// WebPortalPages.jsx keeps its INK palette module-private, so the three values
-// are mirrored here. Keep them in sync with WebPortalPages.jsx:20.
-const WEB_INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
+// Portal ink from lib/webTheme.js (presentational constants only, no page
+// bundle). `subtle` is the helper-text value that clears 4.5:1 on white;
+// `muted` is decorative only.
+const WEB_INK = INK;
 
 const WEB_LABEL = {
   display: 'block',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
-  color: WEB_INK.muted,
+  color: WEB_INK.subtle,
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
   marginBottom: 4,
 };
+
+// Inputs per DESIGN.md: 44px on the web, 48px on the phone, 16px text (stops
+// iOS zooming on focus), radius 12, 1px --line. Focus ring is the global
+// input:focus-visible rule in index.css.
+const WEB_INPUT = {
+  width: '100%', boxSizing: 'border-box', minHeight: 44, border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
+  padding: '10px 12px', fontSize: 16, fontFamily: 'ui-monospace, monospace', outline: 'none', background: 'var(--white)', color: WEB_INK.primary,
+};
+const APP_LABEL = 'text-xs font-semibold mb-1 block';
+const APP_INPUT = 'w-full rounded-xl px-3 min-h-12 text-base outline-none font-mono';
+const APP_INPUT_STYLE = { border: '1px solid var(--line)', background: 'var(--white)', color: 'var(--ink)' };
 
 /**
  * Shared field state for a manual card entry. ManualCardForm creates its own

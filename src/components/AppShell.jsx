@@ -6,7 +6,10 @@ import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
 import { DEMO_USER } from '../data/derived';
+import { greetingNameFor } from '../lib/donorAuth';
 import TabBar from './TabBar';
+import AppVersion from './AppVersion';
+import Button from './ui/Button';
 import { Z } from '../lib/overlay';
 import Sheet from './Sheet';
 import CoinMark from './CoinMark';
@@ -20,6 +23,12 @@ import { useShakeDetector } from '../lib/shake';
 import { DEMO_TOASTS } from '../lib/donorContent';
 
 const SUPPORT_EMAIL = 'support@pocketcache.app';
+
+// The "you signed up through an org link - finish picking that org" prompt
+// belongs to state-core and may not be in the tree yet. import.meta.glob with
+// no match is an empty object, so the shell renders nothing until the file
+// exists and picks it up automatically once it does.
+import PendingOrgPrompt from './PendingOrgPrompt';
 
 /**
  * Open the donor's mail app at support.
@@ -71,8 +80,14 @@ export default function AppShell() {
 
   // Identity comes from the signed-in account, exactly as Settings.jsx reads
   // it; DEMO_USER is the fallback only, for a device with no account yet.
-  const userName = hasAccount?.name ?? DEMO_USER.name;
+  // greetingNameFor returns null for a name that was only guessed from the
+  // email local part, so a real account with no stored name is titled by its
+  // email (and the avatar takes the email's first letter) rather than by a
+  // mangled relay address pretending to be a name.
+  const realName = hasAccount ? greetingNameFor(hasAccount) : null;
+  const userName = realName ?? hasAccount?.email ?? DEMO_USER.name;
   const userEmail = hasAccount?.email ?? DEMO_USER.email;
+  const avatarInitial = (userName?.trim?.()[0] ?? 'P').toUpperCase();
 
   return (
     <div className="w-full h-full relative bg-gray-50 overflow-hidden">
@@ -90,18 +105,28 @@ export default function AppShell() {
       </AnimatePresence>
       <TabBar />
 
-      {/* Global avatar button — fixed top-right inside the phone frame, visible on all donor tabs */}
+      {/* Global avatar button - fixed top-right inside the phone frame, visible
+          on all donor tabs. The BUTTON is the 44x44 hit area (2px of padding
+          around the circle, offset so the 40px circle sits exactly where it
+          always has: 20px from the right edge, safe-top + 12px down). Page
+          headers that can run long (My Cause's org name) reserve this strip
+          (MyCause.jsx AVATAR_CLEARANCE) so the circle never paints over copy. */}
       <button
         onClick={() => setShowProfile(true)}
-        className="absolute right-5 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30 active:scale-95 transition-transform"
-        style={{ top: 'calc(var(--pc-safe-top) + 12px)', zIndex: Z.chrome }}
+        className="absolute flex items-center justify-center active:scale-95 transition-transform"
+        style={{ top: 'calc(var(--pc-safe-top) + 10px)', right: 18, width: 44, height: 44, zIndex: Z.chrome }}
         aria-label="Open account settings"
       >
-        {userName[0]}
-        <span className="absolute inset-0 rounded-full border border-white/40 animate-ping opacity-30" style={{ animationDuration: '3s' }} />
+        <span className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold border border-white/30">
+          {avatarInitial}
+        </span>
       </button>
 
-      {/* Profile / Account sheet — shared by all donor tabs */}
+      {/* Org-pick follow-up for an account that signed up through an org link
+          (state-core). Renders nothing until that component exists. */}
+      <PendingOrgPrompt surface="app" />
+
+      {/* Profile / Account sheet - shared by all donor tabs */}
       <Sheet show={showProfile} onClose={() => setShowProfile(false)} title="Your Account">
         {/* No bottom padding - Sheet owns the bottom safe-area inset. */}
         <div className="px-6 pt-2 space-y-1">
@@ -111,10 +136,10 @@ export default function AppShell() {
               and into pc_identity in one motion via saveDisplayName. */}
           <div className="flex flex-col items-center py-6 gap-2">
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
-              style={{ background: brand.gradient }}
+              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white"
+              style={{ background: brand.gradient, boxShadow: 'var(--shadow-2)' }}
             >
-              {userName[0]}
+              {avatarInitial}
             </div>
             {editingName ? (
               <form
@@ -132,30 +157,26 @@ export default function AppShell() {
                   maxLength={60}
                   onChange={e => setNameInput(e.target.value)}
                   placeholder="What should we call you?"
-                  className="bg-gray-50 rounded-xl px-3 py-2 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+                  aria-label="Your name"
+                  className="rounded-input px-3 outline-none text-ink min-w-0"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, height: 48 }}
                   data-testid="account-name-input"
                 />
-                <button
-                  type="submit"
-                  className="px-3 py-2 rounded-xl text-white text-sm font-bold"
-                  style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)' }}
-                >
-                  Save
-                </button>
+                <Button type="submit" size="md" fullWidth={false}>Save</Button>
               </form>
             ) : (
               <button
                 type="button"
-                onClick={() => { setNameInput(hasAccount?.nameGuessed ? '' : userName); setEditingName(true); }}
-                className="flex items-center gap-1.5 mt-1"
+                onClick={() => { setNameInput(realName ?? ''); setEditingName(true); }}
+                className="flex items-center gap-1.5 mt-1 min-h-[44px] max-w-full"
                 data-testid="account-name-edit"
                 aria-label="Edit your name"
               >
-                <span className="font-bold text-gray-900 text-lg">{userName}</span>
-                <Pencil size={13} className="text-gray-300" />
+                <span className="font-bold text-ink text-lg truncate">{userName}</span>
+                <Pencil size={14} className="text-gray-400 shrink-0" />
               </button>
             )}
-            <p className="text-gray-400 text-sm">{userEmail}</p>
+            {userName !== userEmail && <p className="text-slate text-sm">{userEmail}</p>}
           </div>
 
           {/* Mode switch */}
@@ -166,10 +187,10 @@ export default function AppShell() {
               if (adminRole) { setLastMode('admin'); setPage('np-dashboard'); }
               else goToOnboardingStep('nonprofit-signup');
             }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-left mb-1"
+            className="w-full flex items-center gap-4 px-4 py-3 min-h-[52px] rounded-card text-left mb-1"
             style={adminRole
-              ? { background: 'linear-gradient(135deg,#0B2A4A,#003865)', color: '#fff' }
-              : { background: '#f9fafb', color: '#374151' }}
+              ? { background: 'linear-gradient(135deg, var(--navy), var(--navy-deep))', color: '#fff' }
+              : { background: 'var(--surface)', color: 'var(--ink-2)' }}
           >
             {/* Same fixed-size icon wrapper as the menu rows below (icon
                 component at size={18} inside a span), so this row's icon
@@ -178,7 +199,7 @@ export default function AppShell() {
                 the row's own text color (white on the admin gradient, gray
                 on the default row) rather than the menu rows' fixed
                 text-gray-500, since this row alone switches background. */}
-            <span style={{ color: adminRole ? 'rgba(255,255,255,0.7)' : '#6b7280' }}>
+            <span style={{ color: adminRole ? 'rgba(255,255,255,0.7)' : 'var(--slate)' }}>
               <Landmark size={18} />
             </span>
             {/* One line on a 320pt-class phone (iPhone SE), which the old
@@ -191,7 +212,7 @@ export default function AppShell() {
             <span className="flex-1 font-semibold text-sm">
               {adminRole ? `Switch to Admin · ${adminRole.joinCode}` : 'Create a nonprofit page'}
             </span>
-            <ChevronRight size={16} className={adminRole ? 'text-white/50' : 'text-gray-300'} />
+            <ChevronRight size={16} className={adminRole ? 'text-white/50' : 'text-gray-400'} />
           </motion.button>
 
           {/* Menu rows. "Account Settings", "Payment Method" and
@@ -211,27 +232,30 @@ export default function AppShell() {
             <button
               key={label}
               onClick={action}
-              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-gray-50 active:bg-gray-100 transition-colors text-left"
+              type="button"
+              className="w-full flex items-center gap-4 px-4 py-3 min-h-[52px] rounded-card bg-surface active:bg-gray-100 transition-colors text-left"
             >
-              <span className="text-gray-500">{icon}</span>
-              <span className="flex-1 text-gray-800 font-medium text-sm">{label}</span>
-              <ChevronRight size={16} className="text-gray-300" />
+              <span className="text-slate">{icon}</span>
+              <span className="flex-1 text-ink font-medium text-sm">{label}</span>
+              <ChevronRight size={16} className="text-gray-400" />
             </button>
           ))}
 
           <div className="pt-2">
             <button
+              type="button"
               onClick={() => { setShowProfile(false); resetNpContent(); signOut(); }}
-              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-red-50 active:bg-red-100 transition-colors text-left"
+              className="w-full flex items-center gap-4 px-4 py-3 min-h-[52px] rounded-card bg-danger-wash active:bg-red-100 transition-colors text-left"
             >
-              <span className="text-red-400"><LogOut size={18} /></span>
-              <span className="flex-1 text-red-500 font-medium text-sm">Sign Out</span>
+              <span style={{ color: 'var(--danger)' }}><LogOut size={18} /></span>
+              <span className="flex-1 font-medium text-sm" style={{ color: 'var(--danger)' }}>Sign Out</span>
             </button>
           </div>
 
-          <p className="text-center text-gray-300 text-xs pt-4 flex items-center gap-1 justify-center">
-            <CoinMark size={14} />PocketCache · v1.0.0
-          </p>
+          {/* Build-stamped by AppVersion - the hardcoded "v1.0.0" used to live here. */}
+          <div className="pt-4 flex items-center gap-1 justify-center text-muted text-xs">
+            <CoinMark size={14} /><AppVersion />
+          </div>
         </div>
       </Sheet>
 

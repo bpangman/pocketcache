@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Landmark, Loader2 } from 'lucide-react';
 import { fetchPlaidLinkToken, loadPlaidLinkScript, openPlaidLinkWithToken } from '../lib/plaid';
 import { BANKS } from '../pages/Onboarding';
+import { useShowDemoAffordances } from '../lib/demo';
+import { useApp } from '../store/AppContext';
 
 /**
  * PlaidBankConnect - real Plaid Link (sandbox) for the donor "which card
@@ -32,10 +34,22 @@ import { BANKS } from '../pages/Onboarding';
  *
  * @param {object}   props
  * @param {'app'|'web'} [props.variant='app']
- * @param {Function} props.onConnected  Called once with { name, last4, brand, institution }.
+ * @param {boolean}  [props.showDemo]   Show the sandbox test-credential hint. Defaults to
+ *                                     lib/demo's useShowDemoAffordances(demoMode), so
+ *                                     real donors never see "user_good / pass_good".
+ * @param {Function} props.onConnected  Called once with { name, last4, brand, institution,
+ *                                     source, accountType, accountSubtype } from the real
+ *                                     Plaid flow, or { name, last4, brand, institution,
+ *                                     source: 'practice' } from the practice-mode list.
+ *                                     `source` lets BankPaymentAuth tell a real depository
+ *                                     account from a simulated one (lib/plaid.js isDebitableBank).
  */
-export default function PlaidBankConnect({ variant = 'app', onConnected }) {
+export default function PlaidBankConnect({ variant = 'app', onConnected, showDemo }) {
   const [phase, setPhase] = useState('idle'); // 'idle' | 'connecting' | 'error' | 'fallback'
+  // Rendered inside AppProvider everywhere today; the optional chain keeps a
+  // bare mount (tests, harnesses) from throwing.
+  const demoMode = useApp()?.demoMode;
+  const showTestHint = useShowDemoAffordances(showDemo || demoMode);
   const [fallbackConnecting, setFallbackConnecting] = useState(null);
 
   // Load Plaid's Link script as soon as this step mounts, not on click - so
@@ -75,7 +89,9 @@ export default function PlaidBankConnect({ variant = 'app', onConnected }) {
     setTimeout(() => {
       const last4 = String(Math.floor(1000 + Math.random() * 9000));
       setFallbackConnecting(null);
-      onConnected?.({ name: bank.name, last4, brand: bank.name, institution: bank.name });
+      // Tagged 'practice' so no downstream step mistakes it for a real,
+      // debitable Plaid connection.
+      onConnected?.({ name: bank.name, last4, brand: bank.name, institution: bank.name, source: 'practice' });
     }, 1100);
   }
 
@@ -84,21 +100,25 @@ export default function PlaidBankConnect({ variant = 'app', onConnected }) {
       <div>
         {phase === 'fallback' ? (
           <>
-            <div style={{ marginBottom: 10, padding: '9px 12px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', fontSize: 12, color: '#92400e', fontWeight: 600 }}>
+            <div style={{ marginBottom: 10, padding: '9px 12px', borderRadius: 'var(--r-sm)', background: 'var(--warning-50)', border: '1px solid var(--warning-200)', fontSize: 13, color: 'var(--warning-800)', fontWeight: 600 }}>
               Practice mode - we could not reach the real bank connection right now, so this step is simulated.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
               {BANKS.map(bank => (
-                <button key={bank.id} onClick={() => handleFallbackSelect(bank)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', opacity: fallbackConnecting && fallbackConnecting !== bank.id ? 0.4 : 1 }}>
-                  <span style={{ fontSize: 22 }}>{bank.emoji}</span>
+                <button key={bank.id} type="button" onClick={() => handleFallbackSelect(bank)}
+                  aria-busy={fallbackConnecting === bank.id ? 'true' : undefined}
+                  className="pc-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 52, padding: '12px 14px', borderRadius: 'var(--r-md)', border: '1px solid var(--line)', background: 'var(--white)', cursor: 'pointer', textAlign: 'left', opacity: fallbackConnecting && fallbackConnecting !== bank.id ? 0.5 : 1 }}>
+                  <span style={{ width: 36, height: 36, borderRadius: 'var(--r-xs)', background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Landmark size={18} style={{ color: 'var(--navy)' }} aria-hidden="true" />
+                  </span>
                   <span style={{ flex: 1 }}>
-                    <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>{bank.name}</span>
-                    <span style={{ display: 'block', fontSize: 11.5, color: '#94a3b8' }}>{bank.sub}</span>
+                    <span style={{ display: 'block', fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>{bank.name}</span>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--slate)' }}>{bank.sub}</span>
                   </span>
                   {fallbackConnecting === bank.id
-                    ? <span style={{ fontSize: 11.5, fontWeight: 600, color: '#0D9488' }}>Connecting…</span>
-                    : <ArrowRight size={15} color="#cbd5e1" />}
+                    ? <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--teal-ui)' }}>Connecting…</span>
+                    : <ArrowRight size={15} style={{ color: 'var(--muted)' }} aria-hidden="true" />}
                 </button>
               ))}
             </div>
@@ -106,25 +126,30 @@ export default function PlaidBankConnect({ variant = 'app', onConnected }) {
         ) : (
           <>
             <button
+              type="button"
               onClick={handleConnect}
               disabled={phase === 'connecting'}
+              aria-busy={phase === 'connecting' ? 'true' : undefined}
               data-testid="web-plaid-connect"
+              className="pc-btn"
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                padding: '15px 16px', borderRadius: 14, border: 'none', cursor: phase === 'connecting' ? 'default' : 'pointer',
-                background: phase === 'connecting' ? 'linear-gradient(135deg, #94a3b8, #64748b)' : 'linear-gradient(135deg, #003865, #001a33)',
-                color: '#fff', fontWeight: 700, fontSize: 15, marginBottom: 10,
+                minHeight: 52, padding: '0 16px', borderRadius: 'var(--r-pill)', border: 'none', cursor: phase === 'connecting' ? 'progress' : 'pointer',
+                background: 'var(--grad-primary)',
+                color: 'var(--white)', fontWeight: 600, fontSize: 16, marginBottom: 10,
               }}
             >
               {phase === 'connecting'
                 ? <><Loader2 size={18} className="animate-spin" /> Opening your bank's sign-in…</>
                 : <><Landmark size={18} /> Connect your bank</>}
             </button>
-            <p style={{ margin: '0 0 4px', fontSize: 11.5, color: '#94a3b8', textAlign: 'center' }}>
-              Test mode: use <strong>user_good</strong> / <strong>pass_good</strong>
-            </p>
+            {showTestHint && (
+              <p style={{ margin: '0 0 4px', fontSize: 12, color: 'var(--slate)', textAlign: 'center' }}>
+                Test mode: use <strong>user_good</strong> / <strong>pass_good</strong>
+              </p>
+            )}
             {phase === 'error' && (
-              <div style={{ marginTop: 8, padding: '9px 12px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12.5, color: '#b91c1c' }}>
+              <div role="alert" style={{ marginTop: 8, padding: '9px 12px', borderRadius: 'var(--r-sm)', background: 'var(--danger-50)', border: '1px solid var(--danger-200)', fontSize: 13, color: 'var(--danger-700)' }}>
                 That didn't go through. No harm done - tap Connect your bank to try again.
               </div>
             )}
@@ -139,55 +164,59 @@ export default function PlaidBankConnect({ variant = 'app', onConnected }) {
     <div>
       {phase === 'fallback' ? (
         <>
-          <div className="rounded-2xl px-3 py-2.5 mb-1" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
-            <p className="text-amber-800 text-xs font-semibold">
-              Practice mode  -  we couldn&apos;t reach the real bank connection right now, so this step is simulated.
+          <div className="rounded-xl px-3 py-2.5 mb-1" style={{ background: 'var(--warning-50)', border: '1px solid var(--warning-200)' }}>
+            <p className="text-xs font-semibold" style={{ color: 'var(--warning-800)' }}>
+              Practice mode - we couldn&apos;t reach the real bank connection right now, so this step is simulated.
             </p>
           </div>
           {BANKS.map(bank => (
             <motion.button
               key={bank.id}
-              whileTap={{ scale: 0.97 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => handleFallbackSelect(bank)}
+              aria-busy={fallbackConnecting === bank.id ? 'true' : undefined}
               className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
-              style={{ background: '#fff', border: '1.5px solid #99f6e4', opacity: fallbackConnecting && fallbackConnecting !== bank.id ? 0.4 : 1 }}
+              style={{ background: 'var(--white)', border: '1px solid var(--line)', opacity: fallbackConnecting && fallbackConnecting !== bank.id ? 0.5 : 1 }}
             >
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-xl bg-gray-50">
-                {bank.emoji}
+              <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'var(--surface)' }}>
+                <Landmark size={20} style={{ color: 'var(--navy)' }} aria-hidden="true" />
               </div>
               <div className="flex-1">
-                <p className="font-bold text-gray-900 text-sm">{bank.name}</p>
-                <p className="text-gray-400 text-xs">{bank.sub}</p>
+                <p className="font-bold text-ink text-sm">{bank.name}</p>
+                <p className="text-xs" style={{ color: 'var(--slate)' }}>{bank.sub}</p>
               </div>
               {fallbackConnecting === bank.id
-                ? <span className="text-xs text-teal-600 font-semibold">Connecting…</span>
-                : <ArrowRight size={16} className="text-gray-300 shrink-0" />}
+                ? <span className="text-xs font-semibold" style={{ color: 'var(--teal-ui)' }}>Connecting…</span>
+                : <ArrowRight size={16} className="shrink-0" style={{ color: 'var(--muted)' }} aria-hidden="true" />}
             </motion.button>
           ))}
         </>
       ) : (
         <>
           <motion.button
-            whileTap={phase === 'connecting' ? {} : { scale: 0.97 }}
+            whileTap={phase === 'connecting' ? {} : { scale: 0.98 }}
             onClick={handleConnect}
             disabled={phase === 'connecting'}
-            className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl text-white font-bold text-base"
+            aria-busy={phase === 'connecting' ? 'true' : undefined}
+            className="w-full flex items-center justify-center gap-2 min-h-[52px] px-4 rounded-2xl text-white font-semibold text-base"
             style={{
-              background: phase === 'connecting' ? 'linear-gradient(135deg, #94a3b8, #64748b)' : 'linear-gradient(135deg, #0d9488, #003865)',
-              cursor: phase === 'connecting' ? 'default' : 'pointer',
+              background: 'var(--grad-primary)',
+              cursor: phase === 'connecting' ? 'progress' : 'pointer',
             }}
           >
             {phase === 'connecting'
               ? <><Loader2 size={18} className="animate-spin" /> Opening your bank's sign-in…</>
               : <><Landmark size={18} /> Connect your bank</>}
           </motion.button>
-          <p className="text-gray-400 text-xs text-center px-1 pt-2">
-            Test mode: use <strong>user_good</strong> / <strong>pass_good</strong>
-          </p>
+          {showTestHint && (
+            <p className="text-xs text-center px-1 pt-2" style={{ color: 'var(--slate)' }}>
+              Test mode: use <strong>user_good</strong> / <strong>pass_good</strong>
+            </p>
+          )}
           {phase === 'error' && (
-            <div className="rounded-2xl px-3 py-2.5 mt-2" style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
-              <p className="text-red-600 text-xs font-semibold">
-                That didn&apos;t go through. No harm done  -  tap Connect your bank to try again.
+            <div role="alert" className="rounded-xl px-3 py-2.5 mt-2" style={{ background: 'var(--danger-50)', border: '1px solid var(--danger-200)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--danger-700)' }}>
+                That didn&apos;t go through. No harm done - tap Connect your bank to try again.
               </p>
             </div>
           )}

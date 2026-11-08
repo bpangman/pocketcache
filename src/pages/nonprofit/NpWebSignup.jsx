@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, ShieldCheck, Mail, Landmark, Search, Info } from 'lucide-react';
+import { CheckCircle, ShieldCheck, Mail, Landmark, Search, Info, Hourglass, AlertTriangle, Send } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../../store/AppContext';
 import CoinMark from '../../components/CoinMark';
+import UiButton from '../../components/ui/Button';
+import { INK, NAVY, CARD, PANEL, RADIUS } from '../../lib/webTheme';
 import {
   useNpSignup, useNpGoLive,
   NP_BRAND_COLORS, NP_LICENSE_POINTS,
   widgetSnippet, joinQrValue, launchKitMailto,
   APPLE_TEAM_ID,
 } from '../../lib/npSignup';
-import { nextChargeLabel } from '../../lib/billing';
+import { nextChargeLabel, MONTHLY_FLOOR } from '../../lib/billing';
 import { copyText } from '../../lib/clipboard';
 
 // ─── The browser-native nonprofit signup wizard ──────────────────────────────
@@ -30,24 +32,12 @@ import { copyText } from '../../lib/clipboard';
 // to change behavior, change it there and both surfaces move together.
 //
 // Design language deliberately matches WebOnboarding.jsx / NpWebShell.jsx: same
-// INK scale, same NAVY, same CARD, same 62px nav, same footer, inline styles.
+// INK scale, same NAVY, same CARD, same 62px nav, same footer, inline styles
+// (all from src/lib/webTheme.js).
 
-const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
-const NAVY = '#003865';
 const TEAL = '#0D9488';
 const MAX_W = 1180;
-const CARD = {
-  background: '#fff',
-  borderRadius: 16,
-  border: '1px solid #e5e7eb',
-  boxShadow: '0 1px 2px rgba(11,42,74,0.04)',
-};
-const PANEL = {
-  background: '#fff',
-  borderRadius: 20,
-  border: '1px solid #e5e7eb',
-  boxShadow: '0 16px 48px rgba(11,42,74,0.08), 0 2px 8px rgba(11,42,74,0.05)',
-};
+const LINE = 'var(--line)';
 
 // The indicator collapses `ein` + `confirm-org` into one milestone, because on
 // desktop they are one screen: the form on the left, the result on the right.
@@ -65,75 +55,50 @@ const STEP_BAR = [
 ];
 
 const NEEDS = [
-  { icon: Landmark,    title: 'Your EIN',                     body: 'Checked against the IRS exempt-organization list, so only a real 501(c)(3) can go live.' },
+  { icon: Landmark,    title: 'Your EIN',                     body: 'We confirm your 501(c)(3) status before your page goes live.' },
   { icon: Mail,        title: 'A work email at your domain',  body: 'It becomes the account that approves every later change.' },
   { icon: ShieldCheck, title: 'A Stripe account',             body: 'Donations pay out to your Stripe directly. PocketCache never holds your money.' },
 ];
 
-// ─── Small desktop primitives (real hover states, content-sized buttons) ─────
+// ─── Small desktop primitives ────────────────────────────────────────────────
+// Button is the shared src/components/ui/Button on the web surface (pill, 44px,
+// one disabled token), content-sized rather than full-width. The old tone names
+// stay so the steps below read as before: primary/teal map to the navy primary,
+// quiet to secondary, ghost to tertiary. Stripe keeps its brand purple because
+// that button hands off to Stripe itself.
 
-function Button({ children, onClick, type = 'button', tone = 'primary', disabled = false, style }) {
-  const [hover, setHover] = useState(false);
-  const tones = {
-    primary: {
-      background: hover ? `linear-gradient(135deg, #024d86, ${NAVY})` : `linear-gradient(135deg, ${NAVY}, #001a33)`,
-      color: '#fff', border: '1px solid transparent',
-      boxShadow: hover ? '0 6px 18px rgba(0,56,101,0.28)' : '0 1px 2px rgba(0,56,101,0.18)',
-    },
-    teal: {
-      background: hover ? `linear-gradient(135deg, #0fb3a4, ${TEAL})` : `linear-gradient(135deg, ${TEAL}, #0f766e)`,
-      color: '#fff', border: '1px solid transparent',
-      boxShadow: hover ? '0 6px 18px rgba(13,148,136,0.28)' : '0 1px 2px rgba(13,148,136,0.18)',
-    },
-    stripe: {
-      background: hover ? '#7a73ff' : '#635bff',
-      color: '#fff', border: '1px solid transparent',
-      boxShadow: hover ? '0 6px 18px rgba(99,91,255,0.32)' : '0 1px 2px rgba(99,91,255,0.2)',
-    },
-    quiet: {
-      background: hover ? '#e8eef5' : '#f1f5f9',
-      color: INK.primary, border: '1px solid #e2e8f0', boxShadow: 'none',
-    },
-    ghost: {
-      background: hover ? '#f1f5f9' : 'transparent',
-      color: INK.secondary, border: '1px solid transparent', boxShadow: 'none',
-    },
-  };
+const TONE_VARIANT = { primary: 'primary', teal: 'primary', stripe: 'primary', quiet: 'secondary', ghost: 'tertiary' };
+const STRIPE_STYLE = { background: '#635bff', color: '#fff' };
+
+function Button({ children, onClick, type = 'button', tone = 'primary', disabled = false, loading = false, style }) {
   return (
-    <button
+    <UiButton
       type={type}
       onClick={onClick}
+      variant={TONE_VARIANT[tone] ?? 'primary'}
+      size="md"
+      surface="web"
+      fullWidth={false}
       disabled={disabled}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        padding: '11px 20px', borderRadius: 12, fontSize: 14, fontWeight: 700,
-        cursor: disabled ? 'default' : 'pointer', transition: 'background 0.15s, box-shadow 0.15s',
-        ...(disabled
-          ? { background: '#e2e8f0', color: '#94a3b8', border: '1px solid transparent', boxShadow: 'none' }
-          : tones[tone]),
-        ...style,
-      }}
+      loading={loading}
+      style={{ fontSize: 14, fontWeight: 700, ...(tone === 'stripe' && !disabled && !loading ? STRIPE_STYLE : null), ...style }}
     >
       {children}
-    </button>
+    </UiButton>
   );
 }
 
-/** Same look as Button, but a real link  -  used for the mailto launch kit. */
+/** Same look as the secondary Button, but a real link  -  used for the mailto launch kit. */
 function LinkButton({ href, children }) {
-  const [hover, setHover] = useState(false);
   return (
     <a
       href={href}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      className="pc-btn"
+      data-variant="secondary"
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        padding: '11px 20px', borderRadius: 12, fontSize: 14, fontWeight: 700, textDecoration: 'none',
-        background: hover ? '#e8eef5' : '#f1f5f9', color: INK.primary, border: '1px solid #e2e8f0',
-        transition: 'background 0.15s',
+        minHeight: 44, padding: '0 16px', borderRadius: RADIUS.pill, fontSize: 14, fontWeight: 700, textDecoration: 'none',
+        background: '#fff', color: 'var(--navy)', border: `1px solid ${LINE}`,
       }}
     >
       {children}
@@ -147,7 +112,7 @@ function Pane({ title, hint, children, style }) {
       {title && (
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{title}</h2>
-          {hint && <p style={{ margin: '5px 0 0', fontSize: 13.5, lineHeight: 1.55, color: INK.secondary }}>{hint}</p>}
+          {hint && <p style={{ margin: '5px 0 0', fontSize: 14, lineHeight: 1.55, color: INK.secondary }}>{hint}</p>}
         </div>
       )}
       {children}
@@ -159,7 +124,7 @@ function Side({ label, children, style }) {
   return (
     <aside style={{ ...CARD, padding: 20, minWidth: 0, ...style }}>
       {label && (
-        <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+        <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.subtle }}>
           {label}
         </p>
       )}
@@ -170,27 +135,30 @@ function Side({ label, children, style }) {
 
 function Label({ children }) {
   return (
-    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.subtle, marginBottom: 6 }}>
       {children}
     </label>
   );
 }
 
+// 16px text (no iOS zoom), 44px tall, 12px radius, line border: DESIGN.md inputs.
 const inputStyle = (error, extra) => ({
-  width: '100%', padding: '11px 14px', borderRadius: 12, fontSize: 14, color: INK.primary,
-  background: '#f9fafb', outline: 'none',
-  border: `1px solid ${error ? '#ef4444' : '#d1d5db'}`,
+  width: '100%', minHeight: 44, padding: '10px 14px', borderRadius: RADIUS.sm, fontSize: 16, color: INK.primary,
+  background: 'var(--surface)', outline: 'none', boxSizing: 'border-box',
+  border: `1px solid ${error ? 'var(--danger)' : LINE}`,
   ...extra,
 });
 
+// Helper text: 13px, --slate (AA on white and on the surface wash).
 function Hint({ children, tone = 'muted' }) {
-  const colors = { muted: INK.muted, error: '#ef4444', warn: '#b45309' };
-  return <p style={{ margin: '6px 0 0', fontSize: 12, lineHeight: 1.5, color: colors[tone] }}>{children}</p>;
+  const colors = { muted: INK.subtle, error: 'var(--danger)', warn: 'var(--warning)' };
+  return <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.5, color: colors[tone] }}>{children}</p>;
 }
 
-function DemoNote({ children }) {
+// The one tinted callout a step may carry: an error that blocks progress.
+function ErrorNote({ children }) {
   return (
-    <div style={{ background: '#FFFBEB', border: '1px solid #FBBF24', borderRadius: 12, padding: '11px 14px' }}>
+    <div style={{ marginTop: 14, background: 'var(--danger-50)', border: '1px solid #FECACA', borderRadius: RADIUS.sm, padding: '10px 14px' }}>
       {children}
     </div>
   );
@@ -210,22 +178,22 @@ function StepBar({ step, candidSeal }) {
               <span style={{
                 width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11.5, fontWeight: 800,
-                background: done ? TEAL : active ? NAVY : '#e2e8f0',
-                color: done || active ? '#fff' : INK.muted,
+                fontSize: 12, fontWeight: 800,
+                background: done ? TEAL : active ? NAVY : LINE,
+                color: done || active ? '#fff' : INK.subtle,
               }}>
                 {done ? '✓' : i + 1}
               </span>
               <span style={{
                 fontSize: 13, whiteSpace: 'nowrap',
                 fontWeight: active ? 700 : 500,
-                color: active ? INK.primary : done ? INK.secondary : INK.muted,
+                color: active ? INK.primary : done ? INK.secondary : INK.subtle,
               }}>
                 {s.label}
               </span>
             </span>
             {i < bar.length - 1 && (
-              <span style={{ width: 34, height: 2, margin: '0 10px', borderRadius: 2, background: done ? TEAL : '#e2e8f0', flexShrink: 0 }} />
+              <span style={{ width: 34, height: 2, margin: '0 10px', borderRadius: 2, background: done ? TEAL : LINE, flexShrink: 0 }} />
             )}
           </li>
         );
@@ -236,7 +204,7 @@ function StepBar({ step, candidSeal }) {
 
 // ─── Branding step: a live preview of what a donor lands on ──────────────────
 
-function DonorPagePreview({ orgName, joinCode, story, color, logoPreview, monthlyMinimum }) {
+function DonorPagePreview({ orgName, joinCode, story, color, logoPreview }) {
   return (
     <div style={{ ...CARD, overflow: 'hidden', padding: 0 }}>
       <div style={{ background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`, padding: '22px 22px 26px' }}>
@@ -250,34 +218,36 @@ function DonorPagePreview({ orgName, joinCode, story, color, logoPreview, monthl
             <p style={{ margin: 0, color: '#fff', fontWeight: 800, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {orgName || 'Your Nonprofit'}
             </p>
-            <p style={{ margin: 0, color: 'rgba(255,255,255,0.8)', fontSize: 11.5 }}>Round-Up giving  -  powered by PocketCache</p>
+            <p style={{ margin: 0, color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Round-Up giving  -  powered by PocketCache</p>
           </div>
         </div>
         {/* Clamped to 3 lines: a mission near the 600-char field limit would
             otherwise push the join-code panel below far down the preview,
             out of proportion with the real page it stands in for. */}
         <p style={{
-          margin: '16px 0 0', color: 'rgba(255,255,255,0.92)', fontSize: 12.5, lineHeight: 1.55,
+          margin: '16px 0 0', color: 'rgba(255,255,255,0.92)', fontSize: 13, lineHeight: 1.55,
           display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>
           {story || 'Your mission appears here, in your words, on every page a donor sees.'}
         </p>
       </div>
       <div style={{ padding: 20 }}>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>Donor join code</p>
-        <p style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 900, letterSpacing: '0.06em', color }}>{joinCode || 'CODE'}</p>
-        <p style={{ margin: '2px 0 14px', fontSize: 12.5, color: INK.secondary, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
-          pocketcache.app/{(joinCode || 'code').toLowerCase()}
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.subtle }}>Donor join code</p>
+        <p style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 800, letterSpacing: '0.06em', color }}>{joinCode || 'CODE'}</p>
+        {/* The code is shown exactly as typed: the server stores and resolves
+            it uppercase, so a lowercased link would be a link that is not it. */}
+        <p style={{ margin: '2px 0 14px', fontSize: 13, color: INK.secondary, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
+          pocketcache.app/{joinCode || 'CODE'}
         </p>
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
           <CoinMark size={26} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: INK.primary }}>Round up for {joinCode || 'us'}</p>
-            <p style={{ margin: 0, fontSize: 11.5, color: INK.muted }}>Spare change from every purchase. ${monthlyMinimum} monthly minimum.</p>
+            <p style={{ margin: 0, fontSize: 12, color: INK.subtle }}>Spare change from every purchase. ${MONTHLY_FLOOR} monthly minimum.</p>
           </div>
           <span style={{ background: color, color: '#fff', borderRadius: 10, padding: '7px 12px', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>Join</span>
         </div>
-        <p style={{ margin: '12px 0 0', fontSize: 11.5, color: INK.muted }}>
+        <p style={{ margin: '12px 0 0', fontSize: 12, color: INK.subtle }}>
           This is the website widget donors see on your own site, too.
         </p>
       </div>
@@ -320,7 +290,8 @@ export default function NpWebSignup({ onExit }) {
     codeSent, codeInput, setCodeInput, codeError, requiredDomain,
     sendingCode, verifyingCode,
     stripeConnecting, stripeConnected, stripeError, practiceMode, practiceConnectStripe,
-    story, setStory, color, setColor, monthlyMinimum, setMonthlyMinimum,
+    orgCreateError, retryOrgCreate, creatingOrg, joinCodeTakenNotice,
+    story, setStory, color, setColor,
     logoPreview, logoUrlInput, setLogoUrlInput, logoUrlError,
     joinCode, joinCodeCustom, joinCodeError, accepted, setAccepted, showLicenseHint, showBrandingHint,
     candidSeal, appleApproval, openBenevityPortal, confirmBenevityRegistered, deferBenevity,
@@ -362,15 +333,15 @@ export default function NpWebSignup({ onExit }) {
   }
 
   return (
-    <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
       {/* ── Top nav ── */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+      <header style={{ background: '#fff', borderBottom: `1px solid ${LINE}` }}>
         <div style={{ maxWidth: MAX_W, margin: '0 auto', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <CoinMark size={30} />
             <div style={{ lineHeight: 1.15, minWidth: 0 }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 14.5, color: INK.primary }}>PocketCache for nonprofits</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: INK.muted }}>Set up your round-up program</p>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: INK.primary }}>PocketCache for nonprofits</p>
+              <p style={{ margin: 0, fontSize: 11, color: INK.subtle }}>Set up your round-up program</p>
             </div>
           </div>
           <a href="mailto:support@pocketcache.app" style={{ fontSize: 13, fontWeight: 600, color: NAVY, textDecoration: 'none', whiteSpace: 'nowrap' }}>
@@ -380,11 +351,11 @@ export default function NpWebSignup({ onExit }) {
       </header>
 
       {/* ── Step indicator ── */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+      <div style={{ background: '#fff', borderBottom: `1px solid ${LINE}` }}>
         <div style={{ maxWidth: MAX_W, margin: '0 auto', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
           <StepBar step={step} candidSeal={candidSeal} />
           {showBack && (
-            <Button tone="ghost" onClick={w.back} style={{ padding: '7px 12px', fontSize: 13 }}>
+            <Button tone="ghost" onClick={w.back} style={{ fontSize: 13 }}>
               {step === 'ein' ? 'Leave setup' : '← Back'}
             </Button>
           )}
@@ -425,12 +396,12 @@ export default function NpWebSignup({ onExit }) {
                       </Button>
                     </div>
                     {einError && <Hint tone="error">{einError}</Hint>}
-                    <Hint>Format: XX-XXXXXXX (9 digits). We only use it to confirm your 501(c)(3) status  -  it is checked against public IRS records from ProPublica.</Hint>
+                    <Hint>Format: XX-XXXXXXX (9 digits). We only use it to confirm your 501(c)(3) status  -  it is reviewed before approval.</Hint>
                   </form>
 
-                  <div style={{ height: 1, background: '#f1f5f9', margin: '22px 0 18px' }} />
+                  <div style={{ height: 1, background: LINE, margin: '22px 0 18px' }} />
 
-                  <p style={{ margin: '0 0 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                  <p style={{ margin: '0 0 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.subtle }}>
                     What you&apos;ll need
                   </p>
                   <div style={{ display: 'grid', gap: 14 }}>
@@ -438,20 +409,21 @@ export default function NpWebSignup({ onExit }) {
                       const NeedIcon = need.icon;
                       return (
                         <div key={need.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                          <div style={{ width: 34, height: 34, borderRadius: 10, background: '#eef4fa', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: RADIUS.sm, background: `${NAVY}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <NeedIcon size={17} style={{ color: NAVY }} />
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: INK.primary }}>{need.title}</p>
-                            <p style={{ margin: '2px 0 0', fontSize: 12.5, lineHeight: 1.5, color: INK.secondary }}>{need.body}</p>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: INK.primary }}>{need.title}</p>
+                            <p style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.5, color: INK.secondary }}>{need.body}</p>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                  <div style={{ marginTop: 20, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, padding: '13px 15px' }}>
-                    <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#166534' }}>$0 for your organization, always</p>
-                    <p style={{ margin: '3px 0 0', fontSize: 12.5, lineHeight: 1.5, color: '#15803d' }}>
+                  {/* Neutral framing, not a second tinted callout on this screen. */}
+                  <div style={{ marginTop: 20, background: 'var(--surface)', border: `1px solid ${LINE}`, borderRadius: RADIUS.sm, padding: '13px 15px' }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: INK.primary }}>$0 for your organization, always</p>
+                    <p style={{ margin: '3px 0 0', fontSize: 13, lineHeight: 1.5, color: INK.subtle }}>
                       Donors cover the flat $1 monthly app fee, and most also cover card processing. PocketCache never takes a percentage of a donation.
                     </p>
                   </div>
@@ -461,11 +433,11 @@ export default function NpWebSignup({ onExit }) {
                 <Side label="IRS lookup" style={{ position: 'sticky', top: 24 }}>
                   {step !== 'confirm-org' && !verifying && (
                     <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                      <div style={{ width: 46, height: 46, borderRadius: 12, background: '#f1f5f9', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                        <Landmark size={22} color="#94a3b8" />
+                      <div style={{ width: 46, height: 46, borderRadius: 12, background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                        <Landmark size={22} color={INK.subtle} aria-hidden />
                       </div>
-                      <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: INK.primary }}>Nothing looked up yet</p>
-                      <p style={{ margin: '5px auto 0', fontSize: 12.5, lineHeight: 1.55, color: INK.secondary, maxWidth: 300 }}>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: INK.primary }}>Nothing looked up yet</p>
+                      <p style={{ margin: '5px auto 0', fontSize: 13, lineHeight: 1.55, color: INK.secondary, maxWidth: 300 }}>
                         Enter your EIN and we&apos;ll show your organization&apos;s legal name, city, and exemption status right here before anything is created.
                       </p>
                     </div>
@@ -475,15 +447,15 @@ export default function NpWebSignup({ onExit }) {
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                        style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: NAVY, margin: '0 auto 12px' }}
+                        style={{ width: 26, height: 26, borderRadius: '50%', border: `3px solid ${LINE}`, borderTopColor: NAVY, margin: '0 auto 12px' }}
                       />
-                      <p style={{ margin: 0, fontSize: 13.5, color: INK.secondary }}>Checking IRS records…</p>
+                      <p style={{ margin: 0, fontSize: 14, color: INK.secondary }}>Checking IRS records…</p>
                     </div>
                   )}
                   {step === 'confirm-org' && !verifying && (
                     <div>
-                      <p style={{ margin: 0, fontSize: 12.5, color: INK.secondary }}>We found a match. Is this your organization?</p>
-                      <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 14, padding: 16, background: '#f9fafb' }}>
+                      <p style={{ margin: 0, fontSize: 13, color: INK.secondary }}>We found a match. Is this your organization?</p>
+                      <div style={{ marginTop: 12, border: `1px solid ${LINE}`, borderRadius: RADIUS.md, padding: 16, background: 'var(--surface)' }}>
                         {einNameEditable ? (
                           <input
                             type="text"
@@ -497,18 +469,18 @@ export default function NpWebSignup({ onExit }) {
                         )}
                         {orgAddress && <p style={{ margin: '3px 0 0', fontSize: 13, color: INK.secondary }}>{orgAddress}</p>}
                         {einDemoMode ? (
-                          <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#b45309' }}>
-                            <Info size={15} color="#f59e0b" />
+                          <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: 'var(--warning)' }}>
+                            <Info size={15} color="var(--warning)" aria-hidden />
                             Demo preview  -  IRS verification runs at launch · EIN {ein}
                           </p>
                         ) : (
-                          <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#15803d' }}>
-                            <CheckCircle size={15} color="#22c55e" />
+                          <p style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: 'var(--green-700)' }}>
+                            <CheckCircle size={15} color="var(--green)" aria-hidden />
                             {org501c3 ? '501(c)(3) Verified' : 'Organization found'} · EIN {ein}
                           </p>
                         )}
                         {einDemoMode && (
-                          <p style={{ margin: '10px 0 0', fontSize: 12, fontStyle: 'italic', color: '#b45309' }}>
+                          <p style={{ margin: '10px 0 0', fontSize: 13, fontStyle: 'italic', color: 'var(--warning)' }}>
                             {einNameEditable
                               ? "We couldn't match this EIN  -  enter your organization's name."
                               : 'This EIN matches a sample organization used for the demo.'}
@@ -555,7 +527,7 @@ export default function NpWebSignup({ onExit }) {
                     </form>
                   ) : (
                     <form onSubmit={w.verifyCode}>
-                      <p style={{ margin: '0 0 14px', fontSize: 13.5, color: INK.secondary }}>
+                      <p style={{ margin: '0 0 14px', fontSize: 14, color: INK.secondary }}>
                         We sent a 6-digit code to <strong style={{ color: INK.primary }}>{workEmail}</strong>. Enter it to continue.
                       </p>
                       <Label>Verification code</Label>
@@ -569,14 +541,29 @@ export default function NpWebSignup({ onExit }) {
                           onChange={e => setCodeInput(e.target.value)}
                           style={inputStyle(codeError, { width: 190, fontFamily: 'ui-monospace, monospace', textAlign: 'center', fontSize: 20, letterSpacing: '0.4em' })}
                         />
-                        <Button type="submit" disabled={codeInput.length !== 6 || verifyingCode}>{verifyingCode ? 'Verifying…' : 'Verify & continue →'}</Button>
+                        <Button type="submit" disabled={codeInput.length !== 6 || verifyingCode || creatingOrg}>
+                          {verifyingCode ? 'Verifying…' : creatingOrg ? 'Creating your organization…' : 'Verify & continue →'}
+                        </Button>
                       </div>
                       {codeError && <Hint tone="error">{codeError}</Hint>}
+                      {/* The code was accepted but the org row could not be created
+                          on the server. Nothing advances until it is: Stripe needs
+                          an org id to connect to, so the admin retries right here. */}
+                      {orgCreateError && (
+                        <ErrorNote>
+                          <p style={{ margin: 0, fontSize: 13, color: 'var(--danger)' }}>{orgCreateError}</p>
+                          <div style={{ marginTop: 10 }}>
+                            <Button tone="quiet" onClick={retryOrgCreate} disabled={creatingOrg} style={{ fontSize: 13 }}>
+                              {creatingOrg ? 'Trying again…' : 'Try again'}
+                            </Button>
+                          </div>
+                        </ErrorNote>
+                      )}
                       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                        <Button tone="quiet" onClick={handleResend} disabled={sendingCode} style={{ padding: '8px 14px', fontSize: 13 }}>
+                        <Button tone="quiet" onClick={handleResend} disabled={sendingCode} style={{ fontSize: 13 }}>
                           {sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
                         </Button>
-                        <Button tone="quiet" onClick={w.changeEmail} style={{ padding: '8px 14px', fontSize: 13 }}>Change email</Button>
+                        <Button tone="quiet" onClick={w.changeEmail} style={{ fontSize: 13 }}>Change email</Button>
                       </div>
                       {emailError && <Hint tone="error">{emailError}</Hint>}
                     </form>
@@ -585,12 +572,12 @@ export default function NpWebSignup({ onExit }) {
 
                 <div style={{ display: 'grid', gap: 16 }}>
                   <Side label="Why we ask">
-                    <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                       This address is the only credential your PocketCache admin account has. Every future sign-in
                       emails a fresh one-time code to it, and every change to your page  -  join code, brand, payout
                       account  -  is approved from it.
                     </p>
-                    <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                    <p style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                       Use a shared address your team controls (like info@ or giving@) if you want more than one person
                       to be able to sign in.
                     </p>
@@ -607,11 +594,11 @@ export default function NpWebSignup({ onExit }) {
                   hint="Donations charge directly on your Stripe account  -  you are the merchant of record the whole time."
                 >
                   {stripeConnected ? (
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 14, padding: 16 }}>
-                      <CheckCircle size={20} color="#16a34a" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: 'var(--green-50)', border: '1px solid #A7F3D0', borderRadius: RADIUS.md, padding: 16 }}>
+                      <CheckCircle size={20} color="var(--green)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
                       <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#166534' }}>Stripe connected</p>
-                        <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#15803d' }}>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--green-700)' }}>{practiceMode ? 'Stripe connection simulated' : 'Stripe connected'}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--green-700)' }}>
                           You are the merchant of record for all donations. Payouts follow your existing Stripe schedule.
                         </p>
                       </div>
@@ -622,15 +609,17 @@ export default function NpWebSignup({ onExit }) {
                     </Button>
                   )}
                   {stripeError && (
-                    <div style={{ marginTop: 14, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px' }}>
-                      <p style={{ margin: 0, fontSize: 12.5, color: '#b91c1c' }}>{stripeError}</p>
-                      <button type="button" onClick={practiceConnectStripe} style={{ marginTop: 6, border: 'none', background: 'none', padding: 0, fontSize: 12, fontWeight: 700, color: INK.muted, textDecoration: 'underline', cursor: 'pointer' }}>
-                        Continue in practice mode instead
+                    <ErrorNote>
+                      <p style={{ margin: 0, fontSize: 13, color: 'var(--danger)' }}>{stripeError}</p>
+                      {/* Practice mode is an explicit choice, never a silent fallback:
+                          nothing goes live from a practice run (see the final step). */}
+                      <button type="button" onClick={practiceConnectStripe} style={{ marginTop: 4, border: 'none', background: 'none', padding: 0, minHeight: 44, display: 'inline-flex', alignItems: 'center', fontSize: 13, fontWeight: 700, color: INK.subtle, textDecoration: 'underline', cursor: 'pointer' }}>
+                        Continue in practice mode instead (nothing goes live)
                       </button>
-                    </div>
+                    </ErrorNote>
                   )}
                   {practiceMode && stripeConnected && (
-                    <Hint tone="error">Practice mode: Stripe wasn&apos;t reachable, so this connection is simulated. Reconnect for real anytime from your dashboard.</Hint>
+                    <Hint tone="warn">Practice mode: this Stripe connection is simulated and nothing will go live. Connect for real anytime from your dashboard.</Hint>
                   )}
                   {stripeConnected && (
                     <div style={{ marginTop: 18 }}>
@@ -640,15 +629,15 @@ export default function NpWebSignup({ onExit }) {
                   <Hint>PocketCache never touches the money  -  it goes straight from donors into your Stripe account. Test mode  -  no real money moves.</Hint>
                 </Pane>
                 <Side label="What connecting does">
-                  <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                     Your Stripe account becomes the destination for every donor charge. Donors see your name on their
                     statement, not PocketCache, and you issue their tax receipts.
                   </p>
-                  <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                  <p style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                     Donor charges run on <strong style={{ color: INK.primary }}>{nextChargeLabel()}</strong> each month,
                     after a 10-day review window in which donors can adjust or skip.
                   </p>
-                  <p style={{ margin: '12px 0 0', fontSize: 12, fontStyle: 'italic', color: '#b45309' }}>
+                  <p style={{ margin: '12px 0 0', fontSize: 13, fontStyle: 'italic', color: 'var(--warning)' }}>
                     Test mode: Stripe&apos;s real hosted onboarding, using test data  -  no real money or real bank
                     account required to try it.
                   </p>
@@ -686,15 +675,15 @@ export default function NpWebSignup({ onExit }) {
                       <div>
                         <Label>Admin contact email</Label>
                         {adminEmail ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
-                            <CheckCircle size={15} color="#22c55e" style={{ flexShrink: 0 }} />
-                            <span style={{ fontSize: 13.5, color: INK.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminEmail}</span>
-                            <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: '#15803d', flexShrink: 0 }}>Verified</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '10px 14px', borderRadius: RADIUS.sm, border: `1px solid ${LINE}`, background: 'var(--surface)' }}>
+                            <CheckCircle size={15} color="var(--green)" style={{ flexShrink: 0 }} aria-hidden />
+                            <span style={{ fontSize: 14, color: INK.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminEmail}</span>
+                            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--green-700)', flexShrink: 0 }}>Verified</span>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
-                            <Info size={15} color="#f59e0b" style={{ flexShrink: 0 }} />
-                            <span style={{ fontSize: 13.5, color: INK.muted }}>Not available</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '10px 14px', borderRadius: RADIUS.sm, border: `1px solid ${LINE}`, background: 'var(--surface)' }}>
+                            <Info size={15} color="var(--warning)" style={{ flexShrink: 0 }} aria-hidden />
+                            <span style={{ fontSize: 14, color: INK.subtle }}>Not available</span>
                           </div>
                         )}
                         <Hint>{adminEmail ? 'Verified in the previous step  -  this is your admin sign-in.' : "We couldn't load your verified email  -  go back a step or refresh to try again."}</Hint>
@@ -726,20 +715,20 @@ export default function NpWebSignup({ onExit }) {
                               onClick={() => setColor(c)}
                               aria-label={`Brand color ${c}`}
                               style={{
-                                width: 34, height: 34, borderRadius: 10, cursor: 'pointer', background: c,
-                                border: `2px solid ${color === c ? '#111827' : 'transparent'}`,
+                                width: 44, height: 44, borderRadius: RADIUS.sm, cursor: 'pointer', background: c,
+                                border: `2px solid ${color === c ? INK.primary : 'transparent'}`,
                                 boxShadow: color === c ? '0 0 0 2px #fff inset' : 'none',
                               }}
                             />
                           ))}
                           <label
                             style={{
-                              width: 34, height: 34, borderRadius: 10, cursor: 'pointer', background: color,
-                              border: `2px solid ${!NP_BRAND_COLORS.includes(color) ? '#111827' : 'transparent'}`,
+                              width: 44, height: 44, borderRadius: RADIUS.sm, cursor: 'pointer', background: color,
+                              border: `2px solid ${!NP_BRAND_COLORS.includes(color) ? INK.primary : 'transparent'}`,
                               display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden',
                             }}
                           >
-                            <input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
+                            <input type="color" value={color} onChange={e => setColor(e.target.value)} aria-label="Custom brand color" style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                             <span style={{ color: '#fff', fontSize: 15, fontWeight: 800, textShadow: '0 0 3px rgba(0,0,0,0.5)' }}>+</span>
                           </label>
                         </div>
@@ -750,9 +739,9 @@ export default function NpWebSignup({ onExit }) {
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                           <label
                             style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 12,
-                              border: '2px dashed #99f6e4', color: '#0f766e', background: '#f0fdfa',
-                              fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '10px 16px', borderRadius: RADIUS.sm,
+                              border: '2px dashed var(--teal-ui)', color: 'var(--teal-700)', background: '#fff',
+                              fontSize: 14, fontWeight: 700, cursor: 'pointer',
                             }}
                           >
                             Upload image
@@ -776,18 +765,12 @@ export default function NpWebSignup({ onExit }) {
                         <Hint>Skip this and a default coin mark is used. The preview beside this form updates as you go.</Hint>
                       </div>
 
+                      {/* One floor for every org (lib/billing). The per-org slider
+                          that used to sit here wrote a value no server field read. */}
                       <div>
-                        <Label>Monthly minimum  -  ${monthlyMinimum}</Label>
-                        <input
-                          type="range"
-                          min={5}
-                          max={50}
-                          step={5}
-                          value={monthlyMinimum}
-                          onChange={e => setMonthlyMinimum(Number(e.target.value))}
-                          style={{ width: 320, maxWidth: '100%', accentColor: TEAL }}
-                        />
-                        <Hint>Donors below this in a month roll over to the next month. Default $5.</Hint>
+                        <Label>Monthly minimum</Label>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: INK.primary }}>${MONTHLY_FLOOR} for every donor</p>
+                        <Hint>Monthly minimum: ${MONTHLY_FLOOR}. Donors under ${MONTHLY_FLOOR} in a month roll forward to the next charge.</Hint>
                       </div>
 
                       <div>
@@ -802,7 +785,7 @@ export default function NpWebSignup({ onExit }) {
                   </Pane>
 
                   <div style={{ position: 'sticky', top: 24, display: 'grid', gap: 12, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.subtle }}>
                       Live preview  -  what donors see
                     </p>
                     <DonorPagePreview
@@ -811,7 +794,6 @@ export default function NpWebSignup({ onExit }) {
                       story={story}
                       color={color}
                       logoPreview={logoPreview}
-                      monthlyMinimum={monthlyMinimum}
                     />
                   </div>
                 </div>
@@ -824,8 +806,8 @@ export default function NpWebSignup({ onExit }) {
                 <Pane title="Nonprofit Software License Agreement" hint="Always free for your nonprofit. Never a percentage of donations.">
                   <div
                     style={{
-                      maxHeight: 360, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 14,
-                      padding: 18, background: '#f9fafb', display: 'grid', gap: 12,
+                      maxHeight: 360, overflowY: 'auto', border: `1px solid ${LINE}`, borderRadius: RADIUS.md,
+                      padding: 18, background: 'var(--surface)', display: 'grid', gap: 12,
                     }}
                   >
                     {NP_LICENSE_POINTS.map(([heading, body]) => (
@@ -847,7 +829,7 @@ export default function NpWebSignup({ onExit }) {
                     href="/legal/nonprofit-license/"
                     target="_blank"
                     rel="noopener"
-                    style={{ display: 'inline-block', marginTop: 14, fontSize: 13.5, fontWeight: 700, color: NAVY }}
+                    style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, marginTop: 6, fontSize: 14, fontWeight: 700, color: NAVY }}
                   >
                     Read the full license →
                   </a>
@@ -867,24 +849,24 @@ export default function NpWebSignup({ onExit }) {
                       <span aria-hidden="true" style={{
                         width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1,
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        border: `2px solid ${accepted ? '#059669' : '#d1d5db'}`, background: accepted ? '#059669' : '#fff',
+                        border: `2px solid ${accepted ? 'var(--green)' : 'var(--muted)'}`, background: accepted ? 'var(--green)' : '#fff',
                         boxShadow: licenseCheckboxFocused ? '0 0 0 3px rgba(13,148,136,0.35)' : 'none',
                       }}>
                         {accepted && <CheckCircle size={12} color="#fff" />}
                       </span>
-                      <span style={{ fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                      <span style={{ fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                         I accept the Nonprofit Software License Agreement on behalf of this organization.
                       </span>
                     </label>
                     {showLicenseHint && !accepted && (
-                      <p style={{ margin: '10px 0 0', fontSize: 12.5, fontWeight: 600, color: '#b45309' }}>
+                      <p style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 600, color: 'var(--warning)' }}>
                         Please accept the license to continue
                       </p>
                     )}
                     <div style={{ marginTop: 16 }}>
                       <Button type="submit" tone="teal" disabled={!accepted}>Accept &amp; go live →</Button>
                     </div>
-                    <p style={{ margin: '14px 0 0', fontSize: 12, lineHeight: 1.55, color: INK.muted }}>
+                    <p style={{ margin: '14px 0 0', fontSize: 12, lineHeight: 1.55, color: INK.subtle }}>
                       Signing for {orgName || 'your organization'} as {adminEmail || 'the verified admin'}.
                     </p>
                   </form>
@@ -902,7 +884,7 @@ export default function NpWebSignup({ onExit }) {
                   title="One last thing for the iPhone app"
                   hint="Your PocketCache webpage and website widget go live today, no matter what happens here. This step only affects whether donors can find you inside the PocketCache iPhone app."
                 >
-                  <p style={{ margin: '0 0 16px', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+                  <p style={{ margin: '0 0 16px', fontSize: 14, lineHeight: 1.6, color: INK.secondary }}>
                     Apple asks every nonprofit to be verified once before it can appear inside the iPhone app.
                     Your organization doesn&apos;t have a Candid Seal of Transparency on file, so the fastest
                     path is to register  -  free  -  at the Benevity Causes Portal, using your organization&apos;s
@@ -910,10 +892,10 @@ export default function NpWebSignup({ onExit }) {
                   </p>
                   <Label>PocketCache developer ID</Label>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <code style={{ background: '#0f172a', color: '#4ade80', borderRadius: 10, padding: '10px 14px', fontSize: 13.5, fontFamily: 'ui-monospace, monospace' }}>
+                    <code style={{ background: 'var(--navy-900)', color: '#86EFAC', borderRadius: RADIUS.sm, padding: '10px 14px', fontSize: 14, fontFamily: 'ui-monospace, monospace' }}>
                       {APPLE_TEAM_ID}
                     </code>
-                    <Button tone="quiet" onClick={copyTeamId} style={{ padding: '8px 14px', fontSize: 13 }}>
+                    <Button tone="quiet" onClick={copyTeamId} style={{ fontSize: 13 }}>
                       {teamIdCopied ? 'Copied ✓' : teamIdCopyFailed ? 'Try again' : 'Copy'}
                     </Button>
                   </div>
@@ -925,18 +907,18 @@ export default function NpWebSignup({ onExit }) {
                   <button
                     type="button"
                     onClick={deferBenevity}
-                    style={{ marginTop: 14, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: INK.muted }}
+                    style={{ marginTop: 10, minHeight: 44, padding: '0 4px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: INK.subtle }}
                   >
                     I&apos;ll do this later
                   </button>
                 </Pane>
                 <Side label="Why this exists">
-                  <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                     Apple requires every nonprofit listed inside a charity-giving app to be independently
                     verified. A Candid Seal of Transparency already satisfies that; without one, Benevity&apos;s
                     Causes Portal is the free alternative.
                   </p>
-                  <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                  <p style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                     Neither choice here blocks you from going live right now. It only decides how soon you show
                     up inside the iPhone app.
                   </p>
@@ -952,30 +934,31 @@ export default function NpWebSignup({ onExit }) {
               <div style={{ display: 'grid', gap: 22 }}>
                 <div style={{ ...PANEL, padding: 26, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 24, alignItems: 'center' }}>
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#b45309' }}>
-                      Almost there ⏳
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Hourglass size={14} aria-hidden /> Almost there
                     </p>
                     <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 800, letterSpacing: '-0.4px', color: INK.primary }}>
                       {orgName} is awaiting review
                     </h2>
-                    <p style={{ margin: '8px 0 0', fontSize: 13.5, lineHeight: 1.6, color: INK.secondary }}>
+                    <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.secondary }}>
                       Your signup is complete and PocketCache is reviewing your organization.
                       You&apos;ll get your launch kit by email once approved.
                     </p>
+                    {joinCodeTakenNotice && <Hint tone="warn">{joinCodeTakenNotice}</Hint>}
                   </div>
                   <Button tone="teal" onClick={async () => { await goLive(config); clearDraft(); }}>Open your dashboard →</Button>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
                   <Side label="What happens next">
-                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7, color: INK.secondary, listStyleType: 'decimal' }}>
+                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7, color: INK.secondary, listStyleType: 'decimal' }}>
                       <li>PocketCache reviews your organization - usually quick.</li>
                       <li>Your launch kit lands at {adminEmail || 'your verified admin email'}: your page link, donor join code, QR code, and website widget.</li>
                       <li>Your page goes live and donors can start rounding up.</li>
                     </ol>
                   </Side>
                   <Side label="Until then">
-                    <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.secondary }}>
+                    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: INK.secondary }}>
                       Your page, QR code, and widget stay held back so nothing gets printed or
                       embedded before it works. Your dashboard is ready now - the donor-facing
                       tools unlock automatically the moment you&apos;re approved. Nothing else is
@@ -986,72 +969,97 @@ export default function NpWebSignup({ onExit }) {
               </div>
             )}
 
-            {/* ═══ You're live ═══ */}
-            {step === 'live' && !pendingReview && (
+            {/* ═══ Practice run: nothing was created on the server, so there is
+                 no page, QR or widget to hand out. Saying so beats showing a
+                 launch kit that resolves nowhere. ═══ */}
+            {step === 'live' && !pendingReview && practiceMode && (
               <div style={{ display: 'grid', gap: 22 }}>
                 <div style={{ ...PANEL, padding: 26, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 24, alignItems: 'center' }}>
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15803d' }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <AlertTriangle size={14} aria-hidden /> Practice run
+                    </p>
+                    <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 800, letterSpacing: '-0.4px', color: INK.primary }}>
+                      Nothing is live yet - this was a practice run
+                    </h2>
+                    <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.secondary }}>
+                      {orgName || 'Your organization'} was set up on this device only. No page, join code, QR or widget exists for donors,
+                      and no launch kit is sent. Run setup again with Stripe connected when you are ready to go live.
+                    </p>
+                  </div>
+                  <Button tone="teal" onClick={async () => { await goLive(config); clearDraft(); }}>Open your dashboard →</Button>
+                </div>
+                <Hint>Practice mode: nothing is sent. Your dashboard shows what the real one will look like.</Hint>
+              </div>
+            )}
+
+            {/* ═══ You're live ═══ */}
+            {step === 'live' && !pendingReview && !practiceMode && (
+              <div style={{ display: 'grid', gap: 22 }}>
+                <div style={{ ...PANEL, padding: 26, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 24, alignItems: 'center' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--green-700)' }}>
                       You&apos;re live 🎉
                     </p>
                     <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 800, letterSpacing: '-0.4px', color: INK.primary }}>
                       {orgName} is on PocketCache
                     </h2>
-                    <p style={{ margin: '6px 0 0', fontSize: 13.5, color: INK.secondary, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
-                      pocketcache.app/{joinCode.toLowerCase()}
+                    <p style={{ margin: '6px 0 0', fontSize: 14, color: INK.secondary, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
+                      pocketcache.app/{joinCode}
                     </p>
+                    {joinCodeTakenNotice && <Hint tone="warn">{joinCodeTakenNotice}</Hint>}
                   </div>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <LinkButton href={launchKitMailto(orgName, joinCode)}>
-                      📧 Send the launch kit
+                      <Send size={15} aria-hidden /> Send the launch kit
                     </LinkButton>
                     <Button tone="teal" onClick={async () => { await goLive(config); clearDraft(); }}>Open your dashboard →</Button>
                   </div>
                 </div>
 
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#15803d' }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--green-700)' }}>
                   Live right now
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr)', gap: 20, alignItems: 'start' }}>
                   <Side label="Your donor join code">
-                    <p style={{ margin: 0, fontSize: 42, fontWeight: 900, letterSpacing: '0.06em', color: '#065f46', lineHeight: 1.1 }}>{joinCode}</p>
-                    <p style={{ margin: '8px 0 0', fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                    <p style={{ margin: 0, fontSize: 42, fontWeight: 800, letterSpacing: '0.06em', color: 'var(--green-700)', lineHeight: 1.1 }}>{joinCode}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.55, color: INK.secondary }}>
                       Donors enter this in the PocketCache app, or open your link, to join your program.
                     </p>
                   </Side>
 
                   <Side label="QR code">
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 10, display: 'inline-block' }}>
+                    <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: 10, display: 'inline-block' }}>
                       <QRCodeSVG value={joinQrValue(joinCode)} size={112} level="M" includeMargin />
                     </div>
-                    <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                    <p style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.55, color: INK.secondary }}>
                       Posters, newsletters, event tables. Also on your dashboard&apos;s Grow tab.
                     </p>
                   </Side>
 
                   <Side label="Website widget">
-                    <div style={{ background: '#0f172a', borderRadius: 12, padding: 12, overflowX: 'auto' }}>
-                      <code style={{ fontSize: 11.5, color: '#4ade80', fontFamily: 'ui-monospace, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                    <div style={{ background: 'var(--navy-900)', borderRadius: 12, padding: 12, overflowX: 'auto' }}>
+                      <code style={{ fontSize: 12, color: '#86EFAC', fontFamily: 'ui-monospace, monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                         {widgetSnippet(orgName, joinCode)}
                       </code>
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Button tone="quiet" onClick={copySnippet} style={{ padding: '8px 14px', fontSize: 13 }}>
+                      <Button tone="quiet" onClick={copySnippet} style={{ fontSize: 13 }}>
                         {copied ? 'Copied ✓' : copyFailed ? 'Copy failed  -  try again' : 'Copy snippet'}
                       </Button>
-                      <span style={{ fontSize: 12, color: INK.muted }}>Paste where the &ldquo;Round up for us&rdquo; card should appear.</span>
+                      <span style={{ fontSize: 12, color: INK.subtle }}>Paste where the &ldquo;Round up for us&rdquo; card should appear.</span>
                     </div>
                   </Side>
                 </div>
 
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK.subtle }}>
                   PocketCache iPhone app
                 </p>
-                <Side label={null} style={{ background: '#f8fafc' }}>
+                <Side label={null} style={{ background: 'var(--surface)' }}>
                   {appleApproval.status === 'approved' ? (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                      <CheckCircle size={16} color="#22c55e" style={{ flexShrink: 0, marginTop: 1 }} />
-                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                      <CheckCircle size={16} color="var(--green)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+                      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: INK.secondary }}>
                         {appleApproval.method === 'candid_seal'
                           ? 'Verified through your Candid Seal of Transparency  -  nothing to do.'
                           : 'Approved and ready to appear in the app.'}
@@ -1059,28 +1067,25 @@ export default function NpWebSignup({ onExit }) {
                     </div>
                   ) : appleApproval.status === 'benevity_submitted' ? (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                      <span style={{ flexShrink: 0 }}>⏳</span>
-                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                      <Hourglass size={16} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+                      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: INK.secondary }}>
                         We&apos;ll list you in the iPhone app once Benevity approval comes through.
                       </p>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                      <span style={{ flexShrink: 0 }}>⚠️</span>
-                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: INK.secondary }}>
+                      <AlertTriangle size={16} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+                      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: INK.secondary }}>
                         Register with Benevity when you&apos;re ready  -  it&apos;s in your dashboard.
                       </p>
                     </div>
                   )}
                 </Side>
 
-                <DemoNote>
-                  <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#92400e' }}>
-                    Your launch kit is emailed to {adminEmail || 'your verified admin address'} automatically the moment
-                    you go live (demo: shown on this page instead). Use &ldquo;Send the launch kit&rdquo; to forward a copy
-                    to a colleague  -  just add their address.
-                  </p>
-                </DemoNote>
+                <Hint>
+                  Your launch kit is emailed to {adminEmail || 'your verified admin address'} as soon as your organization is approved.
+                  Use &ldquo;Send the launch kit&rdquo; to forward a copy to a colleague  -  just add their address.
+                </Hint>
               </div>
             )}
           </motion.div>
@@ -1088,7 +1093,7 @@ export default function NpWebSignup({ onExit }) {
       </main>
 
       <footer style={{ padding: '0 24px 26px', textAlign: 'center' }}>
-        <p style={{ color: INK.muted, fontSize: 12, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <p style={{ color: INK.subtle, fontSize: 12, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
           <CoinMark size={14} />
           Powered by PocketCache ·{' '}
           <a href="/legal/nonprofit-license/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Nonprofit License</a>{' '}

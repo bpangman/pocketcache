@@ -18,7 +18,7 @@ export default function MatchDetailsSheet({ show, onClose, match }) {
       <div className="px-6 pt-5">
         {match.sample && (
           <div className="mb-4">
-            <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 text-xs font-semibold text-amber-700">
+            <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-pill px-3 py-1 text-[11px] font-semibold text-amber-700">
               Example partnership - demo only
             </span>
           </div>
@@ -26,35 +26,38 @@ export default function MatchDetailsSheet({ show, onClose, match }) {
 
         {match.logoUrl && (
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0"
-              style={{ border: '1px solid #f3f4f6' }}>
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0"
+              style={{ border: '1px solid var(--line)' }}>
               <img src={match.logoUrl} alt={match.companyShort} style={{ height: 32, objectFit: 'contain' }} />
             </div>
             <div>
-              <p className="font-bold text-gray-900 text-base">{match.company}</p>
-              <p className="text-gray-500 text-sm">Corporate Match Partner</p>
+              <p className="font-bold text-ink text-base">{match.company}</p>
+              <p className="text-slate text-sm">Corporate Match Partner</p>
             </div>
           </div>
         )}
 
-        <p className="text-gray-700 text-sm leading-relaxed mb-4">{match.impactReport}</p>
+        <p className="text-ink-2 text-sm leading-relaxed mb-4">{match.impactReport}</p>
 
-        <div className="rounded-2xl p-4 mb-4" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+        {/* White, not amber: a match is good news, and amber is the warning
+            color. The gold lives on the bar alone. */}
+        <div className="rounded-card p-4 mb-4" style={{ border: '1px solid var(--line)' }}>
           <div className="flex justify-between items-center mb-2">
-            <span className="text-amber-800 text-sm font-bold">Match Pool Progress</span>
-            <span className="text-amber-700 text-sm font-semibold">
+            <span className="text-ink text-sm font-bold">Match Pool Progress</span>
+            <span className="text-slate text-sm font-semibold tabular-nums">
               {mp.matchedLabel} / {mp.poolLabel}
             </span>
           </div>
-          <div className="h-2 bg-amber-100 rounded-full overflow-hidden mb-1.5">
+          <div className="h-2 rounded-pill overflow-hidden mb-1.5" style={{ background: 'var(--line)' }}>
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${mp.pct}%` }}
               transition={{ duration: 1 }}
-              className="h-full bg-amber-400 rounded-full"
+              className="h-full rounded-pill"
+              style={{ background: 'var(--gold)' }}
             />
           </div>
-          <p className="text-amber-700 text-xs" data-testid="match-progress-label">{mp.progressLabel}</p>
+          <p className="text-slate text-[13px]" data-testid="match-progress-label">{mp.progressLabel}</p>
         </div>
 
         {match.impactUrl && (
@@ -62,7 +65,8 @@ export default function MatchDetailsSheet({ show, onClose, match }) {
             href={match.impactUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-900"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold min-h-[44px]"
+            style={{ color: 'var(--navy-deep)' }}
           >
             See {match.companyShort}&apos;s community commitments <ExternalLink size={13} />
           </a>

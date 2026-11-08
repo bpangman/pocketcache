@@ -17,6 +17,8 @@
 // Wiring a generic beacon into a dead endpoint would add a dependency on
 // something that already does not work.
 
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supa';
+
 const NTFY_URL = 'https://ntfy.sh/pocketcache-wl-x7k2m9q4';
 
 // FormSubmit delivery needs Blake's one-time FormSubmit activation click
@@ -30,12 +32,11 @@ const FORMSUBMIT_URL = 'https://formsubmit.co/ajax/blake@pocketcache.app';
 
 // Supabase events table - a permanent, PII-free activity log that the
 // platform admin console reads back directly from the browser. The anon key
-// below is public by design (Supabase's anon key is meant to be shipped in
+// (from lib/supa.js) is public by design (Supabase's anon key is meant to be shipped in
 // client-side source, same trust level as the ntfy topic name above) - it is
 // scoped by row-level security policies on the events table to insert and
 // select only, and that table never stores donor/user PII.
-const SUPABASE_EVENTS_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/events';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
+const SUPABASE_EVENTS_URL = `${SUPABASE_URL}/rest/v1/events`;
 
 /** Only fire on the real production host - stay silent on localhost, preview
  *  deploys, and any test/SSR runner where window/document don't exist. */

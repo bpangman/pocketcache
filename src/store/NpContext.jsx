@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useMemo } from 'react';
 import { saveCustomOrg, getCustomOrg, saveBgcaOverrides, getBgcaOverrides, computeBrandFromColor, cacheServerOrgLocally } from './orgStore';
 import { loadKey, saveKey, removeKeys } from './identityStore';
+import { useApp } from './AppContext';
 
 // localStorage keys — all prefixed pc_np_ so they don't collide with donor keys
 const NP_KEYS = {
@@ -23,10 +24,25 @@ export const DEFAULT_NP_ORG = {
 const NpContext = createContext(null);
 
 export function NpProvider({ children }) {
-  const [npOrg,      setNpOrgState]      = useState(() => loadKey(NP_KEYS.org,      DEFAULT_NP_ORG));
+  const [npOrgStored, setNpOrgState]     = useState(() => loadKey(NP_KEYS.org,      DEFAULT_NP_ORG));
   const [npTab,      setNpTabState]      = useState(() => loadKey(NP_KEYS.tab,      'overview'));
 
+  // DEMO PREVIEW (read-only). The gate's "preview the admin side" used to
+  // hand the device a persisted BGCA admin role; it is now a non-persisted
+  // flag in AppContext (previewAdmin). While it is on, this provider shows
+  // the BGCA record and refuses every write: setNpOrg below is a no-op, so a
+  // prospect poking at Settings can never store pc_bgca_overrides that the
+  // donor side would then merge into the real BGCA page. NpProvider always
+  // sits inside AppProvider (src/App.jsx), hence the direct read; the
+  // optional chaining only guards a stray render outside it.
+  const previewAdmin = !!useApp()?.previewAdmin;
+  const npOrg = useMemo(
+    () => (previewAdmin ? { ...DEFAULT_NP_ORG, ...(getBgcaOverrides() ?? {}) } : npOrgStored),
+    [previewAdmin, npOrgStored],
+  );
+
   function setNpOrg(org) {
+    if (previewAdmin) return; // read-only preview: nothing is written anywhere
     saveKey(NP_KEYS.org, org);
     setNpOrgState(org);
     // Propagate to donor-side org store
@@ -70,7 +86,7 @@ export function NpProvider({ children }) {
   // giving subscription"-adjacent Settings edit used to land in BGCA's shared
   // demo record. Call right after setAdminRole resolves a real org.
   function adoptOrgById(orgId) {
-    const currentId = npOrg._orgId || (npOrg.joinCode ? npOrg.joinCode.toLowerCase() : 'bgca');
+    const currentId = npOrgStored._orgId || (npOrgStored.joinCode ? npOrgStored.joinCode.toLowerCase() : 'bgca');
     if (currentId === orgId) return; // already showing the right org
     if (orgId === 'bgca') {
       const next = { ...DEFAULT_NP_ORG, ...(getBgcaOverrides() ?? {}) };
@@ -137,6 +153,7 @@ export function NpProvider({ children }) {
     <NpContext.Provider value={{
       npOrg, setNpOrg,
       npTab, setNpTab,
+      previewAdmin,
       resetNpContent,
       adoptOrgById,
       adoptServerOrg,

@@ -6,9 +6,15 @@
 // The marketing site's landing/assets/shared.css mirrors the same scale, so
 // the funnel and the portal read as one product family.
 
-export const INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
+// `subtle` is for helper and explanatory text (4.5:1 on white and on the
+// #F6F8FB surface); `muted` is decorative and disabled only - at 14px body
+// size it measures about 2.6:1 and fails AA. See DESIGN.md.
+export const INK = { primary: '#0f172a', secondary: '#475569', subtle: '#5B6B80', muted: '#94a3b8' };
 export const NAVY = '#003865';
 export const TEAL_INK = '#0f766e';
+// Same value as --danger. Exported for Stripe's CardElement, which renders
+// inside its own iframe where CSS variables cannot reach.
+export const DANGER = '#DC2626';
 
 // Depth scale: exactly three levels, used everywhere on the web surfaces.
 export const SHADOW = {
@@ -17,22 +23,25 @@ export const SHADOW = {
   lg: '0 8px 20px rgba(11,42,74,0.10), 0 32px 72px rgba(11,42,74,0.18)',
 };
 
-export const RADIUS = { md: 16, lg: 20, xl: 28, pill: 999 };
+// Mirrors the --r-* scale in src/index.css: 8 / 12 / 16 / 22 / 28 / pill.
+// `lg20` is the pre-2026-11 panel value, kept as an alias for any layout that
+// was measured against 20.
+export const RADIUS = { xs: 8, sm: 12, md: 16, lg: 22, lg20: 20, xl: 28, pill: 999 };
 
 // Standard dashboard card: quiet at rest, one soft ambient layer so the cards
 // sit ON the page instead of being flat white rectangles drawn on it.
 export const CARD = {
-  background: '#fff',
+  background: 'var(--white)',
   borderRadius: RADIUS.md,
-  border: '1px solid #E6EBF2',
+  border: '1px solid var(--line)',
   boxShadow: '0 1px 2px rgba(11,42,74,0.05), 0 8px 24px rgba(11,42,74,0.05)',
 };
 
 // Elevated panel: the onboarding / reactivation focal card.
 export const PANEL = {
-  background: '#fff',
+  background: 'var(--white)',
   borderRadius: RADIUS.lg,
-  border: '1px solid #E6EBF2',
+  border: '1px solid var(--line)',
   boxShadow: SHADOW.md,
 };
 

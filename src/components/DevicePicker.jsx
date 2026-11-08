@@ -1,6 +1,3 @@
-// eslint-disable-next-line no-unused-vars
-import { motion } from 'framer-motion';
-
 // eslint-disable-next-line react-refresh/only-export-components
 export const DEVICES = [
   { id: 'se',       label: 'iPhone SE',          width: 375, height: 667 },
@@ -28,41 +25,51 @@ export function saveDevice(id) {
   try { localStorage.setItem(STORAGE_KEY, id); } catch { /* noop */ }
 }
 
+// Chips sit on the navy demo backdrop. Each chip is a 36px pill inside a 44px
+// tap target (the -4px vertical margin keeps the row at the pill's height, so
+// the bigger target does not push the phone frame down); the gold ring (.pc-on-dark) is the keyboard focus, and the
+// pressed scale comes from .pc-btn (src/index.css).
 export default function DevicePicker({ selected, onChange }) {
   const device = DEVICES.find(d => d.id === selected) ?? DEVICES[2];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
       <p style={{
-        color: 'rgba(148,163,184,0.85)', fontSize: 11, fontWeight: 500,
-        margin: 0, letterSpacing: 0.2, fontFamily: 'Poppins, sans-serif',
+        color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: 500,
+        margin: 0, fontFamily: 'Poppins, sans-serif',
       }}>
-        See how the app fits any phone  -  pick one.
+        See how the app fits any phone - pick one.
       </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
+      <div role="group" aria-label="Preview device" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
         {DEVICES.map(d => {
           const isActive = d.id === selected;
           return (
-            <motion.button
+            <button
               key={d.id}
-              whileTap={{ scale: 0.93 }}
+              type="button"
+              className="pc-btn pc-on-dark"
               title={`${d.label} · ${d.width}×${d.height}`}
+              aria-pressed={isActive}
               onClick={() => onChange(d.id)}
               style={{
-                padding: '5px 13px', borderRadius: 99, border: 'none', cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 11.5,
-                letterSpacing: 0.1,
-                background: isActive ? '#FBBF24' : 'rgba(255,255,255,0.1)',
-                color: isActive ? '#0B2A4A' : 'rgba(255,255,255,0.85)',
-                transition: 'background 0.18s, color 0.18s', outline: 'none',
+                minHeight: 44, padding: '4px 0', margin: '-4px 0', border: 'none', background: 'none', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', borderRadius: 'var(--r-pill)',
               }}
             >
-              {d.label}
-            </motion.button>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px',
+                borderRadius: 'var(--r-pill)', fontFamily: 'Poppins, sans-serif', fontWeight: 600, fontSize: 12,
+                background: isActive ? 'var(--gold)' : 'rgba(255,255,255,0.1)',
+                color: isActive ? 'var(--navy)' : 'rgba(255,255,255,0.88)',
+                transition: 'background 0.18s, color 0.18s',
+              }}>
+                {d.label}
+              </span>
+            </button>
           );
         })}
       </div>
       <p style={{
-        color: 'rgba(148,163,184,0.55)', fontSize: 10.5, fontWeight: 400,
+        color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 400,
         margin: 0, fontFamily: 'Poppins, sans-serif',
       }}>
         {device.label} · {device.width}×{device.height}

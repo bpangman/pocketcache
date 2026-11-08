@@ -1,9 +1,146 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+/* ─── Design tokens (see DESIGN.md) ─────────────────────────────────────────
+   PocketCache chrome and neutrals, mirrored 1:1 from landing/assets/shared.css
+   so the marketing site, the web portal and the phone app read as one product.
+   Tenant colors stay runtime values: ThemeContext writes --brand-* below from
+   the active nonprofit's brand object. */
 :root {
   --pc-safe-top: 0px;
   --pc-safe-bottom: 0px;
+
+  /* Navy */
+  --navy: #0B2A4A;
+  --navy-deep: #003865;
+  --navy-900: #001A33;
+
+  /* Gold: primary action on dark only; gold-700 is gold as TEXT on white */
+  --gold: #FBBF24;
+  --gold-deep: #E5A800;
+  --gold-700: #D97706;
+  --gold-50: #FEF3C7;
+
+  /* Teal: UI accent, focus ring, toggles. --teal-logo is for the logo and
+     accents on navy only, never on white. */
+  --teal-ui: #0D9488;
+  --teal-700: #0F766E;
+  --teal-50: #E8FBF7;
+  --teal-100: #CCFBF1;
+  --teal-200: #99F6E4;   /* teal callout border */
+  --teal-900: #134E4A;   /* heading text inside a teal callout */
+  --teal-logo: #5EEAD4;
+
+  /* Green: every positive money amount */
+  --green: #059669;
+  --green-700: #047857;
+  --green-50: #ECFDF5;
+
+  /* Text */
+  --ink: #0F172A;
+  --ink-2: #475569;
+  --slate: #5B6B80;   /* helper text, 4.5:1 on --surface */
+  --muted: #94A3B8;   /* decorative and disabled only, never body text */
+
+  /* Surfaces */
+  --white: #FFFFFF;
+  --line: #E6EBF2;
+  --line-strong: #E2E8F0;   /* off-state toggle track, firmer dividers */
+  --surface: #F6F8FB;
+  --cream: #FFFBF5;
+
+  /* The one primary gradient: navy buttons on light, onboarding slides */
+  --grad-primary: linear-gradient(135deg, #003865, #0B2A4A);
+
+  /* Status. The -200 values are callout borders, the -700/-800 values are the
+     strong text inside a tinted callout. */
+  --danger: #DC2626;
+  --danger-50: #FEF2F2;
+  --danger-200: #FECACA;
+  --danger-700: #B91C1C;
+  --warning: #B45309;
+  --warning-50: #FFFBEB;
+  --warning-200: #FDE68A;
+  --warning-800: #92400E;
+
+  /* Depth scale: exactly three levels, navy-tinted, no black shadows */
+  --shadow-1: 0 1px 2px rgba(11,42,74,0.05);
+  --shadow-2: 0 2px 6px rgba(11,42,74,0.05), 0 14px 36px rgba(11,42,74,0.09);
+  --shadow-3: 0 8px 20px rgba(11,42,74,0.10), 0 32px 72px rgba(11,42,74,0.18);
+
+  /* Radii: chips / inputs / cards / panels / hero / pills */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* Disabled control, one token everywhere */
+  --disabled-bg: #E6EBF2;
+  --disabled-text: #94A3B8;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Tailwind 4 utilities for the same tokens: text-navy, bg-surface, border-line,
+   shadow-2, rounded-card, rounded-pill ... `inline` keeps the :root variable as
+   the single source of truth. Names are chosen so they never collide with (and
+   so never silently restyle) Tailwind's own scales: rounded-md, bg-teal-50 and
+   text-green-700 keep their stock values. */
+@theme inline {
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-navy-900: var(--navy-900);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-ink: var(--gold-700);
+  --color-gold-wash: var(--gold-50);
+  --color-teal-ui: var(--teal-ui);
+  --color-teal-ink: var(--teal-700);
+  --color-teal-wash: var(--teal-50);
+  --color-teal-line: var(--teal-200);
+  --color-teal-deep: var(--teal-900);
+  --color-teal-logo: var(--teal-logo);
+  --color-positive: var(--green);
+  --color-positive-ink: var(--green-700);
+  --color-positive-wash: var(--green-50);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-slate: var(--slate);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-surface: var(--surface);
+  --color-cream: var(--cream);
+  --color-danger: var(--danger);
+  --color-danger-wash: var(--danger-50);
+  --color-danger-line: var(--danger-200);
+  --color-danger-ink: var(--danger-700);
+  --color-warning: var(--warning);
+  --color-warning-wash: var(--warning-50);
+  --color-warning-line: var(--warning-200);
+  --color-warning-ink: var(--warning-800);
+  --color-disabled: var(--disabled-bg);
+  --color-disabled-text: var(--disabled-text);
+  --color-brand: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-text: var(--brand-text-accent);
+  --color-brand-tint: var(--brand-accent-light);
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+
+  --radius-chip: var(--r-xs);
+  --radius-input: var(--r-sm);
+  --radius-card: var(--r-md);
+  --radius-panel: var(--r-lg);
+  --radius-hero: var(--r-xl);
+  --radius-pill: var(--r-pill);
+
+  --ease-out: var(--ease-out);
 }
 
 * {
@@ -26,7 +163,55 @@ body {
   min-height: 100svh;
 }
 
-/* Phone frame for demo — dimensions controlled by JS (DevicePicker) */
+/* Keyboard focus, one treatment everywhere. In the base layer so a page that
+   already styles its own focus ring (a utility class) still wins. */
+@layer base {
+  button:focus-visible,
+  a:focus-visible,
+  summary:focus-visible,
+  [role="button"]:focus-visible,
+  [role="switch"]:focus-visible,
+  [role="tab"]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible {
+    outline: 3px solid var(--teal-ui);
+    outline-offset: 3px;
+  }
+  .pc-on-dark:focus-visible,
+  .pc-on-dark button:focus-visible,
+  .pc-on-dark a:focus-visible {
+    outline-color: var(--gold);
+  }
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    border-color: var(--teal-ui);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
+  }
+}
+
+/* Shared button base (src/components/ui/Button.jsx). Pressed = scale 0.98
+   over 120ms; disabled buttons do not press. Hover fills per variant. */
+.pc-btn {
+  transition: transform 120ms ease, background-color 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+.pc-btn:active:not([aria-disabled="true"]) {
+  transform: scale(0.98);
+}
+@media (hover: hover) {
+  .pc-btn[data-variant="primary"][data-on-dark="true"]:hover:not([aria-disabled="true"]) {
+    background: var(--gold-deep);
+  }
+  .pc-btn[data-variant="secondary"]:hover:not([aria-disabled="true"]),
+  .pc-btn[data-variant="tertiary"]:hover:not([aria-disabled="true"]) {
+    background: var(--surface);
+  }
+  .pc-btn[data-variant="danger"]:hover:not([aria-disabled="true"]) {
+    background: var(--danger-50);
+  }
+}
+
+/* Phone frame for demo - dimensions controlled by JS (DevicePicker) */
 .phone-frame {
   background: #fff;
   border-radius: 50px;
@@ -45,7 +230,7 @@ body {
 }
 .scrollable::-webkit-scrollbar { display: none; }
 
-/* Subtle scrollbar for content areas — visible when overflowing */
+/* Subtle scrollbar for content areas - visible when overflowing */
 .pc-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(11,42,74,0.18) transparent;
@@ -56,13 +241,13 @@ body {
 }
 .pc-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(11,42,74,0.18);
-  border-radius: 99px;
+  border-radius: var(--r-pill);
 }
 .pc-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Gradient text — follows the active brand color */
+/* Gradient text - follows the active brand color */
 .gradient-text {
   background: linear-gradient(135deg, var(--brand-primary, #FBBF24), var(--brand-secondary, #0D9488));
   -webkit-background-clip: text;
@@ -75,17 +260,17 @@ body {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   background: rgba(255,255,255,0.95);
-  border-top: 1px solid rgba(0,0,0,0.08);
+  border-top: 1px solid var(--line);
 }
 
-/* Card shadow — neutral, no brand-color bleed */
+/* Card shadow - the app's card level (shadow-2), navy-tinted like the site */
 .card-shadow {
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05);
+  box-shadow: var(--shadow-2);
 }
 
 /* Smooth transitions */
 .page-enter {
-  animation: fadeSlideUp 0.3s ease both;
+  animation: fadeSlideUp 0.25s var(--ease-out) both;
 }
 
 @keyframes fadeSlideUp {
@@ -98,6 +283,7 @@ body {
   100% { transform: scale(1.5); opacity: 0; }
 }
 
+/* Only while something is actively loading or scanning - never as decoration. */
 .pulse-ring {
   animation: pulse-ring 1.5s ease-out infinite;
 }
@@ -108,4 +294,17 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.count-up { animation: countUp 0.5s ease both; }
+.count-up { animation: countUp 0.5s var(--ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .count-up,
+  .pulse-ring {
+    animation: none;
+  }
+  .pc-btn,
+  .pc-btn:active:not([aria-disabled="true"]) {
+    transition: none;
+    transform: none;
+  }
+}

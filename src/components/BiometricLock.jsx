@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Lock, ScanFace } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { greetingNameFor } from '../lib/donorAuth';
 import CoinMark from './CoinMark';
+import Button from './ui/Button';
 import { safeBottomAtLeast } from '../lib/safeArea';
 import { Z, scrim, centered } from '../lib/overlay';
 import {
@@ -13,10 +15,16 @@ import {
 // One gate, two skins: <AppLockScreen> fills the phone frame, <WebLockScreen>
 // is a full webpage. Both unlock the same per-tab session. A one-time offer
 // (<BiometricOffer*>) appears after sign-in on devices that support it.
+//
+// The gate has exactly two exits: a successful biometric check, or signing
+// out. There used to be a third - "Use Apple / Google sign-in instead" - that
+// simply marked the session unlocked without any authentication at all, which
+// made the lock decorative. Signing out drops the session and returns the
+// donor to the real sign-in flow, where they re-authenticate for real.
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useBiometricGate() {
-  const { hasAccount } = useApp();
+  const { hasAccount, signOut } = useApp();
   const [locked, setLocked] = useState(() => !!hasAccount && biometricEnrolled() && !sessionUnlocked());
   const [error, setError] = useState(false);
 
@@ -28,47 +36,46 @@ export function useBiometricGate() {
     return ok;
   }
 
-  // Demo fallback: SSO re-auth is simulated; in production this is a real
-  // Apple/Google sign-in round-trip.
-  function unlockWithSso() {
-    markSessionUnlocked();
+  // Signing out ends the session (AppContext clears hasAccount, so the gate's
+  // own precondition goes away) and lands the donor on sign-in.
+  function signOutFromLock() {
     setLocked(false);
+    signOut?.();
   }
 
-  return { locked, unlock, unlockWithSso, error };
+  return { locked, unlock, signOut: signOutFromLock, error };
 }
 
 function LockBody({ gate, name, dark }) {
   const [busy, setBusy] = useState(false);
-  const ink = dark ? '#fff' : '#0f172a';
-  const sub = dark ? 'rgba(255,255,255,0.7)' : '#475569';
+  const ink = dark ? '#fff' : 'var(--ink)';
+  const sub = dark ? 'rgba(255,255,255,0.7)' : 'var(--ink-2)';
   return (
     <>
-      <div style={{ fontSize: 52, marginBottom: 10 }}>🔒</div>
-      <p style={{ margin: 0, fontWeight: 800, fontSize: 20, color: ink }}>Welcome back{name ? `, ${name}` : ''}</p>
-      <p style={{ margin: '6px 0 22px', fontSize: 13.5, color: sub }}>Unlock with Face ID or Touch ID to open your giving.</p>
-      <button
-        onClick={async () => { setBusy(true); await gate.unlock(); setBusy(false); }}
-        disabled={busy}
-        style={{
-          width: '100%', maxWidth: 300, padding: '14px 18px', borderRadius: 14, border: 'none', cursor: 'pointer',
-          background: dark ? '#fff' : 'linear-gradient(135deg, #003865, #001a33)', color: dark ? '#003865' : '#fff',
-          fontWeight: 800, fontSize: 15,
-        }}
-      >
-        {busy ? 'Checking…' : '🙂 Unlock'}
-      </button>
+      <div style={{ width: 64, height: 64, borderRadius: 'var(--r-md)', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: dark ? 'rgba(255,255,255,0.12)' : 'var(--surface)', color: dark ? '#fff' : 'var(--navy-deep)' }}>
+        <Lock size={30} />
+      </div>
+      <p style={{ margin: 0, fontWeight: 700, fontSize: 22, color: ink }}>Welcome back{name ? `, ${name}` : ''}</p>
+      <p style={{ margin: '6px 0 22px', fontSize: 13, lineHeight: 1.5, color: sub }}>Unlock with Face ID or Touch ID to open your giving.</p>
+      <div style={{ width: '100%', maxWidth: 300, margin: '0 auto' }}>
+        <Button
+          onDark={dark}
+          loading={busy}
+          onClick={async () => { setBusy(true); await gate.unlock(); setBusy(false); }}
+        >
+          <ScanFace size={18} /> {busy ? 'Checking…' : 'Unlock'}
+        </Button>
+      </div>
       {gate.error && (
-        <p style={{ margin: '12px 0 0', fontSize: 12.5, color: dark ? '#fecaca' : '#dc2626' }}>
-          Couldn&apos;t verify  -  try again or sign in below.
+        <p role="alert" style={{ margin: '12px 0 0', fontSize: 12, color: dark ? 'rgba(255,255,255,0.85)' : 'var(--danger)' }}>
+          Couldn&apos;t verify - try again, or sign out below.
         </p>
       )}
-      <button
-        onClick={gate.unlockWithSso}
-        style={{ marginTop: 14, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: sub, textDecoration: 'underline' }}
-      >
-        Use Apple / Google sign-in instead
-      </button>
+      <div style={{ marginTop: 10 }}>
+        <Button variant="tertiary" size="md" onDark={dark} fullWidth={false} onClick={gate.signOut}>
+          Sign out
+        </Button>
+      </div>
     </>
   );
 }
@@ -78,8 +85,8 @@ export function AppLockScreen({ gate }) {
   const { hasAccount } = useApp();
   return (
     <div
-      className="w-full h-full flex flex-col items-center justify-center px-8 text-center"
-      style={{ background: 'linear-gradient(135deg, #003865 0%, #001a33 100%)' }}
+      className="w-full h-full flex flex-col items-center justify-center px-8 text-center pc-on-dark"
+      style={{ background: 'linear-gradient(135deg, var(--navy-deep) 0%, #001a33 100%)' }}
     >
       <LockBody gate={gate} name={greetingNameFor(hasAccount)} dark />
       {/* bottom: 28 was a pixel guess that put this tagline under the home
@@ -96,10 +103,10 @@ export function AppLockScreen({ gate }) {
 export function WebLockScreen({ gate }) {
   const { hasAccount } = useApp();
   return (
-    <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ width: 420, maxWidth: '100%', background: '#fff', borderRadius: 20, border: '1px solid #e5e7eb', boxShadow: '0 16px 48px rgba(11,42,74,0.10)', padding: '36px 28px', textAlign: 'center' }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: 420, maxWidth: '100%', background: '#fff', borderRadius: 'var(--r-lg)', border: '1px solid var(--line)', boxShadow: 'var(--shadow-3)', padding: '36px 28px', textAlign: 'center' }}>
         <LockBody gate={gate} name={greetingNameFor(hasAccount)} />
-        <p style={{ margin: '22px 0 0', fontSize: 11.5, color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+        <p style={{ margin: '22px 0 0', fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
           <CoinMark size={13} /> Powered by PocketCache
         </p>
       </div>
@@ -140,27 +147,24 @@ export function BiometricOfferCard({ offer, surface = 'web' }) {
 
   const inner = (
     <>
-      <div style={{ fontSize: 38, marginBottom: 6 }}>🙂</div>
-      <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: '#0f172a' }}>Unlock with Face ID?</p>
-      <p style={{ margin: '6px 0 16px', fontSize: 13, lineHeight: 1.6, color: '#475569' }}>
-        Skip the sign-in next time  -  open your giving with a glance (or a touch).
+      <div style={{ width: 48, height: 48, borderRadius: 'var(--r-sm)', margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', color: 'var(--navy-deep)' }}>
+        <ScanFace size={26} />
+      </div>
+      <p style={{ margin: 0, fontWeight: 700, fontSize: 18, color: 'var(--ink)' }}>Unlock with Face ID?</p>
+      <p style={{ margin: '6px 0 16px', fontSize: 13, lineHeight: 1.6, color: 'var(--ink-2)' }}>
+        Skip the sign-in next time - open your giving with a glance (or a touch).
         You can turn this off anytime in Settings → Privacy &amp; Security.
       </p>
-      {failed && <p style={{ margin: '0 0 10px', fontSize: 12, color: '#dc2626' }}>That didn&apos;t go through  -  you can try again from Settings anytime.</p>}
+      {failed && <p role="alert" style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--danger)' }}>That didn&apos;t go through - you can try again from Settings anytime.</p>}
       <div style={{ display: 'grid', gap: 8 }}>
-        <button
+        <Button
+          size="md"
+          loading={busy}
           onClick={async () => { setBusy(true); const ok = await offer.enable(); setBusy(false); if (!ok) { setFailed(true); offer.later(); } }}
-          disabled={busy}
-          style={{ padding: '12px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #003865, #001a33)', color: '#fff', fontWeight: 700, fontSize: 14 }}
         >
           {busy ? 'Setting up…' : 'Enable Face ID / Touch ID'}
-        </button>
-        <button
-          onClick={offer.later}
-          style={{ padding: '10px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', background: '#f1f5f9', color: '#0f172a', fontWeight: 600, fontSize: 13 }}
-        >
-          Not now
-        </button>
+        </Button>
+        <Button size="md" variant="secondary" onClick={offer.later}>Not now</Button>
       </div>
     </>
   );
@@ -171,7 +175,7 @@ export function BiometricOfferCard({ offer, surface = 'web' }) {
     // Overlay card inside the phone frame
     return (
       <div style={{ ...scrim('blocking'), ...centered(20), zIndex: Z.blockingScrim }}>
-        <div style={{ background: '#fff', borderRadius: 24, padding: 24, width: '100%', maxWidth: 340, textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
+        <div style={{ background: '#fff', borderRadius: 'var(--r-lg)', padding: 24, width: '100%', maxWidth: 340, textAlign: 'center', boxShadow: 'var(--shadow-3)' }}>
           {inner}
         </div>
       </div>
@@ -180,7 +184,7 @@ export function BiometricOfferCard({ offer, surface = 'web' }) {
   // Web modal
   return (
     <div style={{ ...scrim('blocking', { fixed: true }), ...centered(16), zIndex: Z.blockingScrim }}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 24, width: 400, maxWidth: '100%', textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.25)' }}>
+      <div style={{ background: '#fff', borderRadius: 'var(--r-lg)', padding: 24, width: 400, maxWidth: '100%', textAlign: 'center', boxShadow: 'var(--shadow-3)' }}>
         {inner}
       </div>
     </div>

@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { Lock } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { STRIPE_PUBLISHABLE_KEY } from '../lib/stripeKey';
-import { saveCardWithSetupIntent, currentDonorEmail, prettyBrand } from '../lib/stripeSetup';
+import { getStripePromise, saveCardWithSetupIntent, currentDonorEmail, prettyBrand } from '../lib/stripeSetup';
+import { INK, DANGER } from '../lib/webTheme';
 
 /**
  * StripeCardForm - the ONE "Credit or Debit Card" capture form, surface-aware.
@@ -19,14 +18,18 @@ import { saveCardWithSetupIntent, currentDonorEmail, prettyBrand } from '../lib/
  * account, two portals, two completely different levels of honesty about what
  * had been collected. This component is the single form both surfaces use.
  *
- * STRIPE INITIALISATION IS DELIBERATELY THE SAME ONE-LINER THE APP ALREADY USES
- * (Onboarding.jsx and Settings.jsx are byte-identical):
- *   loadStripe(STRIPE_PUBLISHABLE_KEY)   // src/lib/stripeKey.js
- * Do NOT add a second initialisation pattern. When the two app screens adopt
- * this component they should delete their local `stripePromise`,
- * CARD_ELEMENT_OPTIONS and CARD_BRANDS and import this instead - the component
- * mounts its own <Elements> provider, so an adopting screen only has to render
- * <StripeCardForm variant="app" onSuccess={...} /> where its <form> used to be.
+ * STRIPE INITIALISATION GOES THROUGH ONE SHARED LOADER
+ *   getStripePromise()   // src/lib/stripeSetup.js
+ * It is lazy (Stripe.js is only fetched once a card form mounts, never at
+ * import time on pages that have no card step) and it never rejects - when
+ * js.stripe.com is unreachable it resolves to null and this form shows its
+ * practice-mode note instead of the page throwing an unhandled "Failed to
+ * load Stripe.js" rejection. Do NOT call loadStripe() anywhere else. When an
+ * app screen adopts this component it should delete its local
+ * `stripePromise`, CARD_ELEMENT_OPTIONS and CARD_BRANDS and import this
+ * instead - the component mounts its own <Elements> provider, so an adopting
+ * screen only has to render <StripeCardForm variant="app" onSuccess={...} />
+ * where its <form> used to be.
  *
  * WHAT onSuccess RECEIVES
  *   { id, last4, brand, name, simulated }
@@ -54,34 +57,53 @@ import { saveCardWithSetupIntent, currentDonorEmail, prettyBrand } from '../lib/
  * @param {object}   [props.brand]             App-surface gradient (useTheme()).
  */
 export default function StripeCardForm(props) {
+  // One promise per mount: <Elements> must not see its `stripe` prop change,
+  // and the shared loader forgets a failed attempt so a remount retries.
+  const [stripeLoad] = useState(() => getStripePromise());
+  // true once the loader settled without a Stripe instance (script
+  // unreachable), or has not settled within STRIPE_LOAD_TIMEOUT_MS: the
+  // stripe-js loader can hang forever when it finds a script tag another
+  // entry injected that already failed. CardFields drops back to the real
+  // form the moment useStripe() does hand over an instance.
+  const [stripeUnavailable, setStripeUnavailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(() => { if (alive) setStripeUnavailable(true); }, STRIPE_LOAD_TIMEOUT_MS);
+    stripeLoad.then(stripe => {
+      if (!alive) return;
+      clearTimeout(timer);
+      if (!stripe) setStripeUnavailable(true);
+    });
+    return () => { alive = false; clearTimeout(timer); };
+  }, [stripeLoad]);
   return (
-    <Elements stripe={stripePromise}>
-      <CardFields {...props} />
+    <Elements stripe={stripeLoad}>
+      <CardFields {...props} stripeUnavailable={stripeUnavailable} />
     </Elements>
   );
 }
 
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
+// How long a mounted form waits for Stripe.js before offering practice mode.
+const STRIPE_LOAD_TIMEOUT_MS = 8000;
 
-// Byte-identical to Onboarding.jsx:1302 and Settings.jsx:23.
+// Stripe draws the CardElement inside its own iframe, so CSS variables cannot
+// reach it: the colors are the JS mirrors of --ink / --muted / --danger from
+// lib/webTheme. Same options as the card forms in Onboarding.jsx and Settings.jsx.
 const CARD_ELEMENT_OPTIONS = {
   style: {
     base: {
       fontSize: '16px',
-      color: '#111827',
+      color: INK.primary,
       fontFamily: '"Inter", system-ui, sans-serif',
-      '::placeholder': { color: '#9ca3af' },
+      '::placeholder': { color: INK.muted },
     },
-    invalid: { color: '#ef4444' },
+    invalid: { color: DANGER },
   },
   hidePostalCode: false,
 };
 
 // Fallback-only. Stripe tells us the real brand when it answers.
 const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover'];
-
-const WEB_INK = { primary: '#0f172a', secondary: '#475569', muted: '#94a3b8' };
-const NAVY = '#003865';
 
 /**
  * Save whatever is in the CardElement for real: SetupIntent from our
@@ -94,20 +116,24 @@ const NAVY = '#003865';
  *   unreachable and the save fell back to the prototype's simulated path.
  */
 async function saveCard(stripe, elements) {
-  const element = elements.getElement(CardElement);
-  if (!element) return { error: 'Card details are not ready yet  -  try again.' };
+  // stripe/elements are null when Stripe.js itself could not load - go
+  // straight to the simulated save below (the form already told the donor).
+  if (stripe && elements) {
+    const element = elements.getElement(CardElement);
+    if (!element) return { error: 'Card details are not ready yet - try again.' };
 
-  try {
-    const email = await currentDonorEmail();
-    const result = await saveCardWithSetupIntent(stripe, element, email);
-    if (result.error) return { error: result.error }; // decline / bad number - donor retries
-    const brand = prettyBrand(result.card.brand);
-    return { card: { ...result.card, brand, name: `My ${brand}` } };
-  } catch {
-    // Backend or Stripe unreachable BEFORE the card was involved. Fall back to
-    // the prototype's simulated save so signup never dead-ends - flagged
-    // simulated, and shown to the donor as practice mode (same pattern as the
-    // Plaid bank-connect fallback).
+    try {
+      const email = await currentDonorEmail();
+      const result = await saveCardWithSetupIntent(stripe, element, email);
+      if (result.error) return { error: result.error }; // decline / bad number - donor retries
+      const brand = prettyBrand(result.card.brand);
+      return { card: { ...result.card, brand, name: `My ${brand}` } };
+    } catch {
+      // Backend or Stripe unreachable BEFORE the card was involved. Fall back to
+      // the prototype's simulated save so signup never dead-ends - flagged
+      // simulated, and shown to the donor as practice mode (same pattern as the
+      // Plaid bank-connect fallback).
+    }
   }
 
   await new Promise(r => setTimeout(r, 1200));
@@ -132,6 +158,7 @@ function CardFields({
   loadingLabel = 'Saving card securely…',
   appName = 'PocketCache',
   brand,
+  stripeUnavailable: stripeUnavailableProp = false,
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -140,14 +167,20 @@ function CardFields({
   const [cardComplete, setCardComplete] = useState(false);
   const [practice, setPractice] = useState(false);
 
-  const ready = cardComplete && !loading && !!stripe;
+  // Practice mode only while Stripe.js is genuinely missing: a late load
+  // brings the real CardElement back.
+  const stripeUnavailable = stripeUnavailableProp && !stripe;
+  // With Stripe.js unreachable there is no CardElement to complete, so the
+  // button is live right away and the save runs the simulated path.
+  const ready = !loading && (stripeUnavailable || (cardComplete && !!stripe));
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!stripe || !elements || !ready) return;
+    if (!ready) return;
+    if (!stripeUnavailable && (!stripe || !elements)) return;
     setLoading(true);
     setError(null);
-    const result = await saveCard(stripe, elements);
+    const result = await saveCard(stripeUnavailable ? null : stripe, stripeUnavailable ? null : elements);
     setLoading(false);
     if (result.error) { setError(result.error); return; }
     if (result.practice) {
@@ -158,8 +191,8 @@ function CardFields({
     onSuccess?.(result.card);
   }
 
-  const practiceNote = practice
-    ? 'Practice mode  -  we could not reach the real card service right now, so this step is simulated.'
+  const practiceNote = (practice || stripeUnavailable)
+    ? 'Practice mode - we could not reach the real card service right now, so this step is simulated.'
     : null;
 
   const reassurance = (
@@ -169,38 +202,43 @@ function CardFields({
   if (variant === 'web') {
     return (
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12 }} data-testid="stripe-card-form">
-        <div style={{ background: '#fff', border: `1.5px solid ${error ? '#ef4444' : '#e5e7eb'}`, borderRadius: 12, padding: '14px 14px 12px' }}>
-          <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: WEB_INK.muted }}>
-            Card details
-          </p>
-          <CardElement
-            options={CARD_ELEMENT_OPTIONS}
-            onChange={ev => { setCardComplete(ev.complete); setError(ev.error?.message ?? null); }}
-          />
-        </div>
-        {error && <p style={{ margin: 0, fontSize: 12, color: '#dc2626' }}>{error}</p>}
+        {!stripeUnavailable && (
+          <div style={{ background: 'var(--white)', border: `1px solid ${error ? 'var(--danger)' : 'var(--line)'}`, borderRadius: 12, padding: '14px 14px 12px' }}>
+            <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--slate)' }}>
+              Card details
+            </p>
+            <CardElement
+              options={CARD_ELEMENT_OPTIONS}
+              onChange={ev => { setCardComplete(ev.complete); setError(ev.error?.message ?? null); }}
+            />
+          </div>
+        )}
+        {error && <p role="alert" style={{ margin: 0, fontSize: 13, color: 'var(--danger)' }}>{error}</p>}
         {practiceNote && (
-          <p style={{ margin: 0, fontSize: 12, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 10px' }}>
+          <p role="status" style={{ margin: 0, fontSize: 13, color: 'var(--warning)', background: 'var(--warning-50)', border: '1px solid var(--warning-200)', borderRadius: 12, padding: '8px 10px' }}>
             {practiceNote}
           </p>
         )}
-        <p style={{ margin: 0, fontSize: 11.5, color: WEB_INK.muted, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.5 }}>
-          <Lock size={12} style={{ flexShrink: 0, marginTop: 2 }} />
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--slate)', display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.5 }}>
+          <Lock size={12} style={{ flexShrink: 0, marginTop: 3 }} aria-hidden="true" />
           <span>{reassurance}</span>
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
           {onCancel && (
             <button
               type="button" onClick={onCancel}
-              style={{ flex: 1, padding: '11px 0', borderRadius: 12, border: '1.5px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: WEB_INK.secondary }}
+              className="pc-btn"
+              style={{ flex: 1, minHeight: 44, padding: '0 12px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--white)', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--navy)' }}
             >Cancel</button>
           )}
           <button
             type="submit" disabled={!ready}
+            aria-busy={loading ? 'true' : undefined}
+            className="pc-btn"
             style={{
-              flex: 2, padding: '11px 0', borderRadius: 12, border: 'none', cursor: ready ? 'pointer' : 'default',
-              background: ready ? `linear-gradient(135deg, ${NAVY}, #001a33)` : '#d1d5db',
-              color: '#fff', fontSize: 13.5, fontWeight: 700,
+              flex: 2, minHeight: 44, padding: '0 16px', borderRadius: 999, border: 'none', cursor: ready ? 'pointer' : 'not-allowed',
+              background: ready ? 'var(--grad-primary)' : 'var(--disabled-bg)',
+              color: ready ? 'var(--white)' : 'var(--disabled-text)', fontSize: 14, fontWeight: 600,
             }}
           >{loading ? loadingLabel : submitLabel}</button>
         </div>
@@ -211,40 +249,44 @@ function CardFields({
   // variant "app" - the Onboarding / Settings visual, Tailwind classes verbatim.
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="bg-white rounded-2xl px-4 py-4 border" style={{ borderColor: error ? '#ef4444' : '#e5e7eb' }}>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Card details</p>
-        <CardElement
-          options={CARD_ELEMENT_OPTIONS}
-          onChange={ev => { setCardComplete(ev.complete); setError(ev.error?.message ?? null); }}
-        />
-      </div>
+      {!stripeUnavailable && (
+        <div className="bg-white rounded-2xl px-4 py-4 border" style={{ borderColor: error ? 'var(--danger)' : 'var(--line)' }}>
+          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--slate)' }}>Card details</p>
+          <CardElement
+            options={CARD_ELEMENT_OPTIONS}
+            onChange={ev => { setCardComplete(ev.complete); setError(ev.error?.message ?? null); }}
+          />
+        </div>
+      )}
 
-      {error && <p className="text-red-500 text-xs px-1">{error}</p>}
+      {error && <p role="alert" className="text-xs px-1" style={{ color: 'var(--danger)' }}>{error}</p>}
       {practiceNote && (
-        <p className="text-xs rounded-xl px-3 py-2" style={{ color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a' }}>
+        <p role="status" className="text-xs rounded-xl px-3 py-2" style={{ color: 'var(--warning)', background: 'var(--warning-50)', border: '1px solid var(--warning-200)' }}>
           {practiceNote}
         </p>
       )}
 
-      <div className="flex items-center gap-2 px-1">
-        <Lock size={13} className="text-gray-400 shrink-0" />
-        <p className="text-gray-400 text-xs">{reassurance}</p>
+      <div className="flex items-start gap-2 px-1" style={{ color: 'var(--slate)' }}>
+        <Lock size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-xs leading-relaxed">{reassurance}</p>
       </div>
 
       <div className="flex gap-2">
         {onCancel && (
-          <button type="button" onClick={onCancel} className="flex-1 py-4 rounded-2xl text-sm font-semibold text-gray-500 border border-gray-200">
+          <button type="button" onClick={onCancel} className="flex-1 min-h-[52px] rounded-2xl text-base font-semibold" style={{ color: 'var(--navy)', border: '1px solid var(--line)', background: 'var(--white)' }}>
             Cancel
           </button>
         )}
         <motion.button
           type="submit"
-          whileTap={ready ? { scale: 0.97 } : {}}
+          whileTap={ready ? { scale: 0.98 } : {}}
           disabled={!ready}
-          className="flex-1 py-4 rounded-2xl text-white font-bold text-base"
+          aria-busy={loading ? 'true' : undefined}
+          className="flex-1 min-h-[52px] rounded-2xl font-semibold text-base"
           style={{
-            background: ready ? (brand?.gradient ?? `linear-gradient(135deg, ${NAVY}, #001a33)`) : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-            cursor: ready ? 'pointer' : 'default',
+            background: ready ? (brand?.gradient ?? 'var(--grad-primary)') : 'var(--disabled-bg)',
+            color: ready ? 'var(--white)' : 'var(--disabled-text)',
+            cursor: ready ? 'pointer' : 'not-allowed',
           }}
         >
           {loading ? loadingLabel : submitLabel}

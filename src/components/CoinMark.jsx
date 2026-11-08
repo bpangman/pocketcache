@@ -9,11 +9,12 @@ export default function CoinMark({ size = 64, className = '' }) {
       style={{ display: 'inline-block', flexShrink: 0 }}
       aria-hidden="true"
     >
-      {/* Outer rim — dark gold */}
+      {/* Outer rim - dark gold */}
       <circle cx="50" cy="50" r="50" fill="#E5A800" />
-      {/* Coin face — bright gold */}
+      {/* Coin face - bright gold */}
       <circle cx="50" cy="50" r="44" fill="#FBBF24" />
-      {/* Bulky block up-arrow — teal with white halo (matches approved Block Arrow) */}
+      {/* Bulky block up-arrow - teal with white halo (matches approved Block Arrow).
+          Logo art: these hexes are the mark itself, not UI tokens. */}
       <polygon
         points="50,17 24,43 37,43 37,77 63,77 63,43 76,43"
         fill="#5EEAD4"

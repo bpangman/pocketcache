@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, Lock } from 'lucide-react';
+import { CheckCircle, Check, Lock, CreditCard, Landmark } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { useNp } from '../store/NpContext';
 import { useTheme } from '../store/ThemeContext';
-import { saveKey, IDENTITY_KEYS } from '../store/identityStore';
+import { saveKey, loadKey, IDENTITY_KEYS } from '../store/identityStore';
 import { useDonorAuth, nativeSSOAvailable, greetingNameFor } from '../lib/donorAuth';
-import { INK, NAVY, PANEL, RADIUS } from '../lib/webTheme';
+import { INK, NAVY, TEAL_INK, PANEL, RADIUS } from '../lib/webTheme';
 import { fetchRoundupsMe, pushDonorProfile } from '../lib/roundupsMe';
 import { DEMO_USER } from '../data/derived';
 import { US_STATES, PAYMENT_OPTIONS } from './Onboarding';
@@ -21,7 +21,7 @@ import ManualCardForm from '../components/ManualCardForm';
 // Web Apple Pay treatment (round-3 item 1): a web-styled confirmation where
 // Safari's ApplePaySession could really exist, an honest greyed-out option
 // everywhere else - never the phone's "Confirm with Side Button" sheet.
-import WebApplePayConfirm, { webApplePayAvailable, APPLE_PAY_UNAVAILABLE_NOTE } from '../components/WebApplePayConfirm';
+import WebApplePayConfirm, { webApplePayAvailable } from '../components/WebApplePayConfirm';
 import BankPaymentAuth from '../components/BankPaymentAuth';
 import AppleLogo from '../components/AppleLogo';
 import PocketCacheWordmark, { PoweredByWordmark } from '../components/PocketCacheWordmark';
@@ -31,8 +31,16 @@ import { isNative, queueAppDownloadPrompt } from '../components/AppDownloadQRMod
 import { fmtMoney } from '../lib/format';
 import { pcBeacon } from '../lib/beacon.js';
 import { chargeTotal, nextChargeLabel, processingCoverFor } from '../lib/billing';
-import { EXAMPLE_MONTH_ROUNDUPS, EXAMPLE_DISCLAIMER } from '../lib/donorContent';
+// ROLL_FORWARD_NOTE carries the single $5 floor (billing.MONTHLY_FLOOR), so the
+// review copy can never quote a per-org minimum again.
+import { EXAMPLE_MONTH_ROUNDUPS, EXAMPLE_DISCLAIMER, ROLL_FORWARD_NOTE } from '../lib/donorContent';
 import { useStepHistory } from '../lib/stepHistory';
+// Tracking sources: only a real Plaid depository account can be offered as the
+// bank to DEBIT (never a typed-in card or the practice fallback).
+import { isDebitableBank } from '../lib/plaid';
+// One switch for every demo-only affordance on this surface (lib/demo.js).
+import { useShowDemoAffordances } from '../lib/demo';
+import Button from '../components/ui/Button';
 // Draft persistence (survives the mobile/desktop breakpoint remount) and the
 // Settings-deep-link step map - shared with Onboarding.jsx via this one
 // module so the two surfaces cannot drift out of sync on which step means
@@ -58,7 +66,59 @@ import { loadDonorDraft, saveDonorDraft, clearDonorDraft, DEEP_LINK_MAP } from '
 // WebPortal column and got the phone UI at 440px on a 1440px page.
 
 // Ink, panel and depth tokens come from the shared web design vocabulary
-// (lib/webTheme), imported above with the other libs.
+// (lib/webTheme), imported above with the other libs. The few repeated
+// treatments on this page sit here so every input, caps label and error line
+// is literally the same object (DESIGN.md: INPUTS, TYPE).
+
+// 11px caps label above a field (uppercase, 600, 0.06em).
+const CAPS_LABEL = {
+  display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: INK.subtle, marginBottom: 8,
+};
+// Web input: 44px tall, 16px text, radius 12, 1px --line, white. Focus ring is
+// the global input:focus-visible rule in src/index.css.
+const INPUT = {
+  width: '100%', boxSizing: 'border-box', minHeight: 44, padding: '10px 14px', borderRadius: RADIUS.sm,
+  border: '1px solid var(--line)', background: '#fff', fontSize: 16, color: INK.primary, fontFamily: 'inherit',
+};
+const INPUT_ERROR = { border: '1px solid var(--danger)' };
+// 13px --danger helper under a field.
+const FIELD_ERROR = { margin: '0 0 8px', fontSize: 13, color: 'var(--danger)' };
+// The one tinted callout a step may carry when something went wrong.
+const ERROR_CALLOUT = {
+  margin: '0 0 16px', padding: '12px 16px', borderRadius: RADIUS.sm, background: 'var(--danger-50)',
+  border: '1px solid #fecaca', fontSize: 15, color: 'var(--danger)',
+};
+// Horizontal rule with a word in it ("or", "Been here before?").
+const RULE = { flex: 1, height: 1, background: 'var(--line)' };
+const RULE_LABEL = { fontSize: 14, fontWeight: 500, color: INK.subtle, whiteSpace: 'nowrap' };
+// Text-only inline actions (Resend code, Change email, Back): 44px hit area.
+const TEXT_BTN = {
+  border: 'none', background: 'transparent', cursor: 'pointer', minHeight: 44, padding: '0 12px',
+  fontSize: 15, fontWeight: 600, color: INK.subtle, fontFamily: 'inherit', borderRadius: RADIUS.sm,
+};
+// Bordered group inside the panel (payment sub-forms, cap control): 1px
+// --line, radius 16, no tint - the tinted callout budget is for status only.
+const GROUP = { border: '1px solid var(--line)', borderRadius: RADIUS.md, padding: 16, marginBottom: 16 };
+// Teal "done" wash for a connected card / saved payment card.
+const DONE_WASH = { background: 'var(--teal-50)', border: '1px solid #99f6e4', borderRadius: RADIUS.md };
+
+// Payment-method icons: lucide in a 36px radius-12 tinted chip, one tint
+// family per list (DESIGN.md: ICONS). PAYMENT_OPTIONS itself ships emoji for
+// the phone screens; this surface maps the ids instead of rendering them.
+function PayIcon({ id, color }) {
+  const icon = id === 'ach' ? <Landmark size={18} color={color} aria-hidden />
+    : id === 'card' ? <CreditCard size={18} color={color} aria-hidden />
+    : <AppleLogo size={18} color={color} />;
+  return (
+    <span aria-hidden style={{
+      width: 36, height: 36, borderRadius: RADIUS.sm, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      background: `${color}14`,
+    }}>
+      {icon}
+    </span>
+  );
+}
 
 const STEPS = [
   { id: 'account', label: 'Create your account' },
@@ -92,12 +152,12 @@ function StepList({ idx }) {
             <span style={{
               width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, fontWeight: 700, flexShrink: 0,
-              background: done ? '#0D9488' : active ? activeColor : '#e2e8f0',
-              color: done || active ? '#fff' : INK.muted,
+              background: done ? 'var(--teal-ui)' : active ? activeColor : 'var(--line)',
+              color: done || active ? '#fff' : INK.subtle,
             }}>
-              {done ? '✓' : i + 1}
+              {done ? <Check size={13} strokeWidth={3} aria-label="Done" /> : i + 1}
             </span>
-            <span style={{ fontSize: 15.5, fontWeight: active ? 700 : 500, color: active ? INK.primary : done ? INK.secondary : INK.muted }}>
+            <span style={{ fontSize: 15, fontWeight: active ? 700 : 500, color: active ? INK.primary : done ? INK.secondary : INK.subtle }}>
               {s.label}
             </span>
           </li>
@@ -120,17 +180,18 @@ function StepRail({ current, org }) {
           <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary, lineHeight: 1.25 }} data-testid="web-rail-welcome">
             Welcome to the {org?.name ?? 'your nonprofit'} round-up microsite
           </p>
-          <p style={{ margin: 0, fontSize: 14, color: INK.muted }}>Their own giving program  -  and you&apos;re in.</p>
+          <p style={{ margin: 0, fontSize: 14, color: INK.subtle }}>Their own giving program  -  and you&apos;re in.</p>
         </div>
       </div>
-      <p style={{ margin: '0 0 20px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>
+      <p style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6, color: INK.secondary }}>
         Round up your everyday purchases and your spare change quietly adds up
         for {org?.shortName ?? 'your cause'}  -  one small monthly charge, straight to them.
       </p>
       <StepList idx={idx} />
-      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.muted }}>
-        🔒 Bank connection is read-only via Plaid. Payments are processed by
-        Stripe  -  {org?.shortName ?? 'your nonprofit'} is who charges you, never us. No passwords, ever.
+      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.subtle, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <Lock size={14} aria-hidden style={{ flexShrink: 0, marginTop: 4 }} />
+        <span>Bank connection is read-only via Plaid. Payments are processed by
+        Stripe  -  {org?.shortName ?? 'your nonprofit'} is who charges you, never us. No passwords, ever.</span>
       </p>
     </aside>
   );
@@ -147,10 +208,10 @@ function JoinRail({ preview = true }) {
         <CoinMark size={44} />
         <div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: INK.primary, lineHeight: 1.25 }}>Round-up giving</p>
-          <p style={{ margin: 0, fontSize: 14, color: INK.muted }}>for the nonprofit you already care about.</p>
+          <p style={{ margin: 0, fontSize: 14, color: INK.subtle }}>for the nonprofit you already care about.</p>
         </div>
       </div>
-      <p style={{ margin: '0 0 20px', fontSize: 15.5, lineHeight: 1.6, color: INK.secondary }}>
+      <p style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6, color: INK.secondary }}>
         Your nonprofit hands out a short code  -  it is on their flyer, their
         email, their website. Enter it and your everyday purchases round up to
         the nearest dollar, with the spare change going straight to them in one
@@ -158,15 +219,16 @@ function JoinRail({ preview = true }) {
       </p>
       {preview && (
         <>
-          <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+          <p style={{ ...CAPS_LABEL, margin: '0 0 8px' }}>
             Then, about two minutes
           </p>
           <StepList idx={-1} />
         </>
       )}
-      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.muted }}>
-        🔒 Bank connection is read-only via Plaid. Payments are processed by
-        Stripe  -  your nonprofit is who charges you, never us. No passwords, ever.
+      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: INK.subtle, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <Lock size={14} aria-hidden style={{ flexShrink: 0, marginTop: 4 }} />
+        <span>Bank connection is read-only via Plaid. Payments are processed by
+        Stripe  -  your nonprofit is who charges you, never us. No passwords, ever.</span>
       </p>
     </aside>
   );
@@ -189,30 +251,23 @@ function NonprofitCta({ onSignup, placement = 'above' }) {
   const below = placement === 'below';
   const divider = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: below ? '0 0 16px' : '16px 0 0' }}>
-      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-      <span style={{ fontSize: 14, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>
+      <span style={RULE} />
+      <span style={RULE_LABEL}>
         {below ? 'Are you the nonprofit?' : 'Looking to support a nonprofit?'}
       </span>
-      <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+      <span style={RULE} />
     </div>
   );
   return (
-    <div style={{ marginBottom: below ? 0 : 18, marginTop: below ? 22 : 0 }}>
+    <div style={{ marginBottom: below ? 0 : 16, marginTop: below ? 24 : 0 }}>
       {below && divider}
-      <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted }}>
+      <p style={CAPS_LABEL}>
         For Nonprofits
       </p>
-      <button
-        onClick={onSignup}
-        data-testid="web-nonprofit-cta"
-        style={{
-          width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
-          background: `linear-gradient(135deg, ${NAVY}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 17,
-        }}
-      >
+      <Button surface="web" onClick={onSignup} data-testid="web-nonprofit-cta">
         Create your nonprofit page
-      </button>
-      <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, color: INK.muted }}>
+      </Button>
+      <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, color: INK.subtle }}>
         Run a nonprofit? List it on PocketCache and get your own round-up program  -  live in minutes.
       </p>
       {!below && divider}
@@ -222,47 +277,64 @@ function NonprofitCta({ onSignup, placement = 'above' }) {
 
 function PanelTitle({ title, sub }) {
   return (
-    <div style={{ marginBottom: 18 }}>
-      <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: INK.primary }}>{title}</h2>
-      {sub && <p style={{ margin: '5px 0 0', fontSize: 15.5, color: INK.secondary, lineHeight: 1.55 }}>{sub}</p>}
+    <div style={{ marginBottom: 16 }}>
+      <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.3px', lineHeight: 1.2, color: INK.primary }}>{title}</h2>
+      {sub && <p style={{ margin: '4px 0 0', fontSize: 15, color: INK.secondary, lineHeight: 1.55 }}>{sub}</p>}
     </div>
   );
 }
 
-function PrimaryButton({ children, onClick, disabled }) {
+// The wizard's page CTA: the shared Button (web pill, 52px, one disabled
+// token with aria-disabled) wearing the bound nonprofit's gradient.
+function PrimaryButton({ children, onClick, disabled, ...rest }) {
   // Org theme parity (item B): once a nonprofit is bound, the wizard's CTAs
   // follow its brand palette exactly as the app's buttons do. Before one is
-  // bound (join/sign-in steps) the PocketCache navy stays.
+  // bound (join/sign-in steps) the PocketCache navy stays. The brand fill is
+  // only layered on while enabled, so the disabled token always wins.
   const brand = useTheme();
   const themed = brand !== DEFAULT_BRAND;
   return (
-    <button
+    <Button
+      surface="web"
       onClick={onClick}
       disabled={disabled}
-      style={{
-        width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: disabled ? 'default' : 'pointer',
-        background: disabled
-          ? 'linear-gradient(135deg, #d1d5db, #9ca3af)'
-          : themed ? (brand.headerGradient ?? brand.gradient) : `linear-gradient(135deg, ${NAVY}, #001a33)`,
-        color: '#fff', fontWeight: 700, fontSize: 17,
-      }}
+      style={!disabled && themed ? { background: brand.headerGradient ?? brand.gradient } : undefined}
+      {...rest}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
+// Custom-drawn checkbox over a real (visually hidden) native input, so it is
+// focusable, toggles with Space and reads as a checkbox to assistive tech.
+// The native input handles the click, so the label has no onClick of its own
+// (a label click already forwards to the input - a second handler toggled it
+// twice). Links inside the label stop propagation so following one does not
+// also flip the box.
 function Checkbox({ checked, onChange, children }) {
+  // The native input is off-screen, so its keyboard focus ring is drawn on the
+  // visible box instead (only for :focus-visible, never on a mouse click).
+  const [focusRing, setFocusRing] = useState(false);
   return (
-    <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontSize: 14.5, color: INK.secondary, lineHeight: 1.55 }}
-      onClick={e => { if (e.target.tagName !== 'A') onChange(!checked); }}>
-      <span style={{
-        width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        border: `2px solid ${checked ? NAVY : '#d1d5db'}`, background: checked ? NAVY : '#fff',
+    <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer', fontSize: 15, color: INK.secondary, lineHeight: 1.55, position: 'relative', minHeight: 24 }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        onFocus={e => { try { setFocusRing(e.target.matches(':focus-visible')); } catch { setFocusRing(true); } }}
+        onBlur={() => setFocusRing(false)}
+        style={{ position: 'absolute', width: 1, height: 1, margin: -1, padding: 0, border: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
+      />
+      <span aria-hidden style={{
+        width: 20, height: 20, borderRadius: RADIUS.xs, flexShrink: 0, marginTop: 2, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        border: `2px solid ${checked ? NAVY : 'var(--muted)'}`, background: checked ? NAVY : '#fff',
+        outline: focusRing ? '3px solid var(--teal-ui)' : 'none', outlineOffset: 3,
+        transition: 'background-color 120ms ease, border-color 120ms ease',
       }}>
-        {checked && <CheckCircle size={12} color="#fff" />}
+        {checked && <Check size={13} strokeWidth={3} color="#fff" />}
       </span>
-      <span>{children}</span>
+      <span onClick={e => { if (e.target.tagName === 'A') e.stopPropagation(); }}>{children}</span>
     </label>
   );
 }
@@ -274,11 +346,17 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
     setPage, feeMonths, monthlyCap, setMonthlyCap,
     initialOnboardingStep, clearInitialOnboardingStep, goToOnboardingStep,
     coverProcessing, setCoverProcessing, adminRole, setAdminRole, lastMode,
+    demoMode, startAdminPreview,
   } = useApp();
   const { adoptOrgById } = useNp();
   const brand = useTheme();
   const org = selectedNonprofit ?? entryOrg;
   const npShort = org?.shortName ?? org?.name ?? 'your nonprofit';
+  // Demo-only affordances (the BGCA code hint, the admin preview, the typed-in
+  // card, the simulated bank debit) render only on a demo surface. Keyed on
+  // the donor's demoMode toggle, NOT demoActive: demoActive is also true for
+  // anyone without an account yet, which is every visitor to this wizard.
+  const showDemo = useShowDemoAffordances(demoMode);
 
   // A draft from a prior mount of THIS wizard in the same tab (see
   // DONOR_DRAFT_KEY above) - restored below wherever it beats the plain
@@ -328,6 +406,9 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   const donorAuth = useDonorAuth({ resumeKey: 'web' });
   const [emailInput, setEmailInput] = useState('');
   const [emailInputError, setEmailInputError] = useState(null);
+  // Bumped when the donor taps "Email me a code" while it is disabled, so the
+  // hint under it turns amber instead of the tap doing visibly nothing.
+  const [gateHintNudge, setGateHintNudge] = useState(0);
   // Restored so a remount past the account step (signup already verified, but
   // AppContext's hasAccount is not set until handleConfirm on the review step)
   // does not strand the donor on 'card'/'payment'/'review' with no identity.
@@ -419,10 +500,17 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   }
   useStepHistory(step, stepBack, { active: step !== 'join' });
 
-  // Bind the org this page was reached from (replaces the app's gate auto-bind)
+  // Bind the org this page was reached from (replaces the app's gate auto-bind).
+  // Never silently for a signed-in donor whose device already carries a
+  // DIFFERENT cause: that is a switch, and AppContext's pending-org confirm
+  // ("Switch your giving from X to Y?") owns it. The bind here is only for a
+  // device with no binding at all.
   useEffect(() => {
-    if (!selectedNonprofit && entryOrg) setSelectedNonprofit(entryOrg);
-  }, [selectedNonprofit, entryOrg, setSelectedNonprofit]);
+    if (selectedNonprofit || !entryOrg) return;
+    const boundId = loadKey('pc_cause_id');
+    if (hasAccount && boundId && boundId !== entryOrg.id) return;
+    setSelectedNonprofit(entryOrg);
+  }, [selectedNonprofit, entryOrg, setSelectedNonprofit, hasAccount]);
 
   // Honor deep-links from Settings ("change payment method" etc.)
   useEffect(() => {
@@ -547,8 +635,13 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   }
 
   // Demo-only shortcut, carried over from the phone's sign-in empty state, so a
-  // prospect can see the admin side without creating an org first.
+  // prospect can see the admin side without creating an org first. The store's
+  // startAdminPreview is a non-persisted preview (no pc_admin_role written, so
+  // the device does not become a BGCA admin for good); the old persisted
+  // behaviour is the fallback only until that ships, and only on a demo surface.
   function previewAdminDashboard() {
+    if (typeof startAdminPreview === 'function') { startAdminPreview(); return; }
+    if (!showDemo) return;
     const orgId = adminRole?.orgId ?? 'bgca';
     if (!adminRole) setAdminRole({ orgId: 'bgca', joinCode: 'BGCA' });
     adoptOrgById(orgId);
@@ -728,12 +821,24 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
   const cardReady = paymentSel !== 'card' || !!cardInfo;
   // Bank account only counts as SET once a source is authorized (item 2).
   const achReady = paymentSel !== 'ach' || !!achSource;
+  // Which methods this browser can actually offer. Bank debit is simulated
+  // (no ACH mandate exists yet - see BankPaymentAuth's header and
+  // PRELAUNCH.md), so it is a demo-only choice; real donors save a card
+  // through the Stripe SetupIntent. Apple Pay is listed only where Safari's
+  // ApplePaySession could exist, instead of as a second greyed-out control.
+  const paymentOptions = PAYMENT_OPTIONS.filter(opt =>
+    (opt.id !== 'ach' || showDemo) && (opt.id !== 'apple_pay' || applePayOk));
+  // A draft can carry 'ach' from a demo session into a real one: drop it so
+  // the donor is asked again rather than stuck on "Authorize a bank account".
+  useEffect(() => {
+    if (!showDemo && paymentSel === 'ach') { setPaymentSel(null); setAchSource(null); }
+  }, [showDemo, paymentSel]);
 
   return (
     <div style={{position:'relative'}}>
-    <div style={{ minHeight: '100dvh', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
       {/* Top nav  -  same webpage chrome as the dashboard */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+      <header style={{ background: '#fff', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 32px', height: 76, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Brand-kit top bar (item 3a): with an org bound the nonprofit is
               the primary brand and PocketCache attribution renders as the
@@ -745,7 +850,7 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
               <>
                 <OrgLogo nonprofit={org} size={9} rounded="lg" />
                 <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontWeight: 800, fontSize: 16.5, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{brand.appName ?? 'PocketCache'}</p>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: INK.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{brand.appName ?? 'PocketCache'}</p>
                   <PoweredByWordmark size={11} />
                 </div>
               </>
@@ -755,7 +860,7 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
           </div>
           {org && (
             <a href={`/demo/?orgpage=${encodeURIComponent(org.shortName || org.id.toUpperCase())}`}
-              style={{ fontSize: 15, fontWeight: 600, color: NAVY, textDecoration: 'none' }}>
+              style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 12px', margin: '0 -12px', borderRadius: RADIUS.sm, fontSize: 15, fontWeight: 600, color: NAVY, textDecoration: 'none' }}>
               About {npShort} →
             </a>
           )}
@@ -796,7 +901,7 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                   {/* Carried over from a failed review confirm (item 5) so the
                       donor knows WHY they are back on this step. */}
                   {confirmError && (
-                    <p data-testid="web-confirm-error" style={{ margin: '0 0 14px', padding: '10px 14px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 14.5, color: '#b91c1c' }}>
+                    <p data-testid="web-confirm-error" style={ERROR_CALLOUT}>
                       {confirmError}
                     </p>
                   )}
@@ -809,13 +914,13 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                   {hasAccount && accountStatus === 'active' && (
                     <div
                       data-testid="web-join-signed-in"
-                      style={{ marginBottom: 16, padding: '11px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', fontSize: 15.5, fontWeight: 600, color: '#92400e' }}
+                      style={{ marginBottom: 16, padding: '12px 16px', borderRadius: RADIUS.sm, border: '1px solid var(--gold)', background: 'var(--warning-50)', fontSize: 15, fontWeight: 600, color: 'var(--warning)' }}
                     >
                       👋 Signed in as {greetingNameFor(hasAccount) ?? hasAccount.email}  -  pick your nonprofit to carry on.
                     </div>
                   )}
                   <form onSubmit={handleJoin}>
-                    <label htmlFor="pc-join-code" style={{ display: 'block', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                    <label htmlFor="pc-join-code" style={CAPS_LABEL}>
                       Nonprofit code
                     </label>
                     <input
@@ -827,33 +932,27 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       value={code}
                       onChange={e => { setCode(e.target.value.toUpperCase()); setCodeError(null); }}
                       style={{
-                        width: '100%', boxSizing: 'border-box', padding: '13px 15px', borderRadius: 12,
-                        border: `1.5px solid ${codeError ? '#ef4444' : code ? '#FBBF24' : '#d1d5db'}`,
-                        background: '#f9fafb', fontFamily: 'monospace', fontSize: 19, letterSpacing: '0.14em',
-                        textTransform: 'uppercase', color: INK.primary, outline: 'none',
+                        ...INPUT, ...(codeError ? INPUT_ERROR : {}),
+                        padding: '10px 16px', fontFamily: 'monospace', fontSize: 19, letterSpacing: '0.14em', textTransform: 'uppercase',
                       }}
                     />
                     {codeError && (
-                      <p data-testid="web-join-error" style={{ margin: '7px 0 0', fontSize: 14.5, color: '#dc2626' }}>{codeError}</p>
+                      <p data-testid="web-join-error" style={{ ...FIELD_ERROR, margin: '8px 0 0' }}>{codeError}</p>
                     )}
-                    <p style={{ margin: '7px 0 14px', fontSize: 14, lineHeight: 1.55, color: INK.muted }}>
-                      Demo code: BGCA. Holding their flyer? Point your phone camera at
+                    <p style={{ margin: '8px 0 16px', fontSize: 14, lineHeight: 1.55, color: INK.subtle }}>
+                      {showDemo && 'Demo code: BGCA. '}Holding their flyer? Point your phone camera at
                       the QR code on it and it opens this page with the code already filled in.
                     </p>
-                    <PrimaryButton disabled={!code} onClick={handleJoin}>Continue →</PrimaryButton>
+                    <PrimaryButton disabled={!code} onClick={handleJoin} data-testid="web-join-continue">Continue →</PrimaryButton>
                   </form>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0 14px' }}>
-                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                    <span style={{ fontSize: 14, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>Been here before?</span>
-                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0' }}>
+                    <span style={RULE} />
+                    <span style={RULE_LABEL}>Been here before?</span>
+                    <span style={RULE} />
                   </div>
-                  <button
-                    onClick={() => setStep('signin')}
-                    data-testid="web-join-signin"
-                    style={{ width: '100%', padding: '13px 16px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer', background: '#f0f4f8', color: '#0B2A4A', fontWeight: 700, fontSize: 17 }}
-                  >
+                  <Button variant="secondary" surface="web" onClick={() => setStep('signin')} data-testid="web-join-signin">
                     Already have an account? Sign in
-                  </button>
+                  </Button>
                   <NonprofitCta onSignup={() => goToOnboardingStep('nonprofit-signup')} placement="below" />
                 </>
               )}
@@ -867,8 +966,9 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
 
                   {!donorAuth.checkingSession && donorAuth.existingSession && (
                     <button
+                      type="button"
                       onClick={() => finishSignIn(donorAuth.existingSession)}
-                      style={{ width: '100%', textAlign: 'left', marginBottom: 14, padding: '12px 14px', borderRadius: 12, border: '1px solid #FBBF24', background: '#FFFBEB', cursor: 'pointer', fontSize: 15.5, fontWeight: 600, color: '#92400e' }}
+                      style={{ width: '100%', textAlign: 'left', marginBottom: 16, minHeight: 44, padding: '12px 16px', borderRadius: RADIUS.sm, border: '1px solid var(--gold)', background: 'var(--warning-50)', cursor: 'pointer', fontSize: 15, fontWeight: 600, color: 'var(--warning)', fontFamily: 'inherit' }}
                     >
                       👋 Continue as {donorAuth.existingSession.email} →
                     </button>
@@ -876,47 +976,49 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
 
                   {donorAuth.stage === 'code' ? (
                     <form onSubmit={handleVerifySignInCode}>
-                      <p style={{ margin: '0 0 10px', fontSize: 15.5, color: INK.secondary }}>
+                      <p style={{ margin: '0 0 12px', fontSize: 15, color: INK.secondary }}>
                         We sent a 6-digit code to <strong style={{ color: INK.primary }}>{donorAuth.email}</strong>.
                       </p>
                       <input
                         type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                        aria-label="6-digit code"
                         onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
                         style={{
-                          width: '100%', boxSizing: 'border-box', padding: '13px 15px', borderRadius: 12,
-                          border: `1.5px solid ${donorAuth.codeError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb',
-                          fontFamily: 'monospace', fontSize: 22, letterSpacing: '0.4em', textAlign: 'center', color: INK.primary, marginBottom: 8,
+                          ...INPUT, ...(donorAuth.codeError ? INPUT_ERROR : {}),
+                          fontFamily: 'monospace', fontSize: 22, letterSpacing: '0.4em', textAlign: 'center', marginBottom: 8,
                         }}
                       />
-                      {donorAuth.codeError && <p style={{ margin: '0 0 10px', fontSize: 14.5, color: '#dc2626' }}>{donorAuth.codeError}</p>}
+                      {donorAuth.codeError && <p style={{ ...FIELD_ERROR, margin: '0 0 12px' }}>{donorAuth.codeError}</p>}
                       <PrimaryButton onClick={handleVerifySignInCode} disabled={donorAuth.codeInput.length !== 6 || donorAuth.verifying}>
                         {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
                       </PrimaryButton>
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10 }}>
-                        <button type="button" disabled={donorAuth.sendingCode}
-                          onClick={() => handleResend(donorAuth.email, { shouldCreateUser: false })}
-                          style={{ border: 'none', background: 'transparent', cursor: donorAuth.sendingCode ? 'default' : 'pointer', fontSize: 14.5, color: INK.muted, opacity: donorAuth.sendingCode ? 0.6 : 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+                        <button type="button" aria-disabled={donorAuth.sendingCode ? 'true' : undefined}
+                          onClick={() => { if (!donorAuth.sendingCode) handleResend(donorAuth.email, { shouldCreateUser: false }); }}
+                          style={{ ...TEXT_BTN, cursor: donorAuth.sendingCode ? 'default' : 'pointer', color: donorAuth.sendingCode ? INK.muted : INK.subtle }}>
                           {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
                         </button>
-                        <button type="button" onClick={donorAuth.resetToEmail} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, color: INK.muted }}>Change email</button>
+                        <button type="button" onClick={donorAuth.resetToEmail} style={TEXT_BTN}>Change email</button>
                       </div>
-                      {donorAuth.sendError && <p style={{ margin: '10px 0 0', fontSize: 14.5, color: '#dc2626', textAlign: 'center' }}>{donorAuth.sendError}</p>}
+                      {donorAuth.sendError && <p style={{ ...FIELD_ERROR, margin: '8px 0 0', textAlign: 'center' }}>{donorAuth.sendError}</p>}
                     </form>
                   ) : (
-                    <form onSubmit={handleSendSignInCode} style={{ marginBottom: 14 }}>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                    <form onSubmit={handleSendSignInCode} style={{ marginBottom: 16 }}>
+                      <label htmlFor="pc-signin-email" style={CAPS_LABEL}>
                         Your email
                       </label>
                       <input
+                        id="pc-signin-email"
                         type="email"
+                        autoComplete="email"
                         value={signInEmail}
                         onChange={e => { setSignInEmail(e.target.value); setSignInEmailError(null); }}
                         placeholder="you@example.com"
                         data-testid="web-signin-email"
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1px solid ${signInEmailError || donorAuth.sendError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb', fontSize: 16, color: INK.primary, marginBottom: 8 }}
+                        style={{ ...INPUT, ...(signInEmailError || donorAuth.sendError ? INPUT_ERROR : {}), marginBottom: 8 }}
                       />
-                      {signInEmailError && <p style={{ margin: '0 0 8px', fontSize: 14.5, color: '#dc2626' }}>{signInEmailError}</p>}
-                      {donorAuth.sendError && <p data-testid="web-signin-error" style={{ margin: '0 0 8px', fontSize: 14.5, color: '#dc2626' }}>{donorAuth.sendError}</p>}
+                      {signInEmailError && <p style={FIELD_ERROR}>{signInEmailError}</p>}
+                      {donorAuth.sendError && <p data-testid="web-signin-error" style={FIELD_ERROR}>{donorAuth.sendError}</p>}
                       <PrimaryButton onClick={handleSendSignInCode} disabled={!signInEmail.trim() || donorAuth.sendingCode}>
                         {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
                       </PrimaryButton>
@@ -930,37 +1032,44 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       drift from the phone screens' rule. */}
                   {(!isNative() || nativeSSOAvailable()) && (
                     <>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
-                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                        <span style={{ fontSize: 14, fontWeight: 500, color: INK.muted }}>or</span>
-                        <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 16px' }}>
+                        <span style={RULE} />
+                        <span style={RULE_LABEL}>or</span>
+                        <span style={RULE} />
                       </div>
                       <SsoButtons onPress={handleSignInSSO} chosen={ssoChosen} errors={donorAuth.oauthErrors} />
                     </>
                   )}
-                  <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.muted, textAlign: 'center' }}>
+                  <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.subtle, textAlign: 'center' }}>
                     No passwords here  -  we&apos;ll email you a one-time code, or use Apple or Google.
                   </p>
                   {onAdminSignIn && (
                     <button
+                      type="button"
                       onClick={onAdminSignIn}
                       data-testid="web-signin-admin"
-                      style={{ width: '100%', marginTop: 14, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 15, color: INK.muted }}
+                      style={{ ...TEXT_BTN, width: '100%', marginTop: 12, fontWeight: 500 }}
                     >
-                      Nonprofit admin? <span style={{ fontWeight: 700, textDecoration: 'underline', color: NAVY }}>Sign in with your work email</span>
+                      Nonprofit admin? <span style={{ fontWeight: 700, textDecoration: 'underline', color: NAVY, marginLeft: 4 }}>Sign in with your work email</span>
                     </button>
                   )}
-                  {/* Demo-only shortcut so prospects can see the admin side without creating an org */}
+                  {/* Demo-only shortcut so prospects can see the admin side
+                      without creating an org - demo surfaces only. */}
+                  {showDemo && (
+                    <button
+                      type="button"
+                      onClick={previewAdminDashboard}
+                      data-testid="web-signin-demo-admin"
+                      style={{ ...TEXT_BTN, width: '100%', fontSize: 14, fontWeight: 500 }}
+                    >
+                      Demo: preview the BGCA admin dashboard →
+                    </button>
+                  )}
                   <button
-                    onClick={previewAdminDashboard}
-                    style={{ width: '100%', marginTop: 2, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: INK.muted }}
-                  >
-                    Demo: preview the BGCA admin dashboard →
-                  </button>
-                  <button
+                    type="button"
                     onClick={() => { setStep('join'); donorAuth.resetToEmail(); }}
                     data-testid="web-signin-back"
-                    style={{ width: '100%', marginTop: 4, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, fontWeight: 600, color: INK.muted }}
+                    style={{ ...TEXT_BTN, width: '100%', marginTop: 4 }}
                   >
                     ← Back
                   </button>
@@ -978,38 +1087,25 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       had nothing. Same order, same words, web chrome. */}
                   <NonprofitCta onSignup={() => goToOnboardingStep('nonprofit-signup')} />
                   <PanelTitle title="Create your account" sub="Sign up in seconds. No payment required yet." />
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                  <label htmlFor="pc-account-state" style={CAPS_LABEL}>
                     Your state
                   </label>
                   <select
+                    id="pc-account-state"
                     value={selectedState}
                     onChange={e => setSelectedState(e.target.value)}
-                    style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 16, color: INK.primary, marginBottom: 14, appearance: 'none' }}
+                    data-testid="web-account-state"
+                    style={{ ...INPUT, marginBottom: 16, appearance: 'none', color: selectedState ? INK.primary : INK.subtle }}
                   >
                     <option value="">Select your state…</option>
                     {US_STATES.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                   </select>
 
                   {isCA && (
-                    <div style={{ background: '#FEF3C7', border: '1px solid #FBBF24', borderRadius: 12, padding: '10px 14px', fontSize: 15, color: '#92400e', marginBottom: 14 }}>
+                    <div role="status" style={{ background: 'var(--warning-50)', border: '1px solid var(--gold)', borderRadius: RADIUS.sm, padding: '12px 16px', fontSize: 15, color: 'var(--warning)', marginBottom: 16 }}>
                       PocketCache isn&apos;t available in California yet  -  we&apos;re working on it. Ask {npShort} for updates.
                     </div>
                   )}
-
-                  <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
-                    <Checkbox checked={agreedTerms} onChange={setAgreedTerms}>
-                      I am at least 18 years old and agree to the{' '}
-                      <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Terms of Service</a> and{' '}
-                      <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Privacy Policy</a>.
-                    </Checkbox>
-                    <Checkbox checked={commsOptin} onChange={setCommsOptin}>
-                      {/* Tokenized to the joined nonprofit's FULL name (item
-                          9a) - never a hardcoded org, graceful fallback
-                          before one is bound. */}
-                      PocketCache and {org?.name ?? 'your chosen nonprofit partner'} may contact me with account and giving updates  -  details in our{' '}
-                      <a href="/legal/terms/#communications" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Terms</a>.
-                    </Checkbox>
-                  </div>
 
                   {/* Signed-in users never see the forms below again: the
                       auto-advance effect adopts a live session and moves to
@@ -1017,36 +1113,36 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       button any more (item 4). The placeholder keeps the SSO
                       buttons from flashing while the session check runs. */}
                   {donorAuth.checkingSession || autoAdvanced ? (
-                    <div data-testid="web-account-session-check" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 0', color: INK.muted, fontSize: 15 }}>
+                    <div data-testid="web-account-session-check" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 0', color: INK.subtle, fontSize: 15 }}>
                       One moment…
                     </div>
                   ) : donorAuth.stage === 'code' ? (
                     <form onSubmit={handleVerifyCode}>
-                      <p style={{ margin: '0 0 10px', fontSize: 15.5, color: INK.secondary }}>
+                      <p style={{ margin: '0 0 12px', fontSize: 15, color: INK.secondary }}>
                         We sent a 6-digit code to <strong style={{ color: INK.primary }}>{donorAuth.email}</strong>.
                       </p>
                       <input
                         type="text" inputMode="numeric" maxLength={6} value={donorAuth.codeInput}
+                        aria-label="6-digit code"
                         onChange={e => donorAuth.setCodeInput(e.target.value.replace(/\D/g, ''))}
                         style={{
-                          width: '100%', boxSizing: 'border-box', padding: '13px 15px', borderRadius: 12,
-                          border: `1.5px solid ${donorAuth.codeError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb',
-                          fontFamily: 'monospace', fontSize: 22, letterSpacing: '0.4em', textAlign: 'center', color: INK.primary, marginBottom: 8,
+                          ...INPUT, ...(donorAuth.codeError ? INPUT_ERROR : {}),
+                          fontFamily: 'monospace', fontSize: 22, letterSpacing: '0.4em', textAlign: 'center', marginBottom: 8,
                         }}
                       />
-                      {donorAuth.codeError && <p style={{ margin: '0 0 10px', fontSize: 14.5, color: '#dc2626' }}>{donorAuth.codeError}</p>}
+                      {donorAuth.codeError && <p style={{ ...FIELD_ERROR, margin: '0 0 12px' }}>{donorAuth.codeError}</p>}
                       <PrimaryButton onClick={handleVerifyCode} disabled={donorAuth.codeInput.length !== 6 || donorAuth.verifying}>
                         {donorAuth.verifying ? 'Checking…' : 'Verify code →'}
                       </PrimaryButton>
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10 }}>
-                        <button type="button" disabled={donorAuth.sendingCode}
-                          onClick={() => handleResend(donorAuth.email)}
-                          style={{ border: 'none', background: 'transparent', cursor: donorAuth.sendingCode ? 'default' : 'pointer', fontSize: 14.5, color: INK.muted, opacity: donorAuth.sendingCode ? 0.6 : 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+                        <button type="button" aria-disabled={donorAuth.sendingCode ? 'true' : undefined}
+                          onClick={() => { if (!donorAuth.sendingCode) handleResend(donorAuth.email); }}
+                          style={{ ...TEXT_BTN, cursor: donorAuth.sendingCode ? 'default' : 'pointer', color: donorAuth.sendingCode ? INK.muted : INK.subtle }}>
                           {donorAuth.sendingCode ? 'Sending…' : justResent ? 'Code sent' : 'Resend code'}
                         </button>
-                        <button type="button" onClick={donorAuth.resetToEmail} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14.5, color: INK.muted }}>Change email</button>
+                        <button type="button" onClick={donorAuth.resetToEmail} style={TEXT_BTN}>Change email</button>
                       </div>
-                      {donorAuth.sendError && <p style={{ margin: '10px 0 0', fontSize: 14.5, color: '#dc2626', textAlign: 'center' }}>{donorAuth.sendError}</p>}
+                      {donorAuth.sendError && <p style={{ ...FIELD_ERROR, margin: '8px 0 0', textAlign: 'center' }}>{donorAuth.sendError}</p>}
                     </form>
                   ) : (
                     <>
@@ -1055,41 +1151,72 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                           sign-up can bring its own name, and skipping it just
                           means the friendly one-time dashboard prompt asks
                           later. */}
-                      <div style={{ marginBottom: 14 }}>
-                        <label htmlFor="pc-display-name" style={{ display: 'block', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                      <div style={{ marginBottom: 16 }}>
+                        <label htmlFor="pc-display-name" style={CAPS_LABEL}>
                           What should we call you?
                         </label>
                         <input
                           id="pc-display-name"
                           type="text"
+                          autoComplete="given-name"
                           value={displayName}
                           maxLength={60}
                           onChange={e => setDisplayName(e.target.value)}
                           placeholder="Your first name (optional)"
                           data-testid="web-account-name"
-                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 16, color: INK.primary }}
+                          style={INPUT}
                         />
                       </div>
-                      <form onSubmit={handleSendCode} style={{ marginBottom: 14 }}>
-                        <label style={{ display: 'block', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK.muted, marginBottom: 6 }}>
+                      <form onSubmit={handleSendCode} style={{ marginBottom: 16 }}>
+                        <label htmlFor="pc-account-email" style={CAPS_LABEL}>
                           Your email
                         </label>
                         <input
+                          id="pc-account-email"
                           type="email"
+                          autoComplete="email"
                           value={emailInput}
                           onChange={e => { setEmailInput(e.target.value); setEmailInputError(null); }}
                           placeholder="you@example.com"
                           data-testid="web-account-email"
-                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12, border: `1px solid ${emailInputError || donorAuth.sendError ? '#ef4444' : '#d1d5db'}`, background: '#f9fafb', fontSize: 16, color: INK.primary, marginBottom: 8 }}
+                          style={{ ...INPUT, ...(emailInputError || donorAuth.sendError ? INPUT_ERROR : {}), marginBottom: 8 }}
                         />
-                        {emailInputError && <p style={{ margin: '0 0 8px', fontSize: 14.5, color: '#dc2626' }}>{emailInputError}</p>}
-                        {donorAuth.sendError && <p style={{ margin: '0 0 8px', fontSize: 14.5, color: '#dc2626' }}>{donorAuth.sendError}</p>}
+                        {emailInputError && <p style={FIELD_ERROR}>{emailInputError}</p>}
+                        {donorAuth.sendError && <p style={FIELD_ERROR}>{donorAuth.sendError}</p>}
+
+                        {/* Consents sit between the fields and the CTA - the
+                            same order as the phone's signup form (fields,
+                            then consents, then the button). Both boxes stay
+                            REQUIRED (owner decision). */}
+                        <div style={{ display: 'grid', gap: 12, margin: '12px 0 16px' }}>
+                          <Checkbox checked={agreedTerms} onChange={setAgreedTerms}>
+                            I am at least 18 years old and agree to the{' '}
+                            <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Terms of Service</a> and{' '}
+                            <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Privacy Policy</a>.
+                          </Checkbox>
+                          <Checkbox checked={commsOptin} onChange={setCommsOptin}>
+                            {/* Tokenized to the joined nonprofit's FULL name (item
+                                9a) - never a hardcoded org, graceful fallback
+                                before one is bound. */}
+                            PocketCache and {org?.name ?? 'your chosen nonprofit partner'} may contact me with account and giving updates  -  details in our{' '}
+                            <a href="/legal/terms/#communications" target="_blank" rel="noopener" style={{ color: NAVY, fontWeight: 600 }}>Terms</a>.
+                          </Checkbox>
+                        </div>
                         {/* Disabled until the state + BOTH consent boxes above
                             are complete (item 4) - the hint below says which
-                            part is still missing. */}
-                        <PrimaryButton onClick={handleSendCode} disabled={!canContinue || donorAuth.sendingCode}>
+                            part is still missing. A tap while disabled still
+                            surfaces that hint (the Button forwards it). */}
+                        <PrimaryButton onClick={handleSendCode} disabled={!canContinue || donorAuth.sendingCode}
+                          onDisabledPress={() => setGateHintNudge(n => n + 1)} data-testid="web-account-send-code">
                           {donorAuth.sendingCode ? 'Sending…' : 'Email me a code →'}
                         </PrimaryButton>
+                        {!canContinue && !isCA && (
+                          <p style={{ margin: '8px 0 0', fontSize: 13, color: gateHintNudge ? 'var(--warning)' : INK.subtle, textAlign: 'center' }} data-testid="web-account-gate-hint" aria-live="polite">
+                            {selectedState === ''
+                              ? 'Select your state above to continue'
+                              : 'Check both boxes above to continue'}
+                          </p>
+                        )}
                       </form>
 
                       {/* Same SSO rule as Onboarding.jsx's SignUpScreen: web
@@ -1099,29 +1226,35 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                           this screen cannot drift from the phone screens' rule. */}
                       {(!isNative() || nativeSSOAvailable()) && (
                         <>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 14px' }}>
-                            <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                            <span style={{ fontSize: 14, fontWeight: 500, color: INK.muted }}>or</span>
-                            <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 16px' }}>
+                            <span style={RULE} />
+                            <span style={RULE_LABEL}>or</span>
+                            <span style={RULE} />
                           </div>
 
-                          <div style={{ opacity: canContinue ? 1 : 0.55, pointerEvents: chosen ? 'none' : 'auto' }}>
+                          <div style={{ pointerEvents: chosen ? 'none' : 'auto' }}>
                             <SsoButtons onPress={handleSSO} chosen={chosen} disabled={!canContinue} errors={donorAuth.oauthErrors} />
                           </div>
                         </>
                       )}
-                      {!canContinue && !isCA && (
-                        <p style={{ margin: '10px 0 0', fontSize: 14, color: INK.muted, textAlign: 'center' }} data-testid="web-account-gate-hint">
-                          {selectedState === ''
-                            ? 'Select your state above to continue'
-                            : 'Check both boxes above to continue'}
-                        </p>
-                      )}
-                      <p style={{ margin: '12px 0 0', fontSize: 14, color: INK.muted, textAlign: 'center' }}>
+                      <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.6, color: INK.subtle, textAlign: 'center' }}>
                         {isNative() && !nativeSSOAvailable()
                           ? `Sign in with your email  -  we'll send you a 6-digit code, no password needed. Tax receipts from ${npShort} go to your sign-in email.`
                           : `No passwords here  -  we'll email you a one-time code, or use Apple or Google. Tax receipts from ${npShort} go to your sign-in email.`}
                       </p>
+                      {/* The sign-in door the join step has, for the donor an
+                          org link dropped straight onto this step (the
+                          micro-site's "Open your giving dashboard", a re-used
+                          QR on a new device). Same placement as the join step:
+                          below the form, behind the same divider. */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0' }}>
+                        <span style={RULE} />
+                        <span style={RULE_LABEL}>Been here before?</span>
+                        <span style={RULE} />
+                      </div>
+                      <Button variant="secondary" surface="web" onClick={() => setStep('signin')} data-testid="web-account-signin">
+                        Already have an account? Sign in
+                      </Button>
                     </>
                   )}
                 </>
@@ -1131,16 +1264,16 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                 <>
                   <PanelTitle title="Which card should we track?" sub={`Every purchase on this card rounds up  -  the change goes straight to ${npShort}. This card is never charged, we only watch it.`} />
                   {connected ? (
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 14, padding: 16, marginBottom: 16 }}>
-                      <CheckCircle size={22} color="#0D9488" />
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', ...DONE_WASH, padding: 16, marginBottom: 16 }}>
+                      <CheckCircle size={22} color="var(--teal-ui)" aria-hidden />
                       <div>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: '#134e4a' }}>{connected.name} connected</p>
-                        <p style={{ margin: 0, fontSize: 14.5, color: '#0f766e' }}>Card ending ····{connected.last4}  -  we&apos;ll track purchases and tally round-ups as they happen.</p>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: INK.primary }}>{connected.name} connected</p>
+                        <p style={{ margin: 0, fontSize: 14, color: TEAL_INK }}>Card ending ····{connected.last4}  -  we&apos;ll track purchases and tally round-ups as they happen.</p>
                       </div>
                     </div>
                   ) : manualEntry ? (
-                    <div style={{ border: '1.5px solid #99f6e4', borderRadius: 14, padding: 16, marginBottom: 12 }}>
-                      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: INK.muted }}>
+                    <div style={{ ...GROUP, marginBottom: 12 }}>
+                      <p style={{ ...CAPS_LABEL, marginBottom: 12 }}>
                         Enter your card manually
                       </p>
                       <ManualCardForm
@@ -1153,29 +1286,33 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     <div style={{ marginBottom: 12 }}>
                       <PlaidBankConnect variant="web" onConnected={card => setConnected(card)} />
                       {/* Manual entry - the same simulated tracking-card form
-                          the app has (item 10a): clearly the WATCHED card,
-                          raw numbers never sent anywhere. */}
-                      <button
-                        onClick={() => setManualEntry(true)}
-                        data-testid="web-manual-card-entry"
-                        style={{
-                          width: '100%', marginTop: 10, padding: '13px 16px', borderRadius: 14, cursor: 'pointer',
-                          border: '2px dashed #d1d5db', background: '#fff', textAlign: 'left',
-                          display: 'flex', alignItems: 'center', gap: 10,
-                        }}
-                      >
-                        <Lock size={16} color="#0d9488" />
-                        <span>
-                          <span style={{ display: 'block', fontSize: 15.5, fontWeight: 600, color: INK.primary }}>Enter your card manually</span>
-                          <span style={{ display: 'block', fontSize: 13.5, color: INK.muted }}>Type the card we should watch  -  encrypted via Plaid, never charged</span>
-                        </span>
-                      </button>
+                          the app has (item 10a). Demo surfaces only: nothing
+                          is encrypted or sent anywhere, only the last 4 digits
+                          are kept, so a real donor never sees it. */}
+                      {showDemo && (
+                        <button
+                          type="button"
+                          onClick={() => setManualEntry(true)}
+                          data-testid="web-manual-card-entry"
+                          style={{
+                            width: '100%', marginTop: 12, minHeight: 52, padding: '12px 16px', borderRadius: RADIUS.md, cursor: 'pointer',
+                            border: '2px dashed var(--line)', background: '#fff', textAlign: 'left', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', gap: 12,
+                          }}
+                        >
+                          <CreditCard size={18} color={TEAL_INK} aria-hidden />
+                          <span>
+                            <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: INK.primary }}>Enter your card manually</span>
+                            <span style={{ display: 'block', fontSize: 13, color: INK.subtle }}>Demo only - type a card number (we keep just the last 4)</span>
+                          </span>
+                        </button>
+                      )}
                     </div>
                   )}
-                  <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: INK.muted, margin: '0 0 16px' }}>
-                    <Lock size={12} /> Read-only access via Plaid · Never charged · Your credentials are never stored by PocketCache
+                  <p style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, lineHeight: 1.55, color: INK.subtle, margin: '0 0 16px' }}>
+                    <Lock size={14} aria-hidden style={{ flexShrink: 0, marginTop: 3 }} /> <span>Read-only access via Plaid · Never charged · Your credentials are never stored by PocketCache</span>
                   </p>
-                  <PrimaryButton disabled={!connected} onClick={() => setStep('payment')}>
+                  <PrimaryButton disabled={!connected} onClick={() => setStep('payment')} data-testid="web-card-continue">
                     {connected ? 'Continue →' : 'Select a card to continue'}
                   </PrimaryButton>
                 </>
@@ -1185,84 +1322,96 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                 <>
                   <PanelTitle title="How should we collect your round-ups?" sub="Once a month, your round-ups total into one clean charge  -  to the method you pick here." />
                   {confirmError && (
-                    <p data-testid="web-confirm-error" style={{ margin: '0 0 14px', padding: '10px 14px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 14.5, color: '#b91c1c' }}>
+                    <p data-testid="web-confirm-error" style={ERROR_CALLOUT}>
                       {confirmError}
                     </p>
                   )}
-                  {/* Apple Pay on the WEB (item 1): enabled only where
-                      Safari's ApplePaySession could really exist; elsewhere
-                      the pill is greyed out with the honest note. Enabled
-                      taps open the web-styled confirmation dialog - never
-                      the phone's side-button sheet. */}
-                  <button
-                    onClick={() => { if (applePayOk) setShowApplePay(true); }}
-                    disabled={!applePayOk}
-                    data-testid="web-apple-pay-pill"
-                    aria-disabled={!applePayOk}
-                    style={{
-                      width: '100%', padding: '13px 0', borderRadius: RADIUS.pill, border: 'none', cursor: applePayOk ? 'pointer' : 'default',
-                      background: applePayOk ? '#000' : '#e5e7eb', color: applePayOk ? '#fff' : '#9ca3af', fontWeight: 700, fontSize: 17,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 6,
-                    }}
-                  >
-                    <AppleLogo size={16} color={applePayOk ? '#fff' : '#9ca3af'} /> Pay
-                  </button>
-                  <p data-testid="web-apple-pay-note" style={{ margin: '0 0 16px', fontSize: 13.5, color: INK.muted, textAlign: 'center' }}>
-                    {applePayOk ? 'Fastest in Safari on your Apple devices' : APPLE_PAY_UNAVAILABLE_NOTE}
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 14px' }}>
-                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                    <span style={{ fontSize: 14, fontWeight: 500, color: INK.muted, whiteSpace: 'nowrap' }}>or choose another way to pay</span>
-                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-                  </div>
-                  <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
-                    {PAYMENT_OPTIONS.map(opt => {
-                      const appleDisabled = opt.id === 'apple_pay' && !applePayOk;
+                  {/* Apple Pay on the WEB (item 1): the black pill and its
+                      divider render only where Safari's ApplePaySession could
+                      really exist, and open the web-styled confirmation dialog
+                      - never the phone's side-button sheet. Elsewhere there is
+                      no greyed-out pill; one line under the list says where
+                      Apple Pay would appear. */}
+                  {applePayOk && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowApplePay(true)}
+                        data-testid="web-apple-pay-pill"
+                        className="pc-btn"
+                        style={{
+                          width: '100%', minHeight: 52, padding: '0 20px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
+                          background: '#000', color: '#fff', fontWeight: 700, fontSize: 16, fontFamily: 'inherit',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8,
+                        }}
+                      >
+                        <AppleLogo size={16} color="#fff" /> Pay
+                      </button>
+                      <p data-testid="web-apple-pay-note" style={{ margin: '0 0 16px', fontSize: 13, color: INK.subtle, textAlign: 'center' }}>
+                        Fastest in Safari on your Apple devices
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 16px' }}>
+                        <span style={RULE} />
+                        <span style={RULE_LABEL}>or choose another way to pay</span>
+                        <span style={RULE} />
+                      </div>
+                    </>
+                  )}
+                  <div role="radiogroup" aria-label="Payment method" style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+                    {paymentOptions.map(opt => {
+                      const selected = paymentSel === opt.id;
                       return (
-                      <button key={opt.id} disabled={appleDisabled} onClick={() => {
+                      <button key={opt.id} type="button" role="radio" aria-checked={selected} data-testid={`web-pay-option-${opt.id}`} onClick={() => {
                         // Apple Pay goes through the web confirmation dialog,
                         // whether picked here or via the pill button above.
-                        if (opt.id === 'apple_pay') { if (applePayOk) setShowApplePay(true); return; }
+                        if (opt.id === 'apple_pay') { setShowApplePay(true); return; }
                         setPaymentSel(opt.id);
                         // Picking the card option opens the real Stripe form.
                         if (opt.id === 'card') { if (!cardInfo) setCardEntry(true); }
                         else { setCardEntry(false); }
                       }}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14,
-                          cursor: appleDisabled ? 'default' : 'pointer', textAlign: 'left',
-                          border: paymentSel === opt.id ? '2px solid #FBBF24' : '1.5px solid #e5e7eb',
-                          background: paymentSel === opt.id ? '#FEF3C7' : appleDisabled ? '#f8fafc' : '#fff',
-                          opacity: appleDisabled ? 0.55 : 1,
+                          display: 'flex', alignItems: 'center', gap: 12, padding: 16, minHeight: 52, borderRadius: RADIUS.md,
+                          cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                          // Always 2px so the row does not shift when picked.
+                          border: `2px solid ${selected ? 'var(--teal-ui)' : 'var(--line)'}`,
+                          background: selected ? 'var(--teal-50)' : '#fff',
+                          transition: 'border-color 120ms ease, background-color 120ms ease',
                         }}>
-                        <span style={{ fontSize: 26 }}>{opt.icon}</span>
+                        <PayIcon id={opt.id} color={brand !== DEFAULT_BRAND ? (brand.primary ?? NAVY) : NAVY} />
                         <span style={{ flex: 1 }}>
-                          <span style={{ display: 'block', fontWeight: 700, fontSize: 15.5, color: INK.primary }}>{opt.label}</span>
-                          <span style={{ display: 'block', fontSize: 13.5, color: INK.muted }}>
-                            {appleDisabled ? APPLE_PAY_UNAVAILABLE_NOTE : opt.sub}
-                          </span>
+                          <span style={{ display: 'block', fontWeight: 700, fontSize: 15, color: INK.primary }}>{opt.label}</span>
+                          <span style={{ display: 'block', fontSize: 13, color: INK.subtle }}>{opt.sub}</span>
                         </span>
-                        <span style={{
-                          width: 18, height: 18, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          border: `2px solid ${paymentSel === opt.id ? '#FBBF24' : '#d1d5db'}`, background: paymentSel === opt.id ? '#FBBF24' : 'transparent',
+                        <span aria-hidden style={{
+                          width: 20, height: 20, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          border: `2px solid ${selected ? 'var(--teal-ui)' : 'var(--muted)'}`, background: selected ? 'var(--teal-ui)' : 'transparent',
                         }}>
-                          {paymentSel === opt.id && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
+                          {selected && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
                         </span>
                       </button>
                       );
                     })}
                   </div>
+                  {!applePayOk && (
+                    <p data-testid="web-apple-pay-note" style={{ margin: '-4px 0 16px', fontSize: 13, color: INK.subtle, textAlign: 'center' }}>
+                      Apple Pay appears here in Safari on Apple devices.
+                    </p>
+                  )}
                   {/* Bank account requires an authorized SOURCE (item 2):
-                      the linked tracking bank via an explicit confirm, or a
-                      fresh Plaid connect framed as payment authorization. */}
-                  {paymentSel === 'ach' && (
-                    <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 14, padding: 16, marginBottom: 14 }}>
-                      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: INK.muted }}>
+                      the linked tracking bank via an explicit confirm - only
+                      when it is a real Plaid depository account, never a
+                      typed-in or practice card - or a fresh Plaid connect
+                      framed as payment authorization. Demo surfaces only
+                      (see paymentOptions). */}
+                  {paymentSel === 'ach' && showDemo && (
+                    <div style={GROUP}>
+                      <p style={{ ...CAPS_LABEL, marginBottom: 12 }}>
                         Bank account to charge
                       </p>
                       <BankPaymentAuth
                         variant="web"
-                        linkedBank={connected}
+                        linkedBank={isDebitableBank(connected) ? connected : null}
                         authorized={achSource}
                         onAuthorized={src => setAchSource(src)}
                         onClear={() => setAchSource(null)}
@@ -1273,12 +1422,12 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                       uses (Onboarding.jsx CardEntryScreen). Web used to collect
                       nothing at all here and store last4: null. */}
                   {paymentSel === 'card' && (cardEntry || !cardInfo) && (
-                    <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 14, padding: 16, marginBottom: 14 }}>
-                      <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: INK.muted }}>
+                    <div style={GROUP}>
+                      <p style={{ ...CAPS_LABEL, marginBottom: 4 }}>
                         Payment card
                       </p>
-                      <p style={{ margin: '0 0 10px', fontSize: 14.5, color: INK.secondary, lineHeight: 1.55 }}>
-                        This is the card we actually charge. Stripe handles it  -  we never see the number. Round-ups collect monthly on {npShort}&apos;s behalf.
+                      <p style={{ margin: '0 0 12px', fontSize: 14, color: INK.secondary, lineHeight: 1.55 }}>
+                        This is the card {npShort} charges once a month for your round-ups. Stripe handles it - PocketCache never sees the number.
                       </p>
                       <StripeCardForm
                         variant="web"
@@ -1288,26 +1437,26 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                     </div>
                   )}
                   {paymentSel === 'card' && cardInfo && !cardEntry && (
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 14, padding: 14, marginBottom: 14 }}>
-                      <CheckCircle size={20} color="#0D9488" />
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', ...DONE_WASH, padding: 16, marginBottom: 16 }}>
+                      <CheckCircle size={20} color="var(--teal-ui)" aria-hidden />
                       <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15.5, color: '#134e4a' }}>{cardInfo.brand} ····{cardInfo.last4} saved</p>
-                        <p style={{ margin: 0, fontSize: 14, color: '#0f766e' }}>Your monthly round-up charge comes from this card.</p>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: INK.primary }}>{cardInfo.brand} ····{cardInfo.last4} saved</p>
+                        <p style={{ margin: 0, fontSize: 14, color: TEAL_INK }}>Your monthly round-up charge comes from this card.</p>
                       </div>
-                      <button
+                      <Button variant="secondary" surface="web" size="md" fullWidth={false}
                         onClick={() => { setCardInfo(null); setCardEntry(true); }}
-                        style={{ border: '1px solid #99f6e4', background: '#fff', borderRadius: 10, padding: '6px 10px', fontSize: 14, fontWeight: 700, color: '#0f766e', cursor: 'pointer' }}
-                      >Change</button>
+                        style={{ fontSize: 14, color: TEAL_INK, borderColor: '#99f6e4' }}
+                      >Change</Button>
                     </div>
                   )}
-                  <p style={{ fontSize: 14, color: INK.muted, margin: '0 0 14px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 14, color: INK.subtle, margin: '0 0 16px', textAlign: 'center' }}>
                     Change this anytime in Settings. Payments are processed by Stripe  -  not us.
                   </p>
                   {/* Quiet monthly-max opt-in  -  deliberately understated */}
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                  <div style={GROUP}>
                     <CapControl subtle value={monthlyCap} onChange={setMonthlyCap} />
                   </div>
-                  <PrimaryButton disabled={!paymentSel || !cardReady || !achReady} onClick={() => setStep('review')}>
+                  <PrimaryButton disabled={!paymentSel || !cardReady || !achReady} onClick={() => setStep('review')} data-testid="web-payment-continue">
                     {!paymentSel ? 'Choose a payment method' : !cardReady ? 'Add your card to continue' : !achReady ? 'Authorize a bank account to continue' : 'Continue →'}
                   </PrimaryButton>
                   {/* Web-styled confirmation - the phone's side-button sheet
@@ -1328,86 +1477,97 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
                   {/* Example card - an ILLUSTRATION, never the donor's own
                       total (item 11). Same framing, sample figure and
                       disclaimer as the app's confirm step. */}
-                  <div style={{ background: '#f0f6ff', border: '1.5px solid #cce0f5', borderRadius: 14, padding: 16, marginBottom: 14 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b' }}>Here is how a month could look</p>
-                      <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', background: '#fef3c7', borderRadius: 999, padding: '2px 8px', flexShrink: 0 }}>Example</span>
+                  {/* The one tinted callout on this step: it is the
+                      sample-data disclosure. */}
+                  <div style={{ background: '#f0f6ff', border: '1px solid #cce0f5', borderRadius: RADIUS.md, padding: 16, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <p style={{ ...CAPS_LABEL, margin: 0 }}>Here is how a month could look</p>
+                      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--warning)', background: 'var(--gold-50)', borderRadius: RADIUS.pill, padding: '2px 8px', flexShrink: 0 }}>Example</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15.5, padding: '3px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '4px 0' }}>
                       <span style={{ color: INK.secondary }}>Round-ups in a sample month</span>
-                      <span style={{ fontWeight: 700, color: INK.primary }} data-testid="web-confirm-roundups">${fmtMoney(exampleRoundUps)}</span>
+                      <span style={{ fontWeight: 700, color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }} data-testid="web-confirm-roundups">${fmtMoney(exampleRoundUps)}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '3px 0', color: INK.secondary }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '4px 0', color: INK.secondary }}>
                       <span>App fee  -  $1 × {feeMonths} month{feeMonths !== 1 ? 's' : ''} (not tax-deductible)</span>
-                      <span>+${fmtMoney(feeMonths)}</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>+${fmtMoney(feeMonths)}</span>
                     </div>
                     {feeMonths > 1 && (
-                      <p style={{ margin: '2px 0 0', fontSize: 13.5, color: INK.secondary }}>
+                      <p style={{ margin: '4px 0 0', fontSize: 13, color: INK.secondary }}>
                         {feeMonths - 1} month{feeMonths - 1 !== 1 ? 's' : ''} of the $1 fee rolled over from a skipped month, so {feeMonths} land on the {chargeOn} charge.
                       </p>
                     )}
                     {coverProcessing && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '3px 0', color: INK.secondary }} data-testid="web-confirm-cover">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '4px 0', color: INK.secondary }} data-testid="web-confirm-cover">
                         <span>Processing cover (goes to {npShort})</span>
-                        <span>+${fmtMoney(processingCover)}</span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>+${fmtMoney(processingCover)}</span>
                       </div>
                     )}
-                    <div style={{ height: 1, background: '#cbd5e1', margin: '8px 0' }} />
+                    <div style={{ height: 1, background: 'var(--line)', margin: '8px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 15.5, color: INK.primary }}>One charge from {npShort}</span>
-                      <span style={{ fontWeight: 800, fontSize: 20, color: NAVY }} data-testid="web-confirm-total">${fmtMoney(total)}</span>
+                      <span style={{ fontWeight: 700, fontSize: 15, color: INK.primary }}>One charge from {npShort}</span>
+                      <span style={{ fontWeight: 700, fontSize: 22, color: INK.primary, fontVariantNumeric: 'tabular-nums' }} data-testid="web-confirm-total">${fmtMoney(total)}</span>
                     </div>
                     {monthlyCap !== null && monthlyCap !== undefined && (
-                      <p style={{ margin: '8px 0 0', fontSize: 13.5, color: '#b45309' }} data-testid="web-confirm-cap-note">
+                      <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--warning)' }} data-testid="web-confirm-cap-note">
                         Your ${monthlyCap}/month cap applies  -  round-ups above it are simply never charged.
                       </p>
                     )}
-                    <p style={{ margin: '8px 0 0', fontSize: 13.5, fontStyle: 'italic', color: INK.muted }} data-testid="web-confirm-example-note">{EXAMPLE_DISCLAIMER}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 13, fontStyle: 'italic', color: INK.subtle }} data-testid="web-confirm-example-note">{EXAMPLE_DISCLAIMER}</p>
                   </div>
 
                   {/* Writes straight through to the persisted preference (the
                       AppContext setter takes a value, not an updater), so what
                       the donor leaves checked here is what every later charge
                       on BOTH surfaces bills. Settings carries the same standing
-                      control if they change their mind. */}
-                  <div
+                      control if they change their mind. A real button with
+                      role=checkbox, so Tab reaches it and Space flips it. */}
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={coverProcessing}
                     onClick={() => setCoverProcessing(!coverProcessing)}
                     data-testid="web-confirm-cover-toggle"
-                    style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, cursor: 'pointer', marginBottom: 14, border: coverProcessing ? '1.5px solid #6ee7b7' : '1.5px solid #e5e7eb', background: coverProcessing ? '#d1fae5' : '#f9fafb' }}>
-                    <span style={{
-                      width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      border: `2px solid ${coverProcessing ? '#059669' : '#d1d5db'}`, background: coverProcessing ? '#059669' : '#fff',
+                    style={{
+                      width: '100%', display: 'flex', gap: 12, padding: 16, borderRadius: RADIUS.md, cursor: 'pointer', marginBottom: 16, textAlign: 'left', fontFamily: 'inherit',
+                      border: `2px solid ${coverProcessing ? 'var(--teal-ui)' : 'var(--line)'}`, background: '#fff',
+                      transition: 'border-color 120ms ease',
                     }}>
-                      {coverProcessing && <CheckCircle size={12} color="#fff" />}
+                    <span aria-hidden style={{
+                      width: 20, height: 20, borderRadius: RADIUS.xs, flexShrink: 0, marginTop: 2, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      border: `2px solid ${coverProcessing ? 'var(--teal-ui)' : 'var(--muted)'}`, background: coverProcessing ? 'var(--teal-ui)' : '#fff',
+                      transition: 'background-color 120ms ease, border-color 120ms ease',
+                    }}>
+                      {coverProcessing && <Check size={13} strokeWidth={3} color="#fff" />}
                     </span>
                     <span>
-                      <span style={{ display: 'block', fontWeight: 600, fontSize: 15.5, color: INK.primary }}>
+                      <span style={{ display: 'block', fontWeight: 600, fontSize: 15, lineHeight: 1.45, color: INK.primary }}>
                         Cover {npShort}&apos;s card-processing costs too, so 100% of my round-ups reach them.
                       </span>
-                      <span style={{ display: 'block', fontSize: 14, color: INK.secondary, marginTop: 2 }}>
+                      <span style={{ display: 'block', fontSize: 14, lineHeight: 1.5, color: INK.secondary, marginTop: 4 }}>
                         {coverProcessing
                           ? `The ~$${fmtMoney(processingCover)} in the example goes directly to ${npShort}  -  PocketCache never touches it. It counts as part of your donation and scales with your actual round-ups.`
                           : `${npShort} receives your round-ups minus standard card-processing costs, like any donation.`}
                       </span>
                     </span>
-                  </div>
+                  </button>
 
-                  <p style={{ fontSize: 14, lineHeight: 1.6, color: INK.muted, margin: '0 0 16px' }}>
+                  <p style={{ fontSize: 14, lineHeight: 1.6, color: INK.subtle, margin: '0 0 16px' }}>
                     Once a month, {org?.name ?? 'your nonprofit'} bundles your round-ups into one charge  -  you&apos;ll see
-                    &ldquo;{npShort}&rdquo; on your statement, not PocketCache, and they send your tax receipt. Months under
-                    ${org?.monthlyMinimum ?? 5} roll forward (we settle up within 3 months).{' '}
+                    &ldquo;{npShort}&rdquo; on your statement, not PocketCache, and they send your tax receipt.{' '}
+                    {ROLL_FORWARD_NOTE}{' '}
                     Tracking starts now; your round-ups total through the last day of the month, we email your{' '}
                     <strong style={{ color: INK.secondary }}>exact amount on the 1st</strong>, and the{' '}
                     <strong style={{ color: INK.secondary }}>charge runs on the 11th</strong>  -  a full 10 days to review it, and nothing before today ever counts.
                   </p>
 
                   {confirmError && (
-                    <p data-testid="web-confirm-error" style={{ margin: '0 0 10px', padding: '10px 14px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 14.5, color: '#b91c1c' }}>
+                    <p data-testid="web-confirm-error" style={{ ...ERROR_CALLOUT, margin: '0 0 12px' }}>
                       {confirmError}
                     </p>
                   )}
-                  <PrimaryButton onClick={handleConfirm}>Start Giving to {npShort}</PrimaryButton>
-                  <p style={{ margin: '10px 0 0', fontSize: 13.5, color: INK.muted, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                  <PrimaryButton onClick={handleConfirm} data-testid="web-confirm-start">Start Giving to {npShort}</PrimaryButton>
+                  <p style={{ margin: '12px 0 0', fontSize: 13, color: INK.subtle, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                     <CoinMark size={13} /> Powered by PocketCache, LLC. Cancel anytime in Settings.
                   </p>
                 </>
@@ -1418,11 +1578,11 @@ export default function WebOnboarding({ entryOrg, entryCode, entryIntent, onAdmi
       </main>
 
       <footer style={{ padding: '0 24px 20px', textAlign: 'center' }}>
-        <p style={{ color: INK.muted, fontSize: 14, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <p style={{ color: INK.subtle, fontSize: 14, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <CoinMark size={14} />
           Powered by PocketCache ·{' '}
-          <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Terms</a>{' '}
-          <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: INK.secondary }}>Privacy</a>
+          <a href="/legal/terms/" target="_blank" rel="noopener" style={{ color: INK.secondary, display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 4px' }}>Terms</a>{' '}
+          <a href="/legal/privacy/" target="_blank" rel="noopener" style={{ color: INK.secondary, display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 4px' }}>Privacy</a>
         </p>
       </footer>
     </div>

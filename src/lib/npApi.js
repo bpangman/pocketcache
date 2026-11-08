@@ -5,24 +5,28 @@
 // read of orgs_public. Mirrors the auth-header pattern already used by
 // src/lib/stripeSetup.js: the caller's real Supabase session token when
 // there is one, the anon key otherwise.
-import { getSupabase } from './supa';
+import { getSupabase, SUPABASE_URL, SUPABASE_ANON_KEY, FUNCTIONS_BASE } from './supa';
 
-const SUPABASE_URL = 'https://yeptifozaytoglfwxksz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
-const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
 const REST_BASE = `${SUPABASE_URL}/rest/v1`;
 
-async function authHeaders() {
-  const headers = { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY };
+/** The signed-in session's access token, or null (no session / storage error). */
+async function sessionToken() {
   try {
     const supabase = getSupabase();
     const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    headers['Authorization'] = `Bearer ${token ?? SUPABASE_ANON_KEY}`;
+    return data?.session?.access_token ?? null;
   } catch {
-    headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
+    return null;
   }
-  return headers;
+}
+
+async function authHeaders() {
+  const token = await sessionToken();
+  return {
+    'Content-Type': 'application/json',
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${token ?? SUPABASE_ANON_KEY}`,
+  };
 }
 
 async function callFn(name, body) {
@@ -71,12 +75,19 @@ export function orgConnectStatus(orgId) {
   return callFn('org-connect-status', { org_id: orgId });
 }
 
-/** Public - no auth required. Used to resolve which org (if any) an email
- *  administers, both right after OTP verify and by the two sign-in screens. */
+/** Resolves which org (if any) an email administers, right after OTP verify
+ *  and from the two sign-in screens. Both callers run AFTER verifyCode, so a
+ *  session exists and its bearer token goes along: the edge function can then
+ *  look up the AUTHENTICATED email instead of trusting the body, which closes
+ *  the admin-email enumeration hole. With no session the function answers
+ *  401 { known: false }; both callers always have one. */
 export async function orgAdminLookup(email) {
+  const token = await sessionToken();
+  const headers = { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${FUNCTIONS_BASE}/org-admin-lookup`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+    headers,
     body: JSON.stringify({ email }),
   });
   const data = await res.json().catch(() => null);

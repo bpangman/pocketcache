@@ -19,12 +19,18 @@
 // THE ONE RULE THIS FILE FOLLOWS
 // Every flow instance (a wizard, a sheet) keeps AT MOST ONE entry of its own
 // on the shared stack at a time - the one entry that represents "how do I
-// undo being here". Whenever the flow's value changes for ANY reason (a
-// forward tap, an in-UI back tap, or hardware back itself), that one entry is
-// replaced, never accumulated. That is what keeps a long forward run followed
-// by a browser-back-mashing session from ever drifting out of sync or
-// requiring more than one press per step - see the two effects below for the
-// exact bookkeeping.
+// undo being here" - AND at most one entry in the real browser history.
+// Only a flow's FIRST activation pushes a browser entry. Every later value
+// change (a forward tap, an in-UI back tap) re-tags that same entry with
+// history.replaceState, so a five-step wizard plus a few sheets closed by X
+// leaves the tab with the entries it started with, not a dozen dead ones the
+// donor has to press back through before actually leaving.
+//
+// When a flow closes through its own UI (the X, a scrim tap, a finished
+// wizard) and its entry is still the topmost browser entry, the hook pops
+// that browser entry itself with history.back() and tells the popstate
+// listener to ignore the one event that produces. Hardware back therefore
+// always has exactly the entries that correspond to something visible.
 //
 // A sheet opened ON TOP of a wizard pushes its own entry AFTER the wizard's,
 // so it naturally sits on top of the ONE shared stack and is what a popstate
@@ -49,12 +55,20 @@ let suppressNextPush = false;
 // synchronously (it should never call history.back() itself - nothing here
 // does), this drops the nested call instead of recursing.
 let handlingPop = false;
+// Set right before THIS file calls history.back() to unwind a flow that
+// closed through its own UI. The popstate that back() produces is ours, not
+// the donor's, so the listener consumes the flag and does nothing else.
+let ignoreNextPop = false;
 let listenerInstalled = false;
 
 function installListener() {
   if (listenerInstalled || typeof window === 'undefined') return;
   listenerInstalled = true;
   window.addEventListener('popstate', () => {
+    if (ignoreNextPop) {
+      ignoreNextPop = false;
+      return;
+    }
     if (handlingPop) return;
     const entry = stack.pop();
     // Nothing of ours was showing - let the browser do whatever it would
@@ -80,19 +94,39 @@ function installListener() {
   });
 }
 
-/** Push one entry and return an idempotent remover for it. */
-function pushEntry(onBackRef) {
-  const entry = { onBack: () => onBackRef.current() };
+/** Push one entry (in memory AND one browser entry) for a flow's first activation. */
+function pushEntry(value, onBackRef) {
   seq += 1;
-  window.history.pushState({ pcHist: seq }, '');
+  const entry = { seq, onBack: () => onBackRef.current() };
+  window.history.pushState({ pcHist: entry.seq }, '');
   stack.push(entry);
-  let removed = false;
-  return () => {
-    if (removed) return;
-    removed = true;
-    const idx = stack.indexOf(entry);
-    if (idx !== -1) stack.splice(idx, 1);
-  };
+  return { value, entry };
+}
+
+/** Re-tag a flow's existing entry for a move within the flow - no new browser entry. */
+function retagEntry(own, value) {
+  seq += 1;
+  own.entry.seq = seq;
+  own.value = value;
+  window.history.replaceState({ pcHist: seq }, '');
+}
+
+/**
+ * Drop a flow's entry because the flow closed through its own UI (not a
+ * popstate). If that entry is still the topmost browser entry, unwind it too,
+ * so the browser's stack keeps matching what is on screen. The match check is
+ * what keeps this safe: an entry that is no longer on top (something else was
+ * pushed over it, or the donor already went back past it) is only removed
+ * from the in-memory stack, exactly as before.
+ */
+function releaseEntry(own) {
+  const idx = stack.indexOf(own.entry);
+  if (idx !== -1) stack.splice(idx, 1);
+  if (handlingPop) return;
+  if (window.history.state?.pcHist === own.entry.seq) {
+    ignoreNextPop = true;
+    window.history.back();
+  }
 }
 
 /**
@@ -102,7 +136,7 @@ function pushEntry(onBackRef) {
  * @param {*}        value    The flow's current position - a wizard's step
  *                             string, or a sheet's open/closed marker (see
  *                             useSheetHistory below). Any change is treated
- *                             as "the flow moved" and gets its own entry;
+ *                             as "the flow moved" and re-tags its one entry;
  *                             direction (forward vs back) does not matter,
  *                             which is what lets an in-UI back tap and a
  *                             hardware back press stay interchangeable.
@@ -130,7 +164,8 @@ export function useStepHistory(value, onBack, { active = true } = {}) {
   // with the value it represents. Private per instance (a plain ref, not the
   // module-level stack) so replacing/removing it can never touch an entry
   // that belongs to some other flow, e.g. a sheet layered on top.
-  const ownRef = useRef(null); // { value, remove } | null
+  const ownRef = useRef(null); // { value, entry } | null
+  const mountedRef = useRef(false);
 
   useEffect(() => { installListener(); }, []);
 
@@ -138,29 +173,59 @@ export function useStepHistory(value, onBack, { active = true } = {}) {
     if (suppressNextPush) {
       // We got here because a popstate just fired and called this flow's own
       // onBack, which changed `value` - the entry that represented where we
-      // WERE has already been popped by the listener itself. Nothing to
-      // remove; fall through to record a fresh entry for where we landed, so
-      // the next hardware-back still has something to pop.
+      // WERE has already been popped by the listener, and the browser has
+      // already moved back one entry. Record a fresh entry for where we
+      // landed (if the flow is still showing) so the next hardware-back
+      // still has something to pop.
       suppressNextPush = false;
-      ownRef.current = null;
-    } else if (ownRef.current?.value === value) {
+      ownRef.current = active ? pushEntry(value, onBackRef) : null;
+      return;
+    }
+    const own = ownRef.current;
+    if (!active) {
+      // Closed through the flow's own UI (X, scrim tap, Cancel, finished).
+      if (own) {
+        releaseEntry(own);
+        ownRef.current = null;
+      }
+      return;
+    }
+    if (!own) {
+      // First activation: the one and only pushState this flow makes.
+      ownRef.current = pushEntry(value, onBackRef);
+      return;
+    }
+    if (own.value === value) {
       // Unchanged. Covers React StrictMode's synchronous dev-only double
       // invoke of a fresh effect (setup, teardown-that-is-a-no-op, setup
       // again for the same value) as well as an `active` flip back to a
       // value this instance already represents - neither is a real move.
       return;
-    } else if (ownRef.current) {
-      // A real move away from wherever this instance's one entry was - drop
-      // it before (maybe) recording the new position, so a flow never
-      // accumulates more than its single current entry no matter how many
-      // forward taps, in-UI back taps, or hardware presses got it here.
-      ownRef.current.remove();
-      ownRef.current = null;
     }
-    if (active) {
-      ownRef.current = { value, remove: pushEntry(onBackRef) };
-    }
+    // A real move within the flow (forward tap or in-UI back tap): keep the
+    // single browser entry and re-tag it, so the wizard holds ONE entry for
+    // its whole run no matter how many steps it has.
+    retagEntry(own, value);
   }, [value, active]);
+
+  // Unmount: a flow that disappears while still active (a wizard whose last
+  // step navigates away) must not leave its entry behind. Deferred one tick
+  // so StrictMode's dev-only mount/unmount/mount rehearsal (which runs this
+  // cleanup and then re-runs the setup synchronously) is told apart from a
+  // real unmount: by the time the timer fires, a rehearsal has re-mounted.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      setTimeout(() => {
+        if (mountedRef.current) return;
+        if (ownRef.current) {
+          releaseEntry(ownRef.current);
+          ownRef.current = null;
+        }
+      }, 0);
+    };
+  }, []);
 }
 
 /**
@@ -169,10 +234,11 @@ export function useStepHistory(value, onBack, { active = true } = {}) {
  * built on top of Sheet.jsx for free instead of touching each one.
  *
  * Push while shown; nothing while hidden. Closing through the sheet's own UI
- * (X button, scrim tap, Cancel) drops the entry immediately (see the `active`
- * branch in useStepHistory above) rather than leaving it for hardware-back to
- * find later - so a hardware-back press right after an in-UI close steps the
- * PAGE back, instead of trying to close a sheet that is already closed.
+ * (X button, scrim tap, Cancel) drops the entry immediately and unwinds the
+ * browser entry it pushed (see the `active` branch in useStepHistory above)
+ * rather than leaving it for hardware-back to find later - so a hardware-back
+ * press right after an in-UI close steps the PAGE back, instead of trying to
+ * close a sheet that is already closed.
  */
 export function useSheetHistory(show, onClose) {
   useStepHistory(show ? 'pc-sheet-open' : 'pc-sheet-closed', onClose, { active: show });

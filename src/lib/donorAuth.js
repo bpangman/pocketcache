@@ -256,7 +256,6 @@ export function useDonorAuth({ resumeKey }) {
   // A real Supabase session found on load - a returning donor, not this
   // device's own local demo state (which is a separate concept in AppContext).
   const [existingSession, setExistingSession] = useState(null);
-  const [resumedFromOAuth, setResumedFromOAuth] = useState(false);
 
   const [stage, setStage] = useState('email'); // 'email' | 'code'
   const [email, setEmail] = useState('');
@@ -268,8 +267,9 @@ export function useDonorAuth({ resumeKey }) {
   const [oauthErrors, setOauthErrors] = useState({}); // { apple: 'msg', google: 'msg' }
 
   // On mount: is there already a signed-in Supabase session (returning donor
-  // on this browser), and did we just land back here from an Apple/Google
-  // redirect that this surface kicked off?
+  // on this browser)? If we just landed back here from an Apple/Google
+  // redirect that this surface kicked off, the resume marker is cleaned out
+  // of the URL so a later reload cannot replay it.
   useEffect(() => {
     let cancelled = false;
     const supabase = getSupabase();
@@ -286,10 +286,7 @@ export function useDonorAuth({ resumeKey }) {
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;
       const identity = identityFromSession(data?.session);
-      if (identity) {
-        setExistingSession(identity);
-        if (isResume) setResumedFromOAuth(true);
-      }
+      if (identity) setExistingSession(identity);
       setCheckingSession(false);
     }).catch(() => {
       if (!cancelled) setCheckingSession(false);
@@ -419,6 +416,8 @@ export function useDonorAuth({ resumeKey }) {
     }
   }, [resumeKey]);
 
+  // Back to the email stage, keeping the typed address so "Change email" and
+  // the wizard's back button land on a pre-filled field.
   function resetToEmail() {
     setStage('email');
     setCodeInput('');
@@ -427,7 +426,7 @@ export function useDonorAuth({ resumeKey }) {
   }
 
   return {
-    checkingSession, existingSession, resumedFromOAuth,
+    checkingSession, existingSession,
     stage,
     email, setEmail,
     sendingCode, sendError, sendCode,

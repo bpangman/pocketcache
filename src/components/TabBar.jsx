@@ -11,19 +11,26 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
+// Inactive tabs read in the shared slate token; the active tab keeps the
+// tenant's text accent (navy for BGCA, gold for the default brand), so the
+// bar never has to pick a tenant color of its own.
+const INACTIVE = 'var(--slate)';
+
 export default function TabBar() {
   const { tab, setTab } = useApp();
   const brand = useTheme();
 
   return (
-    <div className="tab-bar absolute bottom-0 left-0 right-0 flex items-center px-1 pt-1" style={{ paddingBottom: 'max(12px, calc(var(--pc-safe-bottom) - 6px))' }}>
+    <nav aria-label="Main" className="tab-bar absolute bottom-0 left-0 right-0 flex items-center px-1 pt-1" style={{ paddingBottom: 'max(12px, calc(var(--pc-safe-bottom) - 6px))' }}>
       {TABS.map(({ id, label, icon: Icon }) => { // eslint-disable-line no-unused-vars
         const active = tab === id;
         return (
           <button
             key={id}
+            type="button"
             onClick={() => setTab(id)}
-            className="flex-1 flex flex-col items-center gap-1 py-2 relative"
+            aria-current={active ? 'page' : undefined}
+            className="flex-1 flex flex-col items-center gap-1 py-2 relative min-h-[44px] rounded-chip"
           >
             {active && (
               <motion.div
@@ -34,14 +41,14 @@ export default function TabBar() {
               />
             )}
             <Icon size={20} className="transition-colors duration-300"
-              style={{ color: active ? brand.textAccent : '#9ca3af' }} />
-            <span className="text-xs font-semibold transition-colors duration-300"
-              style={{ color: active ? brand.textAccent : '#9ca3af', fontSize: '10px' }}>
+              style={{ color: active ? brand.textAccent : INACTIVE }} />
+            <span className="font-semibold transition-colors duration-300"
+              style={{ color: active ? brand.textAccent : INACTIVE, fontSize: '0.625rem' }}>
               {label}
             </span>
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }

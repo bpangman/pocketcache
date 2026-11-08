@@ -3,10 +3,14 @@ import { AppProvider, useApp } from './store/AppContext';
 import { NpProvider } from './store/NpContext';
 import { ThemeProvider, useTheme } from './store/ThemeContext';
 import CoinMark from './components/CoinMark';
-import ScaleFit from './components/ScaleFit';
+import ScaleFit, { REF_W } from './components/ScaleFit';
 import DevicePicker, { DEVICES, loadDevice, saveDevice } from './components/DevicePicker';
 // eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
+import { Check, CreditCard, Landmark, Lock } from 'lucide-react';
+import Button from './components/ui/Button';
+import { DemoShellContext } from './lib/demo';
+import { firstEligibleChargeDate } from './lib/billing';
 import OrgLogo from './components/OrgLogo';
 import AppleLogo from './components/AppleLogo';
 import { findOrgByCode, resolveOrgByCode, isOrgPending } from './store/orgStore';
@@ -79,7 +83,7 @@ function warm(load) {
 
 // Exactly SplashAnimation's navy overlay, so the handoff from "chunk arriving"
 // to "splash playing" is invisible - no white flash on a cold native launch.
-const SPLASH_BG = 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)';
+const SPLASH_BG = 'linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%)';
 
 // One entry per surface: the background the arriving screen paints, so the
 // fallback is the same colour the user is about to see. `page` surfaces are
@@ -92,7 +96,11 @@ const SURFACES = {
   // NpShell - phone admin shell
   npApp: { bg: '#f8fafc' },
   // WebDashboard / WebOnboarding / NpWebShell / NpWebSignup / WebAdminSignIn
-  web: { bg: '#f6f8fb', page: true },
+  web: { bg: 'var(--surface)', page: true },
+  // RootBoundary - a crash outside every lazy surface (a provider, ThemedApp).
+  // Navy like the pre-JS paint, because nothing is known about what was on
+  // screen.
+  root: { bg: SPLASH_BG, dark: true, page: true },
 };
 
 function surfaceStyle(surface) {
@@ -125,57 +133,117 @@ function ChunkLoading({ surface }) {
   );
 }
 
-// Shown when a chunk still will not load after lazyChunk's retries - offline
-// mid-session, or a stale index pointing at a deployed-away filename. Reload is
-// the only real cure (React.lazy caches the rejection), so that is the button.
-function ChunkFailed({ surface }) {
+// What a failed dynamic import looks like across browsers: Chrome/Edge
+// ("Failed to fetch dynamically imported module"), Safari ("Importing a module
+// script failed"), and the webpack-era names some wrappers still throw.
+const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError|Loading chunk/i;
+
+function isChunkLoadError(error) {
+  return error?.name === 'ChunkLoadError' || CHUNK_ERROR_RE.test(String(error?.message ?? ''));
+}
+
+// The one error card. Two cases share it:
+//   chunk  - a chunk still will not load after lazyChunk's retries (offline
+//            mid-session, or a stale index pointing at a deployed-away
+//            filename). Reload is the only real cure (React.lazy caches the
+//            rejection), so that is the button.
+//   crash  - anything else that threw while rendering. It is NOT a dropped
+//            connection, so it must not say so; reload is still the honest
+//            first step, and the root card also offers a clean start.
+function ErrorCard({ surface, chunk, startFresh = false }) {
   const dark = SURFACES[surface].dark;
+  const web = SURFACES[surface].page;
   return (
-    <div style={{ ...surfaceStyle(surface), display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box' }}>
+    <div
+      role="alert"
+      style={{ ...surfaceStyle(surface), display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box' }}
+    >
       <div
         style={{
-          width: '100%', maxWidth: 340, background: '#fff', borderRadius: 20, padding: 24,
-          textAlign: 'center', boxShadow: dark ? '0 20px 50px rgba(0,0,0,0.35)' : '0 16px 48px rgba(11,42,74,0.10)',
-          border: dark ? 'none' : '1px solid #e5e7eb',
+          width: '100%', maxWidth: 340, background: '#fff', borderRadius: 'var(--r-lg)', padding: 24,
+          textAlign: 'center', boxShadow: dark ? 'var(--shadow-3)' : 'var(--shadow-2)',
+          border: dark ? 'none' : '1px solid var(--line)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><CoinMark size={34} /></div>
-        <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: '#0f172a' }}>We could not load this screen</p>
-        <p style={{ margin: '8px 0 18px', fontSize: 13.5, lineHeight: 1.6, color: '#64748b' }}>
-          Looks like the connection dropped. Nothing was lost  -  give it another go.
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 18, lineHeight: 1.2, color: 'var(--ink)' }}>
+          {chunk ? 'We could not load this screen' : 'Something went wrong'}
         </p>
-        <button
-          onClick={() => window.location.reload()}
-          style={{
-            width: '100%', padding: '13px 16px', borderRadius: 16, border: 'none', cursor: 'pointer',
-            background: 'linear-gradient(135deg, #0B2A4A, #003865)', color: '#fff', fontWeight: 700, fontSize: 15,
-          }}
-        >
-          Try again
-        </button>
+        <p style={{ margin: '8px 0 20px', fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)' }}>
+          {chunk
+            ? 'Looks like the connection dropped. Nothing was lost - give it another go.'
+            : 'This screen ran into a problem. Reloading usually fixes it.'}
+        </p>
+        <Button surface={web ? 'web' : 'app'} onClick={() => window.location.reload()}>
+          {chunk ? 'Try again' : 'Reload'}
+        </Button>
+        {startFresh && (
+          <a
+            href={`${import.meta.env.BASE_URL}?reset=1`}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, marginTop: 8,
+              fontSize: 14, fontWeight: 600, color: 'var(--navy-deep)', textDecoration: 'none',
+            }}
+          >
+            Sign out and start fresh
+          </a>
+        )}
       </div>
     </div>
   );
 }
 
+// Keeps the error itself so the card can tell a dropped chunk from a real
+// render crash. Only a chunk failure is the "connection dropped" story.
 class ChunkBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { failed: false };
+    this.state = { failed: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error) {
+    return { failed: true, error };
   }
 
-  componentDidCatch(error) {
-    // Not console.error: a dropped chunk is a network condition we handle, not
-    // a bug to page on. Still recorded so it is visible when debugging.
-    console.warn('[PocketCache] screen failed to load', error);
+  componentDidCatch(error, info) {
+    if (isChunkLoadError(error)) {
+      // Not console.error: a dropped chunk is a network condition we handle,
+      // not a bug to page on. Still recorded so it is visible when debugging.
+      console.warn('[PocketCache] screen failed to load', error);
+    } else {
+      console.error('[PocketCache] screen crashed', error, info?.componentStack);
+    }
   }
 
   render() {
-    if (this.state.failed) return <ChunkFailed surface={this.props.surface} />;
+    if (this.state.failed) {
+      return <ErrorCard surface={this.props.surface} chunk={isChunkLoadError(this.state.error)} />;
+    }
+    return this.props.children;
+  }
+}
+
+// Last line of defence, around the stores and the shell router. A throw in a
+// provider initializer or in ThemedApp itself has no LazySurface above it, so
+// without this it white-screened with no way out.
+class RootBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { failed: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[PocketCache] app crashed', error, info?.componentStack);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return <ErrorCard surface="root" chunk={isChunkLoadError(this.state.error)} startFresh />;
+    }
     return this.props.children;
   }
 }
@@ -195,7 +263,33 @@ function LazySurface({ surface, children }) {
 // (full-bleed, proportionally scaled to viewport width).
 const MOBILE_BP = 600;
 
-const PAYMENT_TYPE_ICON = { ach: '🏦', apple_pay: <AppleLogo size={16} />, card: '💳' };
+const PAYMENT_TYPE_ICON = {
+  ach: <Landmark size={18} aria-hidden="true" />,
+  apple_pay: <AppleLogo size={16} />,
+  card: <CreditCard size={18} aria-hidden="true" />,
+};
+
+// Gate cards (closed account, reactivation check-in): enter 250ms ease-out,
+// exit 150ms ease-in, per the motion rules in DESIGN.md.
+const GATE_CARD_MOTION = {
+  initial: { opacity: 0, scale: 0.96, y: 12 },
+  animate: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } },
+  exit: { opacity: 0, scale: 0.98, transition: { duration: 0.15, ease: 'easeIn' } },
+};
+
+// 11px caps label used above each row group.
+const CAPS_LABEL = {
+  margin: '0 0 8px', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+  textTransform: 'uppercase', color: 'var(--slate)',
+};
+
+// 36px icon chip, radius 12, one neutral tint for the whole card (a tenant
+// primary such as the default gold cannot carry an icon on white at AA).
+const ICON_CHIP = {
+  width: 36, height: 36, borderRadius: 'var(--r-sm)', flexShrink: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'var(--surface)', color: 'var(--navy-deep)',
+};
 
 function CancelledOverlay({ onReactivate, onBack }) {
   return (
@@ -207,30 +301,25 @@ function CancelledOverlay({ onReactivate, onBack }) {
       style={{ ...scrim('blocking'), ...centered(24), zIndex: Z.blockingScrim }}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center"
+        {...GATE_CARD_MOTION}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pc-cancelled-title"
+        className="bg-white rounded-panel p-6 w-full max-w-sm shadow-3 text-center"
       >
-        <div className="text-4xl mb-3">🔒</div>
-        <p className="font-bold text-gray-900 text-lg mb-2">Your account is closed</p>
-        <p className="text-gray-500 text-sm mb-5 leading-relaxed">
-          Your donation history and settings are still here  -  just reactivate to pick up where you left off.
+        <div className="mx-auto mb-3" style={{ ...ICON_CHIP, width: 48, height: 48 }}>
+          <Lock size={24} aria-hidden="true" />
+        </div>
+        <p id="pc-cancelled-title" className="font-bold text-ink text-lg mb-2" style={{ lineHeight: 1.2 }}>Your account is closed</p>
+        <p className="text-ink-2 text-sm mb-5 leading-relaxed">
+          Your donation history and settings are still here - just reactivate to pick up where you left off.
         </p>
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={onReactivate}
-          className="w-full py-3.5 rounded-2xl text-white font-bold text-base mb-3"
-          style={{ background: 'linear-gradient(135deg, #0B2A4A, #003865)' }}
-        >
+        <Button onClick={onReactivate} className="mb-3">
           Reactivate my account
-        </motion.button>
-        <button
-          onClick={onBack}
-          className="w-full py-3 rounded-2xl text-gray-500 font-semibold text-sm bg-gray-50"
-        >
+        </Button>
+        <Button variant="secondary" size="md" onClick={onBack}>
           Back to start
-        </button>
+        </Button>
       </motion.div>
     </motion.div>
   );
@@ -246,6 +335,8 @@ function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, 
     setTimeout(() => { setRelinking(false); setRelinked(true); }, 1200);
   }
 
+  const rowGroup = { padding: '16px 0', borderBottom: '1px solid var(--line)' };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -255,75 +346,81 @@ function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, 
       style={{ ...scrim('blocking'), ...centered(24), zIndex: Z.blockingScrim }}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+        {...GATE_CARD_MOTION}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pc-reactivate-title"
+        className="bg-white rounded-panel p-6 w-full max-w-sm shadow-3"
       >
-        <div className="text-2xl mb-2">👋</div>
-        <p className="font-bold text-gray-900 text-lg mb-1">Welcome back!</p>
-        <p className="text-gray-500 text-sm mb-4 leading-relaxed">
+        <div className="text-2xl mb-2" aria-hidden="true">👋</div>
+        <p id="pc-reactivate-title" className="font-bold text-ink text-lg mb-1" style={{ lineHeight: 1.2 }}>Welcome back!</p>
+        <p className="text-ink-2 text-sm mb-1 leading-relaxed">
           Quick check before we restart:
         </p>
 
-        {/* Card we track */}
-        <div className="bg-gray-50 rounded-2xl p-4 mb-3">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Card we track</p>
-          <div className="flex items-center gap-3">
-            <span className="text-xl">🏦</span>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm truncate">{trackedCard?.name ?? 'Chase Sapphire'}</p>
-              <p className="text-gray-400 text-xs">•••• {trackedCard?.last4 ?? '4242'}</p>
-              <p className="text-xs text-amber-600 mt-0.5 leading-tight">We disconnected this when you left  -  give it a quick re-link</p>
+        {/* Inner groups are rows split by a 1px line, not cards in a card. */}
+        <div className="mb-5">
+          {/* Card we track */}
+          <div style={rowGroup}>
+            <p style={CAPS_LABEL}>Card we track</p>
+            <div className="flex items-center gap-3">
+              <span style={ICON_CHIP}><CreditCard size={18} aria-hidden="true" /></span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-ink text-sm truncate">{trackedCard?.name ?? 'Your card'}</p>
+                {trackedCard?.last4 && <p className="text-slate text-xs">•••• {trackedCard.last4}</p>}
+                <p className="text-xs mt-1 leading-tight" style={{ color: 'var(--warning)' }}>We disconnected this when you left - give it a quick re-link</p>
+              </div>
+              {relinked ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold shrink-0" style={{ color: 'var(--teal-700)' }}>
+                  <Check size={14} aria-hidden="true" /> Connected
+                </span>
+              ) : (
+                <Button
+                  size="md"
+                  fullWidth={false}
+                  loading={relinking}
+                  onClick={handleRelink}
+                  className="shrink-0"
+                  style={{ fontSize: 14 }}
+                >
+                  {relinking ? 'Linking…' : 'Re-link'}
+                </Button>
+              )}
             </div>
-            {relinked ? (
-              <span className="text-xs font-semibold text-teal-600 shrink-0">Connected ✓</span>
-            ) : (
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={handleRelink}
-                disabled={relinking}
-                className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold text-white"
-                style={{ background: relinking ? '#9ca3af' : 'linear-gradient(135deg, #0d9488, #003865)', cursor: relinking ? 'default' : 'pointer' }}
-              >
-                {relinking ? 'Linking…' : 'Re-link'}
-              </motion.button>
-            )}
           </div>
-        </div>
 
-        {/* How you pay */}
-        <div className="bg-gray-50 rounded-2xl p-4 mb-5">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">How you pay</p>
-          <div className="flex items-center gap-3">
-            <span className="text-xl">{PAYMENT_TYPE_ICON[paymentMethod?.type] ?? '💳'}</span>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm truncate">{paymentMethod?.label ?? 'Credit or Debit Card'}</p>
-              {paymentMethod?.last4 && <p className="text-gray-400 text-xs">•••• {paymentMethod.last4}</p>}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-semibold text-teal-600">Keep</span>
-              <span className="text-gray-300 text-xs">·</span>
-              <button onClick={onChangePayment} className="text-xs font-semibold" style={{ color: '#003865' }}>Change</button>
+          {/* How you pay */}
+          <div style={rowGroup}>
+            <p style={CAPS_LABEL}>How you pay</p>
+            <div className="flex items-center gap-3">
+              <span style={ICON_CHIP}>{PAYMENT_TYPE_ICON[paymentMethod?.type] ?? PAYMENT_TYPE_ICON.card}</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-ink text-sm truncate">{paymentMethod?.label ?? 'Credit or Debit Card'}</p>
+                {paymentMethod?.last4 && <p className="text-slate text-xs">•••• {paymentMethod.last4}</p>}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-xs font-semibold" style={{ color: 'var(--teal-700)' }}>Keep</span>
+                <span className="text-xs" style={{ color: 'var(--muted)' }} aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  onClick={onChangePayment}
+                  className="text-xs font-semibold"
+                  style={{ color: 'var(--navy-deep)', minHeight: 44, minWidth: 44, padding: '0 4px', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  Change
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* production: Plaid item was removed at cancellation; re-link is mandatory before round-ups resume */}
-        <motion.button
-          whileTap={relinked ? { scale: 0.97 } : {}}
-          onClick={relinked ? onRestart : undefined}
-          className="w-full py-3.5 rounded-2xl text-white font-bold text-base mb-3"
-          style={{
-            background: relinked ? 'linear-gradient(135deg, #0B2A4A, #003865)' : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-            cursor: relinked ? 'pointer' : 'default',
-          }}
-        >
+        <Button disabled={!relinked} onClick={onRestart} className="mb-3">
           Restart my round-ups
-        </motion.button>
-        <button onClick={onBack} className="w-full py-3 rounded-2xl text-gray-500 font-semibold text-sm bg-gray-50">
+        </Button>
+        <Button variant="secondary" size="md" onClick={onBack}>
           Back to start
-        </button>
+        </Button>
       </motion.div>
     </motion.div>
   );
@@ -335,17 +432,36 @@ function ReactivateCheckinCard({ trackedCard, paymentMethod, onRestart, onBack, 
 // sheet's own scrollable body. See the "OPEN-SHEET TRACKING" note in
 // lib/overlay.js. z-index is unchanged either way (globalToast already clears
 // the sheet's own z-index).
-function Toast({ message, nearSheet }) {
+//
+// `fixed` is the full-window web version (the admin portal, NpWebShell): pinned
+// to the browser window, not to a scaled phone box. Either way the toast wraps
+// instead of running off the edge - admin confirmations are full sentences
+// ("Join code updated to X. Reprint any QR codes that used the old one.").
+// AppContext's timer clears it.
+function Toast({ message, nearSheet = false, fixed = false }) {
+  const fromTop = nearSheet && !fixed;
+  let place;
+  if (fixed) place = { bottom: 28, maxWidth: 'min(520px, calc(100vw - 32px))', fontSize: 15 };
+  else if (fromTop) place = { top: 'calc(var(--pc-safe-top) + 12px)', maxWidth: 'calc(100% - 32px)', fontSize: 14 };
+  else place = { bottom: safeBottom(80), maxWidth: 'calc(100% - 32px)', fontSize: 14 };
   return (
     <motion.div
-      initial={{ opacity: 0, y: nearSheet ? -16 : 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: nearSheet ? -16 : 20 }}
-      className="absolute left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm font-semibold shadow-lg whitespace-nowrap"
+      role="status"
+      aria-live="polite"
+      initial={{ opacity: 0, y: fromTop ? -16 : 20 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } }}
+      exit={{ opacity: 0, y: fromTop ? -16 : 20, transition: { duration: 0.15, ease: 'easeIn' } }}
+      className={`${fixed ? 'fixed' : 'absolute'} left-1/2 -translate-x-1/2 px-5 py-3 text-white font-semibold text-center`}
       // globalToast === modal (50) on purpose: DOM order keeps deciding. See lib/overlay.
-      style={nearSheet
-        ? { top: 'calc(var(--pc-safe-top) + 12px)', zIndex: Z.globalToast }
-        : { bottom: safeBottom(80), zIndex: Z.globalToast }}
+      style={{
+        ...place,
+        width: 'max-content',
+        lineHeight: 1.4,
+        background: 'var(--ink)',
+        borderRadius: 'var(--r-md)',
+        boxShadow: 'var(--shadow-3)',
+        zIndex: Z.globalToast,
+      }}
     >
       {message}
     </motion.div>
@@ -382,7 +498,11 @@ function AppSurfaces() {
   }
 
   function handleRestartRoundups() {
-    reactivateAccount('Welcome back  -  tracking restarted today. Your first new charge comes on the 11th.');
+    // The first charge that can include today's round-ups: a restart after
+    // this month's lock waits for the cycle after next (billing.js).
+    const firstCharge = firstEligibleChargeDate(new Date())
+      .toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    reactivateAccount(`Welcome back - tracking restarted today. Your first new charge comes on ${firstCharge}.`);
     setShowReactivateCheckin(false);
   }
 
@@ -415,6 +535,11 @@ function AppSurfaces() {
           itself has mounted, instead of over the wizard's own Benevity /
           Team ID buttons. */}
       <AppDownloadPrompt />
+      {/* Admin confirmations (Grow's join-code change, Overview's Benevity
+          mark) call useApp().showToast too; without this they were dropped. */}
+      <AnimatePresence>
+        {toast && <Toast key="toast" message={toast} nearSheet={sheetOpen} />}
+      </AnimatePresence>
     </div>
   );
   return (
@@ -468,17 +593,22 @@ function PhoneFrame({ children, compact = false }) {
   const { w: windowW, h: windowH } = useWindowSize();
 
   const device = DEVICES.find(d => d.id === deviceId) ?? DEVICES[2];
-  // Reserve vertical space for wordmark, chip bar (desktop only), caption, gaps,
-  // and page padding. Compact mode (real phones) drops the device picker.
-  const chromeV = compact ? 150 : 240;
+  // Compact mode (real phones) drops the device picker and reserves vertical
+  // space for the wordmark, caption, gaps and page padding.
+  const chromeV = 150;
   const BEZEL = 28; // 14px decorative ring on each side (box-shadow)
   const pagePad = compact ? 16 : 32;
-  // Fit by height AND width so the frame never overflows a narrow screen.
-  const outerScale = Math.min(
-    1,
-    (windowH - chromeV) / (device.height + BEZEL),
-    (windowW - 2 * pagePad - BEZEL) / device.width,
-  );
+  // Never overflow a narrow screen sideways.
+  const widthFit = (windowW - 2 * pagePad - BEZEL) / device.width;
+  // Compact (a real phone that lands on the mockup) fits by height AND width.
+  // The desktop demo instead never draws the app below 1:1 CSS px: ScaleFit
+  // renders the REF_W-wide app at device.width / REF_W, so the frame scales by
+  // the inverse (1.04 at 375 wide, 1.08 at 360, 1 for wider presets) and every 44px
+  // tap target lands at 44px on screen. A short window scrolls the page rather
+  // than shrinking the phone (it used to land at about 75% on a 900px window).
+  const outerScale = compact
+    ? Math.min(1, (windowH - chromeV) / (device.height + BEZEL), widthFit)
+    : Math.min(Math.max(1, REF_W / device.width), widthFit);
 
   function handleDeviceChange(id) {
     setDeviceId(id);
@@ -512,20 +642,20 @@ function PhoneFrame({ children, compact = false }) {
         >
           {brand.brandLogoUrl ? (
             <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden"
-              style={{ background: '#fff' }}
+              className="w-10 h-10 flex items-center justify-center overflow-hidden"
+              style={{ background: '#fff', borderRadius: 'var(--r-sm)', boxShadow: 'var(--shadow-2)' }}
             >
               <img
                 src={brand.brandLogoUrl}
                 alt={brand.appName}
-                className="w-full h-full object-contain p-1.5"
+                className="w-full h-full object-contain p-1"
                 style={{ display: 'block' }}
               />
             </div>
           ) : brand.logoEmoji ? (
             <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl shadow-lg"
-              style={{ background: brand.gradient }}
+              className="w-10 h-10 flex items-center justify-center text-xl"
+              style={{ background: brand.gradient, borderRadius: 'var(--r-sm)', boxShadow: 'var(--shadow-2)' }}
             >
               {brand.logoEmoji}
             </div>
@@ -533,10 +663,10 @@ function PhoneFrame({ children, compact = false }) {
             <CoinMark size={40} />
           )}
           <div>
-            <h1 className="text-white font-bold text-2xl" style={{ letterSpacing: '-0.5px' }}>
+            <h1 className="text-white font-bold" style={{ fontSize: 22, lineHeight: 1.2, letterSpacing: '-0.5px', margin: 0 }}>
               {brand.appName}
             </h1>
-            <p className="text-slate-400 text-xs font-medium">{brand.tagline}</p>
+            <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.72)', margin: 0 }}>{brand.tagline}</p>
           </div>
         </motion.div>
 
@@ -562,15 +692,21 @@ function PhoneFrame({ children, compact = false }) {
               position: 'absolute',
               top: 0,
               left: 0,
-              boxShadow: '0 0 0 12px #1a1a2e, 0 0 0 14px #2a2a4e, 0 50px 100px rgba(0,0,0,0.8)',
+              // Drawn device bezel (two rings) plus a navy-tinted drop shadow.
+              boxShadow: '0 0 0 12px #1a1a2e, 0 0 0 14px #2a2a4e, 0 50px 100px rgba(0,26,51,0.8)',
             }}
           >
-            {/* Notch */}
-            <div
-              className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-b-3xl z-50"
-            />
+            {/* Notch (the SE has a home button and no notch; drawing one there
+                covered the gate's logo) */}
+            {device.id !== 'se' && (
+              <div
+                aria-hidden="true"
+                className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-b-3xl z-50"
+              />
+            )}
             {/* Status bar */}
             <div
+              aria-hidden="true"
               className="absolute top-2 left-6 z-50 text-xs font-semibold text-white mix-blend-difference pointer-events-none"
             >
               9:41
@@ -584,7 +720,7 @@ function PhoneFrame({ children, compact = false }) {
           </motion.div>
         </motion.div>
 
-        <p className="text-slate-500 text-xs text-center max-w-xs">
+        <p className="text-xs text-center max-w-xs" style={{ color: 'rgba(255,255,255,0.6)', margin: 0 }}>
           Interactive prototype · BGCA tenant demo
         </p>
       </div>
@@ -615,15 +751,54 @@ function computeIsMobile() {
   return window.innerWidth < MOBILE_BP || isMobileUserAgent();
 }
 
-function useIsMobile() {
+// `live` = keep re-evaluating on resize. Only the marketing PhoneFrame demo
+// shell wants that (its compact mode follows the window). A real app session
+// decides phone-vs-webpage ONCE at mount: the two are different component
+// trees, so flipping between them when a desktop window is dragged under 600px
+// (or an iPad Safari Slide Over pane is resized) remounted the whole app and
+// threw away open sheets, modals and wizard history mid-session.
+function useIsMobile(live = true) {
   const [mobile, setMobile] = useState(computeIsMobile);
   useEffect(() => {
+    if (!live) return undefined;
     const check = () => setMobile(computeIsMobile());
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
-  }, []);
+  }, [live]);
   return mobile;
 }
+
+// Where a join link came from: the widget tags its links ?src=widget, and
+// campaign links carry utm_* params. Kept for this tab only (sessionStorage,
+// key pc_join_src, JSON) so a later step can attach it to the signup; nothing
+// is written to the server here, and the params are never stripped from the
+// URL (the pretty-URL rewrite below carries them along).
+const JOIN_SRC_KEY = 'pc_join_src';
+
+function captureJoinSource() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tags = {};
+    for (const [key, value] of params) {
+      if (value && (key === 'src' || key.startsWith('utm_'))) tags[key] = value.slice(0, 120);
+    }
+    if (Object.keys(tags).length === 0) return;
+    const org = params.get('org');
+    window.sessionStorage.setItem(JOIN_SRC_KEY, JSON.stringify({
+      ...tags,
+      ...(org ? { org: org.toUpperCase() } : {}),
+      at: new Date().toISOString(),
+    }));
+  } catch {
+    // Blocked storage (private mode, sandboxed webview) - attribution is a
+    // nice-to-have, never a reason to break the join.
+  }
+}
+
+// One-shot params the pretty URL must not carry: ?org= becomes the path,
+// ?reset=/?fresh= would wipe the device again on every reload, and the OAuth
+// callback markers are consumed once by supabase-js / donorAuth.
+const PRETTY_URL_DROP = ['org', 'reset', 'fresh', 'code', 'authResume'];
 
 // A fresh Supabase auth return, recognized synchronously (before the SPA's
 // own async supabase.auth.getSession() has had a chance to run), two ways:
@@ -673,8 +848,7 @@ function hasStoredSupabaseSession() {
 // reintroduce a 440px app-in-a-box on a desktop screen.
 
 function ThemedApp() {
-  const isMobile = useIsMobile();
-  const { goToOnboardingStep, page, setPage, hasAccount, adminRole, lastMode, accountStatus, selectedNonprofit } = useApp();
+  const { goToOnboardingStep, page, setPage, hasAccount, adminRole, lastMode, setLastMode, accountStatus, selectedNonprofit } = useApp();
   // Donors arriving through an org's join link (?org=CODE)  -  or admins signing
   // in from their micro-site (?npsignin=1) or listing their org (?npsignup=1)  -
   // get the real app experience: full-bleed on phones, a real webpage in a
@@ -702,6 +876,11 @@ function ThemedApp() {
   // reached the screen that writes pc_identity yet. Without this, that donor
   // hit this exact bug - landed back on bare /demo/ with a real session and
   // no pc_ keys, and got the marketing PhoneFrame instead of the app.
+  //
+  // isMobileUserAgent(): a real phone is never the demo shell's audience. A
+  // bare /demo/ typed on a phone, or a home-screen icon saved before sign-in,
+  // used to draw the marketing phone mockup (bezel, fake 9:41 status bar,
+  // "Interactive prototype" caption) inside the real phone.
   const [appEntry] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return Boolean(
@@ -712,12 +891,18 @@ function ThemedApp() {
       params.get('signin') === '1' ||
       params.get('join') === '1' ||
       window.Capacitor?.isNativePlatform?.() ||
+      isMobileUserAgent() ||
       hasAccount ||
       adminRole ||
       hasOAuthReturnMarkers() ||
       hasStoredSupabaseSession()
     );
   });
+  // Live only for the demo shell; a real session picks its tree once.
+  const isMobile = useIsMobile(!appEntry);
+
+  // Widget / campaign attribution, read before the pretty-URL rewrite runs.
+  useEffect(() => { captureJoinSource(); }, []);
 
   // ?npsignup=1  -  a direct link into the nonprofit signup wizard, for the
   // marketing site's "list your nonprofit" CTA. Drives Onboarding to its
@@ -732,6 +917,26 @@ function ThemedApp() {
     if (new URLSearchParams(window.location.search).get('npsignup') !== '1') return;
     if (page === 'np-dashboard') return;
     goToOnboardingStep('nonprofit-signup');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ?npsignin=1 on the PHONE - the micro-site's "Nonprofit admin? Sign in".
+  // Onboarding's step initializer only honours it while page is 'onboarding',
+  // so a device that also holds a donor session (page 'home') used to open the
+  // donor dashboard instead. Mirrors the ?npsignup=1 effect above: a device
+  // that already holds an admin role goes straight to the admin dashboard,
+  // anyone else gets the admin sign-in step. Desktop is WebExperience's job.
+  useEffect(() => {
+    if (!appEntry || !isMobile) return;
+    if (new URLSearchParams(window.location.search).get('npsignin') !== '1') return;
+    if (page === 'np-dashboard') return;
+    if (adminRole) {
+      setLastMode('admin');
+      setPage('np-dashboard');
+      return;
+    }
+    // page 'onboarding' already lands on 'admin-signin' via the initializer.
+    if (page !== 'onboarding') goToOnboardingStep('admin-signin');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -794,16 +999,44 @@ function ThemedApp() {
   // Org-scoped pretty URL: a join-link entry settles at pocketcache.app/CODE/give
   // (the 404 forwarder routes that path back to ?org=CODE, so refresh/bookmark
   // work). Delayed so the gate's auto-bind consumes ?org= first.
+  //
+  // URL only: this never binds or unbinds anyone. A signed-in donor opening a
+  // DIFFERENT nonprofit's link is parked by AppContext as a pending switch
+  // they confirm, not re-bound here.
+  //
+  // Skipped for:
+  //   - ?npstripe=return|refresh&org=<uuid>: Stripe's hosted-onboarding
+  //     return. `org` is a server org id there, not a join code.
+  //   - any host but pocketcache.app: the /CODE/give path only exists behind
+  //     that domain's 404 forwarder (localhost and preview hosts would 404).
+  // Every other query param (?app=1, ?review=, ?src=widget, utm_*) survives
+  // the rewrite; only the one-shot ones in PRETTY_URL_DROP are removed.
+  //
+  // A code this device already knows is settled without a fetch; an unknown
+  // one goes through resolveOrgByCode, which dedupes in-flight lookups with
+  // the gate's own call for the same code.
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('org');
-    if (!code) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('org');
+    if (!code || params.get('npstripe')) return;
+    if (window.location.hostname !== 'pocketcache.app') return;
     let cancelled = false;
     let cleanupTimer = null;
-    resolveOrgByCode(code).then(org => {
+    const settle = org => {
       if (cancelled || !org) return;
       const slug = encodeURIComponent((org.shortName || org.id).toUpperCase());
-      cleanupTimer = setTimeout(() => { if (!cancelled) window.history.replaceState(null, '', `/${slug}/give`); }, 2500);
-    });
+      cleanupTimer = setTimeout(() => {
+        if (cancelled) return;
+        const rest = new URLSearchParams(window.location.search);
+        if (!rest.get('org')) return; // something else already moved the URL on
+        PRETTY_URL_DROP.forEach(key => rest.delete(key));
+        const qs = rest.toString();
+        window.history.replaceState(null, '', `/${slug}/give${qs ? `?${qs}` : ''}${window.location.hash}`);
+      }, 2500);
+    };
+    const local = findOrgByCode(code);
+    if (local) settle(local);
+    else resolveOrgByCode(code).then(settle);
     return () => { cancelled = true; if (cleanupTimer) clearTimeout(cleanupTimer); };
   }, []);
 
@@ -818,9 +1051,15 @@ function ThemedApp() {
           <WebExperience />
         )
       ) : (
-        <PhoneFrame compact={isMobile}>
-          <AppContent />
-        </PhoneFrame>
+        // The marketing demo shell is the one place demo scaffolding (the demo
+        // code hint, the fake QR scan, Plaid test credentials, the simulated
+        // Apple Pay card) belongs; outside it the real app hides them. See
+        // src/lib/demo.js.
+        <DemoShellContext.Provider value={true}>
+          <PhoneFrame compact={isMobile}>
+            <AppContent />
+          </PhoneFrame>
+        </DemoShellContext.Provider>
       )}
     </ThemeProvider>
   );
@@ -838,7 +1077,7 @@ function ThemedApp() {
 // centered WebPortal column below is now only the router's dead end - see the
 // note on the component for the one state that still leaks into it.
 function WebExperience() {
-  const { page, accountStatus, selectedNonprofit, initialOnboardingStep, returnFromOnboarding } = useApp();
+  const { page, setPage, accountStatus, selectedNonprofit, initialOnboardingStep, returnFromOnboarding, adminRole, setLastMode, toast } = useApp();
   const bioGate = useBiometricGate();
   // Capture the entry context ONCE  -  the pretty-URL rewrite strips the params.
   const [entry, setEntry] = useState(() => {
@@ -909,6 +1148,29 @@ function WebExperience() {
   // step (the phone gate carries the same link, GateSignInScreen ~912). State,
   // not the latched URL param, so that in-page link works without a reload.
   const [adminSignIn, setAdminSignIn] = useState(entry.npsignin);
+  // ?npsignin=1 outranks a donor session on this device. An admin who also
+  // gives, clicking "Nonprofit admin? Sign in" on their micro-site, used to get
+  // the donor dashboard because the signed-in-donor branch below runs first.
+  // A latch, released the moment the admin dashboard is reached (or the
+  // signup wizard takes over), so "Switch to Giving" later in the same visit
+  // is not dragged back to sign-in.
+  const [npSignInFirst, setNpSignInFirst] = useState(entry.npsignin);
+  const npSignInActive = npSignInFirst && page !== 'np-dashboard' && !npSignup;
+  if (npSignInFirst && !npSignInActive) setNpSignInFirst(false);
+  // Already an admin on this device: straight to the dashboard. In an effect,
+  // once, never as an unconditional set during render.
+  useEffect(() => {
+    if (!npSignInActive || !adminRole) return;
+    setLastMode('admin');
+    setPage('np-dashboard');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (npSignInActive) {
+    // One frame while the effect above moves an existing admin along.
+    if (adminRole) return <ChunkLoading surface="web" />;
+    return <LazySurface surface="web"><WebAdminSignIn /></LazySurface>;
+  }
 
   // ── Closed account, FIRST ──
   // cancelAccount() leaves `page` at 'onboarding', so a cancelled donor used to
@@ -917,7 +1179,8 @@ function WebExperience() {
   // same person and the same answer: the web-native closed-account page, which
   // owns both the closed state and the reactivation check-in. It is above every
   // donor branch because none of them can act for someone whose account is
-  // shut, and below nothing, because there is nothing above it.
+  // shut, and below only the explicit ?npsignin=1 admin intent above (an admin
+  // signing in is not acting on their donor account).
   // The nonprofit admin surface is unaffected: `accountStatus` is the DONOR
   // account's, and an admin whose donor side is closed still has page
   // 'np-dashboard'... which is why that branch is the one exception below.
@@ -946,6 +1209,10 @@ function WebExperience() {
             dashboard has mounted, instead of over the wizard's own Benevity /
             Team ID buttons. */}
         <AppDownloadPrompt fixed />
+        {/* Admin confirmations from useApp().showToast (Grow, Overview). */}
+        <AnimatePresence>
+          {toast && <Toast key="toast" message={toast} fixed />}
+        </AnimatePresence>
       </>
     );
   }
@@ -1027,23 +1294,36 @@ function WebExperience() {
   );
 }
 
+// Root chrome for every surface: framer-motion honours the OS "reduce motion"
+// setting everywhere (transforms are dropped, fades stay), and RootBoundary
+// catches what no LazySurface can.
+function Root({ children }) {
+  return (
+    <MotionConfig reducedMotion="user">
+      <RootBoundary>{children}</RootBoundary>
+    </MotionConfig>
+  );
+}
+
 export default function App() {
   const orgPageCode = new URLSearchParams(window.location.search).get('orgpage');
   if (orgPageCode) {
-    return <LazySurface surface="web"><OrgLandingPage code={orgPageCode} /></LazySurface>;
+    return <Root><LazySurface surface="web"><OrgLandingPage code={orgPageCode} /></LazySurface></Root>;
   }
   // Platform-owner-only console - ?padmin=1, never linked from anywhere in the
   // UI. Same pattern as ?orgpage= above: rendered outside AppProvider/NpProvider
   // since it does its own gate and reads localStorage directly.
   const isPlatformAdmin = new URLSearchParams(window.location.search).get('padmin') === '1';
   if (isPlatformAdmin) {
-    return <LazySurface surface="web"><PlatformAdmin /></LazySurface>;
+    return <Root><LazySurface surface="web"><PlatformAdmin /></LazySurface></Root>;
   }
   return (
-    <AppProvider>
-      <NpProvider>
-        <ThemedApp />
-      </NpProvider>
-    </AppProvider>
+    <Root>
+      <AppProvider>
+        <NpProvider>
+          <ThemedApp />
+        </NpProvider>
+      </AppProvider>
+    </Root>
   );
 }

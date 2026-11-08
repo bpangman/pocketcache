@@ -1,7 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { MotionConfig } from 'framer-motion'
 import './index.css'
 import App from './App.jsx'
+import RootBoundary from './components/RootBoundary.jsx'
 import { initNativeAuthListener } from './lib/donorAuth'
 
 // The old TESTING-MODE cold-launch wipe lived here (localStorage/sessionStorage/
@@ -18,8 +20,16 @@ import { initNativeAuthListener } from './lib/donorAuth'
 // without the Browser/App plugins.
 initNativeAuthListener();
 
+// RootBoundary: the one boundary that covers the providers and the stores
+// (App.jsx's ChunkBoundary only wraps the lazy surfaces). MotionConfig
+// reducedMotion="user" makes every framer-motion animation in the tree honor
+// the OS "reduce motion" setting - see DESIGN.md (MOTION).
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <RootBoundary>
+      <MotionConfig reducedMotion="user">
+        <App />
+      </MotionConfig>
+    </RootBoundary>
   </StrictMode>,
 )

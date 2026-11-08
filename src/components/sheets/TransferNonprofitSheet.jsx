@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 import Sheet from '../Sheet';
+import Button from '../ui/Button';
 import { getCustomOrg } from '../../store/orgStore';
 
 /**
@@ -73,36 +74,30 @@ export default function TransferNonprofitSheet({ show, onClose, adminRole, brand
       <div className="px-6 pt-5">
         {stage === 'done' ? (
           <div className="text-center py-6">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: '#fef3c7' }}>
-              <CheckCircle size={26} style={{ color: '#92400e' }} />
+            <div className="w-14 h-14 rounded-card flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--surface)' }}>
+              <CheckCircle size={26} style={{ color: 'var(--navy-deep)' }} />
             </div>
-            <p className="font-bold text-gray-900 text-lg">Demo: transfer simulated</p>
-            <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+            <p className="font-bold text-ink text-lg">Demo: transfer simulated</p>
+            <p className="text-ink-2 text-sm mt-2 leading-relaxed">
               Nothing actually changed. You still administer {joinCode} and no email was sent to {email}.
             </p>
-            <div className="rounded-2xl px-4 py-3 mt-4 text-left" style={{ background: '#fef3c7', border: '1.5px solid #fde68a' }}>
-              <p className="text-xs leading-relaxed" style={{ color: '#92400e' }}>
-                In the live version we check the new address is on your organization&apos;s domain, email them a link to accept, email you a copy, and give you a window to reverse it before your access ends.
-              </p>
+            {/* Plain helper text: this is an explanation, not a warning. */}
+            <p className="text-slate text-[13px] leading-relaxed mt-4 text-left">
+              In the live version we check the new address is on your organization&apos;s domain, email them a link to accept, email you a copy, and give you a window to reverse it before your access ends.
+            </p>
+            <div className="mt-5">
+              <Button onClick={onClose} style={{ background: brand.gradient }}>Done</Button>
             </div>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={onClose}
-              className="w-full py-3.5 rounded-2xl font-bold text-white text-sm mt-5"
-              style={{ background: brand.gradient }}
-            >
-              Done
-            </motion.button>
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm leading-relaxed mb-4">
+            <p className="text-ink-2 text-sm leading-relaxed mb-4">
               PocketCache gives each nonprofit one admin address, and right now that is
-              {currentAdminEmail ? <> <span className="font-semibold text-gray-900">{currentAdminEmail}</span></> : ' yours'}.
+              {currentAdminEmail ? <> <span className="font-semibold text-ink">{currentAdminEmail}</span></> : ' yours'}.
               Moving on? Hand {joinCode} to a colleague so your organization keeps its page.
             </p>
 
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2" htmlFor="transfer-email">
+            <label className="block text-[11px] font-semibold text-slate uppercase tracking-[0.06em] mb-2" htmlFor="transfer-email">
               Colleague&apos;s work email
             </label>
             <input
@@ -115,19 +110,23 @@ export default function TransferNonprofitSheet({ show, onClose, adminRole, brand
               value={email}
               disabled={stage === 'confirm'}
               onChange={e => { setEmail(e.target.value); setError(null); }}
-              className="w-full bg-gray-50 rounded-2xl px-4 py-3.5 text-sm outline-none border-2 transition-colors"
-              style={{ borderColor: error ? '#ef4444' : email ? brand.primary : '#e5e7eb' }}
+              aria-invalid={!!error}
+              aria-describedby={error ? 'transfer-email-error' : undefined}
+              className="w-full rounded-input px-4 text-ink outline-none transition-colors"
+              style={{ background: 'var(--surface)', fontSize: 16, minHeight: 48, border: `1px solid ${error ? 'var(--danger)' : email ? brand.primary : 'var(--line)'}` }}
             />
-            {error && <p className="text-red-500 text-xs mt-1.5 px-1">{error}</p>}
+            {error && <p id="transfer-email-error" role="alert" className="text-[13px] mt-1.5 px-1" style={{ color: 'var(--danger)' }}>{error}</p>}
 
-            <div className="rounded-2xl px-4 py-3 mt-4 flex items-start gap-3" style={{ background: '#fef2f2', border: '1.5px solid #fecaca' }}>
-              <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: '#dc2626' }} />
-              <p className="text-xs leading-relaxed" style={{ color: '#b91c1c' }}>
+            {/* The one tinted callout on this sheet: handing over control is
+                irreversible for the current admin, so it earns the red. */}
+            <div className="rounded-card px-4 py-3 mt-4 flex items-start gap-3" style={{ background: 'var(--danger-50)', border: '1px solid rgba(220,38,38,0.25)' }}>
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: 'var(--danger)' }} />
+              <p className="text-[13px] leading-relaxed" style={{ color: 'var(--danger)' }}>
                 This hands over control of {joinCode}. They get the donor list, the payout settings, and the page itself. You lose your admin access, and you will not be able to take it back yourself - only the new admin can transfer it again.
               </p>
             </div>
 
-            <p className="text-gray-400 text-xs mt-3 leading-relaxed">
+            <p className="text-slate text-[13px] mt-3 leading-relaxed">
               Demo: this transfer is simulated. Nothing is handed over, no email is sent, and you keep your admin access.
             </p>
 
@@ -139,28 +138,18 @@ export default function TransferNonprofitSheet({ show, onClose, adminRole, brand
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="rounded-2xl p-4 mt-4" style={{ background: '#fff7ed', border: '2px solid #fed7aa' }}>
-                    <p className="font-bold text-sm mb-1" style={{ color: '#9a3412' }}>
+                  {/* Neutral panel; the destructive action is carried by the
+                      filled danger button, not by a second tinted surface. */}
+                  <div className="rounded-card p-4 mt-4" style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                    <p className="font-bold text-sm mb-1 text-ink">
                       Give {joinCode} to {email.trim()}?
                     </p>
-                    <p className="text-xs leading-relaxed mb-3" style={{ color: '#9a3412' }}>
+                    <p className="text-[13px] leading-relaxed mb-3 text-ink-2">
                       They become the only admin for {joinCode}. Your own admin access ends. Confirm only if this person works at your organization and is expecting it.
                     </p>
                     <div className="flex gap-3">
-                      <button
-                        onClick={() => setStage('form')}
-                        className="flex-1 py-3 rounded-2xl bg-white border border-orange-200 font-semibold text-sm"
-                        style={{ color: '#9a3412' }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => setStage('done')}
-                        className="flex-1 py-3 rounded-2xl text-white font-semibold text-sm"
-                        style={{ background: '#c2410c' }}
-                      >
-                        Yes, transfer control
-                      </button>
+                      <Button variant="secondary" size="md" onClick={() => setStage('form')}>Cancel</Button>
+                      <Button variant="danger" size="md" onClick={() => setStage('done')}>Yes, transfer control</Button>
                     </div>
                   </div>
                 </motion.div>
@@ -168,17 +157,11 @@ export default function TransferNonprofitSheet({ show, onClose, adminRole, brand
             </AnimatePresence>
 
             {stage === 'form' && (
-              <motion.button
-                whileTap={email.trim() ? { scale: 0.97 } : {}}
-                onClick={handleContinue}
-                className="w-full py-4 rounded-2xl text-white font-bold text-base mt-5"
-                style={{
-                  background: email.trim() ? brand.gradient : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-                  cursor: email.trim() ? 'pointer' : 'default',
-                }}
-              >
-                Continue
-              </motion.button>
+              <div className="mt-5">
+                <Button onClick={handleContinue} disabled={!email.trim()} style={email.trim() ? { background: brand.gradient } : undefined}>
+                  Continue
+                </Button>
+              </div>
             )}
           </>
         )}

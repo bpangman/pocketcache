@@ -2,19 +2,24 @@ import { useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Pencil, Lock } from 'lucide-react';
 import { useNp } from '../../../store/NpContext';
 import { useApp } from '../../../store/AppContext';
-import { isJoinCodeAvailable, JOIN_CODE_RE, renameCustomOrgCode } from '../../../store/orgStore';
+import { isJoinCodeAvailable, JOIN_CODE_RE, renameCustomOrgCode, applyServerJoinCode } from '../../../store/orgStore';
 import { CHARGE_DAY, nextChargeLabel } from '../../../lib/billing';
+import { orgSignup, currentSessionEmail } from '../../../lib/npApi';
+import { escAttr, safeWidgetColor, WIDGET_DEFAULT_COLOR } from '../../../lib/npSignup';
 import CoinMark from '../../../components/CoinMark';
 import PocketCacheLogo from '../../../components/PocketCacheLogo';
+import Button from '../../../components/ui/Button';
 import { AdminVerifyModal, SaveBar } from '../AdminVerify';
 import DemoPill from '../DemoPill';
 import { NpPage, NpBlock, useNpLayout } from '../NpLayout';
+import { useNpDemoData, serverOrgIdFor } from '../useNpAdminActions';
+import { PREVIEW_NOTE } from './Overview';
 import { copyText } from '../../../lib/clipboard';
 
-function CopyButton({ text }) {
+function CopyButton({ text, label = 'Copy' }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -32,14 +37,25 @@ function CopyButton({ text }) {
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors"
-      style={{ background: copied ? '#d1fae5' : failed ? '#fee2e2' : '#f3f4f6', color: copied ? '#065f46' : failed ? '#991b1b' : '#374151' }}
+      aria-label={`${label}${copied ? ' (copied)' : ''}`}
+      className="flex items-center gap-1.5 text-[13px] font-semibold px-3 rounded-input transition-colors shrink-0"
+      style={{ minHeight: 44, background: copied ? 'var(--green-50)' : failed ? 'var(--danger-50)' : 'var(--surface)', color: copied ? 'var(--green-700)' : failed ? 'var(--danger)' : 'var(--ink-2)' }}
       title={failed ? 'Copy failed  -  select and copy manually' : undefined}
     >
-      {copied ? <Check size={13} /> : <Copy size={13} />}
+      {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
       {copied ? 'Copied!' : failed ? 'Try again' : 'Copy'}
     </button>
+  );
+}
+
+// Section label used throughout this tab: 11px, slate, 0.06em tracking.
+function Eyebrow({ children, className = '', style }) {
+  return (
+    <p className={`text-[11px] font-semibold text-slate uppercase ${className}`} style={{ letterSpacing: '0.06em', ...style }}>
+      {children}
+    </p>
   );
 }
 
@@ -57,7 +73,9 @@ function ordinal(n) {
 function buildSteps() {
   return [
     { num: 1, title: 'Share your code or link',  body: "Donors enter your unique code or scan your QR in the PocketCache app to lock in as your supporter." },
-    { num: 2, title: 'They link a card once',    body: "Donor connects a debit or credit card through Plaid. Setup takes under 60 seconds and only happens once." },
+    // Two separate links, not one: Plaid reads the card to count round-ups,
+    // Stripe holds the payment method that is actually charged.
+    { num: 2, title: 'They link a card once',    body: "Donor links the card to round up from (read-only, via Plaid) and adds a payment method with Stripe. Setup takes under 60 seconds and only happens once." },
     {
       num: 3,
       title: 'You collect every month',
@@ -82,25 +100,28 @@ function GrowPending({ web, accent }) {
     <NpPage gap={5} cols={2}>
       <NpBlock span="full">
         <>
-          {!web && <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Grow your donor base</p>}
-          <div className="rounded-3xl p-6" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-            <p className="font-bold text-base" style={{ color: '#92400e' }}>🔒 Your growth assets unlock at approval</p>
-            <p className="text-sm mt-1.5 leading-relaxed" style={{ color: '#b45309' }}>
-              PocketCache is reviewing your organization. The assets below go live - and arrive in
-              your launch-kit email - the moment you are approved. Until then your page is held
-              back, so donors cannot join yet.
-            </p>
+          {!web && <Eyebrow className="mb-3">Grow your donor base</Eyebrow>}
+          <div className="rounded-panel p-6 flex items-start gap-3" style={{ background: 'var(--warning-50)', border: '1px solid #FDE68A' }}>
+            <Lock size={18} className="shrink-0 mt-0.5" style={{ color: 'var(--warning)' }} aria-hidden />
+            <div>
+              <p className="font-bold text-base text-ink">Your growth assets unlock at approval</p>
+              <p className="text-sm mt-1.5 leading-relaxed text-ink-2">
+                PocketCache is reviewing your organization. The assets below go live - and arrive in
+                your launch-kit email - the moment you are approved. Until then your page is held
+                back, so donors cannot join yet.
+              </p>
+            </div>
           </div>
         </>
       </NpBlock>
       {locked.map(([title, body]) => (
         <NpBlock key={title}>
-          <div className="bg-white rounded-3xl p-5 card-shadow" style={{ opacity: 0.75 }}>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{title}</p>
-            <div className="rounded-2xl flex items-center justify-center" style={{ height: 90, background: `${accent}0d`, border: `1px dashed ${accent}55` }}>
-              <span className="text-2xl" aria-hidden>🔒</span>
+          <div className="bg-white rounded-panel p-5 card-shadow" style={{ opacity: 0.75 }}>
+            <Eyebrow className="mb-2">{title}</Eyebrow>
+            <div className="rounded-card flex items-center justify-center" style={{ height: 90, background: `${accent}0d`, border: `1px dashed ${accent}55` }}>
+              <Lock size={24} style={{ color: accent }} aria-hidden />
             </div>
-            <p className="text-gray-400 text-xs mt-3">{body}</p>
+            <p className="text-slate text-xs mt-3">{body}</p>
           </div>
         </NpBlock>
       ))}
@@ -108,21 +129,27 @@ function GrowPending({ web, accent }) {
   );
 }
 
+const DEFAULT_WIDGET_LABEL = 'Start giving →';
+const DEFAULT_WIDGET_WIDTH = 340;
+
 export default function Grow() {
-  const { npOrg, setNpOrg } = useNp();
+  const { npOrg, setNpOrg, previewAdmin } = useNp();
   const { adminRole, setAdminRole, showToast } = useApp();
   const { web } = useNpLayout();
+  const showDemo = useNpDemoData();
   const accent   = npOrg.color || '#0D9488';
   const joinCode = npOrg.joinCode || 'BGCA';
-  const shareUrl = `https://pocketcache.app/demo/?org=${joinCode}`;
+  const shareUrl = `https://pocketcache.app/demo/?org=${encodeURIComponent(joinCode)}`;
   const orgDisplayName = npOrg.name || joinCode;
   const steps = buildSteps();
+  const surface = web ? 'web' : 'app';
 
   // ── Join-code editing (custom orgs; established codes go through support) ──
   const isCustomOrg = !!npOrg._orgId;
   const [editingCode, setEditingCode] = useState(false);
   const [codeDraft, setCodeDraft] = useState(joinCode);
   const [codeError, setCodeError] = useState(null);
+  const [savingCode, setSavingCode] = useState(false);
 
   function handleCodeDraft(raw) {
     const v = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8);
@@ -138,32 +165,72 @@ export default function Grow() {
   const codeDirty = editingCode && codeDraft !== joinCode && !codeError && JOIN_CODE_RE.test(codeDraft);
 
   function requestSaveCode() {
+    if (previewAdmin) { showToast?.(PREVIEW_NOTE); return; }
     if (codeError) return;
     if (codeDraft === joinCode) { setEditingCode(false); return; }
     setVerifyingCode(true);
   }
 
-  function commitCode() {
-    // Moves the record to a new id (id === current code, lowercased) so the
-    // NEW code resolves immediately and the OLD code stops resolving - see
-    // orgStore.renameCustomOrgCode.
-    const renamed = npOrg._orgId ? renameCustomOrgCode(npOrg._orgId, codeDraft) : null;
-    const newOrgId = renamed?.id ?? npOrg._orgId;
-    setNpOrg({ ...npOrg, joinCode: codeDraft, _orgId: newOrgId });
+  // Apply a confirmed rename to this device: npOrg, the admin role, the toast.
+  function finishRename(newOrgId) {
+    setNpOrg({ ...npOrg, joinCode: codeDraft, shortName: codeDraft, _orgId: newOrgId });
     if (adminRole?.orgId === npOrg._orgId) setAdminRole({ ...adminRole, orgId: newOrgId, joinCode: codeDraft });
     setVerifyingCode(false);
     setEditingCode(false);
     showToast?.(`Join code updated to ${codeDraft}. Reprint any QR codes that used the old one.`);
   }
 
+  async function commitCode() {
+    const serverId = serverOrgIdFor(npOrg);
+    if (!serverId) {
+      // Practice / local org: moves the record to a new id (id === current
+      // code, lowercased) so the NEW code resolves immediately and the OLD code
+      // stops resolving - see orgStore.renameCustomOrgCode.
+      const renamed = npOrg._orgId ? renameCustomOrgCode(npOrg._orgId, codeDraft) : null;
+      finishRename(renamed?.id ?? npOrg._orgId);
+      return;
+    }
+    // A real org. Donors on other devices resolve codes through orgs_public,
+    // so the server has to accept the new code BEFORE anything moves locally.
+    // The local availability check above is only a hint: the server's
+    // uniqueness check is the one that counts.
+    if (!(await currentSessionEmail())) {
+      setVerifyingCode(false);
+      showToast?.('Sign in as your organization\'s admin to change the code.');
+      return;
+    }
+    setSavingCode(true);
+    const res = await orgSignup({ joinCode: codeDraft });
+    setSavingCode(false);
+    const serverCode = res.data?.org?.join_code;
+    if (!res.ok) {
+      setVerifyingCode(false);
+      showToast?.(res.status === 401
+        ? 'Your admin session has expired. Sign in again to change the code.'
+        : "Couldn't save the new code right now. Your current code still works.");
+      return;
+    }
+    if (res.data?.joinCodeTaken || serverCode !== codeDraft) {
+      setVerifyingCode(false);
+      setCodeError('That code is taken  -  try another.');
+      showToast?.(`That code is taken. Your code is still ${joinCode}.`);
+      return;
+    }
+    const renamed = applyServerJoinCode(npOrg._orgId, joinCode, codeDraft);
+    finishRename(renamed?.id ?? codeDraft.toLowerCase());
+  }
+
   // ── Widget customization (drives the snippet + live preview) ──
-  const [widgetColor, setWidgetColor] = useState(accent);
-  const [widgetWidth, setWidgetWidth] = useState(340);
-  const [widgetLabel, setWidgetLabel] = useState('Start giving →');
-  const embedSnippet = `<script src="https://pocketcache.app/widget.js" data-org="${joinCode}" data-name="${orgDisplayName}"`
-    + (widgetColor.toLowerCase() !== '#003865' ? ` data-color="${widgetColor}"` : '')
-    + (widgetWidth !== 340 ? ` data-width="${widgetWidth}"` : '')
-    + (widgetLabel !== 'Start giving →' ? ` data-label="${widgetLabel}"` : '')
+  const [widgetColor, setWidgetColor] = useState(safeWidgetColor(accent));
+  const [widgetWidth, setWidgetWidth] = useState(DEFAULT_WIDGET_WIDTH);
+  const [widgetLabel, setWidgetLabel] = useState(DEFAULT_WIDGET_LABEL);
+  // Every value lands inside an HTML attribute on the org's own website, so
+  // each is attribute-escaped and the color is only accepted as a hex literal.
+  const colorAttr = safeWidgetColor(widgetColor);
+  const embedSnippet = `<script src="https://pocketcache.app/widget.js" data-org="${escAttr(joinCode)}" data-name="${escAttr(orgDisplayName)}"`
+    + (colorAttr.toLowerCase() !== WIDGET_DEFAULT_COLOR ? ` data-color="${escAttr(colorAttr)}"` : '')
+    + (widgetWidth !== DEFAULT_WIDGET_WIDTH ? ` data-width="${widgetWidth}"` : '')
+    + (widgetLabel !== DEFAULT_WIDGET_LABEL ? ` data-label="${escAttr(widgetLabel)}"` : '')
     + `></script>`;
 
   // After every hook above (rules of hooks) - a pending org sees the locked
@@ -183,7 +250,7 @@ export default function Grow() {
             onCancel={() => setVerifyingCode(false)}
           />
           {/* Eyebrow only on the phone  -  the desktop shell prints a real <h1>. */}
-          {!web && <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Grow your donor base</p>}
+          {!web && <Eyebrow>Grow your donor base</Eyebrow>}
         </>
       </NpBlock>
 
@@ -192,55 +259,71 @@ export default function Grow() {
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="rounded-3xl p-6 text-center"
-          style={{ background: `linear-gradient(135deg, ${accent}18, ${accent}08)`, border: `2px solid ${accent}40` }}
+          className="rounded-panel p-6 text-center"
+          style={{ background: `${accent}14`, border: `1px solid ${accent}40` }}
         >
-          <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>
-            Your Donor Join Code
-          </p>
+          <Eyebrow className="mb-2" style={{ color: accent }}>Your Donor Join Code</Eyebrow>
           {editingCode ? (
             <div className="space-y-2">
               <input
                 value={codeDraft}
                 onChange={e => handleCodeDraft(e.target.value)}
-                className="w-full text-center text-3xl font-black tracking-wider bg-white rounded-2xl px-4 py-3 outline-none border-2 font-mono"
-                style={{ borderColor: codeError ? '#ef4444' : accent, color: accent }}
+                aria-label="New join code"
+                aria-invalid={!!codeError}
+                className="w-full text-center text-3xl font-extrabold tracking-wider bg-white rounded-card px-4 py-3 outline-none border-2 font-mono"
+                style={{ borderColor: codeError ? 'var(--danger)' : accent, color: accent, minHeight: 48 }}
               />
-              {codeError && <p className="text-red-500 text-xs">{codeError}</p>}
-              <p className="text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-left">
+              {codeError && <p className="text-xs" style={{ color: 'var(--danger)' }}>{codeError}</p>}
+              <p className="text-slate text-[13px] text-left leading-relaxed">
                 Heads up: changing your code changes your link, QR, AND website widget. Anything
                 printed with the old code stops working, and any widget already embedded on your
                 website must be re-pasted with the new code.
               </p>
               <div className="flex gap-2 justify-center">
-                <button onClick={requestSaveCode} disabled={!!codeError}
-                  className="px-4 py-2 rounded-xl text-white text-xs font-bold"
-                  style={{ background: accent, opacity: codeError ? 0.4 : 1 }}>
+                <Button
+                  size="md"
+                  surface={surface}
+                  fullWidth={false}
+                  disabled={!!codeError || previewAdmin}
+                  loading={savingCode}
+                  onDisabledPress={() => previewAdmin && showToast?.(PREVIEW_NOTE)}
+                  onClick={requestSaveCode}
+                  style={{ fontSize: 14 }}
+                >
                   Save new code
-                </button>
-                <button onClick={() => { setEditingCode(false); setCodeDraft(joinCode); setCodeError(null); }}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600">
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  surface={surface}
+                  fullWidth={false}
+                  onClick={() => { setEditingCode(false); setCodeDraft(joinCode); setCodeError(null); }}
+                  style={{ fontSize: 14 }}
+                >
                   Cancel
-                </button>
+                </Button>
               </div>
+              {previewAdmin && <p className="text-slate text-[13px]">{PREVIEW_NOTE}</p>}
             </div>
           ) : (
             <>
-              <p className="text-5xl font-black tracking-wider mb-4" style={{ color: accent }}>{joinCode}</p>
+              <p className="text-5xl font-extrabold tracking-wider mb-4" style={{ color: accent }}>{joinCode}</p>
               <div className="flex items-center justify-center gap-2">
-                <CopyButton text={joinCode} />
+                <CopyButton text={joinCode} label="Copy join code" />
                 {isCustomOrg ? (
                   <button
+                    type="button"
                     onClick={() => { setCodeDraft(joinCode); setEditingCode(true); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700"
+                    className="flex items-center gap-1.5 text-[13px] font-semibold px-3 rounded-input"
+                    style={{ minHeight: 44, background: 'var(--surface)', color: 'var(--ink-2)' }}
                   >
-                    ✏️ Change code
+                    <Pencil size={13} aria-hidden /> Change code
                   </button>
                 ) : null}
               </div>
-              <p className="text-gray-500 text-xs mt-3">
+              <p className="text-slate text-[13px] mt-3">
                 Donors enter this code in the PocketCache app to join your program.
-                {!isCustomOrg && ' Established codes are changed through support@pocketcache.app (so printed QR codes don’t silently break).'}
+                {!isCustomOrg && ' Established codes are changed through support@pocketcache.app (so printed QR codes don\'t silently break).'}
               </p>
             </>
           )}
@@ -253,17 +336,17 @@ export default function Grow() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08 }}
-          className="bg-white rounded-3xl p-5 flex flex-col items-center gap-4 card-shadow"
+          className="bg-white rounded-panel p-5 flex flex-col items-center gap-4 card-shadow"
         >
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest self-start">QR Code</p>
-          <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm">
+          <Eyebrow className="self-start">QR Code</Eyebrow>
+          <div className="bg-white rounded-card p-3" style={{ border: '1px solid var(--line)', boxShadow: 'var(--shadow-1)' }}>
             <QRCodeSVG value={shareUrl} size={web ? 160 : 120} level="M" includeMargin />
           </div>
-          <div className="flex items-center gap-2 w-full bg-gray-50 rounded-xl px-3 py-2.5">
-            <span className="text-xs text-gray-500 truncate flex-1 font-mono">{shareUrl}</span>
-            <CopyButton text={shareUrl} />
+          <div className="flex items-center gap-2 w-full bg-surface rounded-input pl-3 pr-1 py-1">
+            <span className="text-xs text-ink-2 truncate flex-1 font-mono">{shareUrl}</span>
+            <CopyButton text={shareUrl} label="Copy link" />
           </div>
-          <p className="text-gray-400 text-xs text-center">
+          <p className="text-slate text-[13px] text-center">
             Add this QR to your newsletters, event materials, or website to let supporters join instantly.
           </p>
         </motion.div>
@@ -275,16 +358,16 @@ export default function Grow() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.12 }}
-          className="bg-white rounded-3xl p-5 card-shadow"
+          className="bg-white rounded-panel p-5 card-shadow"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Website Embed</p>
-            <CopyButton text={embedSnippet} />
+            <Eyebrow>Website Embed</Eyebrow>
+            <CopyButton text={embedSnippet} label="Copy embed code" />
           </div>
-          <div className="bg-gray-900 rounded-2xl p-4 overflow-x-auto">
-            <code className="text-green-400 text-xs whitespace-pre-wrap break-all">{embedSnippet}</code>
+          <div className="rounded-card p-4 overflow-x-auto" style={{ background: 'var(--navy-900)' }}>
+            <code className="text-xs whitespace-pre-wrap break-all" style={{ color: '#86EFAC' }}>{embedSnippet}</code>
           </div>
-          <p className="text-gray-400 text-xs mt-3">
+          <p className="text-slate text-[13px] mt-3">
             Drop this on your website to show a &quot;Round Up for us&quot; widget that links directly to your program.
             The snippet updates as you customize below  -  copy it whenever it looks right.
           </p>
@@ -292,43 +375,44 @@ export default function Grow() {
           {/* Customize + preview. Side by side once there is room for it. */}
           <div style={web ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' } : undefined}>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Customize</p>
+              <Eyebrow className="mt-4 mb-2">Customize</Eyebrow>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <label className="text-xs text-gray-500 w-24 shrink-0">Button color</label>
-                  <input type="color" value={widgetColor} onChange={e => setWidgetColor(e.target.value)}
-                    className="h-8 w-14 rounded cursor-pointer border border-gray-200" />
-                  <span className="text-xs text-gray-400 font-mono">{widgetColor}</span>
+                  <label htmlFor="grow-widget-color" className="text-[13px] text-slate w-24 shrink-0">Button color</label>
+                  <input id="grow-widget-color" type="color" value={colorAttr} onChange={e => setWidgetColor(e.target.value)}
+                    className="h-11 w-14 rounded-chip cursor-pointer" style={{ border: '1px solid var(--line)' }} />
+                  <span className="text-xs text-slate font-mono">{colorAttr}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <label className="text-xs text-gray-500 w-24 shrink-0">Width · {widgetWidth}px</label>
-                  <input type="range" min={240} max={600} step={10} value={widgetWidth}
-                    onChange={e => setWidgetWidth(Number(e.target.value))} className="flex-1 accent-teal-600" />
+                  <label htmlFor="grow-widget-width" className="text-[13px] text-slate w-24 shrink-0">Width · {widgetWidth}px</label>
+                  <input id="grow-widget-width" type="range" min={240} max={600} step={10} value={widgetWidth}
+                    onChange={e => setWidgetWidth(Number(e.target.value))} className="flex-1" style={{ accentColor: accent, minHeight: 44 }} />
                 </div>
                 <div className="flex items-center gap-3">
-                  <label className="text-xs text-gray-500 w-24 shrink-0">Button text</label>
-                  <input type="text" value={widgetLabel} maxLength={40} onChange={e => setWidgetLabel(e.target.value)}
-                    className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm outline-none border border-gray-200 focus:border-teal-400" />
+                  <label htmlFor="grow-widget-label" className="text-[13px] text-slate w-24 shrink-0">Button text</label>
+                  <input id="grow-widget-label" type="text" value={widgetLabel} maxLength={40} onChange={e => setWidgetLabel(e.target.value)}
+                    className="flex-1 bg-surface rounded-input px-3 text-ink outline-none"
+                    style={{ fontSize: 16, minHeight: web ? 44 : 48, border: '1px solid var(--line)' }} />
                 </div>
               </div>
             </div>
 
             {/* Live preview  -  visually identical to what widget.js renders on the org's site */}
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Preview  -  what visitors see</p>
-              <div className="rounded-2xl p-4 overflow-x-auto" style={{ background: '#f1f5f9' }}>
-                <div style={{ maxWidth: widgetWidth, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(11,42,74,0.08)' }}>
+              <Eyebrow className="mt-4 mb-2">Preview  -  what visitors see</Eyebrow>
+              <div className="rounded-card p-4 overflow-x-auto" style={{ background: 'var(--surface)' }}>
+                <div style={{ maxWidth: widgetWidth, background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-1)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                     <CoinMark size={30} />
-                    <strong style={{ fontSize: 14.5, color: '#0f172a' }}>Round up for {orgDisplayName}</strong>
+                    <strong style={{ fontSize: 15, color: 'var(--ink)' }}>Round up for {orgDisplayName}</strong>
                   </div>
-                  <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#475569' }}>
+                  <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ink-2)' }}>
                     Spare change from your everyday purchases, sent to us automatically once a month. Takes a minute to set up.
                   </p>
-                  <div style={{ textAlign: 'center', padding: '11px 14px', borderRadius: 12, background: `linear-gradient(135deg, ${widgetColor}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 14 }}>
-                    {widgetLabel || 'Start giving →'}
+                  <div style={{ textAlign: 'center', padding: '11px 14px', borderRadius: 12, background: `linear-gradient(135deg, ${colorAttr}, #001a33)`, color: '#fff', fontWeight: 700, fontSize: 14 }}>
+                    {widgetLabel || DEFAULT_WIDGET_LABEL}
                   </div>
-                  <div style={{ margin: '8px 0 0', fontSize: 10.5, color: '#94a3b8', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <div style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--muted)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                     Powered by <PocketCacheLogo size={11} />
                   </div>
                 </div>
@@ -336,24 +420,30 @@ export default function Grow() {
             </div>
           </div>
 
-          {/* Widget performance */}
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-4 mb-2">Widget performance</p>
+          {/* Widget performance. The widget does not report clicks yet, so the
+              tiles only show the seeded sample numbers in demo mode; a real org
+              sees "Not tracked yet" rather than a figure nobody measured. */}
+          <Eyebrow className="mt-4 mb-2">Widget performance</Eyebrow>
           <div className="flex items-start gap-3">
-            <div className="bg-gray-50 rounded-2xl px-4 py-3 flex-1">
-              <p className="text-gray-400 text-xs font-medium">Website clicks · this month</p>
-              <p className="text-gray-900 font-bold text-xl mt-0.5">128
-                <span className="ml-2 align-middle"><DemoPill /></span>
+            <div className="bg-surface rounded-card px-4 py-3 flex-1">
+              <p className="text-slate text-xs font-medium">Website clicks · this month</p>
+              <p className="text-ink font-bold text-xl mt-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {showDemo ? 128 : <span className="text-slate text-sm font-semibold">Not tracked yet</span>}
+                {showDemo && <span className="ml-2 align-middle"><DemoPill /></span>}
               </p>
             </div>
-            <div className="bg-gray-50 rounded-2xl px-4 py-3 flex-1">
-              <p className="text-gray-400 text-xs font-medium">Donors from widget</p>
-              <p className="text-gray-900 font-bold text-xl mt-0.5">9
-                <span className="ml-2 align-middle"><DemoPill /></span>
+            <div className="bg-surface rounded-card px-4 py-3 flex-1">
+              <p className="text-slate text-xs font-medium">Donors from widget</p>
+              <p className="text-ink font-bold text-xl mt-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {showDemo ? 9 : <span className="text-slate text-sm font-semibold">Not tracked yet</span>}
+                {showDemo && <span className="ml-2 align-middle"><DemoPill /></span>}
               </p>
             </div>
           </div>
-          <p className="text-gray-400 text-xs mt-2">
-            Every widget click is tagged, so you&apos;ll see real counts here from day one of launch.
+          <p className="text-slate text-[13px] mt-2">
+            {showDemo
+              ? 'Widget attribution is coming soon - these are sample numbers.'
+              : 'Widget attribution is coming soon.'}
           </p>
         </motion.div>
       </NpBlock>
@@ -364,9 +454,9 @@ export default function Grow() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.16 }}
-          className="bg-white rounded-3xl p-5 card-shadow"
+          className="bg-white rounded-panel p-5 card-shadow"
         >
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">How Donors Join</p>
+          <Eyebrow className="mb-4">How Donors Join</Eyebrow>
           <div
             className={web ? undefined : 'space-y-4'}
             style={web ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 } : undefined}
@@ -374,14 +464,14 @@ export default function Grow() {
             {steps.map(s => (
               <div key={s.num} className="flex items-start gap-4">
                 <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black text-white shrink-0 mt-0.5"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-extrabold text-white shrink-0 mt-0.5"
                   style={{ background: `linear-gradient(135deg, ${accent}, #001a33)` }}
                 >
                   {s.num}
                 </div>
                 <div>
-                  <p className="font-bold text-gray-900 text-sm">{s.title}</p>
-                  <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{s.body}</p>
+                  <p className="font-bold text-ink text-sm">{s.title}</p>
+                  <p className="text-slate text-[13px] mt-0.5 leading-relaxed">{s.body}</p>
                 </div>
               </div>
             ))}

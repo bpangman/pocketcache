@@ -24,7 +24,7 @@ const GOOGLE_ICON = (
 // it, and email is the primary path regardless.
 const SSO_PROVIDERS = [
   { id: 'apple',    label: 'Continue with Apple',    bg: '#000',    color: '#fff',    icon: APPLE_ICON },
-  { id: 'google',   label: 'Continue with Google',   bg: '#fff',    color: '#374151', border: '1.5px solid #e5e7eb', icon: GOOGLE_ICON },
+  { id: 'google',   label: 'Continue with Google',   bg: 'var(--white)', color: 'var(--ink)', border: '1px solid var(--line)', icon: GOOGLE_ICON },
 ];
 
 /**
@@ -32,7 +32,9 @@ const SSO_PROVIDERS = [
  *
  * @param {function} onPress       - Called with provider id on tap
  * @param {string|null} chosen     - Currently-tapped provider (dims the others)
- * @param {boolean} disabled       - Visually dims all buttons (click still fires — callers handle guard logic)
+ * @param {boolean} disabled       - Renders every button in the disabled token (bg #E6EBF2, text
+ *                                   #94A3B8, aria-disabled). The click STILL fires - callers handle
+ *                                   guard logic, e.g. tap-to-show "Select your state first".
  * @param {string[]} providers     - Which providers to render (default: both)
  * @param {object} errors          - Optional { [providerId]: 'friendly message' } shown under that button
  */
@@ -49,22 +51,26 @@ export default function SsoButtons({
       {buttons.map(btn => (
         <div key={btn.id}>
           <motion.button
-            whileTap={{ scale: 0.97 }}
+            type="button"
+            whileTap={disabled ? {} : { scale: 0.98 }}
             onClick={() => onPress(btn.id)}
-            className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-semibold text-sm transition-all"
-            style={{
-              background: chosen === btn.id ? '#e0f0ff' : btn.bg,
-              color: btn.color,
-              border: btn.border ?? 'none',
-              opacity: disabled ? 0.4 : chosen && chosen !== btn.id ? 0.5 : 1,
-              cursor: disabled ? 'default' : 'pointer',
-            }}
+            aria-disabled={disabled ? 'true' : undefined}
+            className="w-full flex items-center justify-center gap-3 min-h-[52px] px-4 rounded-2xl font-semibold text-base transition-colors"
+            style={disabled
+              ? { background: 'var(--disabled-bg)', color: 'var(--disabled-text)', border: '1px solid transparent', cursor: 'not-allowed' }
+              : {
+                background: chosen === btn.id ? 'var(--teal-50)' : btn.bg,
+                color: btn.color,
+                border: btn.border ?? '1px solid transparent',
+                opacity: chosen && chosen !== btn.id ? 0.5 : 1,
+                cursor: 'pointer',
+              }}
           >
-            {btn.icon}
+            <span aria-hidden="true" className="inline-flex" style={disabled ? { opacity: 0.45 } : undefined}>{btn.icon}</span>
             {btn.label}
           </motion.button>
           {errors[btn.id] && (
-            <p className="text-amber-600 text-xs text-center mt-1.5 px-2">{errors[btn.id]}</p>
+            <p className="text-xs text-center mt-1.5 px-2" style={{ color: 'var(--warning)' }}>{errors[btn.id]}</p>
           )}
         </div>
       ))}

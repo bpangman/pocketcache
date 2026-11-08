@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { loadKey, saveKey } from '../store/identityStore';
 import { greetingNameFor } from '../lib/donorAuth';
+import Button from './ui/Button';
 
 export default function NamePromptCard({ variant = 'app' }) {
   const { hasAccount, donorProfile, saveDisplayName } = useApp();
@@ -47,9 +48,9 @@ export default function NamePromptCard({ variant = 'app' }) {
 
   if (variant === 'app') {
     return (
-      <div className="bg-white rounded-3xl p-5 card-shadow" data-testid="name-prompt-card">
-        <p className="font-bold text-gray-900 text-sm">👋 What should we call you?</p>
-        <p className="text-gray-400 text-xs mt-1 leading-relaxed">
+      <div className="bg-white rounded-card p-4 card-shadow" data-testid="name-prompt-card">
+        <p className="font-bold text-ink text-sm">👋 What should we call you?</p>
+        <p className="text-slate text-[13px] mt-1 leading-relaxed">
           Just a first name is perfect - it is how we say hello. You can change it anytime from your account.
         </p>
         <form onSubmit={submit} className="flex gap-2 mt-3">
@@ -59,20 +60,16 @@ export default function NamePromptCard({ variant = 'app' }) {
             maxLength={60}
             onChange={e => setValue(e.target.value)}
             placeholder="Your first name"
-            className="flex-1 min-w-0 bg-gray-50 rounded-xl px-3 py-2.5 text-sm outline-none border border-gray-200 focus:border-blue-400 text-gray-900"
+            aria-label="Your first name"
+            className="flex-1 min-w-0 rounded-input px-3 outline-none text-ink"
+            style={{ background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, height: 48 }}
             data-testid="name-prompt-input"
           />
-          <button
-            type="submit"
-            disabled={!value.trim()}
-            className="px-4 py-2.5 rounded-xl text-white text-sm font-bold shrink-0"
-            style={{ background: value.trim() ? 'linear-gradient(135deg, #0B2A4A, #003865)' : '#d1d5db' }}
-            data-testid="name-prompt-save"
-          >
+          <Button type="submit" size="md" fullWidth={false} disabled={!value.trim()} data-testid="name-prompt-save">
             Save
-          </button>
+          </Button>
         </form>
-        <button onClick={markDone} className="text-gray-400 text-xs font-medium mt-2" data-testid="name-prompt-later">
+        <button type="button" onClick={markDone} className="text-slate text-[13px] font-medium mt-1 -mb-2 min-h-[44px]" data-testid="name-prompt-later">
           Maybe later
         </button>
       </div>
@@ -83,13 +80,13 @@ export default function NamePromptCard({ variant = 'app' }) {
   return (
     <div
       style={{
-        background: '#fff', borderRadius: 16, border: '1px solid #e5e7eb',
-        boxShadow: '0 1px 2px rgba(11,42,74,0.04)', padding: '16px 20px', marginBottom: 20,
+        background: '#fff', borderRadius: 'var(--r-md)', border: '1px solid var(--line)',
+        boxShadow: 'var(--shadow-1)', padding: '16px 20px', marginBottom: 20,
       }}
       data-testid="name-prompt-card"
     >
-      <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#0f172a' }}>👋 What should we call you?</p>
-      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#94a3b8', lineHeight: 1.55 }}>
+      <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>👋 What should we call you?</p>
+      <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--slate)', lineHeight: 1.55 }}>
         Just a first name is perfect - it is how we say hello. You can change it anytime in Settings.
       </p>
       <form onSubmit={submit} style={{ display: 'flex', gap: 8, marginTop: 12, maxWidth: 420 }}>
@@ -99,29 +96,16 @@ export default function NamePromptCard({ variant = 'app' }) {
           maxLength={60}
           onChange={e => setValue(e.target.value)}
           placeholder="Your first name"
-          style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 13.5, color: '#0f172a', outline: 'none' }}
+          aria-label="Your first name"
+          style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '0 12px', height: 44, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)', background: 'var(--surface)', fontSize: 16, color: 'var(--ink)', outline: 'none' }}
           data-testid="name-prompt-input"
         />
-        <button
-          type="submit"
-          disabled={!value.trim()}
-          style={{
-            padding: '9px 16px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13, color: '#fff',
-            cursor: value.trim() ? 'pointer' : 'default', flexShrink: 0,
-            background: value.trim() ? 'linear-gradient(135deg, #0B2A4A, #003865)' : '#d1d5db',
-          }}
-          data-testid="name-prompt-save"
-        >
+        <Button type="submit" size="md" surface="web" fullWidth={false} disabled={!value.trim()} data-testid="name-prompt-save">
           Save
-        </button>
-        <button
-          type="button"
-          onClick={markDone}
-          style={{ padding: '9px 10px', borderRadius: 10, border: 'none', background: 'transparent', fontSize: 12.5, color: '#94a3b8', cursor: 'pointer', flexShrink: 0 }}
-          data-testid="name-prompt-later"
-        >
+        </Button>
+        <Button type="button" variant="tertiary" size="md" surface="web" fullWidth={false} onClick={markDone} data-testid="name-prompt-later">
           Not now
-        </button>
+        </Button>
       </form>
     </div>
   );

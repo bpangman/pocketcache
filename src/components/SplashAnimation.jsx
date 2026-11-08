@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion, useAnimate } from 'framer-motion'; // eslint-disable-line no-unused-vars
+import { motion, useAnimate, useReducedMotion } from 'framer-motion'; // eslint-disable-line no-unused-vars
 import CoinMark from './CoinMark';
 import { Z } from '../lib/overlay';
 
@@ -17,6 +17,10 @@ const ROLL_EASE = [0.22, 1, 0.36, 1]; // easeOutQuint-like
 
 // How high the coin pops above center (px)
 const POP_HEIGHT = 135;
+
+// Reduced motion: no roll, no pop - the coin sits still on navy and the whole
+// overlay fades out over this long, then hands over.
+const REDUCED_FADE_MS = 300;
 
 // ─── Once-per-launch wrapper ─────────────────────────────────────────────────
 // The coin splash plays on EVERY app open (round-4 item 6) - cold launch to
@@ -39,12 +43,27 @@ export function LaunchSplash() {
 
 export default function SplashAnimation({ onDone }) {
   const [coinScope, animateCoin] = useAnimate();
+  // Read once at mount: the OS "reduce motion" setting. The owner-tuned roll
+  // below is untouched for everyone else.
+  const prefersReduced = useReducedMotion();
+  const [reduced] = useState(() => Boolean(prefersReduced));
   // 'rolling' | 'revealing' | 'done'
   const [phase, setPhase] = useState('rolling');
   const [showSparkle, setShowSparkle] = useState(false);
 
   useEffect(() => {
     let dead = false;
+
+    if (reduced) {
+      // Start the fade on the next frame so the navy paint is seen first.
+      const raf = requestAnimationFrame(() => { if (!dead) setPhase('revealing'); });
+      const t = setTimeout(() => {
+        if (dead) return;
+        setPhase('done');
+        onDone?.();
+      }, REDUCED_FADE_MS);
+      return () => { dead = true; cancelAnimationFrame(raf); clearTimeout(t); };
+    }
 
     (async () => {
       // -- Phase 1: roll in from off-screen left to screen center (~0.85s) --
@@ -119,11 +138,11 @@ export default function SplashAnimation({ onDone }) {
       {/* Navy background overlay - fades out in reveal phase to expose gate screen */}
       <motion.div
         animate={{ opacity: phase === 'revealing' ? 0 : 1 }}
-        transition={{ duration: 0.35, ease: 'easeOut' }}
+        transition={{ duration: reduced ? REDUCED_FADE_MS / 1000 : 0.35, ease: 'easeOut' }}
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(135deg, #0B2A4A 0%, #003865 100%)',
+          background: 'linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%)',
           zIndex: Z.splash,
           pointerEvents: 'none',
         }}
@@ -162,10 +181,14 @@ export default function SplashAnimation({ onDone }) {
          */}
         <motion.div
           ref={coinScope}
+          // Reduced motion: the coin is already centred and fades with the
+          // overlay instead of rolling in.
+          animate={reduced ? { opacity: phase === 'revealing' ? 0 : 1 } : undefined}
+          transition={reduced ? { duration: REDUCED_FADE_MS / 1000, ease: 'easeOut' } : undefined}
           style={{
             width: COIN_D,
             height: COIN_D,
-            x: -TRAVEL,
+            x: reduced ? 0 : -TRAVEL,
             rotate: 0,
             position: 'relative',
           }}

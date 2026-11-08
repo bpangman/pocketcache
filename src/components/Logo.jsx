@@ -1,3 +1,6 @@
+// Legacy wrapper (see BRANDING.md Step 2): the older heart coin, still used by
+// Share. New code uses CoinMark or PocketCacheWordmark. Logo art: the hexes
+// below are the mark itself, not UI tokens.
 export default function Logo({ size = 40, className = '' }) {
   return (
     <svg
@@ -7,6 +10,7 @@ export default function Logo({ size = 40, className = '' }) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      aria-hidden="true"
     >
       {/* Coin circle */}
       <circle cx="40" cy="40" r="38" fill="url(#coinGradient)" />
