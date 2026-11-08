@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <title>Nonprofit Software License Agreement  -  PocketCache, LLC</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,7 +19,9 @@
       padding: 2.5rem 1.5rem 2rem;
     }
     .header-inner { max-width: 720px; margin: 0 auto; }
-    .back { display: inline-flex; align-items: center; gap: 0.4rem; color: rgba(255,255,255,0.75); font-size: 0.8rem; text-decoration: none; margin-bottom: 1.25rem; }
+    .back { display: inline-flex; align-items: center; gap: 0.4rem; color: rgba(255,255,255,0.75); font-size: 0.8rem; text-decoration: none; min-height: 44px; margin: -0.6875rem 0 0.5625rem; }
+    a:focus-visible { outline: 3px solid #0D9488; outline-offset: 3px; border-radius: 4px; }
+    .header a:focus-visible { outline-color: #FBBF24; }
     .back:hover { color: white; }
     .header h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px; }
     .header p { color: rgba(255,255,255,0.7); font-size: 0.875rem; margin-top: 0.35rem; }
@@ -49,7 +52,7 @@
     .fee-box p:last-child { margin-bottom: 0; }
     .fee-box strong { color: #14532d; }
     .divider { height: 1px; background: #e5e7eb; margin: 1.5rem 0; }
-    .effective { font-size: 0.78rem; color: #9ca3af; margin-top: 2.5rem; }
+    .effective { font-size: 0.8125rem; color: #6B7280; margin-top: 2.5rem; }
   </style>
 </head>
 <body>
@@ -58,7 +61,7 @@
   <div class="header-inner">
     <a href="../../" class="back">&larr; PocketCache</a>
     <h1>Nonprofit Software License Agreement</h1>
-    <p>PocketCache, LLC &middot; Effective June 2026</p>
+    <p>PocketCache, LLC &middot; Effective June 2026 &middot; Last updated November 2026</p>
   </div>
 </header>
 
@@ -75,9 +78,9 @@
 
   <h2>2. Fee Schedule</h2>
   <div class="fee-box">
-    <p><strong>Donors pay; Nonprofits never pay:</strong> PocketCache charges donors a flat, mandatory <strong>$1.00/month service fee</strong>, which the donor app and web portal show to donors as the <strong>"app fee"</strong> (the two names refer to the same $1.00/month charge), for each month a linked account is actively rounding up (fee rolls over with sub-minimum balances and collects in the same single charge). This is PocketCache's only revenue. <strong>PocketCache does not invoice, bill, or assess any fee against the Nonprofit under any circumstances.</strong> The Nonprofit will never receive an invoice from PocketCache.</p>
+    <p><strong>Donors pay; Nonprofits never pay:</strong> PocketCache charges donors a flat, mandatory <strong>$1.00/month service fee</strong>, which the donor app and web portal show to donors as the <strong>"app fee"</strong> (the two names refer to the same $1.00/month charge), for each month the donor is an Active linked user (defined below) (fee rolls over with sub-minimum balances and collects in the same single charge). This is PocketCache's only revenue. <strong>PocketCache does not invoice, bill, or assess any fee against the Nonprofit under any circumstances.</strong> The Nonprofit will never receive an invoice from PocketCache.</p>
     <p><strong>Processing-cover toggle (donor election):</strong> At checkout, donors see a pre-checked option to cover the Nonprofit's card-processing costs (approximately 2.2% + $0.30 per monthly charge). This amount: (a) is a voluntary addition to the donor's donation to the Nonprofit; (b) is tax-deductible to the donor as allowed by law; (c) passes through entirely to the Nonprofit  -  PocketCache receives none of it; and (d) causes the Nonprofit to net 100% of the donor's round-ups for that billing cycle. If a donor unchecks this option, the Nonprofit receives round-ups minus standard card-processing costs  -  the same outcome as any card donation.</p>
-    <p><strong>Rollover and settle-up:</strong> When a donor's accumulated round-ups are below the Nonprofit's monthly minimum (default $5, configurable per nonprofit), the charge rolls over to the following month. Regardless of the rollover minimum, a settle-up charge runs at least once every <strong>3 calendar months</strong>, collecting all accrued round-ups and fees. At cancellation, a donor may elect a final settle-up or waive all accrued amounts.</p>
+    <p><strong>Rollover and settle-up:</strong> When a donor's accumulated round-ups are below the <strong>$5 monthly minimum</strong>, the charge rolls over to the following month. Balances under $5 (together with the $1.00/month service fee) keep rolling forward until the total reaches $5 or the donor cancels. At cancellation, a donor may elect a final settle-up or waive all accrued amounts.</p>
     <p><strong>No setup fees. No percentage of donation amounts. No nonprofit billing. Ever.</strong></p>
     <p><strong>"Active linked user"</strong> means a donor who has at least one linked Plaid account and at least $0.01 in round-ups during the billing month.</p>
   </div>
@@ -109,7 +112,7 @@
   <div class="divider"></div>
 
   <h2>5. Stripe Connect</h2>
-  <p>The Nonprofit must connect its own Stripe account via Stripe Connect Standard OAuth. The Nonprofit accepts Stripe's <a href="https://stripe.com/connect-account/legal" target="_blank">Connected Account Agreement</a>. PocketCache uses Stripe's <code>application_fee_amount</code> parameter per charge to collect the processing fee; this amount is explicitly disclosed to donors at checkout. PocketCache is not responsible for Stripe service interruptions, Stripe's terms changes, or Stripe's decisions regarding the Nonprofit's account.</p>
+  <p>The Nonprofit's Stripe Connect Standard account is created through Stripe-hosted onboarding started from the Platform. The Nonprofit accepts Stripe's <a href="https://stripe.com/connect-account/legal" target="_blank">Connected Account Agreement</a>. PocketCache may use Stripe's <code>application_fee_amount</code> parameter on a donor's monthly charge solely to collect the $1.00/month service fee described in Section 2. The processing-cover amount is never part of any application fee and is retained in full by the Nonprofit. PocketCache is not responsible for Stripe service interruptions, Stripe's terms changes, or Stripe's decisions regarding the Nonprofit's account.</p>
 
   <div class="divider"></div>
 
@@ -155,7 +158,7 @@
   <p>PocketCache, LLC<br/>
   Legal: <a href="mailto:legal@pocketcache.app">legal@pocketcache.app</a></p>
 
-  <p class="effective">This Agreement is effective June 2026.</p>
+  <p class="effective">This Agreement is effective June 2026 and was last updated November 2026.</p>
 
 </div>
 </body>

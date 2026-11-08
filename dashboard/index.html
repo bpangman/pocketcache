@@ -1,4 +1,5 @@
-<!-- INTERNAL PLANNING DOCUMENT — not deployed publicly as of 2026-07-01 -->
+<!-- INTERNAL - repo is public. This file is not deployed (deploy.yml never copies dashboard/), but anyone can read it on GitHub. Do not add anything new here that should stay private; private notes go in /Users/jarvis/pocketcache-strategy/. -->
+<!-- INTERNAL PLANNING DOCUMENT - not deployed publicly as of 2026-07-01 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -583,8 +584,8 @@
         <div class="check-item">
           <div class="check-icon pending">!</div>
           <div class="check-text">
-            <div class="title">Deploy the backend <span class="tag todo">Stubbed — needs server</span></div>
-            <div class="sub">Full backend is written in <code>backend/</code> (Plaid, Stripe, Treasury, Endaoment, all jobs). Needs a deployment target (Railway, Render, or Fly.io) and live credentials to activate. Frontend API calls are still pointed at mock data.</div>
+            <div class="title">Backend: Supabase edge functions <span class="tag todo">Test mode - live keys behind the launch gate</span></div>
+            <div class="sub">The backend is the Supabase edge functions in <code>supabase/functions</code> (Plaid sync, cycle lock on the 1st, charge run on the 11th, org signup, Stripe setup), deployed in Stripe/Plaid test mode. The old <code>backend/</code> folder is a legacy prototype that was never deployed and will not be. What remains before real money is tracked in PRELAUNCH.md.</div>
           </div>
         </div>
 
@@ -1563,7 +1564,7 @@
   <div>
     <div class="section-label">Backend Architecture</div>
     <div class="card">
-      <p style="font-size:0.85rem;color:var(--gray-500);margin-bottom:1.25rem;">Full backend is stubbed in <code style="background:var(--gray-100);padding:1px 5px;border-radius:4px;font-size:0.8rem;">backend/</code> — real code structure, wired logic, TODOs where live credentials plug in. Not yet deployed; needs a server (Railway, Render, Fly.io, etc.).</p>
+      <p style="font-size:0.85rem;color:var(--gray-500);margin-bottom:1.25rem;">The backend is the Supabase edge functions in <code style="background:var(--gray-100);padding:1px 5px;border-radius:4px;font-size:0.8rem;">supabase/functions</code>, deployed in test mode. The <code style="background:var(--gray-100);padding:1px 5px;border-radius:4px;font-size:0.8rem;">backend/</code> folder is a legacy prototype, never deployed. The architecture notes below are the July 2026 plan and are partly stale (the DAF / destination-charge model was replaced by direct charges on each nonprofit's own Stripe account).</p>
 
       <div class="stack-item">
         <div class="stack-icon">📅</div>

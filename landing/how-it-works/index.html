@@ -4,12 +4,14 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>How PocketCache Works | Round-up giving, step by step</title>
-<meta name="description" content="How PocketCache works: link a card through Plaid, purchases round up to the next dollar, and one monthly charge goes directly to your nonprofit. See why round-ups roll forward under a $5 minimum, and what keeps the whole thing trustworthy."/>
+<meta name="description" content="How PocketCache works: link a card through Plaid, purchases round up to the next dollar, and the round-ups go directly to your nonprofit in one monthly charge. See why round-ups roll forward under a $5 minimum, and what keeps the whole thing trustworthy."/>
 <link rel="icon" type="image/png" href="/logo.png"/>
 <link rel="apple-touch-icon" href="/logo.png"/>
 <meta property="og:title" content="How PocketCache Works"/>
-<meta property="og:description" content="Link a card, round up purchases, and one monthly charge goes directly to your nonprofit. No percentages, ever."/>
-<meta property="og:image" content="/logo.png"/>
+<meta property="og:description" content="Link a card, round up purchases, and the round-ups go directly to your nonprofit in one monthly charge. No percentages, ever."/>
+<meta property="og:image" content="https://pocketcache.app/logo.png"/>
+<meta property="og:image:width" content="512"/>
+<meta property="og:image:height" content="512"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://pocketcache.app/how-it-works/"/>
 <meta name="twitter:card" content="summary"/>
@@ -27,7 +29,7 @@
     background: radial-gradient(ellipse, rgba(94,234,212,0.13) 0%, transparent 65%);
     pointer-events: none;
   }
-  .page-hero h1 { font-size: clamp(33px, 4.9vw, 54px); font-weight: 800; letter-spacing: -0.03em; color: var(--navy); line-height: 1.08; position: relative; max-width: 860px; margin-left: auto; margin-right: auto; }
+  .page-hero h1 { font-size: clamp(34px, 4.9vw, 54px); font-weight: 800; letter-spacing: -0.03em; color: var(--navy); line-height: 1.08; position: relative; max-width: 860px; margin-left: auto; margin-right: auto; }
   .page-hero p { font-size: 19px; color: var(--slate); line-height: 1.7; margin: 16px auto 0; max-width: 640px; position: relative; }
 
   /* ── Fee bar chart (why the $5 floor exists) ── */
@@ -46,14 +48,15 @@
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
   /* ── Trust list (sits on the dark band: frosted cards, not white boxes) ── */
-  .trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 44px; }
+  .trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-top: 44px; }
   .trust-item {
     display: flex; gap: 14px; align-items: flex-start; text-align: left;
     background: rgba(255,255,255,0.05); border: 1px solid rgba(94,234,212,0.16);
     border-radius: var(--r-lg); padding: 22px;
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-  .trust-icon { width: 44px; height: 44px; border-radius: 30%; background: rgba(94,234,212,0.12); border: 1px solid rgba(94,234,212,0.22); display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
+  .trust-icon { width: 44px; height: 44px; border-radius: 30%; background: rgba(94,234,212,0.12); border: 1px solid rgba(94,234,212,0.22); display: flex; align-items: center; justify-content: center; color: var(--teal-logo); flex-shrink: 0; }
+  .trust-icon svg { width: 22px; height: 22px; }
   .trust-item p { font-size: 16px; color: #fff; font-weight: 600; line-height: 1.55; }
 </style>
 </head>
@@ -101,6 +104,7 @@
 <!-- ── VERTICAL TIMELINE ── -->
 <section class="surface">
   <div class="container">
+    <h2 class="visually-hidden">The four steps</h2>
     <div class="vtimeline">
       <div class="vt-item reveal">
         <div class="vt-marker" aria-hidden="true">1</div>
@@ -126,8 +130,8 @@
       <div class="vt-item reveal">
         <div class="vt-marker gold" aria-hidden="true">4</div>
         <div class="vt-body">
-          <h3>One monthly charge, straight to your nonprofit</h3>
-          <p>On the 11th, a single charge runs, and it goes directly to your nonprofit. PocketCache is never in the middle of the money. There is no PocketCache-held balance, ever.</p>
+          <h3>One monthly charge, round-ups straight to your nonprofit</h3>
+          <p>On the 11th, a single charge runs, and the round-ups go directly to your nonprofit. PocketCache is never in the middle of the money. There is no PocketCache-held balance, ever.</p>
         </div>
       </div>
     </div>
@@ -139,13 +143,13 @@
   <div class="container center">
     <p class="badge reveal">The math behind the minimum</p>
     <h2 class="section-title reveal">Why round-ups wait for a $5 minimum.</h2>
-    <p class="section-sub reveal">Every card charge costs real processing fees, a flat 2.9% + $0.30 to the card processor. On a small charge, that fee eats a big share of the gift. So PocketCache lets round-ups build up instead of charging every tiny amount right away.</p>
+    <p class="section-sub reveal">Every card charge costs real processing fees, about 2.2% plus $0.30 to the card processor. On a small charge, that fee eats a big share of the gift. So PocketCache lets round-ups build up instead of charging every tiny amount right away.</p>
 
     <div class="feechart-wrap">
       <div class="feechart-figure reveal">
         <svg class="feechart-svg" viewBox="0 0 640 300" role="img" aria-labelledby="feechart-title feechart-desc">
           <title id="feechart-title">Card processing fee as a percentage of the charge, at $2, $5, and $15</title>
-          <desc id="feechart-desc">A $2 charge loses 18 percent to processing fees. A $5 charge loses 8.9 percent. A $15 charge loses 4.9 percent. The smaller the charge, the bigger the bite.</desc>
+          <desc id="feechart-desc">A $2 charge loses 17.2 percent to processing fees. A $5 charge loses 8.2 percent. A $15 charge loses 4.2 percent. The smaller the charge, the bigger the bite.</desc>
 
           <defs>
             <linearGradient id="fcNavy" x1="0" y1="0" x2="0" y2="1">
@@ -171,42 +175,44 @@
           <!-- baseline -->
           <line x1="72" y1="240" x2="600" y2="240" stroke="#DDE4EC" stroke-width="1.5"/>
 
-          <!-- $2 bar: 18% -> height 176, rounded shoulders only -->
-          <path d="M120,240 L120,76 Q120,64 132,64 L194,64 Q206,64 206,76 L206,240 Z" fill="url(#fcNavy)"/>
-          <text x="163" y="48" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0B2A4A">18%</text>
+          <!-- Bars use about 2.2% + $0.30 (the rate the app and Terms use) at
+               9.8px per percentage point, the same scale as the 5/10/15% grid. -->
+          <!-- $2 bar: 17.2% -> height 168, rounded shoulders only -->
+          <path d="M120,240 L120,84 Q120,72 132,72 L194,72 Q206,72 206,84 L206,240 Z" fill="url(#fcNavy)"/>
+          <text x="163" y="56" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0B2A4A">17.2%</text>
           <text x="163" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$2 charge</text>
-          <text x="163" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.36</text>
+          <text x="163" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="13" fill="#5B6B80">loses $0.34</text>
 
-          <!-- $5 bar: 8.9% -> height ~87, highlighted as the floor -->
-          <path d="M277,240 L277,165 Q277,153 289,153 L351,153 Q363,153 363,165 L363,240 Z" fill="url(#fcTeal)"/>
-          <text x="320" y="137" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0D9488">8.9%</text>
+          <!-- $5 bar: 8.2% -> height 80, highlighted as the floor -->
+          <path d="M277,240 L277,172 Q277,160 289,160 L351,160 Q363,160 363,172 L363,240 Z" fill="url(#fcTeal)"/>
+          <text x="320" y="144" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0F766E">8.2%</text>
           <text x="320" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$5 charge</text>
-          <text x="320" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.445</text>
+          <text x="320" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="13" fill="#5B6B80">loses $0.41</text>
           <!-- gold annotation flag, pointing at the floor bar -->
-          <rect x="269" y="88" width="102" height="24" rx="12" fill="#FBBF24"/>
-          <polygon points="320,118 313,112 327,112" fill="#FBBF24"/>
-          <text x="320" y="104" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="11" fill="#0B2A4A" letter-spacing="0.06em">OUR FLOOR</text>
+          <rect x="269" y="95" width="102" height="24" rx="12" fill="#FBBF24"/>
+          <polygon points="320,125 313,119 327,119" fill="#FBBF24"/>
+          <text x="320" y="111" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="11" fill="#0B2A4A" letter-spacing="0.06em">OUR FLOOR</text>
 
-          <!-- $15 bar: 4.9% -> height ~48 -->
-          <path d="M434,240 L434,204 Q434,192 446,192 L508,192 Q520,192 520,204 L520,240 Z" fill="url(#fcTealLight)"/>
-          <text x="477" y="176" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0F766E">4.9%</text>
+          <!-- $15 bar: 4.2% -> height 41 -->
+          <path d="M434,240 L434,211 Q434,199 446,199 L508,199 Q520,199 520,211 L520,240 Z" fill="url(#fcTealLight)"/>
+          <text x="477" y="183" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="22" letter-spacing="-0.5" fill="#0F766E">4.2%</text>
           <text x="477" y="266" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="15" fill="#0B2A4A">$15 charge</text>
-          <text x="477" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="12.5" fill="#64748B">loses $0.735</text>
+          <text x="477" y="286" text-anchor="middle" font-family="Poppins, sans-serif" font-size="13" fill="#5B6B80">loses $0.63</text>
         </svg>
         <table class="sr-only">
           <caption>Card processing fee eaten as a percentage of the charge</caption>
           <thead><tr><th>Charge amount</th><th>Fee</th><th>Percent lost</th></tr></thead>
           <tbody>
-            <tr><td>$2.00</td><td>$0.36</td><td>18%</td></tr>
-            <tr><td>$5.00</td><td>$0.445</td><td>8.9%</td></tr>
-            <tr><td>$15.00</td><td>$0.735</td><td>4.9%</td></tr>
+            <tr><td>$2.00</td><td>$0.34</td><td>17.2%</td></tr>
+            <tr><td>$5.00</td><td>$0.41</td><td>8.2%</td></tr>
+            <tr><td>$15.00</td><td>$0.63</td><td>4.2%</td></tr>
           </tbody>
         </table>
-        <p class="feechart-caption">Card processing runs 2.9% + $0.30 per charge. The smaller the charge, the bigger the bite, so PocketCache waits until round-ups clear $5 before charging.</p>
+        <p class="feechart-caption">Card processing runs about 2.2% plus $0.30 per charge. The smaller the charge, the bigger the bite, so PocketCache waits until round-ups clear $5 before charging.</p>
       </div>
     </div>
 
-    <p class="section-sub reveal" style="margin:32px auto 0;">If a donor's round-ups haven't reached $5 by the end of a month, the balance rolls forward to the next month instead of charging early. Either way, a settle-up runs at least once every three months, so a balance never lingers indefinitely.</p>
+    <p class="section-sub reveal" style="margin:32px auto 0;">If a donor's round-ups haven't reached $5 by the end of a month, the balance rolls forward to the next month instead of charging early. Balances under $5 (with the $1 app fee) keep rolling forward until the total reaches $5 or the donor cancels.</p>
   </div>
 </section>
 
@@ -218,19 +224,19 @@
     <p class="section-sub reveal">Donations flow from the donor's card, through secure payment processing by Stripe, straight to your nonprofit's bank. PocketCache is the software in between, and nothing more.</p>
     <div class="trust-grid stagger">
       <div class="trust-item reveal">
-        <div class="trust-icon" aria-hidden="true">&#128179;</div>
+        <div class="trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></div>
         <p>Your nonprofit is the merchant of record and issues the receipts</p>
       </div>
       <div class="trust-item reveal">
-        <div class="trust-icon" aria-hidden="true">&#128176;</div>
+        <div class="trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg></div>
         <p>A flat donor fee only, never a percentage of a donation</p>
       </div>
       <div class="trust-item reveal">
-        <div class="trust-icon" aria-hidden="true">&#127974;</div>
+        <div class="trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg></div>
         <p>Card connection is read-only through Plaid, always</p>
       </div>
       <div class="trust-item reveal">
-        <div class="trust-icon" aria-hidden="true">&#9989;</div>
+        <div class="trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
         <p>Disconnect anytime. No lock-in, no exit fee, for donors or nonprofits</p>
       </div>
     </div>

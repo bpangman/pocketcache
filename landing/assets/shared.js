@@ -22,6 +22,14 @@
         toggle.setAttribute('aria-expanded', 'false');
       }
     });
+    // Escape closes the open menu and hands focus back to the toggle.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && panel.classList.contains('open')) {
+        panel.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.focus();
+      }
+    });
   }
 
   var observer = new IntersectionObserver(function (entries) {

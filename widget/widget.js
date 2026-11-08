@@ -6,14 +6,15 @@
  *
  * Optional attributes:
  *   data-name="Boys & Girls Clubs of America"  - display name (defaults to the code)
- *   data-color="#003865"                       - button/brand color
+ *   data-color="#003865"                       - button/brand color (hex, rgb() or hsl())
  *   data-width="340"                           - card max width in px (240-600)
  *   data-label="Start giving \u2192"                - button text
  *
- * Renders a small self-contained "Round up for us" card exactly where the
- * script tag is placed, linking to the org's giving page (tagged src=widget
- * so the org's analytics can attribute clicks). No dependencies, no cookies,
- * no external requests.
+ * Renders a small self-contained "Round up for <name>" card exactly where the
+ * script tag is placed, linking to the org's giving page. The link carries
+ * src=widget, and the pocketcache.app vanity forwarder (public/404.html) keeps
+ * that tag on the /demo/ URL. No dependencies, no cookies, no external
+ * requests.
  */
 (function () {
   var s = document.currentScript;
@@ -22,7 +23,14 @@
   var org = (s.getAttribute('data-org') || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
   if (!org) return;
   var name = s.getAttribute('data-name') || org;
-  var color = (s.getAttribute('data-color') || '#003865').replace(/[^#a-zA-Z0-9(),. %-]/g, '');
+  // data-color is used only if it is a whole, valid colour: #rgb / #rgba /
+  // #rrggbb / #rrggbbaa, or rgb()/rgba()/hsl()/hsla() with plain numeric
+  // arguments. Anything else falls back to PocketCache navy instead of being
+  // stripped into a broken gradient.
+  var rawColor = (s.getAttribute('data-color') || '').trim();
+  var color = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(rawColor) ||
+    /^(?:rgba?|hsla?)\(\s*[0-9.]+(?:deg|%)?(?:\s*[,\s]\s*[0-9.]+%?){2}(?:\s*[,/]\s*[0-9.]+%?)?\s*\)$/i.test(rawColor)
+    ? rawColor : '#003865';
   var width = Math.min(600, Math.max(240, parseInt(s.getAttribute('data-width'), 10) || 340));
   var label = s.getAttribute('data-label') || 'Start giving \u2192';
   // src=widget lets the org's analytics attribute donors who came from the widget
@@ -39,8 +47,8 @@
 
   var card = el('div',
     'display:block;box-sizing:border-box;max-width:' + width + 'px;background:#ffffff;' +
-    'border:1px solid #e5e7eb;border-radius:16px;padding:16px;' +
-    'box-shadow:0 2px 8px rgba(11,42,74,0.08);' +
+    'border:1px solid #E6EBF2;border-radius:16px;padding:16px;' +
+    'box-shadow:0 1px 2px rgba(11,42,74,0.05),0 8px 24px rgba(11,42,74,0.05);' +
     'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
     'line-height:1.45;color:#0f172a;');
 
@@ -57,18 +65,19 @@
   var row = el('div', 'display:flex;align-items:center;gap:10px;margin-bottom:8px;');
   var coin = el('span', 'flex-shrink:0;display:inline-flex;');
   coin.innerHTML = coinSvg(30);
-  var title = el('strong', 'font-size:14.5px;font-weight:700;display:block;');
+  var title = el('strong', 'font-size:15px;font-weight:700;display:block;');
   title.textContent = 'Round up for ' + name;
   row.appendChild(coin);
   row.appendChild(title);
   card.appendChild(row);
 
   card.appendChild(el('p',
-    'margin:0 0 12px;font-size:12.5px;color:#475569;',
-    'Spare change from your everyday purchases, sent to us automatically once a month. Takes a minute to set up.'));
+    'margin:0 0 12px;font-size:13px;color:#475569;',
+    'Spare change from your everyday purchases, sent to ' + name + ' automatically once a month. Takes a minute to set up.'));
 
   var btn = el('a',
-    'display:block;text-align:center;padding:11px 14px;border-radius:12px;' +
+    'display:flex;align-items:center;justify-content:center;box-sizing:border-box;' +
+    'min-height:44px;text-align:center;padding:12px 16px;border-radius:999px;' +
     'background:linear-gradient(135deg,' + color + ',#001a33);color:#ffffff;' +
     'font-weight:700;font-size:14px;text-decoration:none;');
   btn.textContent = label;
@@ -78,8 +87,8 @@
   card.appendChild(btn);
 
   // Footer: "Powered by P\u25c9cketCache" - the coin IS the o, per the brand
-  var foot = el('p', 'margin:8px 0 0;font-size:10.5px;color:#94a3b8;text-align:center;');
-  var footLink = el('a', 'color:#94a3b8;text-decoration:none;');
+  var foot = el('p', 'margin:8px 0 0;font-size:11px;color:#5B6B80;text-align:center;');
+  var footLink = el('a', 'color:#5B6B80;text-decoration:none;');
   footLink.href = 'https://pocketcache.app';
   footLink.target = '_blank';
   footLink.rel = 'noopener';
@@ -90,7 +99,7 @@
   footCoin.innerHTML = coinSvg(10);
   mark.appendChild(footCoin);
   mark.appendChild(document.createTextNode('cket'));
-  var cache = el('span', 'color:#0D9488;', 'Cache');
+  var cache = el('span', 'color:#0F766E;', 'Cache');
   mark.appendChild(cache);
   footLink.appendChild(mark);
   foot.appendChild(footLink);

@@ -19,7 +19,9 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
 <link rel="apple-touch-icon" href="/logo.png"/>
 <meta property="og:title" content="PocketCache | Round-up giving your nonprofit owns"/>
 <meta property="og:description" content="Every nonprofit gets its own branded micro-donation experience. Nonprofits pay $0 and never a percentage. Donations go directly to your nonprofit, we never hold the money."/>
-<meta property="og:image" content="/logo.png"/>
+<meta property="og:image" content="https://pocketcache.app/logo.png"/>
+<meta property="og:image:width" content="512"/>
+<meta property="og:image:height" content="512"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://pocketcache.app"/>
 <meta name="twitter:card" content="summary"/>
@@ -66,11 +68,11 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
   }
   .hero h1 .accent { color: var(--teal-logo); }
   .hero-sub {
-    font-size: 18.5px; color: rgba(255,255,255,0.76);
+    font-size: 18px; color: rgba(255,255,255,0.76);
     line-height: 1.7; margin-top: 22px; max-width: 480px;
   }
   .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
-  .hero-note { margin-top: 22px; font-size: 14px; color: rgba(255,255,255,0.5); }
+  .hero-note { margin-top: 22px; font-size: 14px; color: rgba(255,255,255,0.66); }
 
   /* ── Hero art: layered floating fragments, not a screenshot ── */
   .hero-art { position: relative; display: flex; justify-content: center; padding: 34px 0 46px; }
@@ -93,14 +95,14 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
   }
   .receipt-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
   .receipt-store { font-weight: 800; color: var(--navy); font-size: 16px; }
-  .receipt-date { font-size: 12.5px; color: var(--slate-400); }
+  .receipt-date { font-size: 13px; color: var(--slate-400); }
   .receipt-row { display: flex; justify-content: space-between; font-size: 15px; color: var(--slate); padding: 7px 0; font-variant-numeric: tabular-nums; }
   .receipt-row.up { color: var(--teal-700); font-weight: 600; }
   .receipt-divider { border-top: 1px dashed var(--line); margin: 8px 0; }
   .receipt-row.highlight { font-size: 18px; font-weight: 800; color: var(--green); padding: 10px 0 4px; }
   .receipt-foot {
     margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
-    font-size: 12.5px; color: var(--slate-400); line-height: 1.6; text-align: center;
+    font-size: 13px; color: var(--slate-400); line-height: 1.6; text-align: center;
   }
   .receipt-outer { position: relative; }
 
@@ -126,10 +128,13 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     .hero-inner { grid-template-columns: 1fr; text-align: center; }
     .hero-sub { margin-left: auto; margin-right: auto; }
     .hero-actions { justify-content: center; }
-    .hero-art { padding: 40px 0 52px; margin-top: 4px; }
+    /* Extra bottom room so the monthly card can hang below the receipt
+       instead of covering its footer copy at phone widths. The offset clears
+       the footer's last line even at the top of the 9px idle drift. */
+    .hero-art { padding: 40px 0 140px; margin-top: 4px; }
     .hero-art .glow { width: 420px; height: 420px; }
     .hero-chip { right: -4px; top: -34px; }
-    .hero-month { left: -4px; bottom: -52px; }
+    .hero-month { left: -4px; bottom: -136px; }
   }
 </style>
 </head>
@@ -173,7 +178,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     <div>
       <p class="hero-tag">Round-up giving for nonprofits</p>
       <h1>Round-up giving <span class="accent">your nonprofit owns.</span></h1>
-      <p class="hero-sub">Donors link a card, everyday purchases round up to the next dollar, and one monthly charge goes straight to your nonprofit. PocketCache never holds the money and never takes a percentage.</p>
+      <p class="hero-sub">Donors link a card, everyday purchases round up to the next dollar, and the round-ups go straight to your nonprofit in one monthly charge. PocketCache never holds the money and never takes a percentage.</p>
       <div class="hero-actions">
         <a href="/start/" class="btn btn-gold btn-lg">Create an account &rarr;</a>
         <a href="/how-it-works/" class="btn btn-outline-dark btn-lg">See how it works</a>
@@ -220,22 +225,22 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
     <p class="section-sub reveal">No new habits for donors, no new work for your nonprofit.</p>
     <div class="steps stagger">
       <div class="step reveal">
-        <div class="step-icon" aria-hidden="true">&#128179;</div>
+        <div class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></div>
         <p class="step-num">Step 1</p>
         <h3>Link a card</h3>
         <p>Donors connect a card through Plaid, a read-only bank connection. PocketCache never sees or stores card numbers.</p>
       </div>
       <div class="step reveal">
-        <div class="step-icon alt" aria-hidden="true">&#128176;</div>
+        <div class="step-icon alt" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg></div>
         <p class="step-num">Step 2</p>
         <h3>Purchases round up</h3>
         <p>Everyday purchases round up to the next dollar automatically. Spare change adds up in the background.</p>
       </div>
       <div class="step reveal">
-        <div class="step-icon" aria-hidden="true">&#127974;</div>
+        <div class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg></div>
         <p class="step-num">Step 3</p>
         <h3>One monthly charge</h3>
-        <p>Once a month, the round-ups charge as a single amount that goes directly to your nonprofit.</p>
+        <p>Once a month, the round-ups charge as a single amount (plus the flat $1 app fee), and every round-up goes directly to your nonprofit.</p>
       </div>
     </div>
     <p style="margin-top:32px;"><a href="/how-it-works/" class="btn btn-outline btn-sm">See the full walkthrough &rarr;</a></p>
@@ -258,7 +263,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
       </div>
       <div class="stat-card reveal">
         <p class="stat-num">100%</p>
-        <p class="stat-label">Of every round-up goes to your nonprofit, never held by us</p>
+        <p class="stat-label">Of every round-up reaches your nonprofit when donors leave the processing-cover option on. Never held by us.</p>
       </div>
       <div class="stat-card reveal">
         <p class="stat-num">$749M</p>
@@ -292,7 +297,7 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
         <div class="mock-browser-body" aria-hidden="true">
           <div class="mock-browser-stat"><b>$12,480</b><span>Raised</span></div>
           <div class="mock-browser-stat"><b>1,206</b><span>Donors</span></div>
-          <div class="mock-browser-stat"><b>$0</b><span>We ever charge</span></div>
+          <div class="mock-browser-stat"><b>$0</b><span>Cost to the nonprofit</span></div>
         </div>
       </div>
     </div>
@@ -345,10 +350,11 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
       <h3>Request early access</h3>
       <p class="wl-copy">Enter your work email and we will get you set up.</p>
       <form class="waitlist-form" id="waitlist-form">
-        <label class="sr-only" for="waitlist-email" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Work email</label>
+        <label class="visually-hidden" for="waitlist-email">Work email</label>
         <input type="email" placeholder="you@yournonprofit.org" required id="waitlist-email" autocomplete="email"/>
         <button type="submit" class="btn btn-navy btn-lg">Request access &rarr;</button>
       </form>
+      <p class="waitlist-error" id="waitlist-error" role="alert" hidden>We couldn't save that just now. Check your connection and try again.</p>
       <p class="waitlist-note">PocketCache, LLC &middot; Not available in California at launch</p>
       <p class="waitlist-success" id="waitlist-success" style="display:none;">
         You are on the list. We will be in touch soon to get you set up.
@@ -395,9 +401,9 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
 
 <script src="/assets/shared.js"></script>
 <script>
-  // Waitlist form: dual capture, Google Form (permanent) + Apps Script (stable).
-  // Google Form entry always works, no dependencies, no expiry.
-  // Apps Script URL never changes.
+  // Waitlist form: the Supabase insert below is the record that decides
+  // success; Google Form + Apps Script are fire-and-forget backup copies, and
+  // the ntfy / FormSubmit pings are alerts for Blake.
   const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSc_U6f7hC6KxBDFTfqXTHWrgb5cvvZHOM3gvzUlngC7yWtaag/formResponse';
   const GOOGLE_FORM_ENTRY = 'entry.943864096';
   const APPS_SCRIPT_API = 'https://script.google.com/macros/s/AKfycbw2xVEu7uWaTS0B41DBNDYU_4myWIwjbV_7PvcJsUtCTpGbWaH8NQrFpere4U6PR6Bh/exec';
@@ -408,13 +414,34 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
   const SUPABASE_WAITLIST_URL = 'https://yeptifozaytoglfwxksz.supabase.co/rest/v1/waitlist';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcHRpZm96YXl0b2dsZnd4a3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MDI4ODYsImV4cCI6MjEwMTM3ODg4Nn0.ZnQZXdXIVO6s0yuIN74ihkgPsDVqoxkTk0LIykBZo9U';
 
+  // localStorage can throw (private mode, blocked site data); the form must
+  // work without it, so every read and write is wrapped.
+  function readLocalList() {
+    try { return JSON.parse(localStorage.getItem('pc-waitlist') || '[]'); } catch (_) { return []; }
+  }
+  function writeLocalList(list) {
+    try {
+      if (list.length) localStorage.setItem('pc-waitlist', JSON.stringify(list));
+      else localStorage.removeItem('pc-waitlist');
+    } catch (_) {}
+  }
+
   document.getElementById('waitlist-form').addEventListener('submit', async function(e) {
     e.preventDefault();
+    const form = this;
     const email = document.getElementById('waitlist-email').value.trim();
-    const btn = this.querySelector('button[type="submit"]');
+    const btn = form.querySelector('button[type="submit"]');
+    const errorEl = document.getElementById('waitlist-error');
     const origText = btn.textContent;
     btn.textContent = 'Joining...';
     btn.disabled = true;
+    errorEl.hidden = true;
+
+    // Keep a local copy until the permanent record confirms the save, so an
+    // offline attempt is not lost from this browser.
+    const pending = readLocalList().filter(function (row) { return row.email !== email; });
+    pending.push({ email, ts: new Date().toISOString() });
+    writeLocalList(pending);
 
     // Always send ntfy notification (capture even if all APIs are down).
     // Only the email's domain goes in the body - never the local part or the
@@ -437,20 +464,8 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
       body: JSON.stringify({ _subject: 'PocketCache: waitlist signup', email })
     }).catch(() => {});
 
-    // Insert into the permanent Supabase waitlist table. Insert-only for the
-    // anon key - not even this browser can read the row back afterward.
-    fetch(SUPABASE_WAITLIST_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        Prefer: 'return=minimal'
-      },
-      body: JSON.stringify({ email, source: 'landing' })
-    }).catch(() => {});
-
-    // Submit to Google Form (permanent record; no-cors since Google Forms has no CORS)
+    // Submit to Google Form (backup copy; no-cors since Google Forms has no
+    // CORS, so the result can't be read and never decides success)
     fetch(GOOGLE_FORM_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -458,26 +473,44 @@ if (!sessionStorage.getItem('pc-authfwd') && (location.hash.indexOf('access_toke
       body: GOOGLE_FORM_ENTRY + '=' + encodeURIComponent(email)
     }).catch(() => {});
 
-    // Submit to Apps Script (stable, no external dependencies)
+    // Submit to Apps Script (backup copy, fire-and-forget)
+    fetch(APPS_SCRIPT_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    }).catch(() => {});
+
+    // Insert into the permanent Supabase waitlist table. Insert-only for the
+    // anon key - not even this browser can read the row back afterward. This
+    // is the one write we wait for: "You are on the list" only shows when it
+    // actually saved (409 = the address is already on the list, also a yes).
+    let saved = false;
     try {
-      await fetch(APPS_SCRIPT_API, {
+      const res = await fetch(SUPABASE_WAITLIST_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          Prefer: 'return=minimal'
+        },
+        body: JSON.stringify({ email, source: 'landing' })
       });
+      saved = res.ok || res.status === 409;
     } catch (_) {}
 
-    // Store locally as additional backup regardless
-    const list = JSON.parse(localStorage.getItem('pc-waitlist') || '[]');
-    list.push({ email, ts: new Date().toISOString() });
-    localStorage.setItem('pc-waitlist', JSON.stringify(list));
-
-    // Show success regardless; never block UX on network
-    this.style.display = 'none';
-    document.getElementById('waitlist-success').style.display = 'block';
-    document.querySelector('.waitlist-note').style.display = 'none';
     btn.textContent = origText;
     btn.disabled = false;
+
+    if (!saved) {
+      errorEl.hidden = false;
+      return;
+    }
+
+    writeLocalList(readLocalList().filter(function (row) { return row.email !== email; }));
+    form.style.display = 'none';
+    document.getElementById('waitlist-success').style.display = 'block';
+    document.querySelector('.waitlist-note').style.display = 'none';
   });
 </script>
 </body>
