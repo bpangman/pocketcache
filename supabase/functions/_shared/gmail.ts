@@ -106,8 +106,11 @@ async function getAccessToken(): Promise<string> {
  *  for text-only clients plus a styled HTML part for everything else); omit
  *  it for a plain-text-only message. `text` is always required and is the
  *  fallback body, so a client that cannot render HTML still gets readable
- *  content. Throws on any failure - callers decide whether/how to swallow it. */
-export async function sendGmail(to: string, subject: string, text: string, html?: string): Promise<void> {
+ *  content. Throws on any failure - callers decide whether/how to swallow it.
+ *  Resolves to the Gmail message id (cycle-lock stores it on
+ *  charge_cycles.email_message_id as the record that the 10-day notice went
+ *  out); null if Gmail did not echo one. */
+export async function sendGmail(to: string, subject: string, text: string, html?: string): Promise<string | null> {
   const token = await getAccessToken();
   const headerLines = [
     `From: PocketCache <${GMAIL_USER}>`,
@@ -156,4 +159,5 @@ export async function sendGmail(to: string, subject: string, text: string, html?
   if (!res.ok) {
     throw new Error(`gmail send failed: ${res.status} ${JSON.stringify(data)}`);
   }
+  return typeof data?.id === "string" ? data.id : null;
 }

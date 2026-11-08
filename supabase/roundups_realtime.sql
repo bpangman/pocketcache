@@ -40,3 +40,6 @@ alter table public.plaid_items add column if not exists last_synced_at timestamp
 -- matching the same storage discipline cycle-lock's multiplier section
 -- documents (see supabase/functions/cycle-lock/index.ts).
 alter table public.stripe_donors add column if not exists multiplier smallint not null default 1;
+-- 2026-11-07: the multiplier in force at LOCK time applies to the whole
+-- month's round-ups (billing-math computeCycle); changing it mid-month
+-- changes the projection the dashboard shows, not any already-locked cycle.

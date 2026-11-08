@@ -12,7 +12,8 @@
 -- RLS is ON with NO policies at all, same posture as stripe_donors /
 -- roundups / charge_cycles: written and read only by the edge functions with
 -- the service role key. Inserts come from the give-extra function (donor
--- auth JWT or the same email fallback roundups-me accepts).
+-- auth JWT; roundups-me no longer accepts an email fallback, and give-extra
+-- should follow - see the backend-billing foundation requests).
 --
 -- Applied to project yeptifozaytoglfwxksz via the Supabase management API on
 -- 2026-08-08. Kept here so the schema is in version control.
@@ -23,7 +24,7 @@ create table if not exists public.give_extras (
   email text,
   org_id uuid,
   amount_cents int not null,
-  status text not null default 'pending', -- 'pending' | 'charged'
+  status text not null default 'pending', -- 'pending' | 'charged' | 'cancelled' (donor cancelled and waived; billing_hardening_2026_11.sql)
   cycle_month text
 );
 alter table public.give_extras enable row level security;

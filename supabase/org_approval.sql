@@ -28,6 +28,10 @@ alter table public.orgs
 
 -- 3. Expose status through the public read view (anon-readable; used by the
 --    donor-side resolver and the platform admin console's pending list).
+--    SUPERSEDED: security_hardening_2026_11.sql redefines this view with
+--    logo_url and long_description added. Do not re-run this statement on
+--    its own after that migration (CREATE OR REPLACE VIEW cannot drop
+--    columns and would fail); the newer file is the current definition.
 create or replace view public.orgs_public as
   select id, name, join_code, brand_color, mission, apple_approval,
          stripe_connected, status

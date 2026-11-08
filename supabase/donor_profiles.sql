@@ -41,4 +41,8 @@ create table if not exists public.donor_profiles (
 create index if not exists donor_profiles_email_idx
   on public.donor_profiles (lower(email));
 
+-- org_join_code is also matched case-insensitively when an admin renames
+-- their join code (org-signup moves bound donors to the new code); the
+-- matching index lives in security_hardening_2026_11.sql.
+
 alter table public.donor_profiles enable row level security;

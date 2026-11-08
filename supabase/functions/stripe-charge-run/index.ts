@@ -1,6 +1,6 @@
 // stripe-charge-run
 //
-// POST { customer_id, amount_cents, connected_account_id? }
+// POST { customer_id, amount_cents, connected_account_id?, idempotency_key? }
 //   -> { ok, payment_intent, status }                       on success
 //   -> { blocked: "connect_not_enabled", ... }              while the Stripe
 //        account is not yet enabled as a Connect platform (known state; the
@@ -31,13 +31,31 @@
 // manual test path and the monthly automated run behave identically and a
 // donor+nonprofit pair only ever gets cloned once. See that file for the
 // "why" of the connected_customers table.
+//
+// WHICH NONPROFIT: the connected account comes from the body when given,
+// else from the donor's own cause binding via _shared/org-routing.ts (the
+// same resolver cycle-lock and charge-cycles-run use). The old "every donor
+// into STRIPE_TEST_CONNECTED_ACCT" default is only honored when the
+// ALLOW_TEST_CONNECTED_FALLBACK=1 secret is set - a sandbox switch, never a
+// production default. No account resolved -> 400, nothing charged.
+//
+// IDEMPOTENCY: every PaymentIntent create carries a Stripe Idempotency-Key -
+// the body's idempotency_key when the caller has one, else
+// pc_manual_<customer>_<amount>_<account>_<yyyymmdd>, so the retry script
+// re-running the same manual charge the same day gets the same intent back
+// instead of a second charge. No receipt_email: the nonprofit's own Stripe
+// receipt settings decide.
+//
+// CANCELLED DONORS are refused (409) - except a 'donate' closer whose final
+// cycle is still 'locked', which is exactly the one charge they still owe.
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { STRIPE_SK, dbRest, stripeCall } from "../_shared/stripe.ts";
 import { getOrCreateConnectedCustomer, isBlockedStripeCode, isConnectBlocked } from "../_shared/connected-customer.ts";
+import { resolveOrgForCustomer, statementDescriptorSuffix } from "../_shared/org-routing.ts";
+import { monthKeyUTC, monthName } from "../_shared/billing-math.ts";
 import type { StripeResult } from "../_shared/stripe.ts";
 
 const CHARGE_RUN_KEY = Deno.env.get("CHARGE_RUN_KEY") ?? "";
-const DEFAULT_CONNECTED_ACCT = Deno.env.get("STRIPE_TEST_CONNECTED_ACCT") ?? "";
 
 function connectBlocked(step: string, res: StripeResult) {
   return {
@@ -69,10 +87,10 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const customerId = typeof body?.customer_id === "string" ? body.customer_id : "";
     const amountCents = Number(body?.amount_cents);
-    const connectedAccount =
+    const bodyAccount =
       (typeof body?.connected_account_id === "string" && body.connected_account_id.startsWith("acct_"))
         ? body.connected_account_id
-        : DEFAULT_CONNECTED_ACCT;
+        : "";
 
     if (!customerId.startsWith("cus_")) {
       return jsonResponse(req, { error: "customer_id is required" }, 400);
@@ -81,19 +99,45 @@ Deno.serve(async (req: Request) => {
       // Stripe's own card minimum is 50 cents; the cap is a sanity rail.
       return jsonResponse(req, { error: "amount_cents must be an integer between 50 and 100000" }, 400);
     }
+
+    // Which nonprofit (see header): body wins, else the donor's own binding.
+    const org = await resolveOrgForCustomer(customerId);
+    const connectedAccount = bodyAccount || org?.connectedAccount || "";
     if (!connectedAccount) {
-      return jsonResponse(req, { error: "No connected account configured" }, 400);
+      return jsonResponse(req, { error: "No connected account resolved for this donor (no approved nonprofit with a Stripe account bound, and the test fallback is off)" }, 400);
     }
+    const orgName = org?.name ?? "Your nonprofit";
 
     // 1. The donor's saved card, from our table (service role only).
     const row = await dbRest(
       "GET",
-      `stripe_donors?stripe_customer_id=eq.${encodeURIComponent(customerId)}&select=payment_method_id,setup_status,email&limit=1`,
+      `stripe_donors?stripe_customer_id=eq.${encodeURIComponent(customerId)}&select=payment_method_id,setup_status,email,cancelled_at,close_final&limit=1`,
     );
     const donor = Array.isArray(row.data) ? row.data[0] : null;
     if (!donor?.payment_method_id || donor.setup_status !== "saved") {
       return jsonResponse(req, { error: "No saved card for that customer" }, 404);
     }
+    if (donor.cancelled_at) {
+      // A cancelled donor owes nothing more - unless they chose to donate
+      // their final balance and that cycle is still waiting to be charged.
+      let finalOwed = false;
+      if (donor.close_final === "donate") {
+        const open = await dbRest(
+          "GET",
+          `charge_cycles?stripe_customer_id=eq.${encodeURIComponent(customerId)}&status=in.(locked,retry)&select=id&limit=1`,
+        );
+        finalOwed = Array.isArray(open.data) && open.data.length > 0;
+      }
+      if (!finalOwed) {
+        return jsonResponse(req, { error: "Donor has cancelled; nothing may be charged" }, 409);
+      }
+    }
+
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const idempotencyKey =
+      (typeof body?.idempotency_key === "string" && /^[A-Za-z0-9_.:-]{8,200}$/.test(body.idempotency_key))
+        ? body.idempotency_key
+        : `pc_manual_${customerId}_${amountCents}_${connectedAccount}_${today}`;
 
     // 2-3. Get (or create/re-clone as needed) the connected-account Customer
     //    + attached PaymentMethod for this donor at this nonprofit. Shared
@@ -126,9 +170,16 @@ Deno.serve(async (req: Request) => {
         payment_method: clonedPm,
         off_session: "true",
         confirm: "true",
-        description: "PocketCache round-ups",
+        description: `${orgName} round-ups ${monthName(monthKeyUTC())}`,
+        statement_descriptor_suffix: statementDescriptorSuffix(org?.shortName ?? orgName),
+        metadata: {
+          pocketcache_customer: customerId,
+          org_id: org?.orgId ?? "",
+          source: "stripe-charge-run",
+        },
       },
       connectedAccount,
+      { "Idempotency-Key": idempotencyKey },
     );
     if (!intent.ok) {
       if (isConnectBlocked(intent)) {

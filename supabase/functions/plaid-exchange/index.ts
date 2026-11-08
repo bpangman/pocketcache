@@ -5,15 +5,18 @@
 // access_token server-side only (service role, RLS-protected table), and
 // returns a small confirmation payload that never includes the access token.
 //
-// If the request carries a Supabase auth Authorization header, we try to
-// resolve the signed-in donor and attach user_id/email to the row. A donor
-// who is not signed in yet at this step in the flow is still allowed through
-// anonymously - this function never blocks signup on that.
+// AUTH (2026-11 audit fix, same posture as plaid-link-token): a real Supabase
+// session is required and the row is stamped with that donor's user_id and
+// email. Both wizards verify the account before the connect-card step, so
+// nobody legitimate reaches this without one; the old "proceed anonymous"
+// path produced plaid_items rows nothing could ever link to a donor.
 //
-// Deployed with --no-verify-jwt: the donor may not be signed in yet, and
-// nothing this function returns is sensitive.
+// DEPLOY: redeploy WITHOUT --no-verify-jwt so the gateway rejects tokenless
+// calls too. resolveUser() below stays the real gate (the gateway accepts
+// the anon key as a valid JWT).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
+import { resolveUser } from "../_shared/stripe.ts";
 
 const PLAID_CLIENT_ID = Deno.env.get("PLAID_CLIENT_ID");
 const PLAID_SECRET = Deno.env.get("PLAID_SECRET");
@@ -23,7 +26,6 @@ const PLAID_BASE = "https://sandbox.plaid.com";
 // `supabase secrets set`, they are already present.
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
 Deno.serve(async (req: Request) => {
   const preflight = handleOptions(req);
@@ -31,6 +33,11 @@ Deno.serve(async (req: Request) => {
 
   if (req.method !== "POST") {
     return jsonResponse(req, { error: "Method not allowed" }, 405);
+  }
+
+  const user = await resolveUser(req);
+  if (!user) {
+    return jsonResponse(req, { error: "Sign in required." }, 401);
   }
 
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
@@ -59,25 +66,6 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, { error: "Missing bank connection info." }, 400);
   }
 
-  // Best-effort: attach the signed-in donor if a valid Supabase session was
-  // sent with the request. Never block the exchange on this.
-  let userId: string | null = null;
-  let userEmail: string | null = null;
-  const authHeader = req.headers.get("authorization");
-  if (authHeader && SUPABASE_ANON_KEY) {
-    try {
-      const jwt = authHeader.replace(/^Bearer\s+/i, "");
-      const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      const { data, error } = await authClient.auth.getUser(jwt);
-      if (!error && data?.user) {
-        userId = data.user.id;
-        userEmail = data.user.email ?? null;
-      }
-    } catch (err) {
-      console.error("plaid-exchange: could not verify auth header, proceeding anonymous", err);
-    }
-  }
-
   try {
     const exchangeRes = await fetch(`${PLAID_BASE}/item/public_token/exchange`, {
       method: "POST",
@@ -100,8 +88,8 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { error: insertError } = await admin.from("plaid_items").insert({
-      user_id: userId,
-      email: userEmail,
+      user_id: user.id,
+      email: user.email ?? null,
       item_id: itemId,
       access_token: accessToken,
       institution: institution ?? null,

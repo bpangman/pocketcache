@@ -4,6 +4,8 @@
 // Supabase session resolution), not Stripe-specific despite the file name.
 import { dbRest } from "./stripe.ts";
 
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+
 // Same list the client (src/lib/npSignup.js) already rejects at signup - kept
 // in sync by hand since one is Deno/TS and the other is browser JS. A nonprofit
 // admin account can never live on a free personal mail domain.
@@ -14,6 +16,17 @@ export const FREE_MAIL = new Set([
 
 export function emailDomain(email: string): string {
   return (email.split("@")[1] || "").toLowerCase();
+}
+
+/** An EIN is stored as exactly 9 digits or not at all. Strips the dash and
+ *  any other formatting; anything that is not 9 digits afterwards (including
+ *  '' - a wizard resuming after the Stripe redirect used to send that and
+ *  wipe the stored EIN) is "no EIN provided" and returns null, so callers
+ *  patch only when they really have one. */
+export function normalizeEin(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const digits = raw.replace(/\D/g, "");
+  return digits.length === 9 ? digits : null;
 }
 
 // ─── Known orgs (seeded) ─────────────────────────────────────────────────────
@@ -126,10 +139,15 @@ function candidateFromName(name: string): string {
   return code;
 }
 
+/** Case-insensitive, to match the unique index on upper(join_code) (see
+ *  supabase/security_hardening_2026_11.sql): a pre-check that said "free" for
+ *  KIDS while a legacy row held kids would otherwise send every retry into
+ *  the same 23505. ilike with no wildcards is a plain case-insensitive
+ *  equality here - codes are [A-Z0-9-] only, never % or _. */
 async function joinCodeTaken(code: string, excludeId?: string): Promise<boolean> {
   const filter = excludeId
-    ? `join_code=eq.${encodeURIComponent(code)}&id=neq.${excludeId}`
-    : `join_code=eq.${encodeURIComponent(code)}`;
+    ? `join_code=ilike.${encodeURIComponent(code)}&id=neq.${excludeId}`
+    : `join_code=ilike.${encodeURIComponent(code)}`;
   const res = await dbRest("GET", `orgs?${filter}&select=id&limit=1`);
   return Array.isArray(res.data) && res.data.length > 0;
 }
@@ -176,6 +194,13 @@ export interface OrgRow {
   // 'approved' after. Donor-facing surfaces hold pending orgs back.
   status: string;
   approve_alert_sent_at: string | null;
+  // Added by supabase/security_hardening_2026_11.sql. Rows read before that
+  // migration is applied come back without these keys, so treat undefined
+  // the same as null / false everywhere.
+  admin_user_id?: string | null;
+  benevity_submitted?: boolean;
+  logo_url?: string | null;
+  long_description?: string | null;
 }
 
 export async function getOrgById(id: string): Promise<OrgRow | null> {
@@ -190,12 +215,83 @@ export async function getOrgByAdminEmail(email: string): Promise<OrgRow | null> 
   return row ?? null;
 }
 
-/** org-connect-stripe / org-connect-status share this authorization rule: the
- *  signed-in user must BE the org's admin - either the exact verified address,
- *  or (for a teammate on the same domain who somehow got a token - defense in
- *  depth, not the primary path) the same admin_domain. */
+/** READ-ONLY authorization (org-connect-status): the signed-in user is the
+ *  org's admin of record - the exact verified address - or a teammate on the
+ *  same admin_domain. The domain match is fine for a status read (the same
+ *  facts are in orgs_public) but it is NOT enough for anything that writes;
+ *  use callerIsOrgAdmin for those paths. */
 export function callerOwnsOrg(userEmail: string, org: OrgRow): boolean {
   const lower = userEmail.toLowerCase();
   if (lower === org.admin_email.toLowerCase()) return true;
   return emailDomain(lower) === org.admin_domain.toLowerCase();
+}
+
+/** WRITE authorization (org-connect-stripe, update-donor-email's admin
+ *  branch, anything else that changes the org): the caller must be the admin
+ *  of record exactly - the auth user id stamped on the org (admin_user_id,
+ *  set at org-signup and backfilled by the hardening migration), or the exact
+ *  admin_email. A colleague who merely shares the domain is refused. */
+export function callerIsOrgAdmin(user: { id: string; email?: string }, org: OrgRow): boolean {
+  if (org.admin_user_id && user.id === org.admin_user_id) return true;
+  if (!user.email) return false;
+  return user.email.toLowerCase() === org.admin_email.toLowerCase();
+}
+
+/** PostgREST reports a Postgres unique violation (23505) as HTTP 409 with
+ *  { code: "23505" } in the body. The unique index on upper(join_code) from
+ *  the hardening migration makes this the authoritative "code taken" signal
+ *  when two signups race the GET-then-write check above. */
+export function isUniqueViolation(res: { status: number; data: unknown }): boolean {
+  if (res.status === 409) return true;
+  const code = (res.data as { code?: unknown } | null)?.code;
+  return code === "23505";
+}
+
+// ─── Org profile fields (logo, landing-page story) ──────────────────────────
+
+export const LONG_DESCRIPTION_MAX = 2000;
+
+/** The nonprofit's landing-page story. undefined = not in this request (leave
+ *  the stored value alone); null = clear it; otherwise trimmed and capped. */
+export function sanitizeLongDescription(raw: unknown): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, LONG_DESCRIPTION_MAX);
+}
+
+/** Only logos hosted in this project's own Supabase Storage (public bucket)
+ *  are accepted - the URL is rendered on every donor-facing page of the org,
+ *  so an arbitrary https host would let an admin point donors' browsers at a
+ *  third party (tracking pixel, swapped image), and a data: URL would stuff
+ *  the orgs row and the anon-readable view with the whole file. */
+export function logoStorageBase(): string {
+  return `${SUPABASE_URL}/storage/v1/object/public/`;
+}
+
+export function sanitizeLogoUrl(raw: unknown):
+  | { ok: true; value: string | null | undefined }
+  | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true, value: undefined };
+  if (raw === null) return { ok: true, value: null };
+  if (typeof raw !== "string") return { ok: false, error: "Logo must be a link." };
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: null };
+  if (trimmed.length > 1024) return { ok: false, error: "That logo link is too long." };
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { ok: false, error: "That logo link is not a valid web address." };
+  }
+  if (url.protocol !== "https:") {
+    return { ok: false, error: "Logo links must start with https://." };
+  }
+  const base = logoStorageBase();
+  if (!base.startsWith("https://") || !url.href.startsWith(base)) {
+    return { ok: false, error: "Upload the logo through PocketCache so we can host it for you." };
+  }
+  return { ok: true, value: url.href };
 }

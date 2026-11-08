@@ -8,15 +8,20 @@
 // InvolvementModal). Resolves the org SERVER-SIDE by join code - the org's
 // admin_email never leaves the server (orgs is RLS service-role only and
 // orgs_public deliberately excludes it) - then sends the form contents as
-// one clean HTML email to that admin_email via the shared Gmail helper, and
-// records a PII-free events row (join code + kind only, no name/email) for
-// the owner's live activity feed.
+// one clean HTML email to that admin_email via the shared Gmail helper,
+// stores the submission in contact_submissions (service-role only, RLS on
+// with no anon policies - the nonprofit's lead is not lost if the email
+// bounces), and records a PII-free events row (join code + kind only, no
+// name/email) for the owner's live activity feed.
 //
-// ABUSE GUARD: at most 5 posts per minute PER ORG, counted with a simple
-// query over the same events rows this function inserts ('source=org-contact'
-// within the last 60 seconds for that join code). The 6th rapid post gets a
-// friendly 429. Deliberately simple - this is a contact form, not a login
-// endpoint, and the cost of a false positive is "try again in a minute".
+// ABUSE GUARD: at most 5 posts per minute PER ORG, counted over the
+// contact_submissions rows this function itself wrote in the last 60 seconds
+// for that join code. The 6th rapid post gets a friendly 429. It used to
+// count anon-insertable `events` rows, which let anyone pin a nonprofit's
+// form at 429 for good with five forged rows (2026-11 audit); nothing but
+// this function can write contact_submissions. Deliberately simple
+// otherwise - this is a contact form, not a login endpoint, and the cost of
+// a false positive is "try again in a minute".
 //
 // AUTH: none. This is reachable by anyone with the join code, exactly like
 // the org's public micro-site itself - the form asks for the submitter's own
@@ -139,18 +144,41 @@ Deno.serve(async (req: Request) => {
     }
 
     // Abuse guard: >5 posts in the trailing 60s for this org -> friendly 429.
+    // Counted over our own service-role table, so it cannot be forged from
+    // the browser. Fails closed: if the ledger cannot be read we do not send.
     const cutoff = new Date(Date.now() - 60_000).toISOString();
     const recentRes = await dbRest(
       "GET",
-      `events?source=eq.org-contact&detail->>org=eq.${encodeURIComponent(org.join_code)}&created_at=gt.${encodeURIComponent(cutoff)}&select=id`,
+      `contact_submissions?org_join_code=eq.${encodeURIComponent(org.join_code)}&created_at=gt.${encodeURIComponent(cutoff)}&select=id`,
     );
-    const recentCount = Array.isArray(recentRes.data) ? recentRes.data.length : 0;
-    if (recentCount >= RATE_LIMIT_PER_MINUTE) {
+    if (!recentRes.ok || !Array.isArray(recentRes.data)) {
+      console.error("org-contact: contact_submissions read failed", recentRes.status, JSON.stringify(recentRes.data));
+      return jsonResponse(req, { error: "Could not send your message right now. Please try again." }, 500);
+    }
+    if (recentRes.data.length >= RATE_LIMIT_PER_MINUTE) {
       return jsonResponse(
         req,
         { error: "This nonprofit is getting a lot of messages right now. Please wait a minute and try again." },
         429,
       );
+    }
+
+    // Record the submission BEFORE emailing, so the attempt counts toward the
+    // limit even if the send fails, and the lead survives a bounced email.
+    const saved = await dbRest("POST", "contact_submissions", {
+      org_id: org.id,
+      org_join_code: org.join_code,
+      kind,
+      name,
+      email,
+      company: company || null,
+      budget: budget || null,
+      message: message || null,
+    });
+    const savedRow = Array.isArray(saved.data) ? (saved.data[0] as { id: number } | undefined) : undefined;
+    if (!saved.ok || !savedRow?.id) {
+      console.error("org-contact: contact_submissions insert failed", saved.status, JSON.stringify(saved.data));
+      return jsonResponse(req, { error: "Could not send your message right now. Please try again." }, 500);
     }
 
     const spec = KINDS[kind];
@@ -186,8 +214,19 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(req, { error: "Could not send your message right now. Please try again." }, 502);
     }
 
-    // PII-free feed row: kind + join code only. Also what the rate limiter
-    // above counts.
+    // Mark the stored lead as delivered. Best effort - the email is out.
+    const stamped = await dbRest(
+      "PATCH",
+      `contact_submissions?id=eq.${savedRow.id}`,
+      { emailed_at: new Date().toISOString() },
+      { Prefer: "return=minimal" },
+    );
+    if (!stamped.ok) {
+      console.error("org-contact: emailed_at stamp failed", savedRow.id, stamped.status);
+    }
+
+    // PII-free feed row: kind + join code only, for the owner's live feed.
+    // No longer what the rate limiter counts.
     const eventInsert = await dbRest("POST", "events", {
       event: spec.eventName,
       detail: { org: org.join_code },

@@ -37,20 +37,33 @@ export interface StripeResult {
   data: any;
   errorCode?: string;
   errorMessage?: string;
+  /** Stripe's decline_code (only on card_declined) - what charge-cycles-run
+   *  classifies a failed PaymentIntent by. */
+  declineCode?: string;
+  /** True when fetch itself threw (DNS, timeout, reset): Stripe may or may
+   *  not have processed the request, so callers treat it as retryable and
+   *  rely on the Idempotency-Key to make the retry safe. */
+  networkError?: boolean;
 }
 
 /**
  * Call the Stripe API. `onAccount` adds the Stripe-Account header, which is
- * how a platform acts on a connected account (direct charges).
+ * how a platform acts on a connected account (direct charges). `extraHeaders`
+ * is for Idempotency-Key: charge-cycles-run sends one per cycle attempt so a
+ * crashed-and-rerun job gets the SAME PaymentIntent back instead of a second
+ * charge. A thrown fetch is returned as { ok: false, networkError: true }
+ * rather than propagated, so one network blip cannot abort a whole batch.
  */
 export async function stripeCall(
   method: "GET" | "POST",
   path: string,
   params?: Record<string, unknown>,
   onAccount?: string,
+  extraHeaders?: Record<string, string>,
 ): Promise<StripeResult> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${STRIPE_SK}`,
+    ...extraHeaders,
   };
   if (onAccount) headers["Stripe-Account"] = onAccount;
 
@@ -63,7 +76,12 @@ export async function stripeCall(
     body = params ? stripeForm(params).toString() : "";
   }
 
-  const res = await fetch(url, { method, headers, body });
+  let res: Response;
+  try {
+    res = await fetch(url, { method, headers, body });
+  } catch (err) {
+    return { ok: false, status: 0, data: null, errorCode: "network", errorMessage: String(err), networkError: true };
+  }
   const data = await res.json().catch(() => null);
   return {
     ok: res.ok,
@@ -71,6 +89,7 @@ export async function stripeCall(
     data,
     errorCode: data?.error?.code,
     errorMessage: data?.error?.message,
+    declineCode: data?.error?.decline_code,
   };
 }
 
@@ -97,6 +116,27 @@ export async function dbRest(
   });
   const data = await res.json().catch(() => null);
   return { ok: res.ok, status: res.status, data };
+}
+
+/** Exact row count for a PostgREST filter without pulling the rows: asks for
+ *  `count=exact` with an empty range and reads the Content-Range total.
+ *  Returns null when the count could not be read. */
+export async function dbCount(pathAndQuery: string): Promise<number | null> {
+  const sep = pathAndQuery.includes("?") ? "&" : "?";
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${pathAndQuery}${sep}select=id&limit=1`, {
+    method: "GET",
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      Prefer: "count=exact",
+    },
+  });
+  await res.body?.cancel();
+  if (!res.ok) return null;
+  const range = res.headers.get("content-range") ?? "";
+  const total = range.split("/")[1];
+  const n = Number(total);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**

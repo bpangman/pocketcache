@@ -16,7 +16,13 @@ create table if not exists public.stripe_donors (
   email text,
   stripe_customer_id text not null unique,
   payment_method_id text,
-  setup_status text not null default 'pending'
+  setup_status text not null default 'pending' -- 'pending' | 'saved' | 'closed' (donor-close detached the card)
 );
+
+-- Later columns live in their own files: multiplier (roundups_realtime.sql);
+-- skip_month_key, monthly_cap_cents, charge_adjustment_cents,
+-- adjustment_month_key, cover_processing, cancelled_at, close_final,
+-- giving_started_at (billing_hardening_2026_11.sql - the donor's billing
+-- controls and cancellation state, written by roundups-me / donor-close).
 
 alter table public.stripe_donors enable row level security;

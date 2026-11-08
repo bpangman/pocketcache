@@ -7,6 +7,12 @@
 // finished onboarding on Stripe's side, and persists stripe_connected so the
 // rest of the app (dashboard, org-connect-stripe's own "already connected"
 // check) doesn't have to ask Stripe again.
+//
+// Auth: read-only, so callerOwnsOrg's looser rule applies - the admin of
+// record OR a verified teammate on the org's admin_domain may check status.
+// It reveals nothing orgs_public does not already (stripe_connected), and
+// the only write is a cache of Stripe's own answer. Anything that changes
+// the org goes through callerIsOrgAdmin instead (org-connect-stripe).
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { STRIPE_SK, dbRest, resolveUser, stripeCall } from "../_shared/stripe.ts";
 import { getOrgById, callerOwnsOrg } from "../_shared/org.ts";

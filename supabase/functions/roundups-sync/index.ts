@@ -1,8 +1,10 @@
 // roundups-sync
 //
 // POST (no body needed) -> { ok, items_processed, items_skipped_no_donor,
-//   transactions_seen, roundups_created, roundups_updated,
-//   roundups_skipped_whole_dollar, roundups_removed }
+//   items_skipped_cancelled, items_failed, transactions_seen,
+//   roundups_created, roundups_updated, roundups_skipped_whole_dollar,
+//   roundups_skipped_pending, roundups_skipped_pre_link,
+//   roundups_rekeyed_late, roundups_removed }
 //
 // This is an ADMIN/CRON action, not a browser action: it is protected by the
 // x-charge-key header, which must match the CHARGE_RUN_KEY function secret,
@@ -43,10 +45,26 @@
 // donor's dashboard calls) so the two paths cannot drift on what counts as
 // a round-up. This file is now just: list every plaid_items row, resolve
 // its donor, and call the shared syncer - same external behavior and
-// response shape as before the extraction.
+// response shape as before the extraction. The engine also owns the
+// pre-link floor (no round-ups on purchases from before the bank link), the
+// late-row re-keying (a transaction arriving after its month locked joins
+// the current open month) and cursor-after-write (a failed upsert no longer
+// loses transactions) - see its header.
+//
+// CANCELLED DONORS are skipped here: their giving ended at cancellation, so
+// nothing new accrues even if their bank is still linked while a final
+// 'donate' cycle settles. donor-close / charge-cycles-run remove the Plaid
+// Item itself once the account is fully closed.
+//
+// TODO (Plaid cost, Blake decision 2026-11-07: no dormancy rule for now):
+// Plaid bills per connected Item per month for as long as the Item EXISTS,
+// whether or not this sync calls /transactions/sync. Pausing or skipping a
+// dormant bank saves nothing; only /item/remove (removePlaidItems in the
+// engine, used by donor-close) stops the charge, and the donor would have to
+// relink afterwards. Revisit once real per-Item pricing is in hand.
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { dbRest } from "../_shared/stripe.ts";
-import { resolveStripeCustomerId, syncItemRoundups } from "../_shared/roundups-engine.ts";
+import { resolveDonorForItem, syncItemRoundups } from "../_shared/roundups-engine.ts";
 import type { PlaidItemRow } from "../_shared/roundups-engine.ts";
 
 const CHARGE_RUN_KEY = Deno.env.get("CHARGE_RUN_KEY") ?? "";
@@ -73,32 +91,51 @@ Deno.serve(async (req: Request) => {
   const counts = {
     items_processed: 0,
     items_skipped_no_donor: 0,
+    items_skipped_cancelled: 0,
+    items_failed: 0,
     transactions_seen: 0,
     roundups_created: 0,
     roundups_updated: 0,
     roundups_skipped_whole_dollar: 0,
     roundups_skipped_pending: 0,
+    roundups_skipped_pre_link: 0,
+    roundups_rekeyed_late: 0,
     roundups_removed: 0,
   };
 
   try {
-    const itemsRes = await dbRest("GET", "plaid_items?select=id,item_id,access_token,email,user_id,cursor");
+    const itemsRes = await dbRest("GET", "plaid_items?select=id,item_id,access_token,email,user_id,cursor,created_at");
     const items = Array.isArray(itemsRes.data) ? (itemsRes.data as PlaidItemRow[]) : [];
 
     for (const item of items) {
-      const stripeCustomerId = await resolveStripeCustomerId(item);
-      if (!stripeCustomerId) {
+      const donor = await resolveDonorForItem(item);
+      if (!donor) {
         counts.items_skipped_no_donor++;
+        continue;
+      }
+      if (donor.cancelled_at) {
+        counts.items_skipped_cancelled++;
         continue;
       }
       counts.items_processed++;
 
-      const r = await syncItemRoundups(item, stripeCustomerId);
+      // One item's failure (Plaid error, a refused upsert - the engine throws
+      // so its cursor stays put) must not abort the sweep for everyone else.
+      let r;
+      try {
+        r = await syncItemRoundups(item, donor.stripe_customer_id, { givingStartedAt: donor.giving_started_at });
+      } catch (err) {
+        counts.items_failed++;
+        console.error("roundups-sync: item sync failed", item.id, err);
+        continue;
+      }
       counts.transactions_seen += r.transactions_seen;
       counts.roundups_created += r.roundups_created;
       counts.roundups_updated += r.roundups_updated;
       counts.roundups_skipped_whole_dollar += r.roundups_skipped_whole_dollar;
       counts.roundups_skipped_pending += r.roundups_skipped_pending;
+      counts.roundups_skipped_pre_link += r.roundups_skipped_pre_link;
+      counts.roundups_rekeyed_late += r.roundups_rekeyed_late;
       counts.roundups_removed += r.roundups_removed;
     }
 

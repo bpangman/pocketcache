@@ -4,10 +4,20 @@
 // returns { link_token }. This is the first call the frontend makes when a
 // donor opens the real Plaid Link flow on the connect-card step.
 //
-// Deployed with --no-verify-jwt: the donor may not be signed in yet at this
-// point in signup, and a link token is single-session and safe to hand out
-// without auth - it does not expose any account data by itself.
+// AUTH (2026-11 audit fix): a real Supabase session is required. Both
+// wizards put the verified account step BEFORE connect-card, so every
+// legitimate caller has one; the client (src/lib/plaid.js) no longer falls
+// back to the anon key and PlaidBankConnect turns a 401 into its labeled
+// practice-mode fallback. The verified user's id is the Plaid
+// client_user_id, so the Item Plaid creates is tied to the donor instead of
+// to a throwaway random id.
+//
+// DEPLOY: redeploy WITHOUT --no-verify-jwt (plain `supabase functions deploy
+// plaid-link-token`) so the gateway also rejects requests with no valid JWT
+// before they reach this code. The resolveUser() check below stays the real
+// gate either way, because the gateway accepts the anon key as a valid JWT.
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
+import { resolveUser } from "../_shared/stripe.ts";
 
 const PLAID_CLIENT_ID = Deno.env.get("PLAID_CLIENT_ID");
 const PLAID_SECRET = Deno.env.get("PLAID_SECRET");
@@ -19,6 +29,11 @@ Deno.serve(async (req: Request) => {
 
   if (req.method !== "POST") {
     return jsonResponse(req, { error: "Method not allowed" }, 405);
+  }
+
+  const user = await resolveUser(req);
+  if (!user) {
+    return jsonResponse(req, { error: "Sign in required." }, 401);
   }
 
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
@@ -34,7 +49,7 @@ Deno.serve(async (req: Request) => {
         client_id: PLAID_CLIENT_ID,
         secret: PLAID_SECRET,
         client_name: "PocketCache",
-        user: { client_user_id: crypto.randomUUID() },
+        user: { client_user_id: user.id },
         products: ["transactions"],
         country_codes: ["US"],
         language: "en",

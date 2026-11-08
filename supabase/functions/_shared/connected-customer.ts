@@ -187,3 +187,82 @@ export async function getOrCreateConnectedCustomer(
 
   return { ok: true, connectedCustomerId, paymentMethodId: clonedPm };
 }
+
+// ─── Account closure ─────────────────────────────────────────────────────────
+
+export interface DetachResult {
+  /** Clones detached on connected accounts (one per connected_customers row). */
+  clonesDetached: number;
+  /** The platform-side payment method was detached (or was already gone). */
+  platformDetached: boolean;
+  errors: string[];
+}
+
+/**
+ * Detach every saved payment method a donor has, everywhere it lives, and
+ * clear the saved-card columns on stripe_donors. Used by donor-close (cancel
+ * or delete) and by charge-cycles-run / cycle-lock once a leaving donor's one
+ * final gift has settled.
+ *
+ * WHERE THE CARD LIVES: the original PaymentMethod sits on the PLATFORM
+ * account (stripe_donors.payment_method_id); every nonprofit the donor was
+ * ever charged for holds a CLONE on its connected account
+ * (connected_customers.cloned_payment_method_id). Both must go, or a clone
+ * could still be charged from the nonprofit's side after the donor left.
+ *
+ * Detach failures are collected, not thrown: a payment method Stripe already
+ * considers detached (resource_missing) is a success for our purposes, and
+ * one bad clone must not stop the others from being removed. The DB columns
+ * are cleared regardless, so the billing jobs stop seeing a saved card even
+ * if a Stripe call hiccups - the connected_customers rows are deleted so the
+ * next charge path (if any) would have to re-clone from a card that no longer
+ * exists, which fails closed.
+ */
+export async function detachDonorPaymentMethods(
+  stripeCustomerId: string,
+  platformPaymentMethodId: string | null,
+): Promise<DetachResult> {
+  const result: DetachResult = { clonesDetached: 0, platformDetached: false, errors: [] };
+  const isGone = (r: StripeResult) => r.ok || r.errorCode === "resource_missing";
+
+  const rowsRes = await dbRest(
+    "GET",
+    `connected_customers?stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}&select=connected_account,cloned_payment_method_id`,
+  );
+  const rows = Array.isArray(rowsRes.data)
+    ? (rowsRes.data as { connected_account: string; cloned_payment_method_id: string | null }[])
+    : [];
+  for (const row of rows) {
+    if (!row.cloned_payment_method_id) continue;
+    const detach = await stripeCall("POST", `/payment_methods/${row.cloned_payment_method_id}/detach`, undefined, row.connected_account);
+    if (isGone(detach)) {
+      result.clonesDetached++;
+    } else {
+      result.errors.push(`clone ${row.connected_account}: ${detach.errorCode ?? detach.status}`);
+    }
+  }
+  if (rows.length > 0) {
+    const del = await dbRest("DELETE", `connected_customers?stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}`);
+    if (!del.ok) result.errors.push(`connected_customers delete: ${del.status}`);
+  }
+
+  if (platformPaymentMethodId) {
+    const detach = await stripeCall("POST", `/payment_methods/${platformPaymentMethodId}/detach`);
+    if (isGone(detach)) {
+      result.platformDetached = true;
+    } else {
+      result.errors.push(`platform: ${detach.errorCode ?? detach.status}`);
+    }
+  } else {
+    result.platformDetached = true;
+  }
+
+  const clear = await dbRest(
+    "PATCH",
+    `stripe_donors?stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}`,
+    { payment_method_id: null, setup_status: "closed" },
+  );
+  if (!clear.ok) result.errors.push(`stripe_donors clear: ${clear.status}`);
+
+  return result;
+}

@@ -8,6 +8,11 @@
 --
 -- Applied to project yeptifozaytoglfwxksz via the Supabase management API on
 -- 2026-08-04. Kept here so the schema is in version control.
+--
+-- 2026-11-07: billing_hardening_2026_11.sql adds the retry / adjustment /
+-- months_included columns to charge_cycles, check constraints on the status
+-- columns below, the charge_log audit table and the 14th's retry cron. The
+-- status vocabularies written in the comments here are the full current sets.
 
 -- plaid_items needs a place to persist each item's /transactions/sync
 -- cursor so a re-run only asks Plaid for what changed since last time.
@@ -28,6 +33,8 @@ create table if not exists public.roundups (
   amount_cents int not null,
   roundup_cents int not null,
   month_key text not null,
+  -- 'pending' | 'rolled' | 'locked' | 'charged' | 'skipped' | 'waived' | 'void'
+  -- (constraint roundups_status_check, billing_hardening_2026_11.sql)
   status text not null default 'pending'
 );
 alter table public.roundups enable row level security;
@@ -36,10 +43,16 @@ create index if not exists roundups_customer_month_status_idx
   on public.roundups (stripe_customer_id, month_key, status);
 
 -- charge_cycles: one row per donor per calendar month once cycle-lock has
--- looked at it. Below the nonprofit's minimum it stays 'rolled_forward' and
--- the balance carries to the next month via rollover_in_cents; at or above
--- the minimum it becomes 'locked' (total_cents set) and later 'charged' or
--- 'failed' by charge-cycles-run.
+-- looked at it. Below the $5 floor it stays 'rolled_forward' and the balance
+-- carries to the next month via rollover_in_cents; at or above the floor it
+-- becomes 'locked' (total_cents set, cover_cents inside it) and later
+-- 'charged', or 'retry' (one retryable decline, next_retry_at set) and then
+-- 'charged' or back to 'rolled_forward' by charge-cycles-run. 'skipped' is a
+-- donor's skip, 'waived' a cancelled donor, 'held_no_org' a lock that could
+-- not resolve the donor's nonprofit to a connected Stripe account, and
+-- 'rolled_over' a carry row the next cycle absorbed. 'failed' is legacy.
+-- Full column list: this file + charge_cycles_email.sql +
+-- billing_hardening_2026_11.sql.
 create table if not exists public.charge_cycles (
   id bigint generated always as identity primary key,
   created_at timestamptz not null default now(),

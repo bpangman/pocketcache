@@ -8,11 +8,15 @@
 // charge their monthly round-ups - see stripe-charge-run for what happens
 // once it is finished.
 //
-// Auth: caller must hold a real Supabase session whose email matches the
-// org's admin_email (or its admin_domain) - see _shared/org.ts callerOwnsOrg.
+// Auth: caller must hold a real Supabase session that IS the org's admin of
+// record - the auth user id stamped as admin_user_id, or the exact
+// admin_email - see _shared/org.ts callerIsOrgAdmin. This path creates the
+// connected account and hands out the onboarding link, so a teammate who
+// merely shares the admin domain is not enough here (that looser match is
+// kept only for the read-only org-connect-status).
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { STRIPE_SK, dbRest, resolveUser, stripeCall } from "../_shared/stripe.ts";
-import { getOrgById, callerOwnsOrg } from "../_shared/org.ts";
+import { getOrgById, callerIsOrgAdmin } from "../_shared/org.ts";
 
 const RETURN_BASE = "https://pocketcache.app/demo/";
 
@@ -41,7 +45,7 @@ Deno.serve(async (req: Request) => {
 
     const org = await getOrgById(orgId);
     if (!org) return jsonResponse(req, { error: "Organization not found" }, 404);
-    if (!callerOwnsOrg(user.email, org)) {
+    if (!callerIsOrgAdmin(user, org)) {
       return jsonResponse(req, { error: "You do not administer this organization." }, 403);
     }
 

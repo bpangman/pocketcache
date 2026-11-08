@@ -9,18 +9,21 @@
 // round-ups and flips the row to 'charged'. That is why the client's honest
 // success copy says "Added to your next monthly charge".
 //
-// AUTH: identical posture to roundups-me - primary path is a real Supabase
-// Authorization Bearer JWT resolved via resolveUser(); fallback is a body
-// `email` matched against stripe_donors.email (same trust level
-// stripe-setup-intent already accepts mid-signup). Either way the caller
-// resolves to an existing stripe_donors row or the request is rejected -
-// there is no way to pledge on behalf of an arbitrary customer id, and the
-// "no donor" answer is the same 404 shape for "no such email" and "no row",
-// so this cannot be used to enumerate accounts.
+// AUTH: a real Supabase Authorization Bearer JWT resolved via resolveUser(),
+// and nothing else. There is no email fallback any more: the old one let
+// anyone who knew a donor's address pledge up to $10,000 on that donor's
+// card with a bare POST (2026-11 audit, critical). A request with no valid
+// session gets 401 { error: 'sign-in required' } and writes nothing. The
+// client (src/lib/engagement.js submitGiveExtra) already refuses to call
+// without a session. The donor still has to resolve to an existing
+// stripe_donors row (by user_id, then by the session's verified email), so
+// there is no way to pledge on behalf of an arbitrary customer id.
 //
 // VALIDATION: amount_cents must be an integer between 100 ($1) and
-// 1_000_000 ($10,000). The client keeps its own $1 floor; the ceiling here
-// is the backstop against a fat-fingered or hostile amount.
+// 1_000_000 ($10,000) per pledge, AND the donor's still-pending pledges plus
+// this one may not exceed 1_000_000 cents in total - the per-cycle cap that
+// stops repeated calls stacking past the single-pledge ceiling. Over the
+// cap is a 422 with the pending total so the client can say so.
 //
 // ORG: `org_code` (the donor's selected nonprofit's join code) is optional.
 // If it resolves to a real orgs row the pledge stores that org_id;
@@ -29,13 +32,14 @@
 // extra pledged', join code + amount only) is inserted either way so the
 // pledge shows in the owner's live activity feed.
 //
-// Deployed with --no-verify-jwt, same as every sibling function, because the
-// email fallback path deliberately does not require a Supabase JWT.
+// Deployed with --no-verify-jwt like its siblings; the gate is resolveUser()
+// above, which rejects the anon key and any invalid or expired token.
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { dbRest, resolveUser } from "../_shared/stripe.ts";
 
 const MIN_CENTS = 100; // $1
-const MAX_CENTS = 1_000_000; // $10,000
+const MAX_CENTS = 1_000_000; // $10,000 per pledge
+const PENDING_CAP_CENTS = 1_000_000; // $10,000 of pending pledges per donor, in total
 
 interface DonorRow {
   stripe_customer_id: string;
@@ -43,35 +47,44 @@ interface DonorRow {
 }
 
 // Same donor resolution as roundups-me's findDonor, minus the fields this
-// function does not need. Kept local rather than shared: the two functions
-// select different columns and the duplication is 20 readable lines.
-async function findDonor(req: Request, body: { email?: unknown }): Promise<DonorRow | null> {
-  const user = await resolveUser(req);
-  if (user) {
-    const byUser = await dbRest(
-      "GET",
-      `stripe_donors?user_id=eq.${encodeURIComponent(user.id)}&select=stripe_customer_id,email&limit=1`,
-    );
-    const row = Array.isArray(byUser.data) ? (byUser.data[0] as DonorRow | undefined) : undefined;
-    if (row) return row;
-    if (user.email) {
-      const byEmail = await dbRest(
-        "GET",
-        `stripe_donors?email=eq.${encodeURIComponent(user.email)}&select=stripe_customer_id,email&limit=1`,
-      );
-      const emailRow = Array.isArray(byEmail.data) ? (byEmail.data[0] as DonorRow | undefined) : undefined;
-      if (emailRow) return emailRow;
-    }
-    return null;
-  }
-  const email = typeof body?.email === "string" && body.email.includes("@") ? body.email.trim() : null;
-  if (!email) return null;
-  const byEmail = await dbRest(
+// function does not need and minus any body-email path. Kept local rather
+// than shared: the two functions select different columns and the
+// duplication is a dozen readable lines.
+async function findDonor(user: { id: string; email?: string }): Promise<DonorRow | null> {
+  const byUser = await dbRest(
     "GET",
-    `stripe_donors?email=eq.${encodeURIComponent(email)}&select=stripe_customer_id,email&limit=1`,
+    `stripe_donors?user_id=eq.${encodeURIComponent(user.id)}&select=stripe_customer_id,email&limit=1`,
   );
-  const row = Array.isArray(byEmail.data) ? (byEmail.data[0] as DonorRow | undefined) : undefined;
-  return row ?? null;
+  const row = Array.isArray(byUser.data) ? (byUser.data[0] as DonorRow | undefined) : undefined;
+  if (row) return row;
+  if (user.email) {
+    const byEmail = await dbRest(
+      "GET",
+      `stripe_donors?email=eq.${encodeURIComponent(user.email)}&select=stripe_customer_id,email&limit=1`,
+    );
+    const emailRow = Array.isArray(byEmail.data) ? (byEmail.data[0] as DonorRow | undefined) : undefined;
+    if (emailRow) return emailRow;
+  }
+  return null;
+}
+
+/** Sum of this donor's pledges that have not been charged yet - both the
+ *  never-locked ones (cycle_month null) and the ones already folded into a
+ *  locked cycle that charge-cycles-run has not run for. Both will hit the
+ *  card, so both count toward the cap. */
+async function pendingPledgeCents(stripeCustomerId: string): Promise<number> {
+  const res = await dbRest(
+    "GET",
+    `give_extras?stripe_customer_id=eq.${encodeURIComponent(stripeCustomerId)}&status=eq.pending&select=amount_cents`,
+  );
+  if (!res.ok || !Array.isArray(res.data)) {
+    // Fail closed: if we cannot read the ledger we cannot prove the cap holds.
+    throw new Error(`give_extras read failed (${res.status})`);
+  }
+  return (res.data as Array<{ amount_cents: number }>).reduce(
+    (sum, row) => sum + (Number(row.amount_cents) || 0),
+    0,
+  );
 }
 
 Deno.serve(async (req: Request) => {
@@ -83,6 +96,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const user = await resolveUser(req);
+    if (!user) {
+      return jsonResponse(req, { error: "sign-in required" }, 401);
+    }
+
     const body = await req.json().catch(() => ({}));
 
     const amountCents = Number(body?.amount_cents);
@@ -90,9 +108,18 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(req, { error: "Amount must be between $1 and $10,000." }, 400);
     }
 
-    const donor = await findDonor(req, body);
+    const donor = await findDonor(user);
     if (!donor) {
       return jsonResponse(req, { error: "We could not find your donor account." }, 404);
+    }
+
+    const pendingCents = await pendingPledgeCents(donor.stripe_customer_id);
+    if (pendingCents + amountCents > PENDING_CAP_CENTS) {
+      return jsonResponse(req, {
+        error: "Your pending gifts cannot total more than $10,000 before they are charged.",
+        pending_cents: pendingCents,
+        cap_cents: PENDING_CAP_CENTS,
+      }, 422);
     }
 
     // Optional org resolution - join code to orgs.id. Absent or unknown

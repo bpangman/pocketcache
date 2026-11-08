@@ -11,17 +11,22 @@
 //   role 'donor' -> stripe_donors.email  (the row is what every billing/
 //     round-up path matches a donor by; a stale email there would orphan
 //     their charges from their new sign-in).
-//   role 'admin' -> orgs.admin_email     (the org's admin of record). The new
-//     address MUST be on the org's admin_domain - enforced HERE, server-side,
-//     against orgs.admin_domain, not just in the client. A cross-domain admin
-//     email is rejected 403 and nothing is written.
+//   role 'admin' -> orgs.admin_email     (the org's admin of record). Two
+//     gates, both server-side: the caller's auth user id must equal the
+//     org's admin_user_id (the admin who signed the org up, stamped by
+//     org-signup and backfilled by the hardening migration) - a colleague on
+//     the same domain with their own verified session is a 403, because a
+//     domain match alone used to be enough to take over the admin of record
+//     (2026-11 audit). And the new address MUST still be on the org's
+//     admin_domain. A failed gate writes nothing.
 //
 // AUTH: a real Supabase Bearer JWT, verified with resolveUser() (same helper
 // roundups-me / stripe-setup-intent use). The NEW email is read from the
 // verified user, never trusted from the body - the caller cannot set an email
 // they have not actually confirmed with Supabase. `oldEmail` from the body is
 // only used to also catch pre-signup rows whose user_id is null and can only
-// be matched by their old address.
+// be matched by their old address, and to find the org when no orgId is sent
+// (the identity check is admin_user_id, never oldEmail).
 //
 // Deployed with --no-verify-jwt like every other function here: this function
 // does its own auth via resolveUser(). A request with no/expired token gets a
@@ -61,6 +66,18 @@ Deno.serve(async (req: Request) => {
         : (oldEmail ? await getOrgByAdminEmail(oldEmail) : null);
       if (!org) {
         return jsonResponse(req, { ok: false, error: "Organization not found." }, 404);
+      }
+      // IDENTITY. Only the admin of record (by auth user id) may reassign the
+      // admin email. The session's email is already the NEW address at this
+      // point, so the email itself proves nothing - the user id does. An org
+      // with no admin_user_id yet (not backfilled) cannot be verified, so it
+      // is refused rather than guessed.
+      if (!org.admin_user_id || org.admin_user_id !== user.id) {
+        return jsonResponse(
+          req,
+          { ok: false, error: "Only the organization's current admin can change its admin email." },
+          403,
+        );
       }
       // DOMAIN ENFORCEMENT. The admin of record must stay on the org's domain.
       if (emailDomain(newEmail) !== (org.admin_domain || "").toLowerCase()) {
