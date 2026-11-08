@@ -73,6 +73,13 @@ jobs:
           cp public/logo.png dist-pages/logo.png
           cp public/coin.png dist-pages/coin.png
 
+          # Root favicons: browsers request /favicon.ico on every page (a PNG
+          # served under that name is accepted), and iOS asks for
+          # /apple-touch-icon.png when a page is saved to the home screen
+          cp public/favicon-32.png dist-pages/favicon-32.png
+          cp public/favicon-32.png dist-pages/favicon.ico
+          cp public/apple-touch-icon.png dist-pages/apple-touch-icon.png
+
           # CNAME for custom domain
           cp CNAME dist-pages/CNAME
 

@@ -7,8 +7,8 @@ import tailwindcss from '@tailwindcss/vite'
 // App code is split by route in src/App.jsx (React.lazy). This file only groups
 // the heavy third-party libraries, for two reasons:
 //
-//   1. CACHING. React, framer-motion, recharts and Stripe change only when we
-//      bump a dependency, while app code changes on every deploy. In one chunk,
+//   1. CACHING. React, framer-motion, recharts, Stripe and Supabase change only
+//      when we bump a dependency, while app code changes on every deploy. In one chunk,
 //      a copy tweak re-downloaded 1.1 MB. Split out, a deploy invalidates the
 //      app chunks and leaves the vendor chunks in cache. That matters most on
 //      the native app, which re-fetches this site over the network.
@@ -57,6 +57,15 @@ const VENDOR_GROUPS = [
     priority: 20,
     test: /node_modules[\\/]@stripe[\\/]/,
   },
+  // Supabase client (auth, postgrest, realtime, storage: about 220 kB). Left
+  // to the default placement it was merged into a shared app chunk, so any
+  // edit to a module next to it re-downloaded the whole client. Every entry
+  // loads it, so this is a caching split, not a deferral one.
+  {
+    name: 'vendor-supabase',
+    priority: 20,
+    test: /node_modules[\\/]@supabase[\\/]/,
+  },
   // Charts. recharts drags in redux + d3 (via victory-vendor); every one of
   // those packages is recharts-only in this app, so the whole cluster travels
   // together and is fetched only by the chunks that draw a chart.
@@ -70,6 +79,11 @@ const VENDOR_GROUPS = [
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: '/demo/',
+  // Build id for the version line (src/components/AppVersion.jsx). GITHUB_SHA
+  // is set in the deploy.yml Actions run; local builds read "dev".
+  define: {
+    __BUILD_ID__: JSON.stringify((process.env.GITHUB_SHA || 'dev').slice(0, 7)),
+  },
   server: {
     allowedHosts: 'all',
   },

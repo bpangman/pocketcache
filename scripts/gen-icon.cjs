@@ -29,7 +29,10 @@ html, body { width: 1024px; height: 1024px; background: #0B2A4A; display: flex; 
 </body>
 </html>`);
   await page.waitForTimeout(200);
-  const outPath = path.join(__dirname, '..', 'public', 'icon-1024-master.png');
+  // The 1024 master for the iOS AppIcon (AppIcon-512@2x.png is a copy of it).
+  // It lives with the other native assets, not in public/, so it is not
+  // shipped to the website.
+  const outPath = path.join(__dirname, '..', 'app', 'assets', 'icon-1024-master.png');
   await page.screenshot({ path: outPath, fullPage: false, clip: { x: 0, y: 0, width: 1024, height: 1024 } });
   await browser.close();
   console.log('Generated:', outPath);

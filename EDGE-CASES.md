@@ -1,9 +1,16 @@
-# PocketCache — Money-Flow Edge-Case Test Plan
+# PocketCache - Money-Flow Edge-Case Test Plan
 
 **Launch Gate item #1.** PRELAUNCH.md says this gate is satisfied when (a) a written
 screen-by-screen checklist of every failure scenario exists, and (b) every case has been
-manually verified. This document is (a). Each case has a checkbox for (b) — nothing ships
+manually verified. This document is (a). Each case has a checkbox for (b) - nothing ships
 until every box is checked against the real (staging) system.
+
+> **2026-11-07 note:** "rebuilt backend" in the July entries below means the Express `backend/`
+> folder, which was never deployed (legacy prototype). The real system is the Supabase edge
+> functions: `roundups-sync` / `_shared/roundups-engine.ts` (accrual), `cycle-lock` (the 1st) and
+> `charge-cycles-run` (the 11th). Cases are re-pointed at those where the behavior is known. The
+> billing rules are a fixed $5 minimum, balances under $5 always roll forward, and the $1 app fee
+> is not charged server-side yet (no application fee until Nathan signs off).
 
 **How to read each case:** *Scenario* → *What must happen* → *Status* (✅ handled in code ·
 🔧 code exists but unverified · 🏗️ needs building · ⚖️ needs a policy decision first).
@@ -11,8 +18,8 @@ until every box is checked against the real (staging) system.
 Legend for money invariants that can NEVER be violated:
 - **INV-1: Never charge twice for the same round-ups.**
 - **INV-2: Never charge without a recorded, matching accrual trail.**
-- **INV-3: Every charge lands on the NONPROFIT's Stripe — PocketCache's balance only ever
-  receives the flat $1.00/month application fee.**
+- **INV-3: Every charge lands on the NONPROFIT's Stripe - PocketCache's balance only ever
+  receives the flat $1.00/month application fee (once wired; today it receives nothing).**
 - **INV-4: A donor can always see an accurate answer to "was I charged, and how much?"**
 
 ---
@@ -24,7 +31,7 @@ Legend for money invariants that can NEVER be violated:
 - [ ] **A2. Donor abandons Plaid Link mid-flow** (closes the modal at the credential screen).
   → App returns to the connect screen cleanly; no connection row saved; donor can retry.
 - [ ] **A3. Plaid Link succeeds but our token exchange call fails** (network blip between
-  Plaid and our backend). → Donor sees an honest "connection didn't finish — try again";
+  Plaid and our backend). → Donor sees an honest "connection didn't finish - try again";
   no orphaned "linked" state showing a card that isn't actually monitored. 🔧
 - [ ] **A4. Bank re-auth required later** (donor changes bank password; Plaid fires
   `ITEM_LOGIN_REQUIRED`). Round-up tracking silently stops. → We must (1) detect it via
@@ -43,27 +50,33 @@ Legend for money invariants that can NEVER be violated:
   dedup? Must be decided; today nothing prevents it.
 - [ ] **A8. Plaid outage on sync night.** → Job logs failure, cursor unchanged, next night
   catches up from the same cursor. Verify no gap and no double-count after recovery. ✅
-  (cursor-based sync is built for this) — verify anyway.
+  (cursor-based sync is built for this) - verify anyway.
 - [ ] **A9. Plaid cursor invalidated / history reset** (Plaid re-baselines an item). → Sync
   returns previously-seen transactions again. Dedup by `plaid_txn_id` must absorb the
-  replay with zero new round-ups. ✅ dedup exists — needs a forced test.
+  replay with zero new round-ups. ✅ dedup exists - needs a forced test.
 
 ## B. Turning purchases into round-ups (the accrual math)
 
 - [ ] **B1. Pending transaction posts later with a different amount and a NEW Plaid id**
   (restaurant: $20.00 pending → $24.00 with tip). Plaid pending ids ≠ posted ids, so naive
   dedup double-counts. → We only process POSTED transactions and cross-check
-  `pending_transaction_id`. ✅ in rebuilt backend — must be tested with a live pending txn.
+  `pending_transaction_id`. 🔧 Supabase: `roundups-engine.ts` skips pending transactions
+  and rounds up only the posted one (Plaid reports the pending id as `removed`); there is no
+  `pending_transaction_id` cross-check. Must be tested with a live pending txn.
 - [ ] **B2. Refund BEFORE the monthly charge** (buy $43.18 → +$0.82 accrued → return the
-  item). → Round-up must be reversed; pending total drops. ✅ rebuilt backend consumes
-  Plaid `removed`/`modified` — verify.
+  item). → POLICY (adopted 2026-11-07, Terms sentence pending Nathan): round-ups on
+  purchases later refunded by the merchant are NOT reversed. `roundups-engine.ts` only rounds
+  up outflows (amount > 0); a merchant refund arrives as a separate negative-amount
+  transaction and is ignored, so the original round-up stands. Plaid `removed` deletes a
+  roundup row only while it is still 'pending' (a voided/cancelled transaction, not a
+  refund), and `modified` updates only 'pending' rows. ✅ by design - verify both.
 - [ ] **B3. Refund AFTER the monthly charge** (bought in June, charged July 1, refunded
-  July 3). → ⚖️ policy: no clawback (donation stands — industry standard, cleanest legally
+  July 3). → ⚖️ policy: no clawback (donation stands - industry standard, cleanest legally
   since the nonprofit already has the money). Must be stated in donor Terms. 🏗️ copy.
 - [ ] **B4. Exact-dollar purchase ($25.00).** → $0.00 round-up: no row, no effect on counts.
-  ✅ — verify no $0 rows appear.
+  ✅ - verify no $0 rows appear.
 - [ ] **B5. NON-PURCHASE debits: rent transfer, credit-card bill payment from checking,
-  Venmo transfer, ACH to savings.** Today the code rounds up EVERY debit — paying a $1,432.55
+  Venmo transfer, ACH to savings.** Today the code rounds up EVERY debit - paying a $1,432.55
   rent would "donate" $0.45, and paying off your credit card counts the same purchases
   TWICE (once on the card, once on the checking payment). → Must filter by Plaid
   category/payment_channel (exclude transfers, loan payments, bank fees). 🏗️ **This one
@@ -73,63 +86,66 @@ Legend for money invariants that can NEVER be violated:
 - [ ] **B7. PocketCache's own monthly charge appears on the tracked card** (donor tracks
   the same card they donate with) → the donation itself must NEVER generate a round-up
   (self-feeding loop). The old filter compared the wrong fields and never matched. ✅ fixed
-  (amount+date-window match) — but the filter is heuristic; verify with a real charge, and
+  (amount+date-window match) - but the filter is heuristic; verify with a real charge, and
   add the nonprofit's statement descriptor to the match once live.
-- [ ] **B8. Round-up multiplier (2×/3×) changed mid-month.** → Applies to FUTURE
-  transactions only; already-accrued rows keep their multiplier. Charged amount must equal
-  the sum of row-level accruals, never `base × multiplier` recomputed at charge time. 🏗️
-  (today the demo multiplies the whole pending balance retroactively).
+- [ ] **B8. Round-up multiplier (2×/3×) changed mid-month.** → RULE (kept 2026-11-07,
+  stated in the app and Terms): the multiplier in effect when the month closes is applied at
+  lock time (`cycle-lock`, the 1st) to the whole month's round-ups. Rows store the 1× amount;
+  the charged amount = month's row total × lock-time multiplier. Verify a mid-month change
+  moves the whole month, and that the app's projection matches the locked total.
 - [ ] **B9. Clock/timezone edges.** Purchase at 11:58pm on the 30th (bank timezone) syncs
   on the 1st after the charge job ran. → It simply lands in next month's accrual. Verify no
-  transaction is ever lost between "period" boundaries — the roundup's `included_in`
-  linkage (not date math) decides which charge sweeps it. ✅ by design — verify.
+  transaction is ever lost between "period" boundaries - the roundup's `included_in`
+  linkage (not date math) decides which charge sweeps it. ✅ by design - verify.
 
-## C. The monthly charge — the highest-stakes 60 seconds
+## C. The monthly charge - the highest-stakes 60 seconds
 
 > **Schedule updated 2026-07-06 (Blake, rev 2):** the cycle LOCKS on the 1st (exact amount
-> emailed to the donor) and the charge RUNS on the 11th — 10 full days' notice, matching the
+> emailed to the donor) and the charge RUNS on the 11th - 10 full days' notice, matching the
 > classic Reg E timing for varying preauthorized debits (Nathan asked whether range-based
 > consent lets us move to the 5th; until he says yes, the 11th is the rule). Every case below
 > that says "the 1st" means lock-day behavior; charge-execution cases apply on the 11th.
-> Add cases: (a) donor adjusts the locked charge during the 1st–10th window; (b) round-up
+> Add cases: (a) donor adjusts the locked charge during the 1st-10th window; (b) round-up
 > posting AFTER lock rolls to next month; (c) charge-day failure retries still respect the
 > locked amount; (d) skip-a-month set mid-window cancels the pending charge, fee rolls.
 
-- [ ] **C1. Below the minimum** ($4.63 accrued, $5 minimum). → NO charge; balance rolls
-  over; app shows "building toward your $5 minimum," not "ready to send." Nonprofit is
-  NOT billed the flat $1.00/month fee for that donor that month (⚖️ confirm "active user"
-  definition = charged users, else nonprofits pay fees on donors generating $0). 
+- [ ] **C1. Below the minimum** ($4.63 accrued, $5 minimum). → NO charge; balance and that
+  month's $1 fee roll forward to the donor. Nonprofits are never billed anything. App shows
+  "building toward your $5 minimum," not "ready to send." (`cycle-lock` writes
+  `rolled_forward`; there is no forced settle-up.)
 - [ ] **C2. Rollover then success** ($4.63 June + $6.10 July = $10.73 charged Aug 1). →
   One charge; both months' rows marked; receipt math exact. 
-- [ ] **C3. Insufficient funds on charge day.** → One retry 3 days later; second failure
-  pauses the donor + honest email ("you weren't charged — update your card"); accruals
-  keep rolling. ✅ retry job now exists (the old code set "retrying" and nothing ever
-  retried) — verify both failure legs.
+- [ ] **C3. Insufficient funds on charge day.** → One retry about 3 days later; second
+  failure rolls the amount forward into the next cycle + one honest email ("you weren't
+  charged - update your card"); accruals keep rolling. 🔧 `charge-cycles-run` retry
+  (status 'retry', `next_retry_at` +3 days, pg_cron run on the 14th) is written on the
+  2026-11 fix pass, NOT deployed yet - verify both failure legs after deploy.
 - [ ] **C4. Card expired/canceled (permanent decline).** → Don't burn the retry on a
-  permanent decline code; go straight to paused + "update payment method." 🏗️ decline-code
-  branching.
+  permanent decline code (expired_card, lost_card, stolen_card, no saved card); go straight
+  to rolled forward + "update payment method" email. 🔧 decline-code branching is in the same
+  undeployed `charge-cycles-run` change.
 - [ ] **C5. Job crashes halfway through 500 donors.** → Re-running must skip everyone
   already charged (idempotency key per donor+period, enforced BOTH in our DB and as the
-  Stripe idempotency key). INV-1. ✅ rebuilt — needs a kill-test in staging.
+  Stripe idempotency key). INV-1. ✅ rebuilt - needs a kill-test in staging.
 - [ ] **C6. Server dies AFTER Stripe accepts the charge but BEFORE our DB records it.** →
   On restart the idempotency key makes the "second" attempt return the SAME PaymentIntent
   (no double charge), and the webhook independently records the outcome. INV-1/INV-4. 🔧
 - [ ] **C7. Stripe webhook arrives twice** (Stripe retries deliveries). → Handler is
-  idempotent (status already 'succeeded' → no-op). ✅ — verify.
+  idempotent (status already 'succeeded' → no-op). ✅ - verify.
 - [ ] **C8. Webhook signature invalid / replay attack.** → 400, logged, no state change. ✅
-- [ ] **C9. ACH charge "succeeds" then RETURNS days later** (R01 insufficient funds — ACH
+- [ ] **C9. ACH charge "succeeds" then RETURNS days later** (R01 insufficient funds - ACH
   is not final for ~4 business days). → Must handle `payment_intent.payment_failed` /
-  charge.refunded arriving AFTER we marked success: un-mark? No — mark the charge
+  charge.refunded arriving AFTER we marked success: un-mark? No - mark the charge
   'returned', do NOT un-sweep round-ups silently; surface to donor + nonprofit dashboards.
   ⚖️ + 🏗️ **Most teams miss this one.**
 - [ ] **C10. Chargeback/dispute.** Nonprofit is merchant of record → the dispute is theirs,
   but WE must pause the donor (fraud signal) and show it in their dashboard. 🏗️
 - [ ] **C11. Donor cancels on the 29th with $14 accrued.** → ⚖️ policy: final charge on the
-  1st for what's accrued (recommended — they authorized those round-ups), or forfeit?
+  1st for what's accrued (recommended - they authorized those round-ups), or forfeit?
   Cancel screen must say which. Today the demo cancel flow charges nothing and says nothing.
 - [ ] **C12. Donor switches nonprofits mid-month with $7 accrued.** → Accrued rows are
   locked to the OLD nonprofit (charged to old org's Stripe next 1st); new purchases accrue
-  to the new one. Statement will show the OLD charity's name after the switch — the switch
+  to the new one. Statement will show the OLD charity's name after the switch - the switch
   confirmation must disclose this. ✅ backend locks at accrual · 🏗️ disclosure copy.
 - [ ] **C13. "Cover the fee" toggled mid-month.** → The setting at CHARGE TIME governs the
   whole charge (one flag per charge, recorded on the charge row). Verify no half-states.
@@ -139,11 +155,12 @@ Legend for money invariants that can NEVER be violated:
   was charged. INV-3 means we cannot "hold it for them." 🏗️
 - [ ] **C15. Nonprofit deactivates their page with 40 donors accruing.** → ⚖️ policy: stop
   accrual immediately + notify donors (recommended), define what happens to sub-minimum
-  balances (evaporate — they were never charged). Must be in the nonprofit license + donor
+  balances (evaporate - they were never charged). Must be in the nonprofit license + donor
   terms.
 - [ ] **C16. The flat $1.00/month application fee when round-ups are tiny** (donor accrued
-  exactly $10.00 → nonprofit nets $9.00 minus Stripe's ~$0.59 = $8.41). → Verify the
-  receipt/dashboard math shows this honestly. Also verify the fee is a flat $1.00/month -
+  $10.00 → donor charged $10.00 + $1 fee (+ processing cover if on); nonprofit nets $10.00
+  with cover on, $10.00 minus Stripe processing with it off; $1 goes to PocketCache as the
+  application fee once wired). → Verify the receipt/dashboard math shows this honestly. Also verify the fee is a flat $1.00/month -
   never a percentage anywhere in code, copy, or receipts. INV-3.
 - [ ] **C17. Charge on Jan 1 / DST-shift nights / leap day.** → Cron fires once and only
   once; period labels correct across year boundary ('2026-12' → '2027-01').
@@ -163,7 +180,7 @@ Legend for money invariants that can NEVER be violated:
   a letter/officer verification for big orgs. ⚖️ decide the verification bar before any
   real org onboards. 🏗️
 - [ ] **D5. ProPublica API down during onboarding.** → Graceful "try again later," never a
-  fake auto-pass. (Demo falls back to sample data with a label — production must NOT.) 
+  fake auto-pass. (Demo falls back to sample data with a label - production must NOT.) 
 - [ ] **D6. Nonprofit finishes EIN + branding but never completes Stripe Connect.** → Page
   must NOT go live; donors must not be able to accrue toward an org that can't be charged.
   Today's demo flips "live" regardless. 🏗️ gate on `stripe_account_id` + charges_enabled.
@@ -172,19 +189,19 @@ Legend for money invariants that can NEVER be violated:
 - [ ] **D8. Join-code collision & guessing.** Two orgs both want "BGCA"; codes are
   enumerable by bots. → Uniqueness check at creation; rate-limit `GET /by-code`; codes are
   not secrets (public QR anyway) but binding to a WRONG org must be hard: show org name +
-  logo confirmation before binding. ✅ confirm screen exists — verify rate limiting. 🏗️
+  logo confirmation before binding. ✅ confirm screen exists - verify rate limiting. 🏗️
 - [ ] **D9. California donor.** Picks CA → blocked. Lies about state → ⚖️ accepted risk with
   self-attestation + ToS language (lawyer confirmed approach); revisit geolocation later.
   VPN/moved-to-CA-later: same posture. Verify the block can't be bypassed by going back.
 - [ ] **D10. Donor under 18.** → Self-attestation checkbox exists; ToS states 18+. Verify
-  checkbox is required on every path (SSO fast-path included). ✅ — verify.
+  checkbox is required on every path (SSO fast-path included). ✅ - verify.
 - [ ] **D11. Deep link `?org=BADCODE`** → falls through to the normal gate with a clear
   error, not a crash or silent BGCA default. 🔧 verify (today's demo may silently ignore).
 - [ ] **D12. QR scanned while already bound to another nonprofit.** → Ask, don't silently
   rebind: "Switch your giving from X to Y? Accrued round-ups stay with X." 🏗️
 - [ ] **D13. New phone / cleared storage.** → SSO sign-in restores account server-side
   (nonprofit binding, card link, totals). Demo is localStorage-only; production requires
-  the backend session. 🏗️ (known — backend not deployed)
+  the backend session. 🏗️ (known - backend not deployed)
 - [ ] **D14. Admin work-email verification (added 2026-07-05).** Signup requires an email
   on the org's own domain + 6-digit code before Stripe connect: free-mail domains
   rejected; known-org domains must match exactly; wrong/expired code rejected; resend and
@@ -199,14 +216,14 @@ Legend for money invariants that can NEVER be violated:
 
 - [ ] **E1. "Total donated" NEVER includes pending/un-charged amounts.** (Demo bug fixed:
   it double-counted $4.63.) Verify against Stripe records exactly.
-- [ ] **E2. Pending shows the rollover state when below minimum** — never "ready to send"
-  for an amount that won't be sent. (Fixed in overhaul — verify.)
+- [ ] **E2. Pending shows the rollover state when below minimum** - never "ready to send"
+  for an amount that won't be sent. (Fixed in overhaul - verify.)
 - [ ] **E3. The flat $1.00/month fee appears before the charge happens** (checkout + monthly-charge
   card + cancel flow), not just in Settings fine print. (Reg E-style disclosure hygiene.)
 - [ ] **E4. Tax-receipt attribution appears at checkout and in billing copy** ("BGCA emails
-  your receipt directly") — PocketCache never implies it issues receipts.
+  your receipt directly") - PocketCache never implies it issues receipts.
 - [ ] **E5. After a failed charge, the app says exactly what happened** ("Your July 1 charge
-  of $12.40 didn't go through — we'll retry July 4. You have not been charged."). INV-4. 🏗️
+  of $12.40 didn't go through - we'll retry July 4. You have not been charged."). INV-4. 🏗️
 - [ ] **E6. Donor-facing numbers equal nonprofit-dashboard numbers equal Stripe.** One
   source of truth (charge rows), three views. Build a reconciliation check that runs after
   every charge run and alerts on any mismatch. 🏗️ **This check is cheap and catches
@@ -216,7 +233,7 @@ Legend for money invariants that can NEVER be violated:
 
 ## Manual verification protocol (how to check the boxes)
 
-1. Stand up the backend against **Stripe test mode + Plaid sandbox** (both support forcing
+1. Deploy the Supabase functions and migrations to the test project, against **Stripe test mode + Plaid sandbox** (both support forcing
    failures: Plaid sandbox can simulate ITEM_LOGIN_REQUIRED, returns, pending→posted;
    Stripe test cards simulate declines, disputes, ACH returns).
 2. For each case: perform the scenario, then check all four invariants (INV-1..4), then
@@ -225,5 +242,5 @@ Legend for money invariants that can NEVER be violated:
 4. Record date + initials next to each checked box. The Launch Gate needs every box.
 
 *Authored 2026-07-01 as part of the full-app stress test. Cases marked ⚖️ need Blake's
-policy call before they can be built or verified — they are listed in the decision queue
+policy call before they can be built or verified - they are listed in the decision queue
 in the stress-test report.*

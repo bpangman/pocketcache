@@ -1,7 +1,7 @@
-# PocketCache — Pre-Launch Checklist (Demo → Production)
+# PocketCache - Pre-Launch Checklist (Demo → Production)
 
 ---
-> ### LAUNCH GATE — Core Principle (declared 2026-06-30)
+> ### LAUNCH GATE - Core Principle (declared 2026-06-30)
 >
 > **PocketCache does not go live to real users or real money until every item in this file is satisfied.**
 > This is a hard gate, not a wish list. No exceptions, no partial credit.
@@ -16,15 +16,28 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
 
 ## Must be made real before launch
 
-### 1. EIN / "Verify your nonprofit" — real IRS lookup
-- **Now (demo):** typing any EIN waits ~1.5s and always returns "Boys & Girls Clubs of America."
-  The org name, address, and logo on the confirm screen are hardcoded.
+### 1. EIN / "Verify your nonprofit" - real IRS lookup
+- **Now (demo, re-checked 2026-11-07):** `lookupEIN` in `src/lib/npSignup.js` fetches ProPublica
+  straight from the browser, which CORS always blocks, so every lookup falls back to demo data:
+  BGCA's EIN resolves to the BGCA sample, and any other EIN gets an editable "Your Nonprofit"
+  placeholder (`EIN_UNKNOWN_NAME`), not BGCA. `org-signup` stores the EIN with no check. Every
+  new org still starts as `pending_review` until the platform owner approves it, so a fake org
+  cannot go live on its own. Wizard copy says the 501(c)(3) status is confirmed before the page
+  goes live (not that it was checked against the IRS list), and the result card is labelled
+  "Demo preview". (The comment at `npSignup.js` near the CORS note still says unknown EINs fall
+  back to the BGCA sample; that comment is stale.)
 - **Production:** look the EIN up against IRS-sourced data in real time and fill in the org's legal
   name, address, and 501(c)(3) status. Free option: **ProPublica Nonprofit Explorer API**
   (`https://projects.propublica.org/nonprofits/api/v2/organizations/{EIN}.json`); IRS Tax-Exempt
-  Org Search / Pub 78 are the official sources. **The logo is NOT in IRS data** — it comes from the
+  Org Search / Pub 78 are the official sources. **The logo is NOT in IRS data** - it comes from the
   org's own upload (the Customize step already supports this) or a logo service.
 - **Action:** wire the live lookup with a graceful fallback so it never breaks on stage.
+- [ ] **Server-side EIN lookup (launch gate).** New `supabase/functions/ein-lookup` proxies
+  ProPublica server-side and returns `name`, `city`, `state`, `subsection_code` and
+  `revocation_date`; it rejects when `revocation_date` is set. `lookupEIN` calls it instead of
+  the browser fetch, `org-signup` re-checks the EIN and saves the result (`subsection_code === 3`),
+  the platform-owner approval console shows it, and "Confirm - this is us" is hidden when a real
+  lookup says the org is not a 501(c)(3). Brief in `PRELAUNCH-PLAYBOOK.md`.
 
 ### 2. "Connect with Stripe" - real Stripe Connect onboarding (built 2026-08-04, TEST MODE)
 - **Now:** the nonprofit signup wizard (both surfaces) sends the admin to Stripe's real hosted
@@ -86,7 +99,13 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   `charge_cycles.emailed_at`. `cycle-lock` still ALSO sends the internal blake@pocketcache.app
   summary via FormSubmit, unchanged. Production needs a proper sending domain with SPF/DKIM set up
   and real volume headroom before launch - Gmail is acceptable for pilot scale only.
-- [ ] **Multi-nonprofit routing.** Every charge cycle currently resolves to the single sandbox
+- [ ] **Multi-nonprofit routing - NO LIVE KEYS while any env-default connected-account fallback
+  or the hardcoded `ORG_NAME` remains** in `cycle-lock`, `charge-cycles-run` or `stripe-charge-run`.
+  The 2026-11 fix pass routes each donor through `_shared/org-routing.ts` (stripe customer ->
+  donor_profiles.org_join_code -> approved org with a Stripe account), holds unroutable donors
+  as `held_no_org`, and leaves the `STRIPE_TEST_CONNECTED_ACCT` fallback only behind
+  `ALLOW_TEST_CONNECTED_FALLBACK=1`; that flag must be unset in production, and the change is
+  written but not deployed. Before that pass, every charge cycle resolved to the single sandbox
   connected account (`STRIPE_TEST_CONNECTED_ACCT`, "Pretend BGCA") because PocketCache is
   single-nonprofit in this phase. `charge_cycles.connected_account` is already a per-cycle column
   (not hardcoded into the schema), so wiring a real donor -> nonprofit -> connected-account lookup
@@ -94,6 +113,11 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
 - [ ] **Fee routing - awaiting legal decision #1 (Nathan).** stripe-charge-run and charge-cycles-run
   both charge the donation amount ONLY. No application fee, no $1 fee, nothing, until the fee
   treatment decision is in writing. The code has marked comments where it would go - left as-is.
+  The client agrees: the billing rules live in `src/lib/billing.js`, where `APP_FEE_LIVE` is
+  false, so real donors see "App fee $1 x N - starts at launch, not charged yet" and the fee is
+  left out of their totals (demo mode shows the full itemized version). No fee is charged
+  server-side yet. Fee catch-up is capped at 12 months (`MAX_FEE_MONTHS`), and the server must
+  apply the same cap when the fee goes live.
 - [ ] **Swap test keys for live keys - behind this launch gate.** The publishable key lives in
   `src/lib/stripeKey.js` (test key, committed on purpose); the secret key, Plaid keys, and
   CHARGE_RUN_KEY live only in Supabase function secrets. All switch to live-mode values only when
@@ -123,10 +147,10 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
 - **Action:** build it into the native project during the iOS build phase; until then the UI must
   keep saying it is a preview.
 
-### [TESTING MODE] Native fresh-start wipe on every cold launch
-- **Now (demo):** src/main.jsx clears all localStorage/sessionStorage on every native cold launch so Blake can re-test onboarding from scratch each time.
-- **Production:** This block MUST be removed before the official launch. It is marked with "TESTING MODE - REMOVE BEFORE LAUNCH" in the code.
-- **Action:** Delete the testing-mode block in src/main.jsx before any TestFlight or App Store submission.
+### [DONE 2026-08-09] Native fresh-start wipe on every cold launch
+- [x] The TESTING MODE block that cleared localStorage/sessionStorage on every native cold launch
+  was removed from `src/main.jsx` on 2026-08-09 (commit e3bd08f); the file now carries a comment
+  saying it is gone on purpose. Fresh-start testing uses the `?reset=1` / `?fresh=1` links.
 
 ### 4. Candid Seal of Transparency check - real Candid API lookup
 - **Now (demo):** the nonprofit signup wizard runs a simulated ~1.2s "seal lookup" (src/lib/npSignup.js
@@ -169,6 +193,78 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   confirm for the real PassKit + Stripe flow, keeping the same success payload shape
   (`{ type: 'apple_pay', label: 'Apple Pay', last4: null }`) so nothing downstream has to change.
 
+### 7. Server changes from the 2026-11 fix pass - deploy and apply before live keys
+- [ ] The donor-settings path (`roundups-me` accepting skip-a-month, monthly cap, charge
+  adjustment and processing cover), the new `donor-close` function (cancel / delete with a final
+  gift or waive), the billing hardening (`_shared/billing-math.ts`, gross-up, idempotency keys,
+  two-phase PaymentIntent, retry on the 14th, per-donor org routing) and the security hardening
+  (session-only give-extra, Plaid link token and Stripe setup, org-admin-lookup, CORS, events
+  policy) are written in the repo and NOT deployed. Their migrations
+  (`supabase/billing_hardening_2026_11.sql`, `supabase/security_hardening_2026_11.sql`) are NOT
+  applied. All of it must be deployed, applied and re-verified in test mode before any live key
+  is set. Until then the app sends the donor settings but the server ignores them.
+
+### 8. Demo-only gates - verify in production before launch
+The live site is also the demo, so every simulated control is gated (`src/lib/demo.js`:
+`useShowDemoAffordances`, true only in a `VITE_DEMO=1` build, inside the desktop phone frame, or
+for a demo account). Before launch, open the production build as a real donor and as a real
+nonprofit admin and confirm NONE of these appear:
+- [ ] QR "scan" button and its fake scanner (resolves to BGCA after a timer).
+- [ ] The "Demo code: BGCA" hint on the join gate (real copy: ask your nonprofit for their code).
+- [ ] The demo admin preview link ("preview the BGCA admin dashboard") and its unauthenticated
+  BGCA adoption.
+- [ ] Plaid's "Test mode: use user_good / pass_good" hint (also tie it to the Plaid env being sandbox).
+- [ ] The Apple Pay simulation (`ApplePaySheet` / `WebApplePayConfirm`, "Visa •••• 4242").
+- [ ] Manual card entry (types a card number; demo only, keeps the last 4).
+- [ ] ACH bank debit as a payment method (see item 9).
+
+### 9. ACH bank debit - real mandate before it leaves demo
+- **Now:** `BankPaymentAuth` marks a bank account "authorized" with nothing behind it on the
+  server, and says so ("Sandbox demo: no real mandate is filed"). The card path goes through a
+  real Stripe SetupIntent; bank debit does not. Adopted default (2026-11-07): bank debit and
+  hand-typed cards stay demo-only, and only a Plaid-linked depository account can be offered for
+  debit (`isDebitableBank`).
+- [ ] **Production:** a Stripe Financial Connections SetupIntent with a `us_bank_account` mandate
+  (same idea as item 6 for Apple Pay). Remove the "Sandbox demo" sentence when the real mandate
+  ships. Do not hard-block Start Giving in the meantime.
+
+### 10. Nonprofit receipt and export data
+- **Now:** the License makes the nonprofit responsible for per-charge receipts and year-end
+  letters, and the Privacy Policy promises to give the nonprofit what it needs, but the nonprofit
+  has no export: the admin console's Charges tab is demo data, and the Stripe charge carries one
+  combined amount.
+- [ ] **Production:** a charges CSV per donor per year for each nonprofit, plus a receipt template
+  that separates the two parts: "Donation $X (tax-deductible, includes processing cover).
+  PocketCache app fee $1.00 (paid to PocketCache, not a donation to [Org])." Charges carry
+  metadata (`roundup_cents`, `cover_cents`, `fee_months`) so the split can be rebuilt. PocketCache
+  does not tell Stripe to email its own receipt (no `receipt_email`); turning a nonprofit's Stripe
+  automatic receipts off is a recommendation only when that nonprofit sends its own receipt, so no
+  donor is left without one.
+
+### 11. iOS shell - before App Store review (details in `app/APPSTORE.md`)
+- [ ] **Bundled shell before App Store review.** The shell is a pure remote-URL wrapper
+  (`server.url` = https://pocketcache.app/demo/), which App Review rejects. Build the Vite app
+  into `app/www` with a relative base, drop `server.url` from the Release config, and pick Capgo
+  or one binary per release. First audit everything that keys off the hostname or path, because
+  bundling changes the origin to `capacitor://localhost`: the biometric `rp.id`
+  (`src/lib/biometric.js`), the beacon hostname gate (`src/lib/beacon.js`), absolute
+  `https://pocketcache.app/...` links, Supabase auth redirect URLs, and the `/demo/` base.
+- [ ] **Face ID on a device.** See Production readiness #2 (Biometric unlock) below; test on TestFlight first.
+- [ ] **`window.open` and the Stripe Connect return on TestFlight.** Two buttons use
+  `window.open(url, '_blank')` (Onboarding "Open their webpage", npSignup `openBenevityPortal`),
+  and the Stripe Connect redirect leaves the app for Safari, so `?npstripe=return` lands in
+  Safari, which has no app session. Test both on TestFlight; if broken, route them through the
+  Browser plugin and re-check `org-connect-status` on `browserFinished` / app resume (or send
+  nonprofits to the web wizard).
+- [ ] **Dynamic Type via `@capacitor/text-zoom`.** The web view ignores the iOS text-size setting.
+  Add the plugin and call `TextZoom.getPreferred()` then `TextZoom.set()` on launch (or size type
+  in rem inside the Capacitor build). The 10px tab labels match the native tab bar and stay.
+- [ ] **App Privacy questionnaire** answered in ASC as recorded in `app/APPSTORE.md` (the signup
+  and cancel beacons to ntfy.sh, FormSubmit and the Supabase events table count as Usage Data >
+  Product Interaction, not linked, not tracking).
+- [ ] **Offline stub.** `server.errorPath` is now set, so the bundled `www/index.html` shows on a
+  cold launch with no network; it ships with the next shell build.
+
 ## Launch-blocking legal / ops (see also memory: project_pocketcache_prelaunch_checklist)
 - E&O + cyber insurance in place.
 - Nathan (lawyer) review of the Nonprofit Software License Agreement.
@@ -183,19 +279,27 @@ go live, plus launch-blocking legal/ops items. Updated as we review the app batc
   (a request/review process with Plaid, not just a config change), (b) have someone independently
   review the token handling end to end (this closes out the token-security half of that review,
   not the whole item), and (c) confirm production Plaid webhooks/error handling if added later.
+  Cost note: Plaid bills per linked Item per month for as long as the Item exists, even with no
+  round-ups; only `/item/remove` stops it (`donor-close` calls it on cancel). Whether to unlink
+  banks with no round-ups for several months is a pending Blake decision.
 - California: confirmed blocked at signup until availability is confirmed.
-- Confirm with Apple how the $1/month app fee is treated before launch. The fee is currently charged
-  to the donor outside the app, on the nonprofit's Stripe account (see lib/billing.js) - that
-  structure is the one most likely to avoid Apple's In-App Purchase (IAP) rules entirely, since no
-  purchase happens inside the app itself. If that ever changes to a donor-facing in-app charge, it
+- Confirm with Apple how the $1/month app fee is treated before launch. The fee is not charged
+  anywhere yet (no application fee server-side; `src/lib/billing.js` has `APP_FEE_LIVE` false).
+  When it goes live it is planned to ride the donor's monthly charge on the nonprofit's Stripe
+  account as an application fee. Note for counsel: the card IS entered inside the iPhone app
+  (Stripe CardElement + SetupIntent on the payment step), even though the charge itself runs
+  later on the nonprofit's Stripe, outside the app - so do not describe this as "no purchase
+  happens inside the app". The site line "it isn't a subscription" was removed (2026-11-07)
+  pending this answer. If that ever changes to a donor-facing in-app charge, it
   risks being treated as a digital purchase subject to Apple's IAP cut (up to 15-30%). Get this in
   writing from Apple (or counsel familiar with App Review's charity/donation guidelines) before
   launch, and before any change to where or how the $1 fee is collected.
 - Before launch, point the /app/ page (QR target) at the real App Store listing. `app/index.html`
-  still ships the placeholder badge and carries two `TODO: Replace ... with the real App Store
-  badge + link when the listing goes live` comments (one on the `.store-placeholder` CSS rule,
-  one on the `<span class="store-placeholder">Coming to the App Store</span>` block). Swap in the
-  real badge image and App Store URL, drop the "coming soon" copy, then delete both TODOs.
+  is now a "coming soon" page: "The iPhone app is coming soon. You can give in your browser today
+  through your nonprofit's link," with its one CTA to /start/. It no longer promises TestFlight
+  access (TestFlight is an internal group, Blake only; nothing adds testers). When the listing
+  goes live, swap in the real App Store badge and link and drop the "coming soon" copy. Only add a
+  TestFlight public link if Blake opens an external beta (needs Beta App Review).
 
 ### Nathan (lawyer) review queue - specific clauses in the live legal pages
 Every item below was tracked as a `PENDING NATHAN REVIEW` HTML comment inside the published legal
@@ -244,6 +348,82 @@ reviewed or approved by counsel.
   says the donor app shows it as the "app fee". Substance unchanged. Confirm Nathan is comfortable
   with the dual naming, or pick a single term and use it everywhere.
 
+**2026-11-07 overhaul - fact-alignment edits made to the live legal pages (not reviewed).**
+These edits only make the pages match the adopted model and the app; no new policy was added
+on purpose. Each needs Nathan's sign-off. Line numbers are the pre-edit ones.
+- [ ] Terms :68 and :205, Privacy :59 and :163, License header (near :61) and :158 - "Last
+  updated November 2026" (Effective June 2026 kept; the License footer now reads "effective June
+  2026 and was last updated November 2026").
+- [ ] Terms :97 (sign-up method) - was "You sign up using Apple, Google, or Facebook single
+  sign-on. PocketCache does not create or store passwords"; now "You sign up with a one-time code
+  emailed to you, or with Apple or Google sign-in. PocketCache never creates or stores a
+  password" (matches the real Supabase email-code and Apple/Google sign-in; no Facebook).
+  The rest of the paragraph, including "your sign-in provider secures your account", is kept.
+- [ ] Terms :102 (receipts) - service messages were "charge notices, receipts, payment failure
+  alerts..."; now "charge notices and confirmations, payment failure alerts..." plus "Your tax
+  receipt comes from your Nonprofit (Section 7)." (PocketCache does not send receipts.)
+- [ ] Terms :103, Section 4a (a) - was "product updates, impact stories, and giving
+  opportunities"; now "product updates and service news (PocketCache never asks you for
+  donations; any giving appeals come from your Nonprofit)".
+- [ ] Terms :122 and :125 (settle-up removal, fixed $5) - "below the Nonprofit's monthly minimum
+  (default $5, configurable per nonprofit)" and "the Nonprofit's monthly minimum (default $5)"
+  became a fixed "$5 monthly minimum", and the sentence "Regardless of the rollover minimum, a
+  settle-up charge runs at least once every 3 calendar months, collecting all accrued round-ups
+  and fees" was replaced with "Balances under $5 (together with the $1.00/month service fee) keep
+  rolling forward until the total reaches $5 or you cancel." The cancel-time final settle-up
+  (:157) is kept.
+- [ ] Terms :135 and :141 (gross-up wording) - "(approximately 2.2% + $0.30 per monthly charge)"
+  and, in the ACH authorization, "(approximately 2.2% + $0.30 of your round-up total)" are now
+  "an amount calculated so that, after the card processor's fee of about 2.2% + $0.30, your
+  Nonprofit receives your full round-up total" (the app now computes a true gross-up).
+- [ ] Terms :152 (settle-up wording in the payment-pause paragraph) - "the regular 3-month
+  settle-up schedule applies" replaced with the same roll-forward rule. The "retry once after
+  approximately 3 days" promise was checked and kept (the 2026-11 charge run implements it).
+- [ ] Terms, Section 12a (refunds-not-reversed) - one sentence added at the end of the refunds
+  paragraph: "Round-ups on purchases later refunded by the merchant are not reversed." (Adopted
+  default; Blake to confirm.)
+- [ ] Terms :125, Section 7 monthly-cycle paragraph (multiplier) - one sentence added: "If you
+  set a round-up multiplier in the app, your multiplier applies to the whole month's round-ups
+  when the month closes on the 1st." (Describes the current server rule.)
+- [ ] License :78 (Active linked user) - "for each month a linked account is actively rounding
+  up" became "for each month the donor is an Active linked user (defined below)", tying the fee
+  to the existing :82 definition, which nothing referenced by name before.
+- [ ] License :80 (settle-up and fixed $5) - same two changes as Terms :122: fixed $5 monthly
+  minimum, 3-month settle-up clause replaced with the roll-forward rule; the last sentence
+  (donor may elect a final settle-up or waive at cancellation) kept.
+- [ ] License :112 (application fee and account connection) - was "connect its own Stripe
+  account via Stripe Connect Standard OAuth ... uses Stripe's application_fee_amount parameter
+  per charge to collect the processing fee"; now new Standard accounts are created through
+  Stripe-hosted onboarding (no OAuth, matching `org-connect-stripe`), and "PocketCache may use
+  Stripe's application_fee_amount parameter on a donor's monthly charge solely to collect the
+  $1.00/month service fee described in Section 2. The processing-cover amount is never part of
+  any application fee and is retained in full by the Nonprofit."
+- [ ] Privacy :114 - the leftover `PENDING NATHAN REVIEW` HTML comment was removed (Terms :124
+  and :129 likewise); the items stay tracked here.
+- [ ] Privacy :115 - "The Nonprofit you have chosen" became "The Nonprofit whose program you
+  joined" (donors join through their nonprofit's code or link; they do not pick from a list).
+
+**Flag only - NOT edited, need Nathan's wording (2026-11-07):**
+- [ ] Terms :181 liability cap - limited to "the amount you paid us in processing fees", but
+  donors pay PocketCache no processing fees (Terms :135: PocketCache receives none of the cover);
+  the only PocketCache fee is the $1 app fee, which is not charged yet.
+- [ ] License :140 liability cap - limited to "the fees paid by the Nonprofit to PocketCache",
+  which is $0 by construction (nonprofits never pay), i.e. a zero cap. License :128 (7a) - "If a
+  change increases the fees payable by the Nonprofit": no such fees exist. Nathan to set the right
+  cap amounts.
+- [ ] Dispute fees - who bears Stripe's dispute fee on a disputed monthly charge, and whether
+  PocketCache returns its $1 on a refund or dispute (no promise added; charges now carry metadata
+  so they can be matched later).
+- [ ] Reg E range-election language - whether the $5 minimum plus the optional donor cap counts as
+  a consented range, which decides whether the charge can move from the 11th to the 5th
+  (question #11).
+- [ ] Naming ntfy.sh and FormSubmit in the Privacy Policy as processors that receive IP addresses
+  (the signup/cancel beacons post to both).
+- [ ] Receipt duty - License :92 makes the nonprofit issue per-charge receipts and year-end
+  letters and Privacy :100 promises it the data, but no export exists yet (Must-be-made-real
+  item 10). The $1 app fee is not part of the contribution and should be carved out of any
+  acknowledgment.
+
 ## Production readiness (demo → real product)
 
 The demo at `pocketcache.app/demo` is a polished front-end prototype. Below is every gap between
@@ -251,33 +431,46 @@ The demo at `pocketcache.app/demo` is a polished front-end prototype. Below is e
 Each item notes where PocketCache stands today and what "done" looks like.
 
 ### 1. Edge-case / money-flow testing
-- **Status:** ✍️ The written test plan now EXISTS — `EDGE-CASES.md` (56 scenarios, added
+- **Status:** ✍️ The written test plan now EXISTS - `EDGE-CASES.md` (56 scenarios, added
   2026-07-01). Manual verification of each case against Stripe test mode / Plaid sandbox
-  is still pending — the gate is NOT satisfied until every box in that file is checked.
+  is still pending - the gate is NOT satisfied until every box in that file is checked.
 - **Why it matters:** This is the **MOST IMPORTANT item on this list.** A money bug is not
-  cosmetic — it can charge the wrong amount, charge twice, or fail silently. We need a written
+  cosmetic - it can charge the wrong amount, charge twice, or fail silently. We need a written
   checklist of every "what if the user does X" scenario: failed charge, $0 bank balance,
   double-tap on the donate button, bad EIN entered, Plaid bank link dropped mid-flow, and so on.
 - **Done when:** A written screen-by-screen test plan exists and every edge case has been
   manually verified.
 
 ### 2. Authentication / login security
-- **Status:** Apple/Google/Facebook SSO is already the plan — no passwords stored by us, which is
-  the right call. But the current backend has **no security on its data routes**; anyone who knew
-  the URL could read or write data.
+- **Status:** Apple/Google/Facebook SSO is already the plan - no passwords stored by us, which is
+  the right call. (2026-11-07: the "backend with no security on its data routes" this item was
+  written about is the undeployed `backend/` prototype. The live data is in Supabase tables with
+  RLS on and no anon policies (see 2a), read and written by edge functions; the 2026-11 security
+  pass makes give-extra, Plaid link token, Stripe setup and roundups-me session-only - see Must-be-made-real item 7.)
 - **Biometric unlock (added 2026-07-05):** Face ID / Touch ID unlock ships in the demo via
-  WebAuthn platform credentials — the OS really verifies the user's face/finger, but the check
+  WebAuthn platform credentials - the OS really verifies the user's face/finger, but the check
   is client-side only. Production must issue the challenge from the backend and verify the
   assertion server-side (standard passkey flow) before the session is trusted.
+  **Device test first (2026-11-07):** inside the iOS shell, WebAuthn in WKWebView needs a
+  `webcredentials` Associated Domain the app does not have, so enrollment will likely fail with
+  "Couldn't set up Face ID on this device." Nothing in the repo records a device test. Test on
+  TestFlight; if it fails, either (a) add App.entitlements with
+  `com.apple.developer.associated-domains = webcredentials:pocketcache.app`, enable Associated
+  Domains on the App ID, regenerate the profile and serve `/.well-known/apple-app-site-association`
+  from the Pages build (copy the dot-folder into the upload artifact), or (b) on native, hide the
+  row unless a native biometric plugin is available and route `src/lib/biometric.js` through it.
+  Option (a) stops working after the bundled-shell switch (hostname becomes localhost). Record
+  the result here.
 - **Admin auth model (DECIDED by Blake 2026-07-05): passwordless, org-domain email.**
   Nonprofit admins sign UP by verifying a work email on the org's own domain (free-mail
-  domains rejected; known orgs must match their exact domain) with a 6-digit emailed code —
+  domains rejected; known orgs must match their exact domain) with a 6-digit emailed code -
   that address IS the admin username. Admins sign IN the same way: an emailed one-time code
   per login (optionally + passkey after first login). NO passwords are ever created or
-  stored — preserves the zero-password-liability posture that motivated SSO-only. The demo
-  step is live (code shown on screen, labeled Demo); production needs: transactional email
-  provider (Resend/Postmark), server-side code generation with expiry + attempt limits +
-  rate limiting, and org-domain cross-check against IRS/Stripe-KYC records. Donor sign-in
+  stored - preserves the zero-password-liability posture that motivated SSO-only. (2026-11-07:
+  the work-email code is now a real Supabase email OTP with server-side expiry, not a demo code
+  on screen - see 2a.) Still needed for production: a transactional email provider / custom SMTP
+  for volume, attempt limits + rate limiting confirmed, and org-domain cross-check against
+  IRS/Stripe-KYC records. Donor sign-in
   remains Apple/Google/Facebook SSO, unchanged.
 - **Duplicate-account detection (added 2026-07-19, raised by Blake):** the demo has NO
   "account already exists" checks anywhere except join-code availability. Production must add:
@@ -304,23 +497,23 @@ Each item notes where PocketCache stands today and what "done" looks like.
 - **Billing schedule (DECIDED by Blake 2026-07-06, rev 2 same day): lock on the 1st,
   charge on the 11th.** Round-ups accrue through the last calendar day of the month. On the
   1st the cycle CLOSES: the exact amount is locked and emailed to the donor ("here's your
-  charge"). The charge runs on the 11th — 10 FULL DAYS' notice, deliberately matching the
+  charge"). The charge runs on the 11th - 10 FULL DAYS' notice, deliberately matching the
   classic Reg E §1005.10(d) timing for varying preauthorized debits, plus a generous
-  reconciliation buffer. Donors can adjust the locked charge any day from the 1st–10th
+  reconciliation buffer. Donors can adjust the locked charge any day from the 1st-10th
   (in-product pop-up on every visit + the notice email). Blake PREFERS charging on the 5th:
   Nathan question #11 asks whether range-based consent (our $5 minimum + optional cap
-  bounds every charge) permits the shorter window — if he clears it, move charge day to the
+  bounds every charge) permits the shorter window - if he clears it, move charge day to the
   5th and shrink the window copy accordingly. Demo copy app+web says the 11th; backend
   charge job, Terms §7, and reminder templates must mirror whichever Nathan blesses.
   SKIP-A-MONTH (Blake 2026-07-06, corrected same day): a donor may skip their next
   charge. The skipped month's ROUND-UPS ARE SIMPLY NEVER CHARGED (same mechanic as
-  monthly-cap overflow — never collected, not owed later), but the $1/active-month fee
-  still accrues and rolls: the next bill shows "App fee — $1 × 2 months". The nonprofit
+  monthly-cap overflow - never collected, not owed later), but the $1/active-month fee
+  still accrues and rolls: the next bill shows "App fee - $1 × 2 months". The nonprofit
   forgoes that month; PocketCache's fee is deferred, not waived. The charge-review pop-up acknowledgment ("Looks good") persists for the
   whole review month; the alert reappears each new cycle.
 - **Account separation (hard requirement, per Blake 2026-07-05):** admin and donor are
   fully separate accounts. An admin session must expose ONLY the org's aggregate/donor-list
-  data appropriate to the dashboard — never any individual's personal donor account, giving
+  data appropriate to the dashboard - never any individual's personal donor account, giving
   history, or payment method. A colleague signing in with the shared org admin email sees
   nothing personal about anyone. Verify this explicitly during the backend auth-scoping
   task (playbook #2) and add it to EDGE-CASES.md.
@@ -335,9 +528,13 @@ Each item notes where PocketCache stands today and what "done" looks like.
   real signup volume.
 
 ### 3. Database setup
-- **Status:** No production database exists yet. The backend is a skeleton, not deployed.
+- **Status (2026-11-07):** Supabase Postgres is the database (`orgs`, `plaid_items`,
+  `stripe_donors`, `roundups`, `charge_cycles`, `donor_profiles`, `give_extras`, `events`; SQL
+  in `supabase/*.sql`), RLS on. Plaid tokens live only in `plaid_items` (zero policies, service
+  role only) and never reach the browser. Remaining: confirm encryption at rest for that column
+  (Supabase encrypts the disk; a column-level scheme is not built) and the independent review.
 - **Why it matters:** We need to store only what's necessary (Plaid bank token, email, running
-  donation tallies). The Plaid bank token is the **crown jewel** — if it leaks, someone can read
+  donation tallies). The Plaid bank token is the **crown jewel** - if it leaks, someone can read
   a user's full transaction history. It must be encrypted before storage, never stored as plain
   text.
 - **Done when:** A real database is running in production and Plaid tokens are encrypted at rest.
@@ -346,33 +543,41 @@ Each item notes where PocketCache stands today and what "done" looks like.
 - **Status:** Not a concern at demo scale.
 - **Why it matters:** At volume, transaction syncs need to be batched sensibly so we don't hit
   Plaid or Stripe API limits.
-- **Done when:** Batch sync logic is in place. Lower priority — this is a scale concern, not a
+- **Done when:** Batch sync logic is in place. Lower priority - this is a scale concern, not a
   day-one blocker.
 
 ### 5. Error handling / server-down resilience
-- **Status:** Not implemented in the demo.
+- **Status (2026-11-07):** Partly built. Re-running the charge job was proven a no-op in test mode
+  (see 2b). The 2026-11 fix pass adds Stripe idempotency keys per cycle and attempt, a two-phase
+  PaymentIntent (create, record, then confirm), one retry about 3 days later on retryable
+  declines, and an "update your card" email; all written, not deployed (Must-be-made-real item 7). The donor-facing
+  "you weren't charged - we'll retry" message is not built.
 - **Why it matters:** Critical for a money app. Every charge must be safe to retry (technically:
   idempotent) so a network hiccup never double-charges a user. If something goes wrong, the user
-  should see a clear "you weren't charged — we'll retry" message, not a spinner or a blank screen.
+  should see a clear "you weren't charged - we'll retry" message, not a spinner or a blank screen.
   This also ties directly to E&O insurance requirements.
 - **Done when:** Charge operations are idempotent; all failure states surface a user-friendly
   message with accurate charge status.
 
 ### 6. Analytics
-- **Status:** None. We have no visibility into whether users complete signup, link a card, or drop
-  off.
+- **Status (2026-11-07):** Minimal. `src/lib/beacon.js` posts signup and cancel events (event,
+  surface, nonprofit short name and join code; no donor name or email) to ntfy.sh, FormSubmit and
+  a Supabase `events` table that the platform console reads. It fires only on pocketcache.app,
+  which includes the iOS shell. No card-link or first-donation funnel yet.
 - **Why it matters:** Helps us know what's working and gives concrete data for the BGCA pitch
   ("X% of users who sign up link a bank account within 24 hours").
 - **Done when:** Basic, privacy-respecting analytics are in place tracking key funnel events:
   signup completion, card-link rate, first donation.
 
 ### 7. App Store optimization (screenshots / description / ratings)
-- **Status:** No native app exists yet. This belongs entirely to the iOS build phase.
+- **Status (2026-11-07):** A Capacitor iOS shell exists (`app/`) and is on TestFlight for an
+  internal group (Blake). It remote-loads `/demo/`, so it needs the bundled-shell switch before
+  App Store review (Must-be-made-real item 11). Store listing, screenshots and copy are not done.
 - **Why it matters:** Real, but not blocking the web/BGCA launch.
 - **Done when:** Native app is built and submitted to the App Store.
 
 ### 8. Privacy policy / terms / data compliance
-- **Status:** **ALREADY LIVE** — Terms of Service, Privacy Policy, and the nonprofit click-through
+- **Status:** **ALREADY LIVE** - Terms of Service, Privacy Policy, and the nonprofit click-through
   Software License Agreement are all published.
 - **Remaining:** Nathan Thomas (lawyer) review (~$4,500) and confirming liability caps are in the
   license language. Tracked in the legal/ops section above.
@@ -381,7 +586,7 @@ Each item notes where PocketCache stands today and what "done" looks like.
 ### 9. Push notifications
 - **Status:** Native-app feature only; not relevant to the web launch.
 - **Design intent:** A weekly feel-good summary ("Your round-ups donated $4.17 to BGCA this week")
-  — not nagging or promotional.
+  - not nagging or promotional.
 - **Done when:** Native app is built.
 
 ### 10. Performance with real data
@@ -401,14 +606,16 @@ Each item notes where PocketCache stands today and what "done" looks like.
 - **Done when:** Addressed during the native app or scaling phase.
 
 ### 13. Offline support
-- **Status:** Low priority for a finance app — users expect live data.
+- **Status:** Low priority for a finance app - users expect live data. (2026-11-07: the iOS shell
+  now names its bundled "needs an internet connection" page as `server.errorPath`; it ships with
+  the next shell build.)
 - **Done when:** A graceful "you're offline" message is shown when there's no connection. Full
   offline mode is not needed.
 
 ### 14. Responsive design
 - **Status:** The web demo should work on phone and desktop, but needs a quick spot-check on a few
   real phone screen sizes.
-- **Why it matters:** Quick win — many BGCA contacts will open the link on their phone.
+- **Why it matters:** Quick win - many BGCA contacts will open the link on their phone.
 - **Done when:** Looks correct on a standard iPhone and Android viewport, plus desktop.
 
 ### 15. Older-device testing
@@ -421,53 +628,58 @@ Each item notes where PocketCache stands today and what "done" looks like.
 
 ### 17. Feature requests / architecture evolution
 - **Status:** Good problem to have. The architecture is deliberately simple (we never touch money
-  directly — Stripe Connect means funds go from user's bank to the nonprofit, never through us),
+  directly - Stripe Connect means funds go from user's bank to the nonprofit, never through us),
   which keeps adding features manageable.
-- **Done when:** N/A — ongoing; not a launch gate.
+- **Done when:** N/A - ongoing; not a launch gate.
 
 ---
 
 ## Priority order
 
 **MUST be done before any real users or real money:**
-- **#1** — Money-flow edge-case test plan (written checklist of every failure scenario)
-- **#2 + #3** — Backend security (lock every route) + encrypt the Plaid bank token in the database
-- **Legal/ops** — E&O + cyber insurance, Nathan's license review, liability caps confirmed
-- **#5** — No double-charge guarantee (idempotent charges, clear failure messages to users)
-- **#6** — Basic analytics (funnel visibility + concrete numbers for the BGCA pitch)
+- **#1** - Money-flow edge-case test plan (written checklist of every failure scenario)
+- **#2 + #3** - Backend security (lock every route) + encrypt the Plaid bank token in the database
+- **Legal/ops** - E&O + cyber insurance, Nathan's license review, liability caps confirmed
+- **#5** - No double-charge guarantee (idempotent charges, clear failure messages to users)
+- **#6** - Basic analytics (funnel visibility + concrete numbers for the BGCA pitch)
 
 **Lower priority / native-app-only (not blocking the web/BGCA launch):**
 - #4 (API rate limits at scale), #7 (App Store), #9 (push notifications), #10 (performance at
   scale), #11 (state management), #12 (caching), #13 (offline mode), #15 (older-device testing)
 
-**Already handled — no action needed:**
+**Already handled - no action needed:**
 - #8 (legal docs live), #16 (auto-deploy on push to main), SSO/no-passwords design,
   money-never-touches-us architecture
 
 ---
-_Last updated: 2026-06-30 — this batch added the Launch Gate core principle (hard gate, not a
+_Last updated: 2026-11-07 (the dated entries below run to that date). The 2026-06-30 entry:
+this batch added the Launch Gate core principle (hard gate, not a
 wish list) and the full production-readiness checklist (17 categories with current status, done
 criteria, and priority groupings). Previous entry: landing-page copy, building emoji, mission
 char limit, broader brand colors, and admin-contact email field._
 
 ---
-_2026-07-01 — full-app stress test + overhaul (branch `overhaul/stress-test-2026-07-01`):_
-- _Backend REBUILT to the approved tech-vendor model: direct charges on the nonprofit's own
+_2026-07-01 - full-app stress test + overhaul (branch `overhaul/stress-test-2026-07-01`):_
+- _[Superseded by v3 / 8-4: $1 fee, $5 floor. The `backend/` described here was never deployed;
+  the live backend is the Supabase functions.] Backend REBUILT to the approved tech-vendor model: direct charges on the nonprofit's own
   Stripe Connect account, flat $0.50 application fee (the old 5%/10% percentage-fee /
   Endaoment / Treasury code is gone). Money bugs fixed: webhook metadata mismatch, missing
   idempotency (double-charge risk), retry-that-never-retried, refund handling, pending→posted
   double-count, sweep race. Added: JWT auth on all routes (#2), Plaid token encryption at
   rest (#3 partial), retry job, nonprofit table + dashboard/EIN/Connect endpoints. 22/22
-  tests pass. Still NOT deployed — see backend/README.md for what remains._
-- _`EDGE-CASES.md` created — the written money-flow test plan required by item #1._
+  tests pass. Still NOT deployed - see backend/README.md for what remains._
+- _`EDGE-CASES.md` created - the written money-flow test plan required by item #1._
 - _New NONPROFIT DASHBOARD in the demo app (Overview / Donors / Charges / Grow / Settings)
   and the gate screen reordered nonprofit-first per Blake's direction._
 - _~35 donor-app defects fixed (double-counted totals, fabricated stats, dead buttons,
   rollover warning, fee + tax-receipt disclosures, referral copy legal fix, never-stale
-  demo dates). EIN verify now does a real IRS/ProPublica lookup with demo fallback._
+  demo dates). EIN verify now does a real IRS/ProPublica lookup with demo fallback.
+  [Superseded: the browser lookup is CORS-blocked and always falls back to demo data; the real
+  lookup needs the server-side `ein-lookup` function, Must-be-made-real item 1.]_
 - _Public site: internal strategy doc removed from deployment, waitlist email leak plugged,
   dead tunnel URL removed, "bank-grade security" claim fixed, $10-minimum rollover added to
-  Terms §7, CA note in footer._
+  Terms §7, CA note in footer. [Superseded by v3 / 8-4: $1 fee, $5 floor; the Terms now say a
+  fixed $5 monthly minimum.]_
 
 ---
 _2026-07-23 - public-page copy + legal-doc traceability pass:_
@@ -495,6 +707,20 @@ _2026-08-04 - real Plaid Link (sandbox) replaces the simulated bank list:_
   `pc_tracked_card` and the `plaid_items` row both carry real Plaid metadata._
 - _Offline/function-down fallback keeps the old simulated bank list working (labeled "Practice
   mode") so signup never breaks, and a small "Test mode: use user_good / pass_good" hint shows
-  next to the real Connect button._
+  next to the real Connect button. [2026-11-07: that hint is demo-only now; see Must-be-made-real
+  item 8.]_
 - _See the Plaid access-tokens item in Launch-blocking legal/ops above for what's still needed
   before this can go live with real banks and real money._
+
+---
+_2026-11-07 - full overhaul pass (correctness, consistency, polish):_
+- _This file re-checked against the code: testing-mode wipe marked done, database / auth /
+  analytics / error-handling / native-app statuses updated, the billing path set to
+  `src/lib/billing.js` with no fee charged server-side, the Apple note now says the card is
+  entered in the app, and the /app/ page entry describes the "coming soon" page. Older dated
+  entries carry "superseded" notes instead of being rewritten._
+- _New launch-gate items 7-11 under Must be made real: deploy the 2026-11 server changes, verify
+  the demo-only gates, ACH mandate, nonprofit receipt/export data, and the iOS shell checks
+  (bundled shell, Face ID, window.open / Stripe Connect return, Dynamic Type, App Privacy)._
+- _Nathan queue: one row per legal fact-alignment edit, plus flag-only rows (liability caps,
+  dispute fees, Reg E range language, naming ntfy.sh / FormSubmit, receipt duty)._
