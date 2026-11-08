@@ -1533,7 +1533,7 @@ export default function WebDashboard() {
                 // The tile's headline figure on a skipped cycle is the amount, not
                 // the word "Skipped": $0.00 is what leaves the account. For a new
                 // donor it is the first charge that can hold their round-ups.
-                value={skipNextCharge ? SKIP_COLLECT_AMOUNT : cycle.chargeLabel}
+                value={skipNextCharge ? SKIP_COLLECT_AMOUNT : noBank ? '--' : cycle.chargeLabel}
                 sub={nextChargeSub}
               />
             </div>

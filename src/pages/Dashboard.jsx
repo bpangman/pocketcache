@@ -475,7 +475,9 @@ export default function Dashboard() {
     ? effectiveCharge({ pendingRoundUps: locked.roundUps, monthlyCap, chargeAdjustment })
     : chargeAmount;
 
-  const captionLine = skipNextCharge
+  const captionLine = needsBank
+    ? 'No charge until you link a bank'
+    : skipNextCharge
     ? 'Next charge: Skipped'
     : firstPartialWindow
       ? `First charge: ${chargeDateLabel} (if $${MONTHLY_FLOOR}+)`
@@ -745,13 +747,15 @@ export default function Dashboard() {
                 {captionLine}
               </p>
             </div>
-            <div className="text-right shrink-0 ml-3">
+            {/* No bank linked: nothing is accruing, so a countdown would be a
+                countdown to nothing. The caption says what to do instead. */}
+            {!needsBank && <div className="text-right shrink-0 ml-3">
               <p className="font-bold text-2xl tabular-nums" style={{ color: 'var(--navy)' }}>{daysLeft}</p>
               {/* The countdown measures the CYCLE, and on a skipped cycle its end
                   is not a charge - saying "days left" next to "nothing is
                   collected" would read as a countdown to money leaving. */}
               <p className="text-slate text-xs">{skipNextCharge ? 'days left in cycle' : 'days left'}</p>
-            </div>
+            </div>}
           </div>
           <div className="h-2 rounded-pill overflow-hidden" style={{ background: 'var(--line)' }}>
             <motion.div
